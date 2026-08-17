@@ -1,0 +1,4 @@
+- Never edit files outside your ownership table (.omp/AGENTS.md); report cross-module needs instead.
+- docs/PROTOCOL.md changes must land on both client and server in the same milestone.
+- Never commit or push unless explicitly asked.
+- Never claim done without running the build/tests for what you changed; report the command and the result.

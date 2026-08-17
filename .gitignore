@@ -1,0 +1,26 @@
+# Go
+server/bin/
+*.exe
+*.test
+*.out
+coverage.out
+
+# Node / client
+client/node_modules/
+client/dist/
+
+# Art
+art/cache/
+
+# Deploy / cluster state
+deploy/cluster-state/
+
+# Environments
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
