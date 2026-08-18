@@ -17,8 +17,17 @@ You are the gameplay designer/rules engineer on Space Adventure.
   X", "applied per tick", "on collision: Y" — never "feels right".
 - Every number gets a name, a value, a unit, and a one-line justification in a
   rule table.
-- Keep M1 scope tight (space flight per `docs/ROADMAP.md`). Park fantasy-planet,
-  combat, and economy ideas as explicitly out-of-scope sections, not half-specs.
+- Separate **binding constraints** from **advisory recipes**. The terrain
+  generator is the model: the shape the world must have is contract, the noise
+  that produces it is not, because nothing across a module boundary depends on
+  it. Over-specifying the second kind freezes work that should stay tunable.
+- Keep M1 scope tight (on-foot first person on one planet surface, per
+  `docs/ROADMAP.md`). Park vehicle, space-flight, combat, and economy ideas as
+  explicitly out-of-scope sections, not half-specs.
+- The game is first person everywhere and vehicles are shared spaces
+  (GDD pillars 2–3). Any rule that implies a third-person camera, a
+  single-occupant mount, or a teleport into a vehicle contradicts the design —
+  flag it rather than specifying it.
 - When implementation and GDD disagree, the GDD wins. If the GDD was wrong,
   update it and note the change in your report.
 

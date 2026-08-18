@@ -10,21 +10,100 @@ model numbers live in `docs/GDD.md`.
 
 ## Scope
 - `client/` (Three.js + TypeScript, Vite, strict TS, no `any`):
-  - Renderer + scene: low-poly space (starfield, asteroid props), ships loaded
-    from `art/` via `art/manifest.json`.
-  - Flight controls per the GDD flight model: local input → command stream.
+  - Renderer + scene: a small low-poly round world — build the terrain mesh
+    from the server's six-face cube-sphere radius field, plus sky. Characters
+    load from `art/` via `art/manifest.json`.
+  - Rock props scattered from `world_seed` per the GDD table: seated on the
+    sampled surface, oriented radially, skipped on slopes above
+    `rock_slope_max`, denser in crater floors and along ridges. All clients run
+    the same code and seed, so all clients agree — the server is not involved,
+    because M1 props have no collision. Keep them under `rock_size` so walking
+    through one is not jarring.
+  - **Up is radial, everywhere.** Camera up, character orientation and prop
+    placement all derive from `normalize(pos)`, never from `+Y`. A hardcoded
+    up works at spawn and breaks on the far side of the world, so it will pass
+    your first smoke test — walk a lap before believing it.
+  - **First-person camera, and only that.** M1 mounts it at the `eye` node of
+    the player body (falling back to GDD `eye_height` above the entity
+    origin). The game has no third-person or orbit camera at any point in its
+    future (GDD pillar 2) — do not build one, not even as a debug affordance,
+    because debug affordances become load-bearing. Mount point is an
+    indirection: M2 moves it to a `seat.*` node inside a vehicle.
+  - **Render the local player's own body** — the same `char.player` model, with
+    only the `head` node hidden. Near plane 0.05 m, far 500 m. Looking down
+    shows your torso, legs and hands (GDD "First-person body").
+  - **Procedural walk animation**, no rig: rotate `arm.l/r` and `leg.l/r` about
+    their own pivots with a sine driven by horizontal speed, arms
+    counter-swinging to legs, easing to rest when stopped. Applies to local and
+    remote characters alike. No skeletal animation, no `.glb` clips.
+  - **No head bob.** Nausea risk on a world whose up vector already rotates as
+    you walk.
+  - On-foot controls per the GDD on-foot rule table: WASD wish direction,
+    mouse look, sprint, jump → command stream, each `input` tagged with an
+    incrementing `seq`.
+  - **Look is applied instantly and never reconciled.** Send `look_dir` as an
+    absolute world-space unit vector; do not predict it, do not replay it, and
+    never accept a server correction to it — a yanked view is motion sickness.
+    Only position/velocity go through prediction. Mouse movement maps to
+    rotation in the player's current tangent frame; do not store view as
+    global yaw/pitch, which has no meaning on a sphere.
   - Net client: WebSocket to the Go server, binary frames per
     `docs/PROTOCOL.md`.
-  - Local player prediction + reconciliation; remote entities via
-    interpolation buffer (~100 ms) with short extrapolation.
+  - Local player prediction stepped at a **fixed 50 ms**, same as the server
+    tick, with the render loop interpolating between predicted states for
+    60 fps. Never step the sim on the frame delta.
+  - Reconciliation by **replay**: keep sent inputs in a ring buffer, snap to
+    server state on each snapshot, drop inputs up to `ack_seq`, re-simulate the
+    rest. Do not lerp toward server state — that rubber-bands by
+    `velocity × latency` (ARCHITECTURE "Network model").
+  - Remote entities via interpolation buffer (~100 ms) with short
+    extrapolation — remote players are interpolated, never replayed.
   - HUD: minimal, DOM overlay is fine for M1 (speed, distance to nearest
     player, connection state).
+  - Pointer lock for mouse look, with a visible way back out. A first-person
+    game that traps the cursor with no escape is a bug report.
 
 ## Rules
+- **Movement + terrain sampling go in `client/src/sim/`, a pure module** (no
+  DOM, no Three.js, no browser globals; `dt` and input passed in, never read
+  from a clock). `qa` runs it headless under Node to diff against the Go sim —
+  ROADMAP criterion 5 is untestable if the sim is welded to the renderer.
+  Concretely, and in this order:
+  1. Give `sim/` its own `tsconfig.sim.json` with `"lib": ["ES2022"]` and no
+     `"DOM"`, wired into `make build`. The compiler then rejects `window`,
+     `document`, `performance` and `requestAnimationFrame` inside that folder,
+     so the boundary cannot rot quietly.
+  2. Implement `step(state, input, terrain, dt) -> state` and
+     `sampleRadius(terrain, dir) -> number` — pure, total, matching the Go
+     side so the two can be diffed.
+  3. **Build `sim/` before the renderer.** Extracting a sim out of a finished
+     render loop is exactly how this goes wrong.
+  4. Ship a ten-line Node smoke test that imports `sim/` and steps it once,
+     plus the JSONL trajectory dump entry point (ARCHITECTURE "Client"). Both
+     land in wave 2 — waiting for `qa` in wave 3 means finding the problem at
+     the gate.
+- Ship a dev override that forces local position/velocity to a bad value, so
+  server authority correction is observable (ROADMAP criterion 3).
+- Nametags: plain text over remote characters only, faded out past ~40 m, never
+  over your own body. Names come from `spawn.data` and are **untrusted** —
+  render as text, never as markup.
 - Target 60 fps; never block the render loop on network I/O.
 - The client never invents authoritative world state: everything arrives via
   snapshots; prediction is local-only and reconciled against the server.
-- Consume assets through the manifest by asset id; never edit `art/`.
+- Consume assets through the manifest by asset id; never edit `art/`. A
+  manifest entry whose `.glb` does not exist yet is **normal, not an error**:
+  fall back to a flat-shaded `BoxGeometry` placeholder so you never block on
+  `art`.
+- Mount the camera on the `eye` node inside `char.player.glb` (`-Z` = forward
+  view); fall back to GDD `eye_height` above the entity origin when the asset
+  or node is absent. Never hardcode an eye offset of your own — that number
+  lives in the model, owned by `art`.
+- Collide against the server's radius field with the GDD rules, sampling it
+  exactly as the server does (GDD "Terrain sampling" — face order, axis
+  assignment and seams all have to match, or players fall through the ground
+  at specific edges). Do not add a physics engine, do not mesh-collide the
+  rendered terrain — the ground is six arrays, and the render mesh is a view
+  of it.
 - `docs/PROTOCOL.md` is the contract: implement from it, report gaps.
 - Smoke-test with the `browser` tool where the server is reachable; report
   what you actually observed.

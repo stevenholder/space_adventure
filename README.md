@@ -1,10 +1,19 @@
 # Space Adventure
 
-Low-poly 3D MMO space/fantasy adventure, played in the browser.
+Low-poly 3D MMO space/fantasy adventure, played in the browser, entirely in
+first person.
+
+Board a ship with your friends, fly it to a planet, climb out and explore on
+foot, drive a rover across the surface, load back up and leave. Vehicles are
+shared spaces: one player flies, the rest are aboard. See `docs/GDD.md`.
+
+**M1 builds the middle of that loop first:** a body on foot, with other
+players, on a small round world you can walk all the way around in a couple of
+minutes. Ships arrive at M2, space at M3 — `docs/ROADMAP.md`.
 
 - **Client:** Three.js + TypeScript, 3D-first UI
 - **Server:** Go, authoritative fixed-tick simulation over WebSocket
-- **Infra:** local Kubernetes (kind) + Docker
+- **Infra:** two local processes behind a Makefile (containers + kind at the scale-out milestone)
 - **Development:** agent-first — specialized AI agents work in parallel on
   non-overlapping module boundaries
 
@@ -15,7 +24,7 @@ Low-poly 3D MMO space/fantasy adventure, played in the browser.
 | `server/` | Go game server: simulation, networking, protocol | `netcode` (rules: `game`) |
 | `client/` | Three.js/TS browser client: render, controls, net client, HUD | `frontend` |
 | `art/` | Low-poly assets (glTF), shaders, asset manifest | `art` |
-| `deploy/` | kind config, K8s manifests, Dockerfiles | `infra` |
+| `deploy/` | local run (Makefile); K8s manifests + Dockerfiles from scale-out | `infra` |
 | `test/` | Cross-module integration/e2e tests | `qa` |
 | `docs/` | Architecture, GDD, protocol, roadmap | main thread (agents propose) |
 | `.omp/` | Agent definitions, project context, sticky rules | main thread |
@@ -31,8 +40,9 @@ Low-poly 3D MMO space/fantasy adventure, played in the browser.
 ## Local development (from M1 onward)
 
 ```sh
-make up     # kind cluster + build images + deploy + port-forwards
-make down   # tear it all down
+make up     # Go server (:8080) + Vite dev server (:5173, /ws proxied)
+make down   # stop both
+make build  # go build/vet/test + tsc strict + npm run build
 ```
 
 The Makefile lands with M1 — `infra` owns it.

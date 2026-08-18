@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "char.player",
+      "file": "chars/player.glb",
+      "tris": 0,
+      "license": "CC0",
+      "source": "tools/gen_player.py"
+    },
+    {
+      "id": "prop.rock.a",
+      "file": "props/rock_a.glb",
+      "tris": 0,
+      "license": "CC0",
+      "source": "tools/gen_rocks.py"
+    },
+    {
+      "id": "prop.rock.b",
+      "file": "props/rock_b.glb",
+      "tris": 0,
+      "license": "CC0",
+      "source": "tools/gen_rocks.py"
+    },
+    {
+      "id": "prop.rock.c",
+      "file": "props/rock_c.glb",
+      "tris": 0,
+      "license": "CC0",
+      "source": "tools/gen_rocks.py"
+    }
+  ]
+}

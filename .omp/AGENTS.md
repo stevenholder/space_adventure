@@ -1,10 +1,19 @@
 # Space Adventure — project context for agents
 
-Low-poly 3D MMO space/fantasy adventure. Browser client (Three.js +
-TypeScript) ↔ authoritative Go server (WebSocket, binary protocol) on local
-Kubernetes (kind). Current milestone: **M1 — multiplayer space flight** — two
-browser clients fly low-poly ships in shared space; the server is
-authoritative at 20 Hz. See `docs/ROADMAP.md`.
+Low-poly 3D MMO space/fantasy adventure, played **entirely in first person**:
+crew a ship with other players, land on a planet, explore on foot, drive
+surface vehicles, load back up and leave (`docs/GDD.md`, "Core loop").
+Browser client (Three.js + TypeScript) ↔ authoritative Go server (WebSocket,
+binary protocol), run locally as two processes via `make up`.
+
+Current milestone: **M1 — multiplayer first person on a small round world** —
+two browser clients walk around a low-poly asteroid (150 m radius, a lap in a
+couple of minutes) and see each other move; the server is authoritative at
+20 Hz. M1 builds one verb of the loop, the "explore on foot" one: **the player
+is a body, not a vehicle**, and there are no ships, no space, and no flight
+until M2. The world being round is load-bearing — up is `normalize(pos)`
+everywhere, never `+Y`. See `docs/ROADMAP.md`.
+(Containers and kind land at the scale-out milestone, not now.)
 
 ## Module ownership (parallel safety)
 
@@ -18,7 +27,7 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 | `netcode` | `server/` (except gameplay rule files), `docs/PROTOCOL.md` only when explicitly instructed | `client/`, `deploy/`, `art/` |
 | `frontend` | `client/` | `server/`, `deploy/`, `art/` (consumes assets, doesn't edit) |
 | `art` | `art/` | all code directories |
-| `infra` | `deploy/`, root `Makefile`, root `Dockerfile*` | game logic, client code |
+| `infra` | `deploy/`, root `Makefile` (root `Dockerfile*` from scale-out) | game logic, client code |
 | `qa` | `test/`, verification reports | all product code (reports bugs, never fixes) |
 | main | `docs/`, `.omp/`, `README.md`, root config | orchestrates; edits contract files directly |
 
@@ -39,9 +48,12 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 - Go: module `space-adventure/server`, gofmt-clean, stdlib-first
   (`net/http`, `encoding/binary`), gorilla/websocket for WS, wrap errors
   (`%w`), no global mutable state.
-- Protocol: little-endian binary, length-prefixed — `docs/PROTOCOL.md`.
+- Protocol: little-endian binary, one message per WebSocket message —
+  `docs/PROTOCOL.md`.
 - Assets: glTF 2.0 binary (`.glb`) only, flat-shaded low-poly, reproducible
-  via committed generation scripts, registered in `art/manifest.json`.
+  via committed generation scripts, registered in `art/manifest.json`. The
+  manifest is a frozen contract of asset ids; entries may point at files that
+  do not exist yet, and `frontend` falls back to a placeholder.
 - Commits: conventional (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
   Never commit or push unless explicitly asked.
 

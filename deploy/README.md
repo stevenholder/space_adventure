@@ -1,12 +1,18 @@
-# deploy — local Kubernetes (kind)
-
-kind cluster config, K8s manifests, image build pipeline.
+# deploy — local run (M1)
 
 - Owner: `infra`
-- Namespace: `space-adventure`
-- Workloads (M1): `server` (Deployment + Service, :8080 WS), `client`
-  (nginx static, :80, same-origin with server)
-- Lifecycle: root `Makefile` — `make up` / `make down`
-- Local access: `kubectl port-forward` (no ingress in M1)
+- M1 is two local processes, no containers and no cluster — the rationale is
+  in `docs/ARCHITECTURE.md` ("Deployment").
 
-Nothing here yet — M1 brings up the cluster.
+Root `Makefile` targets:
+
+| Target | Does |
+|--------|------|
+| `make up` | Go server (WS + `/healthz` on :8080) and Vite dev server (:5173, `/ws` proxied to :8080, so client and server are same-origin) |
+| `make down` | stops both, leaves no stray processes |
+| `make build` | `go build ./...` + `tsc` strict + `npm run build` |
+
+Containers, kind config and K8s manifests arrive at the **scale-out milestone**, when
+there is more than one server process to schedule.
+
+Nothing here yet — M1 wave 1 adds the Makefile.
