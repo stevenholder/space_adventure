@@ -1,0 +1,5 @@
+[
+  { "label": "level", "az": 0, "dist": 26, "pauseAfter": 10 },
+  { "label": "slope", "az": 0, "dist": 13, "pauseAfter": 10 },
+  { "label": "slide", "az": 0, "dist": 12, "pauseAfter": 60 }
+]

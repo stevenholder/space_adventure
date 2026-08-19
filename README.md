@@ -13,7 +13,7 @@ minutes. Ships arrive at M2, space at M3 — `docs/ROADMAP.md`.
 
 - **Client:** Three.js + TypeScript, 3D-first UI
 - **Server:** Go, authoritative fixed-tick simulation over WebSocket
-- **Infra:** two local processes behind a Makefile (containers + kind at the scale-out milestone)
+- **Infra:** local kind cluster (server + client in a namespace, nginx `/ws` proxy) behind a Makefile
 - **Development:** agent-first — specialized AI agents work in parallel on
   non-overlapping module boundaries
 
@@ -24,7 +24,7 @@ minutes. Ships arrive at M2, space at M3 — `docs/ROADMAP.md`.
 | `server/` | Go game server: simulation, networking, protocol | `netcode` (rules: `game`) |
 | `client/` | Three.js/TS browser client: render, controls, net client, HUD | `frontend` |
 | `art/` | Low-poly assets (glTF), shaders, asset manifest | `art` |
-| `deploy/` | local run (Makefile); K8s manifests + Dockerfiles from scale-out | `infra` |
+| `deploy/` | local kind run (Makefile) + K8s manifests + Dockerfiles | `infra` |
 | `test/` | Cross-module integration/e2e tests | `qa` |
 | `docs/` | Architecture, GDD, protocol, roadmap | main thread (agents propose) |
 | `.omp/` | Agent definitions, project context, sticky rules | main thread |
@@ -40,9 +40,8 @@ minutes. Ships arrive at M2, space at M3 — `docs/ROADMAP.md`.
 ## Local development (from M1 onward)
 
 ```sh
-make up     # Go server (:8080) + Vite dev server (:5173, /ws proxied)
-make down   # stop both
-make build  # go build/vet/test + tsc strict + npm run build
+make up     # kind cluster + server/client images + manifests + port-forwards
+make down   # tear down the cluster, forwards, and logs
 ```
 
 The Makefile lands with M1 — `infra` owns it.
@@ -62,5 +61,5 @@ main session orchestrates; agents run in parallel on paths they own:
 | `qa` | Verification against acceptance criteria, e2e tests |
 
 Parallel dispatch example (one batch, no file overlap by construction):
-`netcode` builds the tick loop, `frontend` builds flight controls, `infra`
+`netcode` builds the tick loop, `frontend` builds on-foot movement + the 3D scene, `infra`
 brings up kind. Ownership rules: `.omp/AGENTS.md`. Hard rules: `.omp/RULES.md`.

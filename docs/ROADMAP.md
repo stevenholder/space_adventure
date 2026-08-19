@@ -30,9 +30,11 @@ and never rebuilt (GDD "M1 scope").
   remote interpolation, HUD
 - `art/` — player character model, terrain material, surface props (rocks and
   friends) (`.glb`, manifest, generation scripts)
-- `deploy/` — root Makefile (`make up` / `make down` / `make build`) running
-  the Go server and Vite dev server locally. **No containers, no kind in M1**
-  — see ARCHITECTURE "Deployment"; that work moves to M6 (scale-out).
+- `deploy/` — root Makefile (`make up` / `make down`) plus a kind cluster,
+  Dockerfiles, and k8s manifests running the Go server and the built client in
+  a local kind cluster (namespace `space-adventure`) behind an nginx `/ws`
+  proxy. `make up` from a clean clone is the M1 entry point (criterion 1);
+  scale-out (sharding, delta snapshots, 100+ load) is M6.
 - `test/` — e2e two-client harness + movement conformance test
 
 ### Acceptance criteria (`qa` verifies all)

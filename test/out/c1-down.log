@@ -1,0 +1,4 @@
+Deleting cluster "space-adventure" ...
+Deleted nodes: ["space-adventure-control-plane"]
+down: port-forwards stopped, cluster removed, nothing left running
+down_rc=0

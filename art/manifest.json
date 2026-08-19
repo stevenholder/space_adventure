@@ -4,30 +4,42 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 0,
+      "tris": 192,
       "license": "CC0",
-      "source": "tools/gen_player.py"
+      "source": "tools/gen_player.py",
+      "description": "M1 player character. Segmented, unrigged: named nodes eye/head/torso/arm.l/arm.r/leg.l/leg.r; limb pivots at shoulder and hip; eye at 1.7 m, -Z forward; head is a sibling of eye so the local player can hide it without hiding the camera. Orange suit with teal backpack, reads from 50 m and from the inside-down view."
     },
     {
       "id": "prop.rock.a",
       "file": "props/rock_a.glb",
-      "tris": 0,
+      "tris": 320,
       "license": "CC0",
-      "source": "tools/gen_rocks.py"
+      "source": "tools/gen_rocks.py",
+      "description": "Rounded boulder variant, fine facets. Unit-sized, base at origin, up +Y; client seats on surface, orients radially, scales 0.3-1.5 m."
     },
     {
       "id": "prop.rock.b",
       "file": "props/rock_b.glb",
-      "tris": 0,
+      "tris": 80,
       "license": "CC0",
-      "source": "tools/gen_rocks.py"
+      "source": "tools/gen_rocks.py",
+      "description": "Flat-topped slab variant, coarse facets."
     },
     {
       "id": "prop.rock.c",
       "file": "props/rock_c.glb",
-      "tris": 0,
+      "tris": 80,
       "license": "CC0",
-      "source": "tools/gen_rocks.py"
+      "source": "tools/gen_rocks.py",
+      "description": "Sharp angular shard variant, coarse facets, high-amplitude noise."
+    },
+    {
+      "id": "ship.v1",
+      "file": "ships/v1.glb",
+      "tris": 432,
+      "license": "CC0",
+      "source": "tools/gen_ship.py",
+      "description": "Hero scout ship for M2 (built early so M2 does not wait on art). -Z forward, origin at ground level. Carries the seat contract: seat.pilot plus seat.passenger.0/1 empty nodes at the eye point. Walk-in cockpit with open canopy, glass (alphaMode BLEND), floor, dash, lit console panel and seats; hull is double-sided so the interior renders from the pilot seat."
     }
   ]
 }

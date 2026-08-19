@@ -105,6 +105,12 @@ control back to.
 
 ## M1 on-foot movement (spec for `netcode` + `frontend`)
 
+This section is a **drop-in spec**: the server tick step and the client
+prediction step are the same function, and an implementer can code either
+from this section alone. Every number is in the rule table; every rule is a
+formula or a named reference to one. There are no prose-only rules in this
+section.
+
 - Controls: WASD — move (local to facing); mouse — look; Shift — sprint;
   Space — jump.
 - Units: 1 unit = 1 m. Positions are world-space Cartesian with the planet
@@ -125,21 +131,94 @@ control back to.
   `world_seed` and sends them once on join (PROTOCOL `terrain`). Both ends
   collide against those same arrays — no mesh collision, no collision library,
   and no cross-language noise function that has to agree to the last bit.
-  A cube-sphere is used rather than a latitude/longitude grid because it has no
-  pole singularity and no bunching, at the cost of six faces and a seam rule.
+  A cube-sphere is used rather than a latitude/longitude grid because it has
+  no pole singularity and no bunching, at the cost of six faces and a seam rule.
 - Look is **client-authoritative and never predicted**: the client sends its
-  view direction as an absolute unit vector `look_dir` in world space. The
-  server accepts it (clamping how close it may come to local up or down) and
-  derives body facing by projecting it onto the tangent plane. Aim must be
-  instant, and a corrected view is motion sickness. Only position and velocity
-  are predicted and replayed.
+  view direction as an absolute unit vector `look_dir` in world space. Both
+  ends apply the same `clampLook` — the client to its own camera (it must not
+  be able to view the poles the server would reject), the server to derive
+  body facing — by projecting the clamped vector onto the tangent plane. Aim
+  must be instant, and a corrected view is motion sickness. Only position and
+  velocity are predicted and replayed.
   - A world-space vector is used instead of a `yaw`/`pitch` pair because on a
     sphere there is no global reference frame for yaw to be measured against —
     any choice has a singularity somewhere on the surface. A direction vector
     needs no frame, stays absolute and idempotent (latest wins, matching the
     rest of the input design), and costs 4 bytes more.
-- Spawn: on the surface above `spawn_dir`, standing, zero velocity, facing an
-  arbitrary tangent direction.
+
+### State
+
+The complete sim state of a body — both ends keep this and nothing else:
+
+| field | type | meaning |
+|---|---|---|
+| `pos` | vec3, f64 | foot position, world space; `\|pos\|` is the radius from the planet centre |
+| `vel` | vec3, f64 | foot velocity, world space |
+| `grounded` | bool | in contact with the surface **and** the slope at the contact point ≤ `max_slope` (set by the terrain resolution). This exact boolean is the `grounded` field of the trajectory dump |
+| `facing` | vec3, f64 | body facing, unit vector in the local tangent plane; carried so the near-vertical facing-hold (integrator step 2) has a value to keep. Set at spawn; not part of the trajectory dump |
+
+Derived per step (never stored):
+
+```
+up         ← normalize(pos)
+in_contact ← |pos| − radius(terrain, up) ≤ ground_snap
+mode       ← GROUND  if grounded
+             SLIDE   if in_contact
+             AIR     otherwise
+```
+
+`grounded` ⟹ `in_contact` always (the flag is only set while the body is on
+the surface), so the three modes partition the state: **GROUND** = walkable
+contact, **SLIDE** = contact on ground steeper than `max_slope`, **AIR** =
+not in contact.
+
+### Input
+
+The input for a tick is the latest `input` frame received (server) or the
+local command state (client) — current state, latest wins (PROTOCOL).
+Sanitize before use:
+
+| field | sanitize | default when missing |
+|---|---|---|
+| `move_x`, `move_y` | each clamped to [−1, 1]; the pair clamped to unit length (a diagonal must not be 1.41× faster); non-finite → 0 | 0 |
+| `look_dir` | normalized, then `clampLook` (below); non-finite or shorter than `eps_degen` → the last applied input's look | the spawn look |
+| `action_mask` | `0x0001` sprint, `0x0002` jump; other bits ignored | 0 |
+
+- **Axis mapping:** `move_y` is forward (along the facing), `move_x` is right
+  (along `up × facing`) — W = +y, D = +x, S is exactly −forward.
+- **Silent/missing input:** the server holds the last input it received on
+  every tick (PROTOCOL "latest arrival wins"). If it has never received an
+  input frame, the defaults row above applies: the body stands still, with
+  facing derived from the spawn look. A dropped client keeps walking until
+  the 10 s heartbeat timeout despawns it — acceptable, and simpler than a special case.
+- **"Previous look" / "previous facing"** — both mean the last applied
+  input's look: the server's last received `input` frame (PROTOCOL: the input
+  is constant between inputs), or the client's previous-tick local command
+  state. "Previous facing" is the facing step 2 would derive from it. Before
+  any input, both are the spawn look (see "Spawn").
+
+### Spawn
+
+```
+spawn(terrain):
+  up       ← spawn_dir
+  pos      ← up · radius(terrain, up)         # feet, on the surface along spawn_dir
+  vel      ← 0
+  grounded ← slopeOK(terrain, up)             # true by the terrain contract (flat spawn disc)
+  look     ← normalize((1,0,0) − up·dot((1,0,0), up))     # tangent projection of world +X
+  if |look| < eps_degen:
+      look ← normalize((0,0,1) − up·dot((0,0,1), up))
+  facing   ← normalize(look − up·dot(look, up))    # tangent of the spawn look; the held value from here on
+```
+
+With `spawn_dir` (0, 1, 0) this is `pos = (0, radius, 0)` with the initial
+look along world +X. The `look` is the connection's initial `look_dir` — the
+"last applied input's look" of "Input" until the client sends its first
+input, and body facing is initialized from it as in step 2 (then carried
+as state). Deterministic: two servers with the same seed and input stream
+spawn identically. All players spawn at the same point; bodies pass through
+each other (no player-vs-player collision in M1), so overlap is acceptable
+and there is no spawn spread in M1.
 
 ### First-person body
 
@@ -180,8 +259,7 @@ source and this is a first-person game on a world with a 23 m horizon and a
 constantly rotating up vector — there is enough vestibular novelty already.
 Add it later behind a setting if the walk feels weightless.
 
-Terrain sampling (binding on both ends — this is the shared function
-everything else calls):
+### Terrain sampling (binding on both ends — the shared function everything else calls)
 
 1. Given a direction `d` (normalized world position), pick the face by the
    largest-magnitude component of `d`; face order is `+X, −X, +Y, −Y, +Z, −Z`.
@@ -195,35 +273,64 @@ everything else calls):
    (below) satisfies this **for free** — the shared edge is the same direction,
    so it evaluates to the same radius. Any generator that works in per-face 2D
    instead has to reconcile twelve edges by hand; don't.
-5. Surface normal is not radial on sloped ground: compute it by finite
-   differences of the sampled radius around the point. Slope is the angle
-   between that normal and local up.
+5. The surface normal is not radial on sloped ground. Compute it by finite
+   differences of the sampled radius — this exact formula, so both ends get
+   the same normal from the same field:
 
-Rule table (implementers treat as spec — every value is named):
+   ```
+   surfaceNormal(terrain, up):
+     k  ← (1,0,0)  if |dot(up, (1,0,0))| ≤ 0.9  else  (0,1,0)
+     e1 ← normalize(k − up·dot(k, up))
+     e2 ← up × e1
+     P0 ← up · radius(terrain, up)
+     d1 ← normalize(up + e1·normal_eps)
+     d2 ← normalize(up + e2·normal_eps)
+     P1 ← d1 · radius(terrain, d1)
+     P2 ← d2 · radius(terrain, d2)
+     n  ← cross(P1 − P0, P2 − P0)
+     if dot(n, up) < 0: n ← −n
+     return normalize(n)
+   ```
 
-| name | value | unit | note |
-|------|-------|------|------|
-| `eye_height` | 1.7 | m | camera offset above foot position |
-| `capsule_radius` | 0.4 | m | body radius (terrain + props only in M1) |
-| `capsule_height` | 1.8 | m | body height |
-| `walk_speed` | 4.5 | m/s | target ground speed |
-| `sprint_speed` | 7.5 | m/s | target speed with the sprint bit held |
-| `accel_ground` | 50 | m/s² | reaches walk speed in ~0.09 s — arcade snap |
-| `friction_ground` | 8 | 1/s | `v *= exp(-friction·dt)` with no move input (stop in ~0.3 s) |
-| `accel_air` | 8 | m/s² | limited air control; no friction while airborne |
-| `gravity` | 9.8 | m/s² | toward the planet centre. A real 150 m asteroid pulls ~0.0001 g; that is ignored on purpose, because the game is about walking, not floating. Lower it for a floatier feel — it is a one-value knob. |
-| `jump_speed` | 4.5 | m/s | initial upward velocity → ~1.03 m apex |
-| `terminal_speed` | 60 | m/s | downward speed clamp |
-| `max_step` | 0.3 | m | height walked up without jumping |
-| `max_slope` | 50 | deg | steeper ground is not walkable — you slide |
-| `ground_snap` | 0.15 | m | stay glued to ground walking downhill |
-| `look_clamp` | 1 | deg | `look_dir` may not come within this angle of local up or down |
+   The fixed `k` and its fallback make the tangent basis deterministic and
+   frame-free (no pole). **Slope** = the angle between `n` and local up:
+   `acos(clamp(dot(n, up), −1, 1))`. `normal_eps` ≈ 5 m ≈ 1.5 grid cells, so
+   the normal averages over the bilinear kinks instead of snapping at every
+   grid line.
+
+### Rule table
+
+Implementers treat this as spec — every value is named, unit'd, and justified:
+
+| name | value | unit | justification |
+|------|-------|------|---------------|
+| `tick_hz` | 20 | Hz | server **and** client-prediction tick (PROTOCOL); `dt = 1/tick_hz = 0.05 s`, fixed on both ends |
+| `walk_speed` | 4.5 | m/s | brisk human walk; full 942 m lap in ~3.5 min |
+| `sprint_speed` | 7.5 | m/s | ~30 km/h; full lap in ~2.1 min — the demo's "fast" |
+| `accel_ground` | 50 | m/s² | `walk_speed/accel_ground` = 0.09 s from 0 to walk — input registers within a tenth of a second |
+| `friction_ground` | 8 | 1/s | `v *= exp(−friction·dt)` with no move input: to 9 % of speed in 0.3 s — ~3× slower than the accel ramp, so stopping has weight |
+| `accel_air` | 8 | m/s² | 1/6 of `accel_ground` — air control steers, momentum dominates; no friction while airborne |
+| `gravity` | 9.8 | m/s² | 1 g toward the planet centre; jump apex 1.03 m, hang time 0.92 s — readable, not floaty. A real 150 m asteroid pulls ~0.0001 g; that is ignored on purpose, because the game is about walking, not floating. Lower it for a floatier feel — it is a one-value knob. |
+| `jump_speed` | 4.5 | m/s | apex `v²/2g` = 1.03 m, hang time `2v/g` = 0.92 s — clears a `max_step` 0.3 m ledge with margin |
+| `terminal_speed` | 60 | m/s | downward radial-speed clamp; the longest M1 fall (Great Crater rim→floor, 38 m) reaches `sqrt(2·9.8·38)` ≈ 27 m/s, so the clamp is a safety valve, not a feel knob |
+| `max_step` | 0.3 | m | step height walked up per step; sprinting up a `max_slope` slope rises `sprint_speed·dt·sin 50°` ≈ 0.29 m per step — just under, so the steepest walkable slope is climbable at full sprint |
+| `max_slope` | 50 | deg | walkability limit; steeper ground is slid (no friction, no walk accel), not climbed |
+| `ground_snap` | 0.15 | m | glue band: the per-step curvature drop at sprint is ~0.5 mm, so >300× margin — feet stay glued downhill without cliff edges feeling sticky |
+| `look_clamp` | 1 | deg | keeps `look_dir` off the exact poles, where the tangent-plane projection that derives facing degenerates; ±89° pitch remains |
+| `facing_hold` | 0.1 | — | below this tangent-projection magnitude the look is too near-vertical to define a stable azimuth, so facing holds its carried value (integrator step 2) — avoids body spin on mouse jitter |
+| `normal_eps` | 2 | deg | finite-difference offset for the surface normal — ~5 m at the surface, ~1.5 grid cells, so the slope test is not kink-noisy |
+| `wall_tol` | 1e-3 | m | bisection tolerance for wall contact — 1 mm, far below the 5 % conformance tolerance |
+| `eps_degen` | 1e-6 | — | numeric-degeneracy threshold for direction normalization (unit-vector dot products) |
+| `eye_height` | 1.7 | m | camera offset above the foot position (client only — the server sim does not use it) |
+| `near_clip` | 0.05 | m | first-person near plane (client only); a default 0.1 m slices through the player's own chest when looking straight down — see "First-person body" |
+| `far_clip` | 500 | m | first-person far plane (client only); the 23 m horizon bounds what is visible, so 500 m is skybox headroom, not view range |
+| `capsule_radius` | 0.4 | m | body collision radius, declared now so M1 prop collision and M2 vehicle collision have a number; M1 terrain collision uses the foot point and must not use this |
+| `capsule_height` | 1.8 | m | body height (client only — the M1 sim does not use it) |
 | `planet_radius` | 150 | m | nominal surface radius — 942 m circumference, ~2 min sprint lap, ~3.5 min walk |
 | `radius_min` | 124 | m | wire-encoding floor — deepest crater floor in a valley, with headroom |
 | `radius_max` | 190 | m | wire-encoding ceiling — highest peak on the tallest ridge, with headroom |
 | `face_grid` | 65 | samples | per cube face, per axis; 6 faces → 25,350 samples, ~3.3 m apart at the surface |
-| `spawn_dir` | (0, 1, 0) | unit | spawn on the surface along this direction |
-| `tick_hz` | 20 | Hz | server tick (matches PROTOCOL) |
+| `spawn_dir` | (0, 1, 0) | unit | spawn plain sits on the +Y cube face (reserved by the terrain spec); the flat disc is guaranteed by the terrain contract |
 
 Consequences of `planet_radius` worth knowing before tuning it: the horizon
 sits `sqrt(2 · planet_radius · eye_height)` ≈ **23 m** away, other players
@@ -232,67 +339,259 @@ direction. That is the demo's whole charm — and also why this world cannot
 double as a realistic planet later. It is a practice world, sized for
 practicing.
 
-Edge cases:
+### Integrator (binding per-tick step — both ends run this exact order)
 
-- **Diagonal input is normalized.** `(move_x, move_y)` is clamped to unit
-  length before use, or diagonal movement is 1.41× faster than forward — the
-  oldest bug in first-person movement.
-- **Sprint applies in every direction**, not forward only. Simpler to
-  implement, simpler to predict, and nobody has ever enjoyed the alternative.
-- **Jump requires being grounded** — no double jump, no air jump. Coyote time
-  is a feel-pass question, not an M1 rule.
-- **Slopes steeper than `max_slope`:** no ground friction and no walk
-  acceleration; gravity applies along the slope, so you slide down. The body
-  is not "grounded" for jump purposes while sliding.
-- **`max_step`:** ground within `max_step` above the body's feet is walked up
-  without leaving the ground. Above that, it is a wall.
-- **Falling through terrain:** after integrating position, if `|pos|` is below
-  the sampled surface radius for that direction, snap it out to the surface and
-  zero the radial component of velocity. This is a correctness backstop, not a
-  movement rule — it must never be the mechanism that normal walking relies on.
-- **Crossing a cube-face seam must be invisible.** This is the one bug a round
-  world adds that a flat patch does not have, and it will not appear in a test
-  that walks in a small circle near the spawn point. Any test of movement must
-  cross at least one seam.
-- **Velocity is re-projected as you walk.** Moving across a curved surface
-  continuously rotates local up, so tangential velocity must be re-projected
-  into the new tangent plane each step or the body slowly acquires a radial
-  component and drifts off the ground.
+The server tick step and the client prediction step are this one function.
+Replay converges only if the step structure matches (ARCHITECTURE "Network
+model"). Fixed `dt = 1/tick_hz` = 0.05 s, never a variable frame delta. `f64`
+internally on both ends, `f32` only on the wire. Bit-identical determinism is
+explicitly **not** required — the server is authoritative and the per-step
+rounding difference is far below the 5 % conformance tolerance (ROADMAP
+criterion 5). Chasing cross-language float parity is not an M1 problem.
+
+```
+step(state, input, terrain, dt):
+
+  # 1. Sanitize input (see "Input")
+  (move_x, move_y) ← clamped pair
+  (sprint, jump)   ← mask bits
+  look             ← input.look_dir, or the previous look if non-finite/degenerate
+
+  # 2. Frame and facing — rotation is a direct rule, not a dynamic: facing is
+  #    updated from the clamped look every tick, held when the look is too
+  #    near-vertical to define a stable azimuth. No smoothing, no angular
+  #    velocity, no lerp, on either end.
+  up     ← normalize(pos)
+  look   ← clampLook(look, up)
+  tang   ← look − up·dot(look, up)                 # tangent projection of the look
+  if |tang| ≥ facing_hold:                          # stable azimuth (≥ ~5.7° off vertical)
+      facing ← normalize(tang)
+  # else: facing holds its carried value — a near-vertical look has too short
+  #       a tangent to define a stable azimuth, so recomputing would spin the
+  #       body on mouse jitter (facing_hold = 0.1, rule table)
+  right  ← up × facing
+
+  # 3. Mode (from state carried out of the previous step)
+  in_contact ← |pos| − radius(terrain, up) ≤ ground_snap
+  mode ← GROUND if grounded, else SLIDE if in_contact, else AIR
+
+  # 4. Acceleration — per mode
+  w      ← (move_x, move_y)
+  ŵ      ← facing·w.y + right·w.x
+  speed  ← sprint_speed if sprint else walk_speed
+  target ← (ŵ/|ŵ|)·speed  if |ŵ| > eps_degen  else  0    # binary: stick magnitude does not scale speed
+  if mode = GROUND:
+      if target ≠ 0: vel ← approach(vel, target, accel_ground·dt)
+      else:          vel ← vel·exp(−friction_ground·dt)
+  if mode = SLIDE:
+      n ← surfaceNormal(terrain, up)
+      vel ← vel + (−up·gravity − n·dot(−up·gravity, n))·dt   # gravity along the downslope tangent
+  if mode = AIR:
+      vr ← dot(vel, up)
+      vt ← vel − up·vr
+      if target ≠ 0: vt ← approach(vt, target, accel_air·dt)
+      vel ← up·vr + vt − up·gravity·dt
+      if dot(vel, up) < −terminal_speed:
+          vel ← vel − up·(dot(vel, up) + terminal_speed)     # clamp downward radial speed only
+
+  # 5. Jump — level-triggered, once per grounded contact
+  if mode = GROUND and jump:
+      vel ← vel + up·jump_speed
+
+  # 6. Integrate (semi-implicit Euler: the velocity from 4–5 moves the body)
+  pos_old ← pos
+  pos     ← pos + vel·dt
+
+  # 7. Terrain resolution — the single writer of grounded
+  (pos, vel, grounded) ← resolve(pos_old, pos, vel, mode, terrain)
+```
+
+Helpers (both ends implement these exactly):
+
+```
+approach(v, target, maxΔ):         # constant acceleration toward target, no overshoot
+  d ← target − v
+  if |d| ≤ maxΔ: return target
+  return v + (d/|d|)·maxΔ
+
+clampLook(l, up):                  # push l to ≥ look_clamp from ±up, preserving azimuth
+  l ← normalize(l)
+  c ← dot(l, up)
+  if c ≥ cos(look_clamp):
+      t ← l − up·c
+      if |t| < eps_degen: t ← previous facing        # l ≈ up exactly
+      return up·cos(look_clamp) + (t/|t|)·sin(look_clamp)
+  if c ≤ −cos(look_clamp):
+      t ← l − up·c
+      if |t| < eps_degen: t ← previous facing
+      return −up·cos(look_clamp) + (t/|t|)·sin(look_clamp)
+  return l
+
+slopeOK(terrain, up):              # is ground at up walkable?
+  return acos(clamp(dot(surfaceNormal(terrain, up), up), −1, 1)) ≤ max_slope
+
+wallSlide(p_old, p_new, terrain):  # p_old on/above surface, p_new below it by > max_step
+  f(t) ← |p_old + t·(p_new − p_old)| − radius(terrain, normalize(p_old + t·(p_new − p_old)))
+  lo, hi ← 0, 1                    # f(lo) ≥ 0, f(hi) < 0
+  while hi − lo > wall_tol:
+      mid ← (lo + hi)/2
+      if f(mid) ≥ 0: lo ← mid else: hi ← mid
+  return p_old + lo·(p_new − p_old)
+```
+
+The bisection runs a fixed number of iterations on both ends, so the two
+results differ only by float rounding. The search segment is ≤ ~1 m (max
+per-step displacement) and the terrain varies on a ≥ 3.3 m scale, so `f` has
+a single crossing in practice.
+
+```
+resolve(p_old, p_new, vel, mode, terrain):
+  up ← normalize(p_new)
+  h  ← |p_new| − radius(terrain, up)
+  if h < 0:                                        # feet below the surface
+      if −h ≤ max_step:                            # step-up, landing, or the normal curvature fit
+          p_new ← up·radius(terrain, up)
+      else:                                        # wall: the step is too high to climb
+          p_new ← wallSlide(p_old, p_new, terrain)
+          up ← normalize(p_new)
+      vel ← vel − up·dot(vel, up)                  # zero radial velocity
+      grounded ← slopeOK(terrain, up)              # in contact; walkable only if the slope allows
+  else if mode = AIR:
+      grounded ← false                             # still above the surface
+  else:                                            # was GROUND or SLIDE
+      if h ≤ ground_snap:                          # still in the glue band
+          p_new ← up·radius(terrain, up)
+          vel ← vel − up·dot(vel, up)
+          grounded ← slopeOK(terrain, up)
+      else:
+          grounded ← false                         # ran off an edge, or jumped — airborne
+  return (p_new, vel, grounded)
+```
+
+Invariants, checked after every step:
+
+- **Never below the surface:** `|pos| ≥ radius(terrain, normalize(pos))`. The
+  terrain resolution is the *only* position correction in M1 — there is no
+  world-edge clamp (a sphere has no edge) and no altitude clamp (the maximum
+  altitude in M1 is the jump apex, ~1.03 m).
+- **Tangent velocity in contact:** whenever the body is in contact after a
+  step, `dot(vel, up_new) = 0` at the new position. The radial zeroing above
+  *is* the velocity re-projection, done at the new position, never the old
+  one, so walking across a curved surface cannot accumulate radial drift. On
+  flat ground the per-step correction is the curvature fit (~0.2 mm at walk
+  speed); a body correcting by centimetres every step on flat ground is a bug
+  (velocity not staying tangent), not the model.
+- **Gravity is not applied in GROUND mode** — the ground's normal force
+  cancels it. Gravity acts in SLIDE mode (downslope tangent) and AIR mode
+  (radial) only. This is what keeps normal walking from relying on the
+  below-surface snap as its floor.
+
+**Snapshot encoding (per PROTOCOL `entity`):** `pos` and `vel` as stored,
+plus the `quat` of the body's orientation:
+
+```
+quat = rotation taking the entity's local frame (+X right, +Y up, +Z forward)
+       to (right = up_new × facing, up_new, facing)
+```
+
+so a remote body stands on its own local ground facing its own facing. The
+character model is authored in that local frame. Head pitch is not
+transmitted (PROTOCOL) — remote characters look level along their own
+horizon. The owning client ignores the server's `pos`/`vel`/`quat` for its
+own body except at the reconciliation snap, where it takes the server
+`pos`/`vel`, re-integrates the un-acked inputs, and re-derives facing from
+its own (client-authoritative) look.
+
+### Edge cases (all resolved)
+
+- **Diagonal input** is normalized in input sanitization — or diagonal
+  movement is 1.41× faster than forward, the oldest bug in first-person
+  movement.
+- **Sprint applies in every direction** — forward, backward and strafe all
+  at the same `speed`. Simpler to implement, simpler to predict, and nobody
+  has ever enjoyed the alternative.
+- **Backward movement is full speed.** S alone is exactly `−facing·speed`;
+  there is no backward penalty (the uniform-speed rule above covers it, and
+  a penalty would be an untestable feel knob).
+- **Sprint with no move input does nothing.** The sprint bit selects the
+  target speed; it adds no acceleration of its own. With no wish direction
+  the target is zero and the body decelerates through `friction_ground`.
+- **Jump requires `mode = GROUND`** — no double jump, no air jump, no slide
+  jump. It is level-triggered: holding the bit re-jumps on every landing
+  (bunny hop). The client may debounce the bit before sending if that is not
+  wanted; the server rule is level-triggered either way. Coyote time and
+  jump buffering are parked (open questions), not M1 rules.
+- **Slopes steeper than `max_slope` are slid, not climbed:** `mode = SLIDE` —
+  no walk acceleration, no friction, no jump, and gravity along the
+  downslope tangent, so the body accelerates down the slope. The body is in
+  contact but not `grounded`. When the slope below becomes walkable,
+  `grounded` flips back and the slide velocity carries into normal walking
+  (friction then decays it).
+- **`max_step`:** ground within `max_step` above the feet, per step, is
+  walked up without leaving the ground. Above that, it is a wall —
+  `wallSlide` stops the body at the first contact and cancels the radial
+  velocity, so the body slides along the face instead of passing through it.
+- **Landing discards radial kinetic energy** — radial velocity zeroed,
+  tangential kept. No bounce, no damage (health is parked). A fall at
+  `terminal_speed` stops dead at the surface: safety-valve behaviour, not a
+  feel.
+- **Falling through terrain** is the resolution's `h < 0` branch — the
+  mm-scale curvature fit in normal walking, and the cm–m correction only when
+  a step, landing or wall is actually hit. The invariant above is the test:
+  a body correcting by centimetres every step on flat ground is a bug, not
+  the model.
+- **Position clamping: none.** No world-edge clamp (a sphere has no edge), no
+  altitude clamp. The terrain resolution is the only position correction, and
+  the never-below-surface invariant holds after every step.
+- **Crossing a cube-face seam must be invisible.** This is the one bug a
+  round world adds that a flat patch does not have, and it will not appear in
+  a test that walks in a small circle near the spawn point. Any test of
+  movement must cross at least one seam.
 - **Poles do not exist and must not be introduced.** No `atan2`-based
   latitude/longitude anywhere in movement, orientation, or camera code. The
-  cube-sphere has no singularity; adding a spherical-coordinate helper puts one
-  back.
-- **Input missing (client silent):** server holds last input state; heartbeat
-  timeout despawns (PROTOCOL semantics). Note this means a dropped client keeps
-  walking — acceptable for the ~10 s until timeout, and simpler than a
-  special case.
+  cube-sphere has no singularity; adding a spherical-coordinate helper puts
+  one back.
+- **Input missing (client silent):** the server holds the last input (see
+  "Input"); the no-input default is stand-still; a dropped client keeps
+  walking until the 10 s heartbeat timeout despawns it.
+- **Non-finite input** (NaN/Inf on the wire) sanitizes to defaults, so one
+  broken or malicious client cannot poison world state or snapshots.
 - **HUD "distance to nearest player" with nobody else in the world:** show
-  `—`, not `0` and not `∞`.
-- Client prediction uses the identical rule table and integrator — divergence
-  is corrected by **replay from `ack_seq`**, not blending (ARCHITECTURE
-  "Network model").
+  `—`, not `0` and not `∞` (client rule).
+- **Client prediction** uses the identical rule table and this exact
+  integrator — divergence is corrected by **replay from `ack_seq`**, not
+  blending (ARCHITECTURE "Network model").
 
-Integrator (binding on both implementations — replay only converges if the
-step structure matches):
+### Tuning targets (advisory — the rule table is the contract; this is what it buys)
 
-1. Step at fixed `dt = 1/tick_hz` (50 ms). Never a variable frame delta.
-2. Semi-implicit Euler, in this order per step:
-   compute `up = normalize(pos)` → accept `look_dir` from input, clamping it to
-   `look_clamp` from up/down, and derive body facing by projecting it onto the
-   tangent plane → build the wish direction from normalized `(move_x, move_y)`
-   in that tangent frame → if grounded, apply `accel_ground` toward
-   `wish · target_speed` and `friction_ground` when there is no input; else
-   apply `accel_air` → apply `gravity` along `−up` and clamp the radial speed
-   to `terminal_speed` when airborne → apply `jump_speed` along `+up` if
-   grounded and the jump bit is set → integrate position → resolve against the
-   terrain radius (snap within `max_step`/`ground_snap`, set grounded, zero
-   radial velocity on landing) → re-project velocity into the tangent plane at
-   the new position.
-   There is no world-edge clamp: the world has no edge.
-3. `f64` internally on both ends, `f32` only on the wire. Bit-identical
-   determinism is explicitly **not** required — the server is authoritative and
-   the per-step rounding difference is far below the 5% conformance tolerance.
-   Chasing cross-language float parity is not an M1 problem.
+**Feel: weighty + responsive.** The body answers input within a tenth of a
+second but momentum is visible — the asymmetry *is* the feel:
+
+- 0 → walk in 0.09 s (`accel_ground` 50): a direction change registers
+  instantly, not after a ramp.
+- A full sprint reversal takes 0.3 s (`2·sprint_speed/accel_ground`):
+  readable momentum, not inertia.
+- Stop in ~0.3 s (`friction_ground` 8): deceleration is ~3× slower than
+  acceleration — stopping has weight.
+- Jump apex 1.03 m, hang time 0.92 s: a readable hop, not a float.
+- Slides above `max_slope` are frictionless: a slide-off is a commitment, not
+  a shuffle.
+
+**The ~100 ms interpolation budget.** Remote players are interpolated two
+ticks (100 ms) behind the server (ARCHITECTURE "Network model"); the model
+must stay smooth through that buffer:
+
+- Max per-tick displacement is `sprint_speed·dt` = 0.375 m, so two buffered
+  snapshots are ≤ 0.75 m apart — linear interpolation is smooth over that.
+- Worst-case error of linearly interpolating a quadratic (max acceleration)
+  across the full buffer is `accel_ground·T²/8` = 50·0.1²/8 ≈ 0.06 m — a
+  quarter of the 0.25 m p95 prediction-error budget (ROADMAP criterion 6).
+- Local prediction reconciles by replay, so its steady-state error is ~0
+  while the two rule tables agree; the budget binds on remote interpolation
+  and on transients after a reconciliation snap.
+- Any tuning change that raises `accel_ground`, `sprint_speed`, or
+  `jump_speed` must re-check this arithmetic. The budget is the constraint,
+  not the table.
 
 ## M1 terrain generation (spec for `netcode`)
 
@@ -568,6 +867,13 @@ M1:
 - **Coyote time and jump buffering** — omitted from the M1 rules on purpose.
   Both are cheap and both are the difference between "responsive" and "this
   feels bad"; decide after the first feel pass, as a rule-table addendum.
+- **Bunny hop (level-triggered jump).** The server rule is
+  level-triggered: holding the jump bit re-jumps on every landing. The
+  client may debounce the bit before sending, so the *player-facing*
+  behaviour depends on a client choice, not the server rule. M1 decision:
+  allow the auto-rejump (free vertical mobility, simpler client), or require
+  client-side edge-triggering (a hop is one press)? Either is implementable
+  from the spec as written.
 - Concurrent player target for local dev: assume 10–50.
 
 M2 and later:

@@ -69,6 +69,12 @@ Constants:
     there is no global frame for yaw to be measured against that does not have
     a singularity somewhere on the surface. A world-space direction needs no
     frame and stays idempotent under the "latest input wins" rule.
+  - **Facing-hold:** facing is the tangent projection of `look_dir`. When that
+    projection's magnitude is < `facing_hold` (0.1, ≈ 5.7° from local vertical),
+    facing holds its previous value instead of being recomputed — a 1°-clamped
+    near-vertical look has too-short a tangent to define a stable azimuth, so
+    recomputing would spin the body on mouse jitter. Both ends run this in the
+    integrator (GDD "Integrator" step 2).
 - `quat` in a body's `entity` carries the body's **full orientation** — facing
   plus which way is up for it, which on a round world differs per player and
   is needed to draw a remote character standing correctly on the far side of
@@ -129,6 +135,29 @@ Constants:
   over the wire.
 - Reconnect (M1): connection loss = entity despawns (after heartbeat
   timeout); reconnecting yields a new `entity_id`.
+
+## Terrain sampling (pinned — both ends implement this exactly)
+
+The radius field is consumed identically by the server generator, the server
+sim, and the client (mesh + sim). A mismatch sinks a player under the ground
+at specific cube-face edges, so the exact mapping is pinned here rather than
+left to the GDD's prose.
+
+- **Face.** For a normalized direction `d = (dx, dy, dz)`, the face is the
+  axis of largest magnitude; exact ties resolve to the earlier face in
+  `+X, −X, +Y, −Y, +Z, −Z`.
+- **(u, v).** Divide the two non-dominant components by the dominant magnitude,
+  keeping world order: `+X/−X → (u, v) = (dy, dz)`; `+Y/−Y → (dx, dz)`;
+  `+Z/−Z → (dx, dy)`. Each lies in `[−1, 1]`.
+- **Grid index.** `col = (u + 1) / 2 · (face_grid − 1)`;
+  `row = (v + 1) / 2 · (face_grid − 1)`; bilinearly interpolate over the four
+  surrounding cells of `radii[face · face_grid² + row · face_grid + col]`.
+  Equivalently, `radii[face][row][col]` is the radius of the surface point on
+  face `face` whose direction sets the non-dominant axes to
+  `2·col/(grid−1) − 1` (first) and `2·row/(grid−1) − 1` (second), with the
+  dominant axis as the face normal, then normalized.
+- **Normal / slope.** Use the GDD "Terrain sampling" finite-difference formula
+  verbatim (same `normal_eps` on both ends).
 
 ## Versioning
 

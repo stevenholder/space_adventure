@@ -1,0 +1,16 @@
+{
+  "name": "space-adventure-art",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "glTF 2.0 binary assets and manifest for Space Adventure; scripts verify them.",
+  "scripts": {
+    "gen": "python3 tools/gen_player.py && python3 tools/gen_rocks.py && python3 tools/gen_ship.py",
+    "verify": "node tools/verify.mjs",
+    "render": "python3 tools/render_check.py",
+    "test": "node tools/verify.mjs"
+  },
+  "devDependencies": {
+    "three": "^0.185.1"
+  }
+}

@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/name: client
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: client
+        app.kubernetes.io/part-of: space-adventure
+    spec:
+      containers:
+        - name: nginx
+          image: space-adventure/client:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/name: client
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  selector:
+    app.kubernetes.io/name: client
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,706 @@
+{
+  "decoder_crosscheck": {
+    "max_abs_diff_m": 0.0,
+    "per_dir_diff_m": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "pass": true
+  },
+  "radii": {
+    "min": 130.435,
+    "max": 187.955,
+    "bounds": [
+      124,
+      190
+    ],
+    "nodes_total": 25350,
+    "fraction_below_150m": 0.2021,
+    "fraction_at_150m_pm0.02": 0.0135,
+    "fraction_above_150m": 0.7845,
+    "pass": true
+  },
+  "walkable": {
+    "samples": 25350,
+    "walkable": 23898,
+    "fraction": 0.9427,
+    "probe_report_fraction": 0.9427218934911242,
+    "threshold": 0.7,
+    "pass": true
+  },
+  "spawn_disc": {
+    "r_spawn": 150.0,
+    "max_dev_m": 0.0,
+    "samples": 89,
+    "tolerance_m": 0.5,
+    "pass": true
+  },
+  "spawn_outward": {
+    "max_slope_just_outside_deg": 1.41,
+    "max_slope_blend_band_deg": 1.45,
+    "max_slope_deg": 50.0,
+    "pass": true
+  },
+  "craters": {
+    "placed": 11,
+    "expected_range": [
+      6,
+      12
+    ],
+    "confirmed_in_field": 11,
+    "all_confirmed": true,
+    "count_in_range": true,
+    "spawn_hidden": 0,
+    "spawn_hidden_dirs": [],
+    "independent_basins_detected": 34,
+    "basins": [
+      {
+        "dir": [
+          0.962,
+          0.03,
+          -0.271
+        ],
+        "depth_m": 37.5,
+        "rim_arc_m": 60
+      },
+      {
+        "dir": [
+          0.729,
+          0.684,
+          -0.023
+        ],
+        "depth_m": 10.4,
+        "rim_arc_m": 25
+      },
+      {
+        "dir": [
+          0.837,
+          0.523,
+          -0.157
+        ],
+        "depth_m": 9.9,
+        "rim_arc_m": 20
+      },
+      {
+        "dir": [
+          0.568,
+          0.507,
+          0.649
+        ],
+        "depth_m": 7.5,
+        "rim_arc_m": 25
+      },
+      {
+        "dir": [
+          -0.657,
+          0.37,
+          -0.657
+        ],
+        "depth_m": 7.3,
+        "rim_arc_m": 20
+      },
+      {
+        "dir": [
+          -0.53,
+          0.0,
+          -0.848
+        ],
+        "depth_m": 6.7,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.812,
+          0.33,
+          0.482
+        ],
+        "depth_m": 6.6,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          -0.512,
+          0.256,
+          -0.82
+        ],
+        "depth_m": 6.1,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.662,
+          0.662,
+          -0.352
+        ],
+        "depth_m": 5.9,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.0,
+          -0.659,
+          0.753
+        ],
+        "depth_m": 5.5,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.616,
+          0.758,
+          -0.213
+        ],
+        "depth_m": 5.1,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          -0.86,
+          0.161,
+          0.484
+        ],
+        "depth_m": 4.9,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          -0.814,
+          0.56,
+          0.153
+        ],
+        "depth_m": 4.8,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.49,
+          -0.027,
+          0.871
+        ],
+        "depth_m": 4.4,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          -0.081,
+          -0.869,
+          0.489
+        ],
+        "depth_m": 3.9,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          -0.871,
+          0.49,
+          -0.027
+        ],
+        "depth_m": 3.7,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.29,
+          -0.232,
+          0.928
+        ],
+        "depth_m": 3.7,
+        "rim_arc_m": 20
+      },
+      {
+        "dir": [
+          -0.667,
+          0.333,
+          0.667
+        ],
+        "depth_m": 3.7,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.334,
+          -0.462,
+          0.822
+        ],
+        "depth_m": 3.5,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.0,
+          -0.812,
+          0.584
+        ],
+        "depth_m": 3.4,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          -0.645,
+          0.0,
+          -0.764
+        ],
+        "depth_m": 3.4,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.42,
+          -0.841,
+          -0.342
+        ],
+        "depth_m": 3.4,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          -0.845,
+          -0.185,
+          0.502
+        ],
+        "depth_m": 3.3,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.255,
+          0.34,
+          0.905
+        ],
+        "depth_m": 3.3,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          0.42,
+          0.342,
+          -0.841
+        ],
+        "depth_m": 3.2,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.883,
+          0.331,
+          0.331
+        ],
+        "depth_m": 3.2,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          -0.504,
+          -0.849,
+          0.159
+        ],
+        "depth_m": 3.2,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.344,
+          -0.201,
+          -0.917
+        ],
+        "depth_m": 3.0,
+        "rim_arc_m": 15
+      },
+      {
+        "dir": [
+          -0.07,
+          0.657,
+          0.751
+        ],
+        "depth_m": 2.9,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          -0.94,
+          -0.294,
+          0.176
+        ],
+        "depth_m": 2.7,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          -0.664,
+          -0.415,
+          0.622
+        ],
+        "depth_m": 2.7,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.0,
+          -0.741,
+          -0.672
+        ],
+        "depth_m": 2.7,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.51,
+          0.628,
+          0.588
+        ],
+        "depth_m": 2.6,
+        "rim_arc_m": 10
+      },
+      {
+        "dir": [
+          0.0,
+          -0.954,
+          0.298
+        ],
+        "depth_m": 2.6,
+        "rim_arc_m": 10
+      }
+    ],
+    "per_crater": [
+      {
+        "dir": [
+          0.754,
+          0.56,
+          0.343
+        ],
+        "diam_m": 29.4,
+        "depth_expected_m": 4.4,
+        "depth_observed_m": 6.3,
+        "dist_from_spawn_m": 146.5,
+        "dist_from_notch_dir_deg": 106.0,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          0.653,
+          -0.703,
+          0.283
+        ],
+        "diam_m": 28.7,
+        "depth_expected_m": 4.3,
+        "depth_observed_m": 6.0,
+        "dist_from_spawn_m": 352.6,
+        "dist_from_notch_dir_deg": 120.5,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          -0.908,
+          0.339,
+          0.248
+        ],
+        "diam_m": 49.5,
+        "depth_expected_m": 7.4,
+        "depth_observed_m": 12.3,
+        "dist_from_spawn_m": 183.8,
+        "dist_from_notch_dir_deg": 93.8,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          -0.032,
+          -0.327,
+          0.944
+        ],
+        "diam_m": 59.2,
+        "depth_expected_m": 8.9,
+        "depth_observed_m": 10.6,
+        "dist_from_spawn_m": 285.6,
+        "dist_from_notch_dir_deg": 170.6,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          0.469,
+          -0.299,
+          0.831
+        ],
+        "diam_m": 51.6,
+        "depth_expected_m": 7.7,
+        "depth_observed_m": 6.4,
+        "dist_from_spawn_m": 281.2,
+        "dist_from_notch_dir_deg": 157.2,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          0.636,
+          0.503,
+          0.585
+        ],
+        "diam_m": 25.7,
+        "depth_expected_m": 3.9,
+        "depth_observed_m": 10.6,
+        "dist_from_spawn_m": 156.6,
+        "dist_from_notch_dir_deg": 120.7,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          0.603,
+          0.761,
+          -0.241
+        ],
+        "diam_m": 29.6,
+        "depth_expected_m": 4.4,
+        "depth_observed_m": 5.2,
+        "dist_from_spawn_m": 106.0,
+        "dist_from_notch_dir_deg": 69.4,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          -0.23,
+          -0.959,
+          -0.167
+        ],
+        "diam_m": 22.5,
+        "depth_expected_m": 3.4,
+        "depth_observed_m": 2.6,
+        "dist_from_spawn_m": 428.0,
+        "dist_from_notch_dir_deg": 92.4,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          -0.706,
+          -0.031,
+          0.708
+        ],
+        "diam_m": 59.4,
+        "depth_expected_m": 8.9,
+        "depth_observed_m": 16.4,
+        "dist_from_spawn_m": 240.3,
+        "dist_from_notch_dir_deg": 128.2,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          0.156,
+          -0.889,
+          0.431
+        ],
+        "diam_m": 24.8,
+        "depth_expected_m": 3.7,
+        "depth_observed_m": 6.8,
+        "dist_from_spawn_m": 399.7,
+        "dist_from_notch_dir_deg": 130.1,
+        "pass": true,
+        "fail_cause": null
+      },
+      {
+        "dir": [
+          0.646,
+          0.073,
+          0.76
+        ],
+        "diam_m": 52.6,
+        "depth_expected_m": 7.9,
+        "depth_observed_m": 8.2,
+        "dist_from_spawn_m": 224.6,
+        "dist_from_notch_dir_deg": 141.5,
+        "pass": true,
+        "fail_cause": null
+      }
+    ],
+    "pass": true
+  },
+  "landmarks": {
+    "spire": {
+      "placed_dir": [
+        0.258,
+        -0.966,
+        0.026
+      ],
+      "field_max_in_cone_m": 187.95,
+      "expected_m": 188,
+      "pass": true
+    },
+    "twinpeaks": {
+      "placed_dir": [
+        -0.242,
+        0.093,
+        0.966
+      ],
+      "field_max_in_cone_m": 179.92,
+      "expected_m": [
+        180,
+        176
+      ],
+      "pass": true
+    },
+    "mesa": {
+      "placed_dir": [
+        -0.966,
+        -0.171,
+        -0.195
+      ],
+      "field_max_in_cone_m": 172.0,
+      "expected_m": 172,
+      "pass": true
+    },
+    "greatcrater": {
+      "placed_dir": [
+        0.966,
+        0.017,
+        -0.258
+      ],
+      "field_center_m": 132.3,
+      "field_rim_m": 169.99,
+      "expected_m": {
+        "floor": 132,
+        "rim": 170
+      },
+      "pass": true
+    },
+    "notch": {
+      "placed_dir": [
+        -0.103,
+        0.238,
+        -0.966
+      ],
+      "field_center_m": 138.0,
+      "expected_m": {
+        "floor": 138,
+        "walls": 170
+      },
+      "pass": true
+    },
+    "beacon": {
+      "placed_dir": [
+        0.339,
+        0.941,
+        0
+      ],
+      "field_max_in_cone_m": 164.94,
+      "expected_m": 165,
+      "pass": true
+    },
+    "all_present_at_specified_locations": true,
+    "min_separation_placed_deg": 69.9,
+    "probe_min_sep_deg": 69.90375193673324,
+    "min_sep_required_deg": 60.0,
+    "separation_pass": true,
+    "field_global_max": {
+      "r_m": 187.95,
+      "dir": [
+        0.271,
+        -0.962,
+        0.03
+      ]
+    },
+    "field_global_min": {
+      "r_m": 130.44,
+      "dir": [
+        0.667,
+        -0.333,
+        -0.667
+      ]
+    },
+    "pass": true
+  },
+  "visibility": {
+    "model": "gdd 6-cap: ang_dist <= acos(R/(R+H)) + acos(R/(R+eye)), H = r-150, eye=1.7 m",
+    "samples": 100000,
+    "visible": 66039,
+    "fraction": 0.6604,
+    "targets": [
+      {
+        "name": "spire",
+        "dir": [
+          0.258,
+          -0.966,
+          0.026
+        ],
+        "r_m": 187.95,
+        "half_angle_deg": 45.64
+      },
+      {
+        "name": "twinpeaks",
+        "dir": [
+          -0.242,
+          0.093,
+          0.966
+        ],
+        "r_m": 179.92,
+        "half_angle_deg": 42.11
+      },
+      {
+        "name": "mesa",
+        "dir": [
+          -0.966,
+          -0.171,
+          -0.195
+        ],
+        "r_m": 172.0,
+        "half_angle_deg": 37.88
+      },
+      {
+        "name": "greatcrater",
+        "dir": [
+          0.966,
+          0.017,
+          -0.258
+        ],
+        "r_m": 169.99,
+        "half_angle_deg": 36.65
+      },
+      {
+        "name": "notch",
+        "dir": [
+          -0.103,
+          0.238,
+          -0.966
+        ],
+        "r_m": 169.74,
+        "half_angle_deg": 36.49
+      },
+      {
+        "name": "beacon",
+        "dir": [
+          0.339,
+          0.941,
+          0.0
+        ],
+        "r_m": 164.94,
+        "half_angle_deg": 33.16
+      }
+    ],
+    "threshold": 0.6,
+    "pass": true
+  },
+  "world": {
+    "file": "test/out/world-seed1337.json",
+    "face_grid": 65,
+    "bounds": [
+      124,
+      190
+    ],
+    "probe_file": "test/out/t9-probe-1337.json",
+    "probe_seed": 1337
+  },
+  "OVERALL": "PASS"
+}

@@ -24,3 +24,15 @@ deploy/cluster-state/
 .idea/
 .vscode/
 *.log
+
+# Build artifacts / regenerable binaries
+server/server
+test/out/server-dump
+test/out/terrain-probe
+test/out/terrain-raw-*.bin
+test/out/t9-stderr.txt
+test/t5/explore-out.txt
+test/t5/explore-err.txt
+
+# QA evidence logs (referenced from docs/QA-STATUS.md)
+!test/out/*.log
