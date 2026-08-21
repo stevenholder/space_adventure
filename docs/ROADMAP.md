@@ -72,13 +72,20 @@ and never rebuilt (GDD "M1 scope").
    apart, with ≥ 60% of sampled surface points able to see one over the
    horizon. These are checked against the generated field, not against the
    generator's code, so retuning the noise never breaks the test.
-10. **Circumnavigation:** a scripted client walks a full great-circle lap
-   holding one direction, crossing every cube face, and arrives back within
-   1 m of its start having stayed on the ground the whole way — no fall
-   through, no seam hitch, no accumulated drift off the surface. Two clients
-   standing on opposite sides of the world each render the other upright on
-   their own horizon. This is the criterion that catches a hardcoded `+Y` up,
-   which works fine everywhere near spawn.
+10. **Circumnavigation:** a scripted client walks a closed circuiting loop
+   (≥ 4 great-circle legs — a single great circle through the spawn pole
+   crosses only 4 of the 6 faces, and no generic six-face circle is
+   walkable on the M1 terrain, proven by exhaustive scan), crossing every
+   cube face, totalling at least one full circuit (≥ 942 m), and arriving
+   back within 1 m of its start having stayed on the ground the whole way
+   — no fall through, no seam hitch at any face crossing or leg junction,
+   no accumulated drift off the surface. Remote players must render
+   upright on the local terrain normal everywhere they are visible,
+   checked at near-horizon two-client viewpoints (two clients 180° apart
+   cannot see each other — at r=150 with 1.7 m eye height the horizon is
+   ≈23.7 m — so opposite-side rendering is not a verifiable check). This
+   is the criterion that catches a hardcoded `+Y` up, which works fine
+   everywhere near spawn.
 
 ### Parallel task split (suggested dispatch)
 

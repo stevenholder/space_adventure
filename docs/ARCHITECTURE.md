@@ -156,27 +156,36 @@ flowchart LR
 - Reconnect: M1 = drop and rejoin (new entity id); session resumption later.
 - Heartbeat: ping/pong frames; server drops connections silent for 10 s.
 
-## Deployment (`deploy/`) — local processes in M1
+## Deployment (`deploy/`) — kind cluster in M1
 
-M1 is two processes on one dev machine, so that is all the deployment it gets:
+M1 runs the whole stack through the deployed path from a clean clone: a local
+kind cluster (namespace `space-adventure`) is the M1 entry point (ROADMAP
+criterion 1).
 
-- `make up` — starts the Go server (`go run ./cmd/server`, WS on :8080) and the
-  Vite dev server (:5173, `/ws` proxied to :8080, so same-origin, no CORS).
-- `make down` — stops both. `make build` — `go build` + `npm run build`,
-  the CI-shaped check.
-- No containers, no cluster, no port-forward in M1.
+- `make up` — creates the kind cluster (`deploy/kind.yaml`) if absent, builds
+  `Dockerfile.server` / `Dockerfile.client` and loads both images into the
+  cluster, applies `deploy/manifests/` (server Deployment + nginx-backed
+  client, each with readiness/liveness probes), then opens two host
+  port-forwards and fails until both endpoints answer:
+  - `:3000` → client — nginx serves the built client and proxies `/ws` to the
+    server, so the browser is same-origin (no CORS).
+  - `:18080` → server — direct WS + `/healthz`.
+- `make down` — stops the port-forwards (verifying the ports are actually
+  free), deletes the cluster, removes logs. Leaves nothing running.
+- Overrides: `make up CLIENT_PORT=8081 SERVER_PORT=18081`.
 
-**Why not kind yet.** Kubernetes solves scheduling more than one thing onto
-more than one machine; M1 has two processes on one laptop. Paying for it early
-costs Dockerfiles, an image-load step, manifests, probes and port-forwards
-before a single ship moves — and `kubectl port-forward` is a userspace TCP
-proxy whose jitter would land directly on the M1 latency target, so a failed
-measurement would tell us nothing about the game.
+**Why kind in M1.** The acceptance criteria are measured on the deployed
+stack: criterion 1 is `make up` from a clean clone, and the nginx `/ws` proxy
+is part of the wire path the browser actually takes. Known cost:
+`kubectl port-forward` is a userspace TCP proxy, so criterion 7's latency
+measurement carries its jitter — the harness pins the epoch and documents the
+residual uncertainty instead of pretending it is zero.
 
-Scaling path (the scale-out milestone, when it earns its keep): containerize both, kind cluster in
-namespace `space-adventure`, one server per system/sector shard, stateless
-connections behind a gateway. The client already talks to a URL, so this is an
-additive change, not a rewrite.
+**Why not more.** One pod per process, one shard, no sharding, no delta
+snapshots, no 100+ load — the scale-out milestone is where Kubernetes earns
+its keep (one server per system/sector shard, stateless connections behind a
+gateway). The client already talks to a URL, so that is an additive change,
+not a rewrite.
 
 ## Key decisions
 
@@ -186,8 +195,8 @@ additive change, not a rewrite.
 | Server language | Go | one static binary; goroutines fit tick + IO |
 | Transport | WebSocket (binary) | simple, works everywhere; revisit UDP if M1 feels limited |
 | Authority | server-authoritative | MMO correctness, cheat resistance |
-| Local run (M1) | two processes + Makefile | two processes on one box need no orchestrator; keeps the latency target measurable |
-| Local K8s | kind, deferred to scale-out | closest to real K8s when sharding actually needs it |
+| Local run (M1) | kind cluster + Makefile | `make up` from a clean clone is the M1 entry point; the nginx `/ws` proxy path is part of the contract |
+| K8s scale-out | deferred to M6 | sharding, delta snapshots and 100+ load earn the orchestrator's keep; kind already proves the manifests |
 | Prediction | replay from `ack_seq` | blending rubber-bands by `velocity × latency`; replay is exact when the rule tables match |
 | Assets | glTF 2.0 binary, low-poly | one universal format, reproducible generation |
 
@@ -217,5 +226,6 @@ additive change, not a rewrite.
   casual testing. Movement, camera, character orientation and prop placement
   all have to derive up from position; ROADMAP criterion 10 (walk a full lap) is
   what catches the ones that slip through.
-- Deferring containers means M1 is never exercised in its eventual runtime;
-  accepted, because the scale-out milestone changes the runtime anyway.
+- M1 runs on kind from day one, so the deployed stack (probes, nginx `/ws`
+  proxy, image pipeline) is exercised for real; what it does not exercise is
+  sharding, delta snapshots and load — the scale-out milestone's job.

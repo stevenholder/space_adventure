@@ -24,7 +24,10 @@
  *     "radii": [25350 numbers, wire order face·grid²+row·grid+col] }
  * Without --world, a flat 150 m sphere is used — fine for a quick check;
  * the real conformance run passes the server's generated field to both
- * sims:  server terrain --seed 1337 > world.json
+ * sims. It is captured from a running server with
+ *   node test/lib/capture-terrain.mjs [host] [port]
+ * and written to test/out/world-seed<seed>.json (the committed seed-1337
+ * capture is test/out/world-seed1337.json).
  *
  *   npm run sim:dump -- <script.jsonl> <out.jsonl> [--world world.json]
  */
