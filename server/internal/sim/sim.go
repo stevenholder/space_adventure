@@ -210,7 +210,16 @@ func resolve(s *State, pOld Vec, mode mode, t *terrain.Field) {
 		s.Grounded = false
 		return
 	}
-	if h <= GroundSnap {
+	// Glue band (GDD resolve, "was GROUND or SLIDE"): ground_snap plus the
+	// per-step downhill drop on the contact slope, so a body on steep ground
+	// stays glued while the surface recedes faster than ground_snap per tick.
+	// Flat ground (θ ≈ 0) keeps the band exactly ground_snap. |vel| is the
+	// tangential speed: radial velocity is zeroed every contact tick, and on
+	// a jump tick the jump's radial rise must not widen the band — the jump
+	// margin jump_speed·dt − ground_snap (GDD invariants) holds only then.
+	slopeDrop := tangential(s.Vel, up).Len() * DT * math.Max(0, math.Sin(t.Slope(up)))
+	band := GroundSnap + slopeDrop
+	if h <= band {
 		s.Pos = up.Scale(t.SampleRadius(up))
 		s.Vel = s.Vel.Sub(up.Scale(s.Vel.Dot(up)))
 		s.Grounded = t.Walkable(up)

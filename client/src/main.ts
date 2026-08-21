@@ -28,6 +28,10 @@ import { makeRigFromGltf, rigIsComplete } from './scene/character.js'
 
 const TICK_MS = TICK_DT * 1000
 const MAX_FRAME_MS = 250 // clamp: tab switches must not spiral
+// Frame-loop scratch: the render pass must not allocate (GC spikes show up
+// as frame jitter). Allocations at 20 Hz tick or event rate are fine.
+const scratchUp: Vec3 = { x: 0, y: 0, z: 0 }
+const scratchPos: Vec3 = { x: 0, y: 0, z: 0 }
 
 const cfg = parseConfig(location.search)
 
@@ -38,11 +42,15 @@ const statusEl = document.getElementById('status') as HTMLDivElement
 const hintEl = document.getElementById('hint') as HTMLDivElement
 const tagsEl = document.getElementById('tags') as HTMLDivElement
 
-const renderer = new THREE.WebGLRenderer({ antialias: true })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+// Backing store at 1:1 CSS pixels. The QA-gate box rasterizes through a
+// virtualized iGPU (ANGLE/D3D11 over WSL2): a >1.0 device-pixel ratio
+// multiplies fragment + present cost with no visible gain on a flat-shaded
+// low-poly scene (no AA, no text in the GL canvas), and it is what pushed
+// full-viewport frames past the 16.7 ms budget intermittently.
+const renderer = new THREE.WebGLRenderer({ antialias: false })
+renderer.setPixelRatio(1)
 renderer.setSize(window.innerWidth, window.innerHeight)
 appEl.appendChild(renderer.domElement)
-
 const world = new World(tagsEl)
 const hud = new Hud(hudEl)
 const controls = new Controls(renderer.domElement)
@@ -82,8 +90,16 @@ function flashStatus(text: string): void {
 function connText(): string {
   if (cfg.mock) return 'mock'
   if (!net) return 'connecting…'
-  if (!net.isOpen) return 'disconnected'
-  return net.rtt > 0 ? `online ${Math.round(net.rtt)} ms` : 'online'
+  switch (net.state) {
+    case 'open':
+      return net.rtt > 0 ? `online ${Math.round(net.rtt)} ms` : 'online'
+    case 'reconnecting':
+      return net.reconnectLabel
+    case 'connecting':
+      return 'connecting…'
+    default:
+      return 'disconnected'
+  }
 }
 
 function hudPush(force = false): void {
@@ -115,6 +131,10 @@ function processSnapshot(snap: Snapshot, nowMs: number): void {
 }
 
 function onSpawn(id: number, name: string): void {
+  // Own entity: the predictor + local body are its entry. The server
+  // re-anchors it via its snapshot rows (and the fresh SPAWN on join);
+  // upserting it as a remote would duplicate the body.
+  if (id === myId) return
   world.upsertRemote(id, name)
   remoteIds.add(id)
   // Late joiner (asset already loaded): give it the real model.
@@ -136,6 +156,26 @@ function onTerrain(t: Terrain): void {
   controls.setWorldUp(vec.norm(spawn.pos))
   simReady = true
   hudPush(true)
+}
+
+/**
+ * Connection re-established after a loss (NetClient.onReconnect): the
+ * fresh join handshake (hello_ack, terrain, complete spawn list) is the
+ * complete truth, so drop everything the old connection believed.
+ * Inputs held during the disconnect are dropped — the server spawns the
+ * new entity at the spawn point and the first snapshot reconciles.
+ */
+function onResync(): void {
+  world.clearRemotes()
+  remoteIds.clear()
+  const t = world.terrainRef
+  if (!t) return // terrain never arrived; the fresh handshake seeds it
+  predictor.reset()
+  // reset() clears lastAck: the new connection's low ack seqs would
+  // else compare wraparound-stale against the old one and every
+  // snapshot would be rejected. Re-seed at spawn (where the server
+  // places the new entity); the first snapshot owns the truth.
+  predictor.seed(spawnState(t), t, performance.now())
 }
 
 function startMock(): void {
@@ -164,8 +204,10 @@ function startLive(): void {
     onTerrain: (wire) => {
       onTerrain(decodeTerrain(wire.faceGrid, wire.radiusMin, wire.radiusMax, wire.radii))
     },
+    onSnapshot: (snap) => processSnapshot(snap, performance.now()),
     onSpawn: (sp) => onSpawn(sp.entityId, sp.name),
     onDespawn: (id) => onDespawn(id),
+    onReconnect: () => onResync(),
     onPong: () => hudPush(true),
   })
   net.connect(cfg.wsUrl, cfg.name)
@@ -205,7 +247,16 @@ function frame(now: number): void {
 
   const rs = predictor.renderState(now)
   if (rs) {
-    controls.setWorldUp(vec.norm(rs.pos))
+    // Radial up, normalized once and reused for the look frame, body and
+    // camera (the render pass allocates nothing).
+    const px = rs.pos.x
+    const py = rs.pos.y
+    const pz = rs.pos.z
+    const il = 1 / Math.hypot(px, py, pz)
+    scratchUp.x = px * il
+    scratchUp.y = py * il
+    scratchUp.z = pz * il
+    controls.setWorldUp(scratchUp)
 
     // Dev override: force a bad local position, briefly.
     let pos = rs.pos
@@ -214,7 +265,7 @@ function frame(now: number): void {
       if (now >= corruptNext) {
         corruptNext = now + 5000
         corruptUntil = now + 1000
-        const up = vec.norm(rs.pos)
+        const up = scratchUp
         corruptSide = vec.norm(vec.cross(up, { x: 1, y: 0, z: 0 }))
       }
       if (now < corruptUntil) {
@@ -227,7 +278,7 @@ function frame(now: number): void {
     hudData.speed = vel ? vec.len(vel) : null
   }
 
-  world.frameRemotes(now, frameDt, rs?.pos ?? { x: 0, y: 0, z: 0 })
+  world.frameRemotes(now, frameDt, rs ? rs.pos : scratchPos)
   hudData.nearest = rs ? world.nearestDist(rs.pos) : null
   hudData.conn = connText()
   hud.update(hudData)

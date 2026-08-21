@@ -315,7 +315,7 @@ Implementers treat this as spec — every value is named, unit'd, and justified:
 | `terminal_speed` | 60 | m/s | downward radial-speed clamp; the longest M1 fall (Great Crater rim→floor, 38 m) reaches `sqrt(2·9.8·38)` ≈ 27 m/s, so the clamp is a safety valve, not a feel knob |
 | `max_step` | 0.3 | m | step height walked up per step; sprinting up a `max_slope` slope rises `sprint_speed·dt·sin 50°` ≈ 0.29 m per step — just under, so the steepest walkable slope is climbable at full sprint |
 | `max_slope` | 50 | deg | walkability limit; steeper ground is slid (no friction, no walk accel), not climbed |
-| `ground_snap` | 0.15 | m | glue band: the per-step curvature drop at sprint is ~0.5 mm, so >300× margin — feet stay glued downhill without cliff edges feeling sticky |
+| `ground_snap` | 0.15 | m | glue-band margin on top of the per-step downhill drop `|vel|·dt·sinθ`, which the glue condition adds explicitly (`resolve`): the steepest walkable slope (50°) drops `4.5·0.05·sin 50°` ≈ 0.172 m/step at walk and 0.287 m at sprint — the band `0.15 + drop` covers both; on flat ground θ ≈ 0 so the band is exactly 0.15 m and cliff edges stay non-sticky (curvature drop ~0.5 mm → >300× margin, as before) |
 | `look_clamp` | 1 | deg | keeps `look_dir` off the exact poles, where the tangent-plane projection that derives facing degenerates; ±89° pitch remains |
 | `facing_hold` | 0.1 | — | below this tangent-projection magnitude the look is too near-vertical to define a stable azimuth, so facing holds its carried value (integrator step 2) — avoids body spin on mouse jitter |
 | `normal_eps` | 2 | deg | finite-difference offset for the surface normal — ~5 m at the surface, ~1.5 grid cells, so the slope test is not kink-noisy |
@@ -459,7 +459,9 @@ resolve(p_old, p_new, vel, mode, terrain):
   else if mode = AIR:
       grounded ← false                             # still above the surface
   else:                                            # was GROUND or SLIDE
-      if h ≤ ground_snap:                          # still in the glue band
+      θ_contact ← acos(clamp(dot(surfaceNormal(terrain, up), up), −1, 1))  # same slope measure as slopeOK
+      slope_drop ← |vel|·dt·max(0, sin θ_contact)  # per-step downhill drop on that slope
+      if h ≤ ground_snap + slope_drop:             # glue band; flat ground θ ≈ 0 → exactly ground_snap
           p_new ← up·radius(terrain, up)
           vel ← vel − up·dot(vel, up)
           grounded ← slopeOK(terrain, up)
@@ -485,6 +487,16 @@ Invariants, checked after every step:
   cancels it. Gravity acts in SLIDE mode (downslope tangent) and AIR mode
   (radial) only. This is what keeps normal walking from relying on the
   below-surface snap as its floor.
+- **A jump always leaves the glue band on its first tick.** A jump tick adds
+  `jump_speed·dt` = 0.225 m of rise; while descending at speed v on slope θ,
+  the post-jump height is `jump_speed·dt + v·dt·sinθ` while the glue band is
+  `ground_snap + v·dt·sinθ`, so `h − band = jump_speed·dt − ground_snap` =
+  0.075 m > 0 for all v and θ — the speed/slope terms cancel, so a jump is
+  never re-glued, on any slope at any speed. Combined with the edge case
+  "jump requires `mode = GROUND`", this bounds the re-jump cadence of a held
+  jump bit to the hang time (0.92 s): the bit cannot re-fire until the body
+  lands and `grounded` returns. The margin is exactly `jump_speed·dt −
+  ground_snap`; re-check it if either changes.
 
 **Snapshot encoding (per PROTOCOL `entity`):** `pos` and `vel` as stored,
 plus the `quat` of the body's orientation:
@@ -590,8 +602,12 @@ must stay smooth through that buffer:
   while the two rule tables agree; the budget binds on remote interpolation
   and on transients after a reconciliation snap.
 - Any tuning change that raises `accel_ground`, `sprint_speed`, or
-  `jump_speed` must re-check this arithmetic. The budget is the constraint,
-  not the table.
+  `jump_speed`, or changes `ground_snap`, must re-check this arithmetic. The
+  budget is the constraint, not the table.
+- The terrain-resolution glue-band arithmetic (per-step downhill drop
+  `|vel|·dt·sinθ` vs the `ground_snap + slope_drop` band, and the jump margin
+  `jump_speed·dt − ground_snap`) must be re-checked if `sprint_speed`,
+  `walk_speed`, `max_slope`, or `ground_snap` changes.
 
 ## M1 terrain generation (spec for `netcode`)
 

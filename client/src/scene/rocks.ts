@@ -105,14 +105,10 @@ export function buildRockGroup(
   const group = new THREE.Group()
   const counts = [0, 0, 0]
   for (const p of placements) counts[p.variant]++
-  const mats = [0x7d7f85, 0x8a8275, 0x6f7480].map(
-    (c) =>
-      new THREE.MeshStandardMaterial({
-        color: c,
-        roughness: 1,
-        metalness: 0,
-        flatShading: true,
-      }),
+  // Lambert (per-vertex lighting): the PBR fragment cost of 400 instanced
+  // rocks is pure overhead for flat-shaded props.
+  const mats = [0x7d7f85, 0x8a8275, 0x6f7480].map((c) =>
+    new THREE.MeshLambertMaterial({ color: c, flatShading: true }),
   )
   const m4 = new THREE.Matrix4()
   const q = new THREE.Quaternion()

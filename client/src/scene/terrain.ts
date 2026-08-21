@@ -69,6 +69,60 @@ export function buildTerrain(t: Terrain): THREE.Mesh {
     }
   }
 
+  // Seam weld: every cube edge is stored once per adjacent face, and the
+  // two copies are computed independently (per-face f64 direction math,
+  // per-face color jitter). A 1-ulp f32 difference between the copies of
+  // a boundary node opens into a visible slit at grazing angles (QA
+  // C7-F1). Copy the canonical face's exact f32 triples over the other
+  // face's boundary row so both sides of every seam share bit-identical
+  // vertices — no gap can open, and the mesh stays on the collision
+  // surface (the canonical face's node IS the lattice node).
+  //
+  // Canonical face = the lower face index of each pair. Order matters: at
+  // each of the 8 cube corners the Z face's node is written by both a
+  // Y->Z and an X->Z copy; the X face (index 0/1) is the smallest index
+  // in every corner trio, so the X->Z edges are welded last and the X
+  // face wins the final write. X->Y edges run first, harmlessly.
+  // Tuple: [faceA, fixA, valA, faceB, fixB, valB]; fix=0 -> i is fixed at
+  // val (j varies, k <-> free axis), fix=1 -> j is fixed at val (i
+  // varies). val 0 -> index 0, 1 -> g-1.
+  const SEAMS: readonly (readonly [
+    number, 0 | 1, 0 | 1, number, 0 | 1, 0 | 1,
+  ])[] = [
+    // X∩Y edges (k <-> z)
+    [0, 0, 1, 2, 0, 1], // x=+1, y=+1
+    [0, 0, 0, 3, 0, 1], // x=+1, y=−1
+    [1, 0, 1, 2, 0, 0], // x=−1, y=+1
+    [1, 0, 0, 3, 0, 0], // x=−1, y=−1
+    // Y∩Z edges (k <-> x) — before the X∩Z edges, see note above
+    [2, 1, 1, 4, 1, 1], // y=+1, z=+1
+    [2, 1, 0, 5, 1, 1], // y=+1, z=−1
+    [3, 1, 1, 4, 1, 0], // y=−1, z=+1
+    [3, 1, 0, 5, 1, 0], // y=−1, z=−1
+    // X∩Z edges (k <-> y); A fixes j, B fixes i
+    [0, 1, 1, 4, 0, 1], // x=+1, z=+1
+    [0, 1, 0, 5, 0, 1], // x=+1, z=−1
+    [1, 1, 1, 4, 0, 0], // x=−1, z=+1
+    [1, 1, 0, 5, 0, 0], // x=−1, z=−1
+  ]
+  for (const [fa, fixA, va, fb, fixB, vb] of SEAMS) {
+    const ia = va ? g - 1 : 0
+    const ib = vb ? g - 1 : 0
+    for (let k = 0; k < g; k++) {
+      const s3 = (fa * perFace + (fixA ? ia * g + k : k * g + ia)) * 3
+      const t3 = (fb * perFace + (fixB ? ib * g + k : k * g + ib)) * 3
+      positions[t3] = positions[s3]
+      positions[t3 + 1] = positions[s3 + 1]
+      positions[t3 + 2] = positions[s3 + 2]
+      normals[t3] = normals[s3]
+      normals[t3 + 1] = normals[s3 + 1]
+      normals[t3 + 2] = normals[s3 + 2]
+      colors[t3] = colors[s3]
+      colors[t3 + 1] = colors[s3 + 1]
+      colors[t3 + 2] = colors[s3 + 2]
+    }
+  }
+
   // Index pass: two triangles per cell. Winding is fixed by an outward
   // test (geometric normal must point away from the planet center) so it
   // is correct on every face regardless of per-face UV orientation.
@@ -126,12 +180,11 @@ export function buildTerrain(t: Terrain): THREE.Mesh {
   geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   geo.setIndex(new THREE.BufferAttribute(indices, 1))
-  const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 1,
-    metalness: 0,
-    flatShading: false,
-  })
+  // Lambert, not Standard: per-vertex lighting. The PBR fragment shader
+  // dominates fill cost on weak GPUs for a 49k-triangle planet, and
+  // roughness-1 / metalness-0 PBR with no env map is visually identical
+  // to plain diffuse.
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true })
   const mesh = new THREE.Mesh(geo, mat)
   mesh.matrixAutoUpdate = false
   return mesh

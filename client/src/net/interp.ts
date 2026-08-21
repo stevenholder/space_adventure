@@ -7,9 +7,8 @@
  * local player against its own acked inputs.
  */
 import type { Vec3 } from '../sim/index.js'
-import { vec } from '../sim/index.js'
 import type { Quat } from '../util/quat.js'
-import { quatSlerp } from '../util/quat.js'
+import { quatSlerpInto } from '../util/quat.js'
 
 const BUFFER_MS = 100
 const MAX_EXTRAP_MS = 150
@@ -48,26 +47,43 @@ export class InterpBuffer {
     return this.buf.length
   }
 
-  /** Render state at `nowMs - BUFFER_MS`, or null before the first sample. */
-  render(nowMs: number): RemoteRender | null {
+  /**
+   * Render state at `nowMs - BUFFER_MS`, written into `out` and returned
+   * (no allocation — called per remote per frame from the render loop).
+   * False before the first sample.
+   */
+  renderInto(nowMs: number, out: RemoteRender): boolean {
     const n = this.buf.length
-    if (n === 0) return null
+    if (n === 0) return false
     const t = nowMs - BUFFER_MS
     const last = this.buf[n - 1]
     if (t >= last.recvMs) {
       // Buffer drained: extrapolate with the last velocity, capped.
       const lead = Math.min(last.recvMs + MAX_EXTRAP_MS - t, MAX_EXTRAP_MS)
-      if (lead <= 0) return { pos: last.pos, quat: last.quat, vel: last.vel, extrapolatedMs: 0 }
-      const dt = lead / 1000
-      return {
-        pos: vec.add(last.pos, vec.scale(last.vel, dt)),
-        quat: last.quat,
-        vel: last.vel,
-        extrapolatedMs: lead,
+      if (lead <= 0) {
+        this.sampleInto(last, out)
+        out.extrapolatedMs = 0
+        return true
       }
+      const dt = lead / 1000
+      out.pos.x = last.pos.x + last.vel.x * dt
+      out.pos.y = last.pos.y + last.vel.y * dt
+      out.pos.z = last.pos.z + last.vel.z * dt
+      out.quat.x = last.quat.x
+      out.quat.y = last.quat.y
+      out.quat.z = last.quat.z
+      out.quat.w = last.quat.w
+      out.vel.x = last.vel.x
+      out.vel.y = last.vel.y
+      out.vel.z = last.vel.z
+      out.extrapolatedMs = lead
+      return true
     }
-    if (t < this.buf[0].recvMs) {
-      return { pos: this.buf[0].pos, quat: this.buf[0].quat, vel: this.buf[0].vel, extrapolatedMs: 0 }
+    const first = this.buf[0]
+    if (t < first.recvMs) {
+      this.sampleInto(first, out)
+      out.extrapolatedMs = 0
+      return true
     }
     // Find the pair bracketing t (walk from the back — it is almost always
     // the newest pair).
@@ -77,13 +93,31 @@ export class InterpBuffer {
       if (t < a.recvMs) continue
       const span = b.recvMs - a.recvMs
       const k = span > 0 ? (t - a.recvMs) / span : 1
-      return {
-        pos: vec.lerp(a.pos, b.pos, k),
-        quat: quatSlerp(a.quat, b.quat, k),
-        vel: vec.lerp(a.vel, b.vel, k),
-        extrapolatedMs: 0,
-      }
+      out.pos.x = a.pos.x + (b.pos.x - a.pos.x) * k
+      out.pos.y = a.pos.y + (b.pos.y - a.pos.y) * k
+      out.pos.z = a.pos.z + (b.pos.z - a.pos.z) * k
+      quatSlerpInto(a.quat, b.quat, k, out.quat)
+      out.vel.x = a.vel.x + (b.vel.x - a.vel.x) * k
+      out.vel.y = a.vel.y + (b.vel.y - a.vel.y) * k
+      out.vel.z = a.vel.z + (b.vel.z - a.vel.z) * k
+      out.extrapolatedMs = 0
+      return true
     }
-    return { pos: last.pos, quat: last.quat, vel: last.vel, extrapolatedMs: 0 }
+    this.sampleInto(last, out)
+    out.extrapolatedMs = 0
+    return true
+  }
+
+  private sampleInto(s: RemoteSample, out: RemoteRender): void {
+    out.pos.x = s.pos.x
+    out.pos.y = s.pos.y
+    out.pos.z = s.pos.z
+    out.quat.x = s.quat.x
+    out.quat.y = s.quat.y
+    out.quat.z = s.quat.z
+    out.quat.w = s.quat.w
+    out.vel.x = s.vel.x
+    out.vel.y = s.vel.y
+    out.vel.z = s.vel.z
   }
 }

@@ -74,9 +74,15 @@ export class Controls {
     return this.look
   }
 
-  /** The player's current world up, refreshed each frame from prediction. */
+  /**
+   * The player's current world up, refreshed each frame from prediction.
+   * `up` is already normalized (the render loop normalizes once and
+   * reuses it); copied in place so the frame loop allocates nothing.
+   */
   setWorldUp(up: Vec3): void {
-    this.up = vec.norm(up)
+    this.up.x = up.x
+    this.up.y = up.y
+    this.up.z = up.z
   }
 
   private rotateLook(dx: number, dy: number): void {

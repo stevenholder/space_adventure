@@ -66,10 +66,11 @@ function applyCycle(
 
 /** Build the placeholder box rig (same node names/pivots as the GLB). */
 function buildPlaceholder(): CharRig {
-  const suit = new THREE.MeshStandardMaterial({ color: 0xd97a2b, roughness: 1, flatShading: true })
-  const dark = new THREE.MeshStandardMaterial({ color: 0x2a2926, roughness: 1, flatShading: true })
-  const pack = new THREE.MeshStandardMaterial({ color: 0x2f8f8f, roughness: 1, flatShading: true })
-  const visor = new THREE.MeshStandardMaterial({ color: 0x0e3438, roughness: 0.6 })
+  // Lambert: flat-shaded low-poly boxes don't need the PBR pipeline.
+  const suit = new THREE.MeshLambertMaterial({ color: 0xd97a2b, flatShading: true })
+  const dark = new THREE.MeshLambertMaterial({ color: 0x2a2926, flatShading: true })
+  const pack = new THREE.MeshLambertMaterial({ color: 0x2f8f8f, flatShading: true })
+  const visor = new THREE.MeshLambertMaterial({ color: 0x0e3438 })
 
   const root = new THREE.Group()
   const legL = new THREE.Group()
@@ -130,8 +131,27 @@ function buildPlaceholder(): CharRig {
 /** Extract a rig from a loaded `char.player` gltf scene. */
 function buildFromGltf(scene: THREE.Object3D): CharRig {
   const nodes: Record<string, THREE.Object3D> = {}
+  // GLTFLoader emits MeshStandardMaterial (PBR). The M1 rig is untextured
+  // boxes: a Lambert with the same color/side is visually identical and
+  // far cheaper to fill, so swap it here (art/ itself is untouched).
+  const matSwap = new Map<THREE.Material, THREE.MeshLambertMaterial>()
   scene.traverse((o) => {
     if (o.name && !nodes[o.name]) nodes[o.name] = o
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh) return
+    const src = mesh.material as THREE.MeshStandardMaterial
+    if (!src.isMeshStandardMaterial || src.map) return // textured PBR stays PBR
+    let lam = matSwap.get(src)
+    if (!lam) {
+      lam = new THREE.MeshLambertMaterial({
+        color: src.color,
+        side: src.side,
+        transparent: src.transparent,
+        opacity: src.opacity,
+      })
+      matSwap.set(src, lam)
+    }
+    mesh.material = lam
   })
   const rig: CharRig = {
     root: scene,

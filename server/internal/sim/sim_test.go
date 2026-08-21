@@ -33,6 +33,26 @@ func rampFieldY(base, gain float64) *terrain.Field {
 	return f
 }
 
+// slopeFieldY returns a Field with constant base everywhere except the +Y
+// face, whose radius is r = base·exp(tan θ·atan v): a surface of revolution
+// whose measured (finite-difference) slope is ≈ θ along the whole downhill
+// meridian. The exponential keeps the 3D slope constant as the local up
+// rotates — a v-linear ramp like rampFieldY steepens past max_slope within
+// a few metres of the face centre. The 3-point finite-difference normal
+// reads ≈1° steeper than the continuum slope, so the 48.4° design here
+// measures ≈49.4° — the C10 49° leg.
+func slopeFieldY(base, theta float64) *terrain.Field {
+	k := math.Tan(theta)
+	f := flatField(base)
+	for row := range terrain.FaceGrid {
+		v := 2*float64(row)/(terrain.FaceGrid-1) - 1
+		for col := range terrain.FaceGrid {
+			f.Radii[terrain.FacePY][row*terrain.FaceGrid+col] = base * math.Exp(k*math.Atan(v))
+		}
+	}
+	return f
+}
+
 func dist(a, b Vec) float64 { return a.Sub(b).Len() }
 
 func finite(v Vec) bool {
@@ -156,12 +176,11 @@ func TestJumpApexAndAirtime(t *testing.T) {
 // TestSlideOverSteep: contact on ground steeper than max_slope is SLIDE —
 // no walk accel, no friction, gravity along the downslope tangent.
 //
-// The GDD integrator zeroes radial velocity against the radial direction
-// each tick; on an over-steep ramp the surface recedes faster than the
-// body falls, so once the per-tick recession exceeds ground_snap the body
-// hops (AIR) before re-landing further down. Both ends run the same code,
-// so the hops are deterministic. We assert the GDD invariants: never below
-// the surface, never grounded, accelerating downhill.
+// On an over-steep ramp the surface recedes faster than ground_snap per
+// tick, so the glue band carries the extra drop: ground_snap +
+// |vel|·dt·sin θ_contact (GDD resolve). The body stays glued every tick —
+// never below the surface, never airborne, radial velocity zeroed — while
+// it accelerates downhill; Grounded stays false above max_slope.
 func TestSlideOverSteep(t *testing.T) {
 	f := rampFieldY(150, 200) // 53° slope at the face centre — unwalkable
 	up := Vec{0, 1, 0}
@@ -176,8 +195,16 @@ func TestSlideOverSteep(t *testing.T) {
 	zStart := s.Pos[2]
 	for i := 0; i < 10; i++ {
 		prev = Step(&s, Input{Look: s.Facing}, prev, f, DT)
-		if h := s.Pos.Len() - f.SampleRadius(terrain.Normalize(s.Pos)); h < -1e-9 {
+		u := terrain.Normalize(s.Pos)
+		h := s.Pos.Len() - f.SampleRadius(u)
+		if h < -1e-9 {
 			t.Fatalf("tick %d: below the surface: h=%f", i, h)
+		}
+		if h > 1e-9 {
+			t.Fatalf("tick %d: over-steep slide must stay glued, not hop: h=%f", i, h)
+		}
+		if math.Abs(s.Vel.Dot(u)) > 1e-9 {
+			t.Fatalf("tick %d: radial velocity while in contact: %f", i, s.Vel.Dot(u))
 		}
 		if s.Grounded {
 			t.Fatal("53° slope must not be walkable")
@@ -188,6 +215,59 @@ func TestSlideOverSteep(t *testing.T) {
 	}
 	if s.Pos[2] >= zStart {
 		t.Fatalf("slide must descend the ramp: z=%f start=%f", s.Pos[2], zStart)
+	}
+}
+
+// TestWalkDownSlopeNoHop: the C10 defect. Walking straight down a ~49°
+// slope, the per-tick surface recession at walk speed (4.5·0.05·sin 49° ≈
+// 0.172 m) exceeded the old flat ground_snap 0.15 m band, so the body
+// micro-flied ballistically on most ticks. The slope-aware glue band
+// (ground_snap + |vel|·dt·sin θ_contact) must keep the body on the surface:
+// zero airborne ticks, h ≈ 0, and Grounded true (49° ≤ max_slope) for the
+// whole walk.
+func TestWalkDownSlopeNoHop(t *testing.T) {
+	f := slopeFieldY(150, 48.4*math.Pi/180) // measures ≈49.4° — walkable
+	up := Vec{0, 1, 0}
+	s := State{
+		Pos:      up.Scale(f.SampleRadius(up)), // face centre, on the surface
+		Vel:      Vec{},
+		Grounded: f.Walkable(up),
+		Facing:   Vec{0, 0, -1}, // downhill is −Z on the +Y face
+	}
+	if !s.Grounded {
+		t.Fatalf("49° slope must be walkable: slope=%f deg", f.Slope(up)*180/math.Pi)
+	}
+	prev := s.Facing
+	pathLen := 0.0
+	prevPos := s.Pos
+	airTicks := 0
+	for i := 0; i < 300; i++ {
+		prev = Step(&s, Input{MoveY: 1, Look: s.Facing}, prev, f, DT)
+		pathLen += dist(s.Pos, prevPos)
+		prevPos = s.Pos
+		u := terrain.Normalize(s.Pos)
+		h := s.Pos.Len() - f.SampleRadius(u)
+		if h < -1e-9 {
+			t.Fatalf("tick %d: below the surface: h=%f", i, h)
+		}
+		if h > 1e-9 {
+			airTicks++ // not snapped to the surface — the old C10 hop
+		}
+		if !s.Grounded {
+			t.Fatalf("tick %d: must stay grounded on a 49° slope (slope=%f deg)", i, f.Slope(u)*180/math.Pi)
+		}
+		if math.Abs(s.Vel.Dot(u)) > 1e-9 {
+			t.Fatalf("tick %d: radial velocity while in contact: %f", i, s.Vel.Dot(u))
+		}
+	}
+	if airTicks > 0 {
+		t.Fatalf("body left the surface %d of 300 ticks (C10 defect)", airTicks)
+	}
+	if pathLen < 60 {
+		t.Fatalf("body must walk 60 m+ down the slope, walked %f m", pathLen)
+	}
+	if d := s.Vel.Len() - WalkSpeed; d < -1e-2 || d > 1e-9 {
+		t.Fatalf("body must be at walk speed: %f", s.Vel.Len())
 	}
 }
 
@@ -521,11 +601,19 @@ func TestInvariantsRandomWalk(t *testing.T) {
 		if h < -1e-9 {
 			t.Fatalf("tick %d: below surface: h=%f", i, h)
 		}
+		// Glue band for a body that was GROUND or SLIDE pre-step (GDD
+		// resolve): ground_snap + |vel|·dt·sin θ_contact, |vel| the
+		// tangential speed — the glue zeroes only the radial part, so the
+		// post-step tangential speed is the one resolve's band used.
+		band := GroundSnap
+		if !preModeAir {
+			band += tangential(s.Vel, up).Len() * DT * math.Max(0, math.Sin(f.Slope(up)))
+		}
 		// Tangent velocity in contact (GDD invariant): snapped to the
 		// surface, or GROUND/SLIDE inside the glue band. An AIR body inside
 		// the glue band keeps its radial velocity by design (resolve: AIR →
 		// no re-projection).
-		inContact := h < 1e-9 || (h <= GroundSnap && !preModeAir)
+		inContact := h < 1e-9 || (h <= band && !preModeAir)
 		if inContact && math.Abs(s.Vel.Dot(up)) > 1e-9 {
 			t.Fatalf("tick %d: radial velocity while in contact: %f", i, s.Vel.Dot(up))
 		}

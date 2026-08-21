@@ -20,7 +20,7 @@
  * a clock. `dt` is TICK_DT = 50 ms on both ends.
  */
 import type { Input, State, Terrain, Vec3 } from './types.js'
-import { ACTION, RULES, SPAWN_DIR, vec } from './types.js'
+import { ACTION, RULES, SPAWN_DIR, TICK_DT, clamp, vec } from './types.js'
 import { sampleRadius, slopeOK, surfaceNormal } from './terrain.js'
 
 const DEG = Math.PI / 180
@@ -241,7 +241,19 @@ function resolve(
     // Still above the surface.
     return { pos: pNew, vel, grounded: false }
   }
-  if (h <= RULES.groundSnap) {
+  // GDD resolve, "was GROUND or SLIDE" — slope-aware glue band: θ_contact
+  // is the same slope measure as slopeOK (same surfaceNormal/normal_eps);
+  // the band widens by the per-step downhill drop |vel|·dt·sin θ, so steep
+  // walkable slopes stay glued at walk/sprint speed. |vel| is the
+  // tangential speed — contact velocity is radial-zeroed every step
+  // (tangent-velocity invariant), and a jump tick's radial rise must not
+  // widen the band, or the GDD jump margin (jump_speed·dt − ground_snap)
+  // stops holding exactly. Flat ground (θ ≈ 0) gives exactly groundSnap —
+  // old flat/cliff behavior unchanged.
+  const theta = Math.acos(clamp(vec.dot(surfaceNormal(terrain, up), up), -1, 1))
+  const tangent = vec.sub(vel, vec.scale(up, vec.dot(vel, up)))
+  const slopeDrop = vec.len(tangent) * TICK_DT * Math.max(0, Math.sin(theta))
+  if (h <= RULES.groundSnap + slopeDrop) {
     // Still in the glue band — feet stay glued downhill.
     return {
       pos: vec.scale(up, sampleRadius(terrain, up)),

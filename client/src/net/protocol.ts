@@ -192,7 +192,7 @@ export function decodeSnapshot(p: Uint8Array): Snapshot {
 export function decodeSpawn(p: Uint8Array): SpawnMsg {
   need(p, 10, 'spawn')
   const dv = new DataView(p.buffer, p.byteOffset, p.byteLength)
-  const dataLen = dv.getUint32(8, true)
+  const dataLen = dv.getUint32(6, true)
   need(p, 10 + dataLen, 'spawn data')
   return {
     entityId: dv.getUint32(0, true),
@@ -209,7 +209,7 @@ export function decodeDespawn(p: Uint8Array): number {
 export function decodeEvent(p: Uint8Array): EventMsg {
   need(p, 10, 'event')
   const dv = new DataView(p.buffer, p.byteOffset, p.byteLength)
-  const dataLen = dv.getUint32(8, true)
+  const dataLen = dv.getUint32(6, true)
   need(p, 10 + dataLen, 'event data')
   return {
     entityId: dv.getUint32(0, true),

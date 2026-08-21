@@ -7,6 +7,9 @@
  *
  * Outbound: hello on open, input (one per local tick while simulating),
  * ping every 2 s when otherwise silent (PROTOCOL heartbeat).
+ * On unexpected close: auto-reconnect with exponential backoff and a
+ * fresh Hello; the server's join handshake is the full resync. Only an
+ * explicit close() stops the retries.
  */
 import {
   MAX_MESSAGE_SIZE,
@@ -32,7 +35,7 @@ import {
 } from './protocol.js'
 import type { Vec3 } from '../sim/index.js'
 
-export type NetState = 'idle' | 'connecting' | 'open' | 'closed'
+export type NetState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
 
 export interface InputCmd {
   moveX: number
@@ -43,6 +46,14 @@ export interface InputCmd {
 
 export interface NetEvents {
   onState?: (state: NetState, detail: string) => void
+  /**
+   * The connection re-established after an unexpected close and a fresh
+   * Hello is about to be sent. The join handshake that follows
+   * (hello_ack, terrain, complete spawn list) is the complete truth:
+   * the caller must clear stale remote state and reset local prediction
+   * before any of it is processed.
+   */
+  onReconnect?: () => void
   onHelloAck?: (ack: HelloAck) => void
   onTerrain?: (wire: TerrainWire) => void
   onSnapshot?: (snap: Snapshot) => void
@@ -62,6 +73,20 @@ export class NetClient {
   /** u16 input seq, incremented on every input message sent. */
   seq = 0
 
+  // --- reconnect (M1) ------------------------------------------------
+  // Unexpected close → exponential backoff (500 ms × 2, cap 30 s, small
+  // jitter), then a fresh Hello with the same name; the server's join
+  // handshake (hello_ack, terrain, complete spawn list) is the full
+  // resync. An intentional close() never reconnects.
+  private url = ''
+  private name = ''
+  private stopped = false
+  private timer: number | null = null
+  /** Reconnect attempts since the last open (drives the backoff). */
+  attempts = 0
+  /** Delay of the scheduled retry in ms (0 when none pending). */
+  nextRetryMs = 0
+
   constructor(events: NetEvents) {
     this.events = events
   }
@@ -76,18 +101,35 @@ export class NetClient {
 
   connect(url: string, name: string): void {
     this.teardown()
-    this.netState = 'connecting'
-    this.events.onState?.('connecting', url)
-    const ws = new WebSocket(url)
+    this.url = url
+    this.name = name
+    this.stopped = false
+    this.attempts = 0
+    this.nextRetryMs = 0
+    this.openSocket()
+  }
+
+  /** Open one socket — first try or a backoff retry — and wire its handlers. */
+  private openSocket(): void {
+    const retrying = this.netState === 'reconnecting'
+    if (!retrying) this.netState = 'connecting'
+    this.nextRetryMs = 0
+    this.events.onState?.(this.netState, retrying ? this.reconnectLabel : `connecting ${this.url}`)
+    const ws = new WebSocket(this.url)
     ws.binaryType = 'arraybuffer'
     this.ws = ws
 
     ws.onopen = () => {
       if (this.ws !== ws) return
+      const wasReconnecting = this.netState === 'reconnecting'
+      this.attempts = 0
+      this.nextRetryMs = 0
+      this.seq = 0 // per-connection counter (PROTOCOL "seq")
       this.netState = 'open'
       this.lastSentAt = performance.now()
-      this.sendRaw(encodeHello(PROTOCOL_VERSION, name))
-      this.events.onState?.('open', url)
+      if (wasReconnecting) this.events.onReconnect?.()
+      this.sendRaw(encodeHello(PROTOCOL_VERSION, this.name))
+      this.events.onState?.('open', 'connected')
     }
 
     ws.onmessage = (ev: MessageEvent) => {
@@ -97,14 +139,32 @@ export class NetClient {
 
     ws.onerror = () => {
       if (this.ws !== ws) return
-      this.events.onState?.('connecting', `${url} — connection error`)
+      // onclose follows and owns the state transition + backoff.
+      this.events.onState?.(
+        this.netState,
+        this.netState === 'reconnecting' ? this.reconnectLabel : `${this.url} — connection error`,
+      )
     }
 
     ws.onclose = (ev: CloseEvent) => {
       if (this.ws !== ws) return
       this.ws = null
-      this.netState = 'closed'
-      this.events.onState?.('closed', `closed ${ev.code}${ev.reason ? `: ${ev.reason}` : ''}`)
+      if (this.stopped) {
+        this.netState = 'closed'
+        this.events.onState?.('closed', `closed ${ev.code}${ev.reason ? `: ${ev.reason}` : ''}`)
+        return
+      }
+      // Unexpected loss (or a failed first try): back off, then retry
+      // with a fresh Hello. The join handshake on success is the full
+      // resync (hello_ack, terrain, complete spawn list).
+      this.netState = 'reconnecting'
+      this.attempts += 1
+      this.nextRetryMs = this.backoffMs(this.attempts)
+      this.timer = window.setTimeout(() => {
+        this.timer = null
+        this.openSocket()
+      }, this.nextRetryMs)
+      this.events.onState?.('reconnecting', this.reconnectLabel)
     }
   }
 
@@ -132,6 +192,8 @@ export class NetClient {
   }
 
   close(reason = 'user'): void {
+    this.stopped = true
+    this.cancelTimer()
     const ws = this.ws
     this.ws = null
     this.netState = 'closed'
@@ -146,6 +208,7 @@ export class NetClient {
   }
 
   private teardown(): void {
+    this.cancelTimer()
     const ws = this.ws
     this.ws = null
     this.netState = 'idle'
@@ -155,6 +218,29 @@ export class NetClient {
       ws.onerror = null
       ws.onclose = null
       if (ws.readyState <= WebSocket.OPEN) ws.close(1000, 'reconnect')
+    }
+  }
+
+  /**
+   * HUD text for the reconnecting state: attempt count plus the delay of
+   * the next scheduled retry.
+   */
+  get reconnectLabel(): string {
+    let label = this.attempts > 0 ? `reconnecting… attempt ${this.attempts}` : 'reconnecting…'
+    if (this.nextRetryMs > 0) label += `, next in ${(this.nextRetryMs / 1000).toFixed(1)} s`
+    return label
+  }
+
+  /** Exponential backoff: 500 ms × 2^(attempt−1), cap 30 s, ±20% jitter. */
+  private backoffMs(attempt: number): number {
+    const base = Math.min(30_000, 500 * 2 ** (attempt - 1))
+    return Math.round(base * (0.8 + 0.4 * Math.random()))
+  }
+
+  private cancelTimer(): void {
+    if (this.timer !== null) {
+      window.clearTimeout(this.timer)
+      this.timer = null
     }
   }
 

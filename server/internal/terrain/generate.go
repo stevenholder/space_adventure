@@ -43,7 +43,7 @@ const (
 	// the band edge (±normalEps neighbourhood) still sees flat ground,
 	// and it is one blend width wide.
 	spawnSupIn  = (spawnFlatRadius + spawnFlatBlend + normalEps*PlanetRadius) / PlanetRadius
-	spawnSupOut = spawnSupIn + spawnFlatBlend / PlanetRadius
+	spawnSupOut = spawnSupIn + spawnFlatBlend/PlanetRadius
 
 	landmarkJitterDeg = 15.0
 	// LandmarkMinSep is the GDD landmark_min_sep: jitter may not bunch two
@@ -276,7 +276,7 @@ func underTilt(d Vec, rimRad float64, seed uint64, lm []landmark) float64 {
 		q := d.Scale(math.Cos(rimRad)).Add(e1.Scale(math.Sin(rimRad) * math.Cos(a))).Add(e2.Scale(math.Sin(rimRad) * math.Sin(a)))
 		sum += under(Normalize(q))
 	}
-	return uc - sum / float64(n)
+	return uc - sum/float64(n)
 }
 
 // ---- landmarks ----

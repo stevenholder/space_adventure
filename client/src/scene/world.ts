@@ -19,9 +19,9 @@ import * as THREE from 'three'
 import type { Terrain, Vec3 } from '../sim/index.js'
 import { RULES } from '../sim/index.js'
 import type { EntityState } from '../net/protocol.js'
-import { InterpBuffer } from '../net/interp.js'
+import { InterpBuffer, type RemoteRender } from '../net/interp.js'
 import type { Quat } from '../util/quat.js'
-import { QUAT_FLIP_Y, quatFromForwardUp, quatMul } from '../util/quat.js'
+import { QUAT_FLIP_Y, quatFromForwardUpUnit, quatMulInto } from '../util/quat.js'
 import { buildTerrain } from './terrain.js'
 import { buildSky } from './sky.js'
 import type { RockPlacement } from './rocks.js'
@@ -38,9 +38,16 @@ interface RemoteView {
   rig: CharRig | null
   tagEl: HTMLDivElement
   interp: InterpBuffer
+  /** Reused interpolation output (renderInto writes here — no allocation). */
+  rr: RemoteRender
   pos: THREE.Vector3
   quat: THREE.Quaternion
   speed: number
+  /** Last applied tag state — DOM writes are skipped when unchanged. */
+  tagX: number
+  tagY: number
+  tagO: number
+  tagVis: boolean
 }
 
 export class World {
@@ -133,13 +140,17 @@ export class World {
    */
   setLocal(pos: Vec3, facing: Vec3, lookDir: Vec3): void {
     const up = this.up.set(pos.x, pos.y, pos.z).normalize()
+    _upV.x = up.x
+    _upV.y = up.y
+    _upV.z = up.z
     const f = this.f.set(facing.x, facing.y, facing.z)
     if (f.lengthSq() < 1e-12) f.set(1, 0, 0)
     f.normalize()
+    _fV.x = f.x
+    _fV.y = f.y
+    _fV.z = f.z
     this.localAnchor.position.set(pos.x, pos.y, pos.z)
-    this.localAnchor.quaternion.copy(
-      toTHREE(quatFromForwardUp({ x: f.x, y: f.y, z: f.z }, upToVec3(up))),
-    )
+    this.localAnchor.quaternion.copy(toTHREE(quatFromForwardUpUnit(_fV, _upV, _q2)))
     this.localAnchor.updateMatrixWorld()
 
     // Camera mounts on the eye node (GDD); fallback: eye_height above origin.
@@ -159,7 +170,10 @@ export class World {
     const look = this.fwd.set(lookDir.x, lookDir.y, lookDir.z)
     if (look.lengthSq() < 1e-12) look.set(1, 0, 0)
     look.normalize()
-    this.camera.quaternion.copy(toTHREE(quatFromForwardUp({ x: look.x, y: look.y, z: look.z }, upToVec3(up))))
+    _fV.x = look.x
+    _fV.y = look.y
+    _fV.z = look.z
+    this.camera.quaternion.copy(toTHREE(quatFromForwardUpUnit(_fV, _upV, _q2)))
   }
 
   // --------------------------------------------------------------- remotes
@@ -173,15 +187,28 @@ export class World {
       const tagEl = document.createElement('div')
       tagEl.className = 'tag'
       tagEl.textContent = name // untrusted name: text, never markup
+      // Placement is transform-only (see placeTag): pin the box at 0,0.
+      tagEl.style.left = '0px'
+      tagEl.style.top = '0px'
       this.tagsEl.appendChild(tagEl)
       rv = {
         anchor,
         rig,
         tagEl,
         interp: new InterpBuffer(),
+        rr: {
+          pos: { x: 0, y: 0, z: 0 },
+          quat: { x: 0, y: 0, z: 0, w: 1 },
+          vel: { x: 0, y: 0, z: 0 },
+          extrapolatedMs: 0,
+        },
         pos: new THREE.Vector3(),
         quat: new THREE.Quaternion(),
         speed: 0,
+        tagX: -1,
+        tagY: -1,
+        tagO: -1,
+        tagVis: false,
       }
       this.remotes.set(id, rv)
       this.scene.add(anchor)
@@ -212,6 +239,11 @@ export class World {
     this.remotes.delete(id)
   }
 
+  /** Drop every remote (reconnect resync: the fresh spawn list is truth). */
+  clearRemotes(): void {
+    for (const id of [...this.remotes.keys()]) this.removeRemote(id)
+  }
+
   /** Swap a remote body for the loaded GLB rig. */
   setRemoteRig(id: number, rig: CharRig): void {
     const rv = this.remotes.get(id)
@@ -229,15 +261,15 @@ export class World {
   frameRemotes(nowMs: number, dt: number, localPos: Vec3): void {
     const lp = this.lpV.set(localPos.x, localPos.y, localPos.z)
     for (const rv of this.remotes.values()) {
-      const r = rv.interp.render(nowMs)
-      if (!r) {
-        rv.tagEl.style.display = 'none'
+      if (!rv.interp.renderInto(nowMs, rv.rr)) {
+        this.hideTag(rv)
         continue
       }
+      const r = rv.rr
       rv.pos.set(r.pos.x, r.pos.y, r.pos.z)
       // Wire quat (GDD +Z frame) → authored art frame (−Z forward).
-      const q = quatMul(r.quat, QUAT_FLIP_Y)
-      rv.quat.set(q.x, q.y, q.z, q.w)
+      quatMulInto(r.quat, QUAT_FLIP_Y, _q2)
+      rv.quat.set(_q2.x, _q2.y, _q2.z, _q2.w)
       rv.speed = Math.hypot(r.vel.x, r.vel.y, r.vel.z)
       rv.anchor.position.copy(rv.pos)
       rv.anchor.quaternion.copy(rv.quat)
@@ -246,34 +278,59 @@ export class World {
     }
   }
 
+  /**
+   * Nametag: projected anchor, transform-only placement. left/top stay
+   * pinned at 0, so moving a tag is a compositor job (translate3d), not a
+   * main-thread layout — it matters at 10 tags × 60 fps. Writes are
+   * skipped when the applied value is unchanged.
+   */
   private placeTag(rv: RemoteView, localPos: THREE.Vector3): void {
     const el = rv.tagEl
     const d = rv.pos.distanceTo(localPos)
     if (d > TAG_FADE_END) {
-      el.style.display = 'none'
+      this.hideTag(rv)
       return
     }
     // Behind the camera?
     const toTag = this.toTag.copy(rv.pos).sub(this.camera.position)
     const fwd = this.fwd.set(0, 0, -1).applyQuaternion(this.camera.quaternion)
     if (toTag.dot(fwd) <= 0) {
-      el.style.display = 'none'
+      this.hideTag(rv)
       return
     }
     // Tag anchor: TAG_HEIGHT along the entity's radial up, projected.
     const anchor = this.anchorV.copy(rv.pos).normalize().multiplyScalar(TAG_HEIGHT).add(rv.pos)
     const proj = anchor.project(this.camera)
     if (proj.z > 1) {
-      el.style.display = 'none'
+      this.hideTag(rv)
       return
     }
-    const x = (proj.x * 0.5 + 0.5) * window.innerWidth
-    const y = (-proj.y * 0.5 + 0.5) * window.innerHeight
-    el.style.display = ''
-    el.style.opacity =
-      d > TAG_FADE_START ? String(1 - (d - TAG_FADE_START) / (TAG_FADE_END - TAG_FADE_START)) : '1'
-    el.style.left = `${x}px`
-    el.style.top = `${y}px`
+    const x = Math.round((proj.x * 0.5 + 0.5) * window.innerWidth)
+    const y = Math.round((-proj.y * 0.5 + 0.5) * window.innerHeight)
+    if (rv.tagX !== x || rv.tagY !== y) {
+      rv.tagX = x
+      rv.tagY = y
+      el.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -100%)`
+    }
+    const o =
+      d > TAG_FADE_START
+        ? Math.round((1 - (d - TAG_FADE_START) / (TAG_FADE_END - TAG_FADE_START)) * 100)
+        : 100
+    if (rv.tagO !== o) {
+      rv.tagO = o
+      el.style.opacity = String(o / 100)
+    }
+    if (!rv.tagVis) {
+      rv.tagVis = true
+      el.style.display = ''
+    }
+  }
+
+  private hideTag(rv: RemoteView): void {
+    if (rv.tagVis) {
+      rv.tagVis = false
+      rv.tagEl.style.display = 'none'
+    }
   }
 
   /** Distance to the nearest remote (m), or null when there are none. */
@@ -294,13 +351,12 @@ export class World {
 }
 
 const _q = new THREE.Quaternion()
+const _q2: Quat = { x: 0, y: 0, z: 0, w: 1 }
+const _upV: Vec3 = { x: 0, y: 0, z: 0 }
+const _fV: Vec3 = { x: 0, y: 0, z: 0 }
 
 function toTHREE(q: Quat): THREE.Quaternion {
   return _q.set(q.x, q.y, q.z, q.w)
-}
-
-function upToVec3(v: THREE.Vector3): { x: number; y: number; z: number } {
-  return { x: v.x, y: v.y, z: v.z }
 }
 
 function proceduralRockGeoms(): THREE.BufferGeometry[] {
