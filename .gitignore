@@ -34,5 +34,13 @@ test/out/t9-stderr.txt
 test/t5/explore-out.txt
 test/t5/explore-err.txt
 
+# Raw QA captures / scans (regenerable — result and report JSONs are committed)
+test/out/t5-fieldmap.json
+test/out/t7-raw-*.jsonl
+test/out/t7-final-08-fps-raw.json
+test/out/t10-*-scan*.jsonl
+test/out/t10-sim-cand*.json
+test/out/t10-sim-result-prefix.json
+
 # QA evidence logs (referenced from docs/QA-STATUS.md)
 !test/out/*.log
