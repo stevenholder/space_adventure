@@ -1,0 +1,9 @@
+[t2 2026-08-20T03:27:12.265Z] world file: face_grid=65 radius=[124,190] sha256_16=c80269c44a757a8f seed=1337
+[t2 2026-08-20T03:27:12.290Z] A connected :3000 (nginx /ws) — handshake 6.0 ms, entity_id=5 world_seed=1337 tick_hz=20
+[t2 2026-08-20T03:27:12.791Z] B connected :18080 (direct /ws) +502.1 ms after A — entity_id=6 world_seed=1337 tick_hz=20
+[t2 2026-08-20T03:27:13.791Z] PASS a: B burst contains A spawn OR A gets B spawn <=1 s burst_contains_A=true (B recv 5.2 ms after B connect); A recv B spawn 4.5 ms after B connect (limit 1000)
+[t2 2026-08-20T03:27:13.791Z] PASS b: each client sees the other within 1 s B sees A: spawn 5.2 ms, first snapshot row 18.6 ms (limit 1000); A sees B: spawn 4.5 ms, first snapshot row 18.7 ms (limit 1000)
+[t2 2026-08-20T03:27:13.791Z] PASS c: both spawn positions on terrain (|len - sampleRadius| <= 0.05 m) A: r=150.0002 vs field 150.0002 dev=2.79e-9 m (face 2); B@A: r=150.0002 dev=2.79e-9 m; B@B: r=150.0002 dev=2.79e-9 m
+[t2 2026-08-20T03:27:13.792Z] PASS field: live terrain == captured world-seed1337.json (both paths), seed 1337, 20 Hz A sha256_16=c80269c44a757a8f B sha256_16=c80269c44a757a8f world=c80269c44a757a8f; seeds 1337/1337; tick_hz 20/20
+[t2 2026-08-20T03:27:13.792Z] OVERALL: PASS
+[t2 2026-08-20T03:27:13.792Z] evidence: /home/steve/code/space_adventure/test/out/t2-two-client.json

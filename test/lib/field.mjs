@@ -16,14 +16,17 @@
 const FACE_AXIS = [0, 0, 1, 1, 2, 2]
 const FACE_SIGN = [1, -1, 1, -1, 1, -1]
 
-/** Face index for a normalized direction (largest-magnitude component; ties → earlier face). */
+/**
+ * Face index for a normalized direction: the SIGNED dominant component
+ * picks the face; exact magnitude ties keep the earlier face in the
+ * +X, −X, +Y, −Y, +Z, −Z order. Verified against
+ * server/internal/terrain/terrain.go FaceOf and client/src/sim/terrain.ts
+ * pickFace (2026-08-19).
+ */
 export function faceOf(d) {
-  const ax = [Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])]
+  const score = [d[0], -d[0], d[1], -d[1], d[2], -d[2]]
   let face = 0
-  for (let f = 1; f < 6; f++) {
-    // later face wins only on STRICTLY larger magnitude (tie keeps earlier)
-    if (ax[FACE_AXIS[f]] > ax[FACE_AXIS[face]]) face = f
-  }
+  for (let f = 1; f < 6; f++) if (score[f] > score[face]) face = f
   return face
 }
 

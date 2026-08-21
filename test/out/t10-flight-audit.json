@@ -1,0 +1,73 @@
+{
+ "label": "final",
+ "params": {
+  "A1": 30,
+  "Q2": 50,
+  "P3colat": 28,
+  "P3az": 198.5,
+  "Q4": 225.5,
+  "Q5": 215
+ },
+ "hard": {
+  "noFallThrough": true,
+  "minH": 0,
+  "endpointDelta": 0.0095,
+  "pathLen": 1157.59,
+  "faces": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "crossings": 7,
+  "stalled": false
+ },
+ "seamHitches": [],
+ "noSeamHitch": true,
+ "flights": [
+  {
+   "ticks": [
+    2823,
+    2837
+   ],
+   "hangS": 0.75,
+   "s": 637.59,
+   "az": 205.6,
+   "lat": -54.66,
+   "face": 3,
+   "maxH": 1.053,
+   "minH": 0,
+   "slopeDeg": 17.06,
+   "localMaxMin10m": 4.01,
+   "maxDrop02m": 0.129,
+   "maxRise02m": 0.123,
+   "maxDrop06m": 0.382,
+   "feature": "scarp/rim-drop (0.2 m step drop > 0.12 m)"
+  },
+  {
+   "ticks": [
+    4077,
+    4089
+   ],
+   "hangS": 0.65,
+   "s": 920.58,
+   "az": 215,
+   "lat": 35.17,
+   "face": 1,
+   "maxH": 1.246,
+   "minH": 0,
+   "slopeDeg": 18.74,
+   "localMaxMin10m": 4.21,
+   "maxDrop02m": 0.07,
+   "maxRise02m": 0.159,
+   "maxDrop06m": 0.169,
+   "feature": "kink lip (0.2 m step rise > 0.12 m)"
+  }
+ ],
+ "flightCount": 2,
+ "totalHangS": 1.4,
+ "maxFlightH": 1.246,
+ "verdict": "QUALIFYING (GDD AIR cases only)"
+}

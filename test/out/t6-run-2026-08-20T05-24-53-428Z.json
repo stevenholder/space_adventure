@@ -1,0 +1,193 @@
+{
+ "criterion": "C6 — prediction quality at 100 ms injected latency",
+ "method": "deferred match: err = |P_M − snapshot(ack M) pos|, P_M = client Predictor state after input M; snap-back = reconcile Δ along-track < −0.15 m; phase-pinned anchor (see file header)",
+ "commands": [
+  "client/node_modules/.bin/tsx test/t6-prediction.mjs",
+  "node test/lib/proxy.mjs 28092 127.0.0.1 18080   (spawned by the harness; 50 ms/direction)"
+ ],
+ "thresholds": {
+  "errP95": 0.25,
+  "snapback": 0,
+  "rttTargetMs": 100
+ },
+ "directTerrainSha": "c80269c44a757a8f",
+ "directHello": {
+  "serverVer": 1,
+  "tickHz": 20,
+  "worldSeed": 1337,
+  "entityId": 37
+ },
+ "routes": [
+  {
+   "az": 132.5,
+   "flatLen": 43,
+   "slopeRun": {
+    "from": 44,
+    "to": 63,
+    "len": 19
+   }
+  }
+ ],
+ "route": {
+  "az": 132.5,
+  "flatLen": 43,
+  "slopeRun": {
+   "from": 44,
+   "to": 63,
+   "len": 19
+  },
+  "jumpTick": 302
+ },
+ "scenario": {
+  "checks": {
+   "flatSlope": true,
+   "sprint": true,
+   "reversal": true,
+   "jump": true
+  },
+  "stats": {
+   "maxSpeedSprint": 7.499976562667086,
+   "minTrackVelReversal": -7.49995312540741,
+   "airTicks": 19,
+   "landing": {
+    "tick": 321,
+    "s": 45.32865417082974,
+    "slopeDeg": 21.904500643678077
+   },
+   "flatLen": 43,
+   "slopeRun": {
+    "from": 44,
+    "to": 63,
+    "len": 19
+   }
+  }
+ },
+ "attempts": [
+  {
+   "n": 1,
+   "anchorHrMs": 634946700,
+   "psiMs": 38.941218,
+   "pEstMs": 49.04227400000002,
+   "summary": {
+    "snapshots": 371,
+    "snapshotsWithErr": 371,
+    "errM0": {
+     "p50": 2.7940245672652964e-9,
+     "max": 2.7940245672652964e-9
+    },
+    "err": {
+     "p50": 0.3749986857363595,
+     "p95": 0.7499976471352447,
+     "max": 0.7499996268366688,
+     "n": 368
+    },
+    "reconD": {
+     "min": -0.37556230591481277,
+     "max": 0.37500195499763944,
+     "p95": 0.3749985225560448
+    },
+    "snapbackCount": 37,
+    "rttMs": {
+     "p50": 104.99713249999999,
+     "p95": 106.35318194999999,
+     "min": 104.03103,
+     "max": 106.543219,
+     "n": 8
+    },
+    "entityCounts": {
+     "min": 1,
+     "max": 1
+    },
+    "bursts": [
+     {
+      "tick": 1,
+      "n": 1
+     }
+    ]
+   }
+  },
+  {
+   "n": 2,
+   "anchorHrMs": 634965309,
+   "psiMs": 38.919847000000004,
+   "pEstMs": 8.063645000000008,
+   "S0modMs": 36.441218,
+   "summary": {
+    "snapshots": 370,
+    "snapshotsWithErr": 370,
+    "errM0": {
+     "p50": 2.7940245672652964e-9,
+     "max": 2.7940245672652964e-9
+    },
+    "err": {
+     "p50": 0.374998751391931,
+     "p95": 0.3751070691414288,
+     "max": 0.4246837845389727,
+     "n": 367
+    },
+    "reconD": {
+     "min": -0.24999960937688046,
+     "max": 0.25000124033594306,
+     "p95": 0.000002378358967575626
+    },
+    "snapbackCount": 1,
+    "rttMs": {
+     "p50": 101.9505585,
+     "p95": 102.6311723,
+     "min": 100.962742,
+     "max": 102.877293,
+     "n": 8
+    },
+    "entityCounts": {
+     "min": 1,
+     "max": 1
+    },
+    "bursts": []
+   }
+  }
+ ],
+ "summary": {
+  "snapshots": 370,
+  "snapshotsWithErr": 370,
+  "errM0": {
+   "p50": 2.7940245672652964e-9,
+   "max": 2.7940245672652964e-9
+  },
+  "err": {
+   "p50": 0.374998751391931,
+   "p95": 0.3751070691414288,
+   "max": 0.4246837845389727,
+   "n": 367
+  },
+  "reconD": {
+   "min": -0.24999960937688046,
+   "max": 0.25000124033594306,
+   "p95": 0.000002378358967575626
+  },
+  "snapbackCount": 1,
+  "rttMs": {
+   "p50": 101.9505585,
+   "p95": 102.6311723,
+   "min": 100.962742,
+   "max": 102.877293,
+   "n": 8
+  },
+  "entityCounts": {
+   "min": 1,
+   "max": 1
+  },
+  "bursts": []
+ },
+ "proxiedTerrainSha": "c80269c44a757a8f",
+ "terrainSameAsDirect": true,
+ "verdict": "FAIL",
+ "reasons": [
+  "err p95 0.3751 m ≥ 0.25 m",
+  "snap-backs 1 ≠ 0"
+ ],
+ "evidence": {
+  "run": "test/out/t6-run-2026-08-20T05-24-53-428Z.json",
+  "snapshots": "test/out/t6-snapshots-2026-08-20T05-24-53-428Z.jsonl",
+  "proxyLog": "test/out/t6-proxy-2026-08-20T05-24-53-428Z.log"
+ }
+}

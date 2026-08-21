@@ -1,0 +1,2 @@
+proxy ready on :28092 -> 127.0.0.1:18080 (delay 50 ms/direction)
+conn closed after 19716 ms: c2t 370 frames/11643 B, t2c 385 frames/71707 B (delay 50 ms/dir)

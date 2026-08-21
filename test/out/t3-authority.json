@@ -1,0 +1,280 @@
+{
+  "criterion": "C3 (ROADMAP #3): server-authoritative correction within one tick",
+  "run": {
+    "ts": "2026-08-20T04:41:17.997Z",
+    "endpoint": "ws://127.0.0.1:3000/ws (nginx)",
+    "name": "qa-t3",
+    "entity_id": 21
+  },
+  "method": "real client Predictor (client/src/net/predictor.ts) vs live server; client wire codec (net/protocol.ts) + client sim terrain (sim/); raw-TCP transport (test/lib/ws.mjs); loop mirrors client/src/main.ts tickStep/processSnapshot",
+  "phases": {
+    "walk_ms": 1500,
+    "rest_vel_threshold_mps": 0.005,
+    "last_rest_snapshot": {
+      "tick": 1127834,
+      "ackSeq": 48,
+      "pos": {
+        "x": 7.104586601257324,
+        "y": 149.8318328857422,
+        "z": 0
+      },
+      "vel": {
+        "x": 0.0022494993172585964,
+        "y": -0.00010666466550901532,
+        "z": 0
+      },
+      "at_ms": 2471.225,
+      "auth_pos_m": 150.00018
+    }
+  },
+  "corruption": {
+    "at_ms": 2471.225,
+    "tick": 1127834,
+    "offset_m": 4,
+    "dir": [
+      0.99888,
+      -0.04736,
+      0
+    ],
+    "pre_dist_m": 4,
+    "forced_pos": [
+      11.1001,
+      149.64238,
+      0
+    ]
+  },
+  "correction": {
+    "snapshot_tick": 1127835,
+    "snapshot_ack_seq": 49,
+    "snapshot_at_ms": 2520.778,
+    "authoritative_pos": {
+      "x": 7.10466194152832,
+      "y": 149.8318328857422,
+      "z": 0
+    },
+    "corrected_pos": {
+      "x": 7.10466194152832,
+      "y": 149.8318328857422,
+      "z": 0
+    },
+    "snap_dist_m": 0,
+    "tolerance_m": 0.001,
+    "elapsed_from_corrupt_ms": 49.552999999999884,
+    "one_tick_budget_ms": 100,
+    "tick_delta": 1,
+    "single_step": true
+  },
+  "recent_snapshots": [
+    {
+      "tick": 1127812,
+      "ackSeq": 26,
+      "ok": true,
+      "at_ms": 1371.033,
+      "vel_mps": 4.5,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127813,
+      "ackSeq": 27,
+      "ok": true,
+      "at_ms": 1420.543,
+      "vel_mps": 4.5,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127814,
+      "ackSeq": 28,
+      "ok": true,
+      "at_ms": 1471.28,
+      "vel_mps": 4.5,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127815,
+      "ackSeq": 29,
+      "ok": true,
+      "at_ms": 1520.894,
+      "vel_mps": 4.5,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127816,
+      "ackSeq": 30,
+      "ok": true,
+      "at_ms": 1570.787,
+      "vel_mps": 3.016,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127817,
+      "ackSeq": 31,
+      "ok": true,
+      "at_ms": 1621.487,
+      "vel_mps": 2.022,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127818,
+      "ackSeq": 32,
+      "ok": true,
+      "at_ms": 1671.271,
+      "vel_mps": 1.355,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127819,
+      "ackSeq": 33,
+      "ok": true,
+      "at_ms": 1721.045,
+      "vel_mps": 0.9085,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127820,
+      "ackSeq": 34,
+      "ok": true,
+      "at_ms": 1771.71,
+      "vel_mps": 0.609,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127821,
+      "ackSeq": 35,
+      "ok": true,
+      "at_ms": 1821.34,
+      "vel_mps": 0.4082,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127822,
+      "ackSeq": 36,
+      "ok": true,
+      "at_ms": 1871.365,
+      "vel_mps": 0.2736,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127823,
+      "ackSeq": 37,
+      "ok": true,
+      "at_ms": 1921.162,
+      "vel_mps": 0.1834,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127824,
+      "ackSeq": 38,
+      "ok": true,
+      "at_ms": 1970.954,
+      "vel_mps": 0.123,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127825,
+      "ackSeq": 39,
+      "ok": true,
+      "at_ms": 2021.71,
+      "vel_mps": 0.08242,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127826,
+      "ackSeq": 40,
+      "ok": true,
+      "at_ms": 2071.539,
+      "vel_mps": 0.05525,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127827,
+      "ackSeq": 41,
+      "ok": true,
+      "at_ms": 2121.295,
+      "vel_mps": 0.03703,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127828,
+      "ackSeq": 42,
+      "ok": true,
+      "at_ms": 2171.042,
+      "vel_mps": 0.02482,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127829,
+      "ackSeq": 43,
+      "ok": true,
+      "at_ms": 2220.63,
+      "vel_mps": 0.01664,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127830,
+      "ackSeq": 44,
+      "ok": true,
+      "at_ms": 2271.451,
+      "vel_mps": 0.01115,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127831,
+      "ackSeq": 45,
+      "ok": true,
+      "at_ms": 2321.209,
+      "vel_mps": 0.007477,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127832,
+      "ackSeq": 46,
+      "ok": true,
+      "at_ms": 2370.904,
+      "vel_mps": 0.005012,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127833,
+      "ackSeq": 47,
+      "ok": true,
+      "at_ms": 2421.623,
+      "vel_mps": 0.00336,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127834,
+      "ackSeq": 48,
+      "ok": true,
+      "at_ms": 2471.225,
+      "vel_mps": 0.002252,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 1127835,
+      "ackSeq": 49,
+      "ok": true,
+      "at_ms": 2520.778,
+      "vel_mps": 0.00151,
+      "pos_m": 150.0002
+    }
+  ],
+  "inputs_sent": 50,
+  "overall": "PASS",
+  "checks": [
+    {
+      "id": "c3a: forced +4 m tangent applied to the live predicted state",
+      "pass": true,
+      "detail": "preDist=4.0000 m (target 4.000), dir=(0.9989,-0.0474,0.0000) at tick 1127834"
+    },
+    {
+      "id": "c3b: corrected state snaps <1e-3 m from the authoritative position in one step",
+      "pass": true,
+      "detail": "snapDist=0.000e+0 m (limit 0.001) in a single effective reconcile; pre-correction distance 4.000 m"
+    },
+    {
+      "id": "c3c: correction within one tick (50 ms + network) of the forced state",
+      "pass": true,
+      "detail": "corrupt -> corrected in 49.552999999999884 ms (budget 100 ms = 1 tick + network), tick delta 1"
+    }
+  ]
+}

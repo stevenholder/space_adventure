@@ -1,0 +1,907 @@
+{
+ "step": "C6 product-gap evidence — perceived (rendered) error, offline demo with real Predictor/renderState",
+ "metric": "e(t) = |renderState(t).pos - server truth(t)|, 1 kHz, t in [2000,8000] ms, sustained sprint (ACTION.SPRINT, forward), mock-terrain flat spawn plain; truth = W_floor(t/50) (20 Hz step function); server: 100 ms pipeline (50 ms one-way), generation skew delta, float32 wire",
+ "thresholdM": 0.25,
+ "t6LiveEvidence": {
+  "originalMetric": {
+   "errP50": 0.3749987,
+   "errP95": 0.3754437,
+   "errMax": 0.7499982
+  },
+  "correctedPairing": {
+   "p50": 0.00000366,
+   "p95": 0.00000776,
+   "max": 0.375,
+   "snapbacks": 0
+  },
+  "reconD": {
+   "p95": 0.00000249
+  },
+  "source": "test/out/t6-corrected-pairing.json + test/out/t6-run-2026-08-20T06-32-23-124Z.json"
+ },
+ "runs": [
+  {
+   "mode": "shipped-live",
+   "phi": 25,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "3.901e-1",
+    "p95": "5.850e-1",
+    "p99": "6.458e-1",
+    "max": "6.714e-1",
+    "mean": "3.930e-1"
+   },
+   "snapbacks": 0,
+   "validation": null
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 0,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.036e-6",
+    "p95": "2.705e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.499e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.197e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 5,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 10,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 15,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 20,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 25,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 30,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 35,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 40,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 45,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.025e-6",
+    "p95": "2.667e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.628e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.570e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 0,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.506e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.206e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 5,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "8.990e-1",
+     "max": "9.012e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.513e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.402e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 10,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "8.990e-1",
+     "max": "9.012e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.513e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.402e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 15,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 20,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 25,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 30,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 35,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 40,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 45,
+   "delta": 10,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.342e-6",
+    "p95": "4.334e-1",
+    "p99": "4.498e-1",
+    "max": "4.507e-1",
+    "mean": "7.903e-2"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 0,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.506e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.206e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 5,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "8.990e-1",
+     "max": "9.012e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.513e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.402e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 10,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "8.990e-1",
+     "max": "9.012e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.513e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.402e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 15,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "8.990e-1",
+     "max": "9.012e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.513e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.402e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 20,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "8.990e-1",
+     "max": "9.012e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.513e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.402e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 25,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 30,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 35,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 40,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "reconcile-at-arrival",
+   "phi": 45,
+   "delta": 20,
+   "nSamples": 12001,
+   "err": {
+    "p50": "2.014e-6",
+    "p95": "4.443e-1",
+    "p99": "4.502e-1",
+    "max": "4.507e-1",
+    "mean": "1.580e-1"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.629e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.577e-6",
+     "max": "3.771e-1"
+    }
+   }
+  },
+  {
+   "mode": "phase-locked-fix",
+   "phi": 0,
+   "delta": 0,
+   "nSamples": 12001,
+   "err": {
+    "p50": "1.036e-6",
+    "p95": "2.705e-6",
+    "p99": "3.550e-6",
+    "max": "4.118e-6",
+    "mean": "1.161e-6"
+   },
+   "snapbacks": 0,
+   "validation": {
+    "sendVsAuth": {
+     "p95": "4.496e-1",
+     "max": "4.507e-1"
+    },
+    "postVsNextAuth": {
+     "p95": "7.499e-6",
+     "max": "3.771e-1"
+    },
+    "reconDelta": {
+     "p95": "4.197e-6",
+     "max": "3.771e-1"
+    }
+   }
+  }
+ ]
+}

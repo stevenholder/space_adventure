@@ -1,0 +1,8 @@
+port 3000 inputs=true: snapshots=50 nonFiniteVel=0
+  head tick=1110222 vel=[0,0,0] bytes=00 00 00 00 00 00 00 00 00 00 00 00
+  head tick=1110223 vel=[0,-0.00208,-2.5] bytes=00 00 00 00 77 88 08 bb f9 ff 1f c0
+  head tick=1110224 vel=[0,-0.0105,-4.5] bytes=00 00 00 00 06 08 2c bc dc ff 8f c0
+port 18080 inputs=true: snapshots=50 nonFiniteVel=0
+  head tick=1110272 vel=[0,0,0] bytes=00 00 00 00 00 00 00 00 00 00 00 00
+  head tick=1110273 vel=[0,-0.00208,-2.5] bytes=00 00 00 00 77 88 08 bb f9 ff 1f c0
+  head tick=1110274 vel=[0,-0.0105,-4.5] bytes=00 00 00 00 06 08 2c bc dc ff 8f c0

@@ -1,0 +1,45 @@
+{
+ "verdict": "FAIL",
+ "summary": {
+  "snapshots": 371,
+  "snapshotsWithErr": 371,
+  "errM0": {
+   "p50": 2.7940245672652964e-9,
+   "max": 2.7940245672652964e-9
+  },
+  "err": {
+   "p50": 0.3749987460121319,
+   "p95": 0.37544371550887706,
+   "max": 0.7499981590213096,
+   "n": 368
+  },
+  "reconD": {
+   "min": -0.3749998212181333,
+   "max": 0.3749992836858641,
+   "p95": 0.0000024854874289521932
+  },
+  "snapbackCount": 3,
+  "rttMs": {
+   "p50": 110.2462505,
+   "p95": 148.3144289,
+   "min": 105.110593,
+   "max": 149.307752,
+   "n": 8
+  },
+  "entityCounts": {
+   "min": 1,
+   "max": 2
+  },
+  "bursts": []
+ },
+ "reasons": [
+  "err p95 0.3754 m ≥ 0.25 m",
+  "snap-backs 3 ≠ 0",
+  "RTT p50 110.2 ms not ~100 ms (latency injection broken)"
+ ],
+ "evidence": {
+  "run": "test/out/t6-run-2026-08-20T06-32-23-124Z.json",
+  "snapshots": "test/out/t6-snapshots-2026-08-20T06-32-23-124Z.jsonl",
+  "proxyLog": "test/out/t6-proxy-2026-08-20T06-32-23-124Z.log"
+ }
+}

@@ -1,0 +1,94 @@
+{
+  "criterion": "C2 (ROADMAP #2): two clients see each other <=1 s of spawn, on terrain",
+  "run": {
+    "ts": "2026-08-20T03:27:13.792Z",
+    "world_sha256_16": "c80269c44a757a8f",
+    "world_seed": 1337
+  },
+  "clients": {
+    "A": {
+      "endpoint": "ws://127.0.0.1:3000/ws (nginx)",
+      "name": "qa-t2-a",
+      "entity_id": 5,
+      "connect_start_ns": "627883482678919",
+      "open_ns": "627883488571113",
+      "hello_ns": "627883488711394",
+      "terrain_sha256_16": "c80269c44a757a8f"
+    },
+    "B": {
+      "endpoint": "ws://127.0.0.1:18080/ws (direct)",
+      "name": "qa-t2-b",
+      "entity_id": 6,
+      "connect_start_ns": "627883987477943",
+      "open_ns": "627883990676329",
+      "hello_ns": "627883990761585",
+      "connect_after_A_open_ms": 502.11,
+      "terrain_sha256_16": "c80269c44a757a8f"
+    }
+  },
+  "timing_ms": {
+    "a_handshake": 6.032,
+    "b_handshake": 3.284,
+    "b_burst_A_spawn_after_b_connect": 5.22,
+    "a_recv_b_spawn_after_b_connect": 4.55,
+    "b_recv_a_spawn_after_b_connect": 5.22,
+    "b_first_snapshot_with_a_after_b_connect": 18.6,
+    "a_first_snapshot_with_b_after_b_connect": 18.69
+  },
+  "on_surface": {
+    "A": {
+      "pos": [
+        0,
+        150.00018310546875,
+        0
+      ],
+      "radius_m": 150.0002,
+      "field_radius_m": 150.0002,
+      "deviation_m": 2.794e-9
+    },
+    "B_in_A_snapshot": {
+      "pos": [
+        0,
+        150.00018310546875,
+        0
+      ],
+      "radius_m": 150.0002,
+      "field_radius_m": 150.0002,
+      "deviation_m": 2.794e-9
+    },
+    "B_own_snapshot": {
+      "pos": [
+        0,
+        150.00018310546875,
+        0
+      ],
+      "radius_m": 150.0002,
+      "field_radius_m": 150.0002,
+      "deviation_m": 2.794e-9
+    },
+    "tolerance_m": 0.05
+  },
+  "overall": "PASS",
+  "checks": [
+    {
+      "id": "a: B burst contains A spawn OR A gets B spawn <=1 s",
+      "pass": true,
+      "detail": "burst_contains_A=true (B recv 5.2 ms after B connect); A recv B spawn 4.5 ms after B connect (limit 1000)"
+    },
+    {
+      "id": "b: each client sees the other within 1 s",
+      "pass": true,
+      "detail": "B sees A: spawn 5.2 ms, first snapshot row 18.6 ms (limit 1000); A sees B: spawn 4.5 ms, first snapshot row 18.7 ms (limit 1000)"
+    },
+    {
+      "id": "c: both spawn positions on terrain (|len - sampleRadius| <= 0.05 m)",
+      "pass": true,
+      "detail": "A: r=150.0002 vs field 150.0002 dev=2.79e-9 m (face 2); B@A: r=150.0002 dev=2.79e-9 m; B@B: r=150.0002 dev=2.79e-9 m"
+    },
+    {
+      "id": "field: live terrain == captured world-seed1337.json (both paths), seed 1337, 20 Hz",
+      "pass": true,
+      "detail": "A sha256_16=c80269c44a757a8f B sha256_16=c80269c44a757a8f world=c80269c44a757a8f; seeds 1337/1337; tick_hz 20/20"
+    }
+  ]
+}

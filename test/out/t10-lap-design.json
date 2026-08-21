@@ -1,0 +1,154 @@
+{
+ "world": "test/out/world-seed1337.json",
+ "phase": "dense",
+ "beta": 87,
+ "alpha": 316.25,
+ "planeNormal": [
+  0.721374,
+  0.052336,
+  -0.690565
+ ],
+ "entryPoint": {
+  "dir": [
+   -0.037806,
+   0.99863,
+   0.036191
+  ],
+  "fromSpawnDeg": 3,
+  "fromSpawnM": 7.85
+ },
+ "legs": [
+  {
+   "label": "lapAccess",
+   "az": 223.75,
+   "dist": 7.85
+  },
+  {
+   "label": "lapCircle",
+   "az": 90,
+   "dist": 942.48
+  },
+  {
+   "label": "lapReturn",
+   "az": 90,
+   "dist": 7.85
+  }
+ ],
+ "accessArc": 7.85,
+ "per": 942.48,
+ "total": 958.19,
+ "faces": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "faceRuns": [
+  2,
+  4,
+  0,
+  3,
+  5,
+  1,
+  2
+ ],
+ "circleCrossings": [
+  {
+   "s": 0,
+   "to": 2
+  },
+  {
+   "s": 145,
+   "from": 2,
+   "to": 4
+  },
+  {
+   "s": 312.5,
+   "from": 4,
+   "to": 0
+  },
+  {
+   "s": 351,
+   "from": 0,
+   "to": 3
+  },
+  {
+   "s": 637,
+   "from": 3,
+   "to": 5
+  },
+  {
+   "s": 800.5,
+   "from": 5,
+   "to": 1
+  },
+  {
+   "s": 838.25,
+   "from": 1,
+   "to": 2
+  }
+ ],
+ "fullLapCrossings": [
+  {
+   "s": 7.85,
+   "to": 2
+  },
+  {
+   "s": 152.85,
+   "from": 2,
+   "to": 4
+  },
+  {
+   "s": 320.35,
+   "from": 4,
+   "to": 0
+  },
+  {
+   "s": 358.85,
+   "from": 0,
+   "to": 3
+  },
+  {
+   "s": 644.85,
+   "from": 3,
+   "to": 5
+  },
+  {
+   "s": 808.35,
+   "from": 5,
+   "to": 1
+  },
+  {
+   "s": 846.1,
+   "from": 1,
+   "to": 2
+  }
+ ],
+ "maxSlope": 48.49,
+ "accessMaxSlope": 1.41,
+ "wallSteps": 0,
+ "hazDeg": 5.55,
+ "hazPoint": {
+  "kind": "staircase",
+  "az": 159.5,
+  "s": 51.5
+ },
+ "circleEndDriftM": 42.641,
+ "tLap": [
+  0.691513,
+  0,
+  0.722364
+ ],
+ "constraints": {
+  "slopeLimit": 49.5,
+  "wallDrLimit": 0.33,
+  "hazMinDeg": 5,
+  "totalM": [
+   894.9,
+   989.1
+  ],
+  "hazards": "beacon az 3.5-6.5 s 43-59 (fieldmap circles 4-6); staircase az 159.5-164.5 s 51.5-61.5 (circles 160-164)"
+ }
+}

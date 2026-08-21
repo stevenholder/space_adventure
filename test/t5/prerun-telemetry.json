@@ -1,0 +1,286 @@
+{
+ "totalTicks": 1993,
+ "telemetry": [
+  {
+   "label": "level",
+   "kind": "circle",
+   "ticks": 90,
+   "minSlope": 1.4134962014749721,
+   "maxSlope": 1.4134962014765196,
+   "slideTicks": 0,
+   "airTicks": 0,
+   "stepUps": 0,
+   "faces": [
+    2
+   ],
+   "startDir": "[0.0000,150.0002,0.0000]",
+   "endDir": "[20.0894,148.6488,0.0000]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": null
+  },
+  {
+   "label": "aim",
+   "kind": "toPoint",
+   "ticks": 151,
+   "minSlope": 1.4062188787327758,
+   "maxSlope": 55.1023072179676,
+   "slideTicks": 27,
+   "airTicks": 0,
+   "stepUps": 16,
+   "faces": [
+    2
+   ],
+   "startDir": "[20.0894,148.6488,0.0000]",
+   "endDir": "[49.5711,146.2791,-5.1951]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": 0.8876429349694606
+  },
+  {
+   "label": "descend",
+   "kind": "toPoint",
+   "ticks": 268,
+   "minSlope": 1.0928355781186254,
+   "maxSlope": 62.73916380899051,
+   "slideTicks": 35,
+   "airTicks": 69,
+   "stepUps": 20,
+   "faces": [
+    2
+   ],
+   "startDir": "[49.5711,146.2791,-5.1951]",
+   "endDir": "[43.0136,143.6988,-0.6706]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": 0.8723219880755775
+  },
+  {
+   "label": "slide",
+   "kind": "hold",
+   "ticks": 120,
+   "minSlope": 26.86903598823498,
+   "maxSlope": 64.6315227855183,
+   "slideTicks": 55,
+   "airTicks": 15,
+   "stepUps": 18,
+   "faces": [
+    2
+   ],
+   "startDir": "[43.0136,143.6988,-0.6706]",
+   "endDir": "[57.1208,142.8209,-7.9371]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": null
+  },
+  {
+   "label": "backoff",
+   "kind": "hold",
+   "ticks": 30,
+   "minSlope": 17.176825504369038,
+   "maxSlope": 36.61158656883735,
+   "slideTicks": 1,
+   "airTicks": 9,
+   "stepUps": 0,
+   "faces": [
+    2
+   ],
+   "startDir": "[57.1208,142.8209,-7.9371]",
+   "endDir": "[53.4510,142.0514,-8.3400]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": null
+  },
+  {
+   "label": "shoulder",
+   "kind": "toPoint",
+   "ticks": 129,
+   "minSlope": 16.45078252925839,
+   "maxSlope": 36.05124929854655,
+   "slideTicks": 0,
+   "airTicks": 0,
+   "stepUps": 20,
+   "faces": [
+    2
+   ],
+   "startDir": "[53.4510,142.0514,-8.3400]",
+   "endDir": "[83.8549,139.7889,-11.0759]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": 0.7617877675253302
+  },
+  {
+   "label": "merge",
+   "kind": "toPoint",
+   "ticks": 157,
+   "minSlope": 8.18828540599979,
+   "maxSlope": 35.49951277649268,
+   "slideTicks": 0,
+   "airTicks": 14,
+   "stepUps": 30,
+   "faces": [
+    2
+   ],
+   "startDir": "[83.8549,139.7889,-11.0759]",
+   "endDir": "[93.1150,142.1917,-24.1877]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": 0.8857417123792571
+  },
+  {
+   "label": "seam",
+   "kind": "circle",
+   "ticks": 203,
+   "minSlope": 3.82067442790124,
+   "maxSlope": 39.251227075345966,
+   "slideTicks": 2,
+   "airTicks": 23,
+   "stepUps": 6,
+   "faces": [
+    2,
+    0
+   ],
+   "startDir": "[93.1150,142.1917,-24.1877]",
+   "endDir": "[123.0652,112.8816,-33.9741]",
+   "stalled": false,
+   "joinTurnDeg": 13.660257728761874,
+   "endTargetDist": null
+  },
+  {
+   "label": "return",
+   "kind": "toPoint",
+   "ticks": 749,
+   "minSlope": 0.4841238063702989,
+   "maxSlope": 48.816831655168514,
+   "slideTicks": 3,
+   "airTicks": 103,
+   "stepUps": 15,
+   "faces": [
+    0,
+    2
+   ],
+   "startDir": "[123.0652,112.8816,-33.9741]",
+   "endDir": "[-37.0360,144.8588,-12.0136]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": 0.6931090474272408
+  },
+  {
+   "label": "jump",
+   "kind": "circle",
+   "ticks": 36,
+   "minSlope": 1.1768811988293595,
+   "maxSlope": 23.71168887895963,
+   "slideTicks": 1,
+   "airTicks": 16,
+   "stepUps": 0,
+   "faces": [
+    2
+   ],
+   "startDir": "[-37.0360,144.8588,-12.0136]",
+   "endDir": "[-44.7409,143.6228,-14.4363]",
+   "stalled": false,
+   "joinTurnDeg": 143.31905724758485,
+   "endTargetDist": null
+  },
+  {
+   "label": "ledge",
+   "kind": "circle",
+   "ticks": 49,
+   "minSlope": 25.818990490588305,
+   "maxSlope": 38.66571570681398,
+   "slideTicks": 0,
+   "airTicks": 0,
+   "stepUps": 9,
+   "faces": [
+    2
+   ],
+   "startDir": "[-44.7409,143.6228,-14.4363]",
+   "endDir": "[-47.3215,145.3216,-15.2538]",
+   "stalled": true,
+   "joinTurnDeg": -0.0004269652981522307,
+   "endTargetDist": null
+  },
+  {
+   "label": "probe",
+   "kind": "hold",
+   "ticks": 6,
+   "minSlope": 39.94583878945807,
+   "maxSlope": 39.94583878945807,
+   "slideTicks": 0,
+   "airTicks": 0,
+   "stepUps": 1,
+   "faces": [
+    2
+   ],
+   "startDir": "[-47.3215,145.3216,-15.2538]",
+   "endDir": "[-47.6175,145.5339,-15.3477]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": null
+  },
+  {
+   "label": "pause",
+   "kind": "pause",
+   "ticks": 5,
+   "minSlope": 40.78130485512094,
+   "maxSlope": 42.09667543728254,
+   "slideTicks": 0,
+   "airTicks": 0,
+   "stepUps": 1,
+   "faces": [
+    2
+   ],
+   "startDir": "[-47.6175,145.5339,-15.3477]",
+   "endDir": "[-48.1412,145.9126,-15.5136]",
+   "stalled": false,
+   "joinTurnDeg": 0,
+   "endTargetDist": null
+  }
+ ],
+ "assertResults": [
+  {
+   "label": "level",
+   "assert": "maxSlope<10",
+   "ok": true,
+   "detail": "maxSlope=1.413 < 10"
+  },
+  {
+   "label": "aim",
+   "assert": "endTargetDist<1",
+   "ok": true,
+   "detail": "endTargetDist=0.888 < 1"
+  },
+  {
+   "label": "slide",
+   "assert": "slideTicks>=5",
+   "ok": true,
+   "detail": "slideTicks=55 >= 5"
+  },
+  {
+   "label": "seam",
+   "assert": "faces:2->0",
+   "ok": true,
+   "detail": "faces=2,0"
+  },
+  {
+   "label": "seam",
+   "assert": "maxSlope<50",
+   "ok": true,
+   "detail": "maxSlope=39.251 < 50"
+  },
+  {
+   "label": "jump",
+   "assert": "airTicks>0",
+   "ok": true,
+   "detail": "airTicks=16 > 0"
+  },
+  {
+   "label": "ledge",
+   "assert": "stepUps>=1",
+   "ok": true,
+   "detail": "stepUps=9 >= 1"
+  }
+ ],
+ "ok": true
+}

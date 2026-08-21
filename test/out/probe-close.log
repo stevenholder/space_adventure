@@ -1,0 +1,4 @@
+B silent at T0; ids A=32 B=31; last B snapshot +596.0 ms
+A witnessed B despawn: at +10001.4 ms (expect ~10000)
+B close observed: at +11002.3 ms, reason=TCP closed, code=null
+B last snapshot: +9996.2 ms

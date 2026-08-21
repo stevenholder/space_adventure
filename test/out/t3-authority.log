@@ -1,0 +1,11 @@
+[t3 2026-08-20T04:41:15.480Z] connected ws://127.0.0.1:3000/ws (+0.000 ms)
+[t3 2026-08-20T04:41:15.482Z] hello_ack: server_ver=1 tick_hz=20 world_seed=1337 entity_id=21 (+6.554 ms)
+[t3 2026-08-20T04:41:15.485Z] terrain + Predictor seed: face_grid=65 r=[124,190] spawn pos=(0.000,150.000,0.000) (+7.14 ms)
+[t3 2026-08-20T04:41:16.996Z] walk 1500 ms done — pos=(6.648,149.853,0.000) vel=4.500 m/s, switching to stand (+1520.894 ms)
+[t3 2026-08-20T04:41:17.947Z] CORRUPT at tick 1127834 (+2471.225 ms): predicted pos forced +4 m tangent dir=(0.9989,-0.0474,0.0000) auth=(7.1046,149.8318,0.0000) -> forced=(11.1001,149.6424,0.0000) preDist=4.0000 m
+[t3 2026-08-20T04:41:17.996Z] CORRECTED at tick 1127835: corrected pos=(7.10466,149.83183,0.00000) authoritative=(7.10466,149.83183,0.00000) snapDist=0.000e+0 m, 49.552999999999884 ms after corruption (tick 1127834 -> 1127835)
+[t3 2026-08-20T04:41:17.996Z] PASS c3a: forced +4 m tangent applied to the live predicted state preDist=4.0000 m (target 4.000), dir=(0.9989,-0.0474,0.0000) at tick 1127834
+[t3 2026-08-20T04:41:17.996Z] PASS c3b: corrected state snaps <1e-3 m from the authoritative position in one step snapDist=0.000e+0 m (limit 0.001) in a single effective reconcile; pre-correction distance 4.000 m
+[t3 2026-08-20T04:41:17.996Z] PASS c3c: correction within one tick (50 ms + network) of the forced state corrupt -> corrected in 49.552999999999884 ms (budget 100 ms = 1 tick + network), tick delta 1
+[t3 2026-08-20T04:41:17.996Z] OVERALL: PASS
+[t3 2026-08-20T04:41:17.997Z] evidence: /home/steve/code/space_adventure/test/out/t3-authority.json

@@ -1,0 +1,14 @@
+[t4 2026-08-20T05:03:20.014Z] === phase (a): hard TCP kill (no close frame) ===
+[t4 2026-08-20T05:03:20.027Z] A(id=33) and B(id=34) joined
+[t4 2026-08-20T05:03:20.044Z] mutual visibility: A sees B spawn+snapshot, B sees A spawn+snapshot
+[t4 2026-08-20T05:03:20.245Z] B hard-killed at +200.0 ms after its last write (kill() = socket destroy, no close frame)
+[t4 2026-08-20T05:03:21.547Z] PASS a1: B despawned on A within 10 s of the hard kill kill->DESPAWN = 1002.5 ms (limit 10000); last-B2write->DESPAWN = 1202.5 ms
+[t4 2026-08-20T05:03:21.548Z] PASS a2: mechanism is connection loss, not a close frame (B sent none) B sent 1 hello + 1 input, 0 WS close frames, then kill(); latency 1002.5 ms << 10 s read deadline -> server detected the dead TCP (read EOF/RST) and despawned on connection loss
+[t4 2026-08-20T05:03:21.548Z] A: first snapshot without B after kill: tick 1154302 at +1047.8 ms
+[t4 2026-08-20T05:03:21.748Z] === phase (b): silent connection, 10 s heartbeat timeout ===
+[t4 2026-08-20T05:03:21.760Z] A2(id=35) and B2(id=36) joined
+[t4 2026-08-20T05:03:21.794Z] B2 final write at T0; now silent (open TCP, no traffic) — waiting for the server's 10 s deadline
+[t4 2026-08-20T05:03:32.795Z] PASS b1: silent (open) connection dropped at ~10 s (heartbeat timeout) last-B2-write -> DESPAWN = 10001.0 ms (expected ~10000 ms, tolerance +/-500)
+[t4 2026-08-20T05:03:32.795Z] PASS b2: server closed B2 silent socket after the timeout (before our cleanup) B2 close: reason=TCP closed, code=n/a, observed +11002.1 ms (server teardown; WS close frame not observed — port-forward teardown delivers a bare TCP close)
+[t4 2026-08-20T05:03:32.996Z] OVERALL: PASS
+[t4 2026-08-20T05:03:32.996Z] evidence: /home/steve/code/space_adventure/test/out/t4-despawn.json

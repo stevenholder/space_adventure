@@ -1,0 +1,100 @@
+{
+  "criterion": "C4 (ROADMAP #4): connection loss despawns the entity on other clients within 10 s (heartbeat timeout)",
+  "run": {
+    "ts": "2026-08-20T05:03:20.014Z",
+    "endpoints": {
+      "A": "ws://127.0.0.1:3000/ws (nginx)",
+      "B": "ws://127.0.0.1:18080/ws (direct)"
+    }
+  },
+  "phase_a": {
+    "A": {
+      "entity_id": 33,
+      "endpoint": "ws://127.0.0.1:3000/ws (nginx)"
+    },
+    "B": {
+      "entity_id": 34,
+      "endpoint": "ws://127.0.0.1:18080/ws (direct)"
+    },
+    "b_last_input_ns": "633653107480120",
+    "b_kill_ns": "633653307464636",
+    "b_sent": {
+      "hello": 1,
+      "input": 1,
+      "ping": 0,
+      "closeFrame": false,
+      "killed": true
+    },
+    "despawn_at_ns": "633654309972775",
+    "kill_to_despawn_ms": 1002.51,
+    "last_write_to_despawn_ms": 1202.49,
+    "limit_ms": 10000,
+    "first_snapshot_without_B_after_kill": {
+      "tick": 1154302,
+      "at_ns": "633654355306917",
+      "at_ms": 1047.84
+    },
+    "mechanism": "immediate connection-loss detection: server read loop hit EOF/RST on the destroyed TCP (no close frame involved) and broadcast despawn"
+  },
+  "phase_b": {
+    "A2": {
+      "entity_id": 35,
+      "endpoint": "ws://127.0.0.1:3000/ws (nginx)"
+    },
+    "B2": {
+      "entity_id": 36,
+      "endpoint": "ws://127.0.0.1:18080/ws (direct)"
+    },
+    "b2_last_input_ns": "633654857627920",
+    "b2_sent": {
+      "hello": 1,
+      "input": 1,
+      "ping": 0,
+      "closeFrame": false,
+      "killed": false
+    },
+    "b2_closed_by_server": {
+      "reason": "TCP closed",
+      "code": null,
+      "observed_at_ns": "633665859749780",
+      "observed_at_ms": 11002.12
+    },
+    "despawn_at_ns": "633664858622912",
+    "silent_to_despawn_ms": 10000.99,
+    "expected_ms": 10000,
+    "tolerance_ms": 500,
+    "first_snapshot_without_B2": {
+      "tick": 1154513,
+      "at_ns": "633664905894141"
+    }
+  },
+  "overall": "PASS",
+  "checks": [
+    {
+      "id": "a1: B despawned on A within 10 s of the hard kill",
+      "pass": true,
+      "detail": "kill->DESPAWN = 1002.5 ms (limit 10000); last-B2write->DESPAWN = 1202.5 ms"
+    },
+    {
+      "id": "a2: mechanism is connection loss, not a close frame (B sent none)",
+      "pass": true,
+      "detail": "B sent 1 hello + 1 input, 0 WS close frames, then kill(); latency 1002.5 ms << 10 s read deadline -> server detected the dead TCP (read EOF/RST) and despawned on connection loss"
+    },
+    {
+      "id": "b1: silent (open) connection dropped at ~10 s (heartbeat timeout)",
+      "pass": true,
+      "detail": "last-B2-write -> DESPAWN = 10001.0 ms (expected ~10000 ms, tolerance +/-500)"
+    },
+    {
+      "id": "b2: server closed B2 silent socket after the timeout (before our cleanup)",
+      "pass": true,
+      "detail": "B2 close: reason=TCP closed, code=n/a, observed +11002.1 ms (server teardown; WS close frame not observed — port-forward teardown delivers a bare TCP close)"
+    }
+  ],
+  "notes": [
+    "A/A2 keep-alive = game-level ping (type 0x0008 binary, PROTOCOL heartbeat) every 2 s; the server reader decodes every inbound message and closes on unknown types, so WS-control-frame pings are NOT used.",
+    "Phase (a) measures the criterion bound (<=10 s) under a hard loss: B sends no close frame; kill() destroys the TCP. Observed latency distinguishes immediate EOF/RST detection from the 10 s deadline.",
+    "Phase (b) verifies the mechanism named in PROTOCOL (\"drops connections silent for 10 s\"): an open but silent socket must be dropped at the 10 s read deadline.",
+    "OBSERVED (transport, not product): the kubectl port-forward sa-pf-server (host :18080 -> pod) propagates connection TEARDOWN ~1 s after the event — phase (a): kill -> server detection ~1002 ms; phase (b): server teardown -> B2 sees a bare TCP close ~+1001 ms (no WS close frame delivered). The pod->host DATA path is prompt (20 Hz snapshots; phase-b DESPAWN reached the witness at 10001.6 ms)."
+  ]
+}

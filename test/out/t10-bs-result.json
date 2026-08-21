@@ -1,0 +1,73 @@
+{
+ "step": "C10 STEP 5 - near-horizon two-client upright check",
+ "terrain": {
+  "seed": 1337,
+  "sha16": "c80269c44a757a8f"
+ },
+ "placement": {
+  "cameraP": {
+   "pos": [
+    18.98895406123871,
+    147.57673996884702,
+    18.988954061238722
+   ],
+   "slopeDeg": 1.41,
+   "note": "az=315 meridian, flat cap, walked via W+A diagonal 6.0 s @ 4.5 m/s (facing stays +X)"
+  },
+  "remoteQ": {
+   "pos": [
+    41.41520011159373,
+    143.34352290539874,
+    18.444258709071164
+   ],
+   "sM": 45.95,
+   "slopeDeg": 20.1,
+   "note": "geodesic 45.9 m from spawn; 20.1 deg slope; 23.0 m from P (at horizon)"
+  },
+  "eyeToQ_M": 23,
+  "horizon_M": 22.65,
+  "horizonFormula": "sqrt((r+eye)^2 - r^2), r=150, eye=1.7 m"
+ },
+ "cameraClient": {
+  "type": "real browser page http://127.0.0.1:3000 (headless Chromium, real WS via nginx /ws)",
+  "walk": "W+A held 6.0 s (diagonal az=315), then held still",
+  "hudAtCapture": {
+   "speed": "0.0 m/s",
+   "nearest": "22.6 m",
+   "conn": "online"
+  },
+  "nearestInterpretation": "22.6 m = distance to the remote at Q (spawn cluster at 27.3 m is farther)"
+ },
+ "remoteClient": {
+  "type": "scripted WS client (test/t10/bs-walker.mjs) on real server 127.0.0.1:18080",
+  "entityName": "QA-C10-bs-walker",
+  "path": "geodesic spawn -> Q (45.9 m, max slope 20.1 deg at Q), walk speed 4.5 m/s (server GDD walk speed), 20 Hz inputs on snapshot cadence",
+  "walkDurationS": 10.5,
+  "closedLoopArrival": {
+   "dQ_M": 0.06,
+   "stopRadius_M": 0.6,
+   "finalDQ_M": 0.09
+  },
+  "maxDvPerTickWalking": 0.227,
+  "maxDvPerTickHolding": 0.0143,
+  "seamCheck": "max server-pos delta per tick = 0.225 m == 4.5 m/s / 20 Hz exactly; no >1-tick jump (no seam hitch)"
+ },
+ "uprightCheck": {
+  "renderedUpSource": "wire quat (server sim.go OrientationQuat: up = normalize(pos) = radial; client world.ts applies it directly, ~100 ms slerp buffer; local player uses the same convention: world.ts setLocal up = normalize(pos))",
+  "measured": {
+   "quatUpVsRadial_deg": 0,
+   "quatUpVsTerrainNormal_deg": 20.309153270209737,
+   "localSlopeAtQ_deg": 20.30915236448565
+  },
+  "verdict": "remote body up == radial at Q (0.000 deg); deviation from the local terrain normal = 20.31 deg = exactly the local slope: the GDD radial-up design (upright against radial gravity, NOT world +Y). Feet grounded at Q (server pos on surface, dQ=0.09 m)."
+ },
+ "visualEvidence": {
+  "test/out/t10-bs-a-view-b-1.webp": "camera view at P: remote QA-C10-bs-walker standing at Q, 22.6 m, at the horizon; HUD nearest 22.6 m online",
+  "test/out/t10-bs-a-view-b-2.webp": "second frame 4 s later: remote settled (no drift)",
+  "test/out/t10-bs-figure-zoom.webp": "5x zoom: upright box rig (torso above legs, feet on slope), name tag QA-C10-bs-walker"
+ },
+ "commands": [
+  "node test/t10/bs-walker.mjs 18   # 127.0.0.1:18080, geodesic to Q, closed-loop stop <0.6 m, 18 s hold",
+  "browser: goto http://127.0.0.1:3000/ ; keydown KeyW+KeyA 6.0 s ; keyup ; screenshots"
+ ]
+}

@@ -1,0 +1,380 @@
+{
+ "ts": "2026-08-21T00-45-19-161Z",
+ "duration_s": 60,
+ "t0_ms": 1787273058702.156,
+ "t1_ms": 1787273118652.945,
+ "epochPin": {
+  "ts": "2026-08-21T00-44-16-658Z",
+  "method": "input-phase sweep: one input per 50 ms phase k (mod 50, host wall grid), A_k = arrival of first snapshot with ack >= 1000+k minus send time; A_k is a 50 ms sawtooth in k; fractional jump position j* (0.25 ms grid, MAD fit) -> C_phase = (j* + t_up) mod 50, t_up = RTT_p50/2 (symmetric port-forward path). One-way L(T) = (recvWall - T*50ms - C_phase) mod 50 ms; assumes L < 50 ms (local server + userspace port-forward, no clock domain change). Residual uncertainty ±~2 ms (port-forward userspace-proxy jitter).",
+  "host": "127.0.0.1",
+  "port": 18080,
+  "t_up_ms": 1.100830078125,
+  "j_star_ms": 24.25,
+  "k_jump": 24,
+  "jump_size_ms": 48.352783203125,
+  "C_phase_ms": 25.350830078125,
+  "boundary_skip_ms": 6.38671875,
+  "fit_mad_ms": 0.6669921875,
+  "n_fit": 42,
+  "A_ms": [
+   31.238,
+   31.602,
+   26.691,
+   28.525,
+   27.109,
+   27.512,
+   25.071,
+   26.292,
+   23.896,
+   24.018,
+   22.973,
+   21.529,
+   19.5,
+   18.738,
+   17.213,
+   17.688,
+   14.62,
+   17.417,
+   11.504,
+   14.378,
+   11.735,
+   8.741,
+   9.72,
+   7.949,
+   7.917,
+   7.212,
+   7.935,
+   6.117,
+   2.695,
+   3.821,
+   52.173,
+   51.138,
+   52.793,
+   46.841,
+   48.074,
+   53.078,
+   45.155,
+   44.719,
+   44,
+   42.573,
+   41.948,
+   40.99,
+   41.604,
+   38.115,
+   39.425,
+   37.32,
+   34.827,
+   35.197,
+   35.479,
+   30.282
+  ],
+  "S_ms": [
+   1787273052650.026,
+   1787273052701.002,
+   1787273052754.882,
+   1787273052803.005,
+   1787273052854.005,
+   1787273052905.003,
+   1787273052956.005,
+   1787273053007.006,
+   1787273053059.004,
+   1787273053109.005,
+   1787273053160.003,
+   1787273053211.024,
+   1787273053262.004,
+   1787273053313.004,
+   1787273053364.381,
+   1787273053415.183,
+   1787273053466.55,
+   1787273053517.003,
+   1787273053569.387,
+   1787273053619.004,
+   1787273053670.154,
+   1787273053722.382,
+   1787273053772.005,
+   1787273053823.004,
+   1787273053874.259,
+   1787273053925.024,
+   1787273053976.004,
+   1787273054027.003,
+   1787273054078.025,
+   1787273054129.004,
+   1787273054180.004,
+   1787273054231.019,
+   1787273054282.004,
+   1787273054334.871,
+   1787273054384.004,
+   1787273054435.003,
+   1787273054486.003,
+   1787273054537.004,
+   1787273054588.004,
+   1787273054639.003,
+   1787273054690.015,
+   1787273054741.004,
+   1787273054792.003,
+   1787273054843.003,
+   1787273054894.062,
+   1787273054945.003,
+   1787273054996.591,
+   1787273055047.005,
+   1787273055098.004,
+   1787273055151.072
+  ],
+  "sanity": {
+   "A_range_ms": [
+    2.695,
+    53.078
+   ],
+   "sawtooth_decreasing": 28
+  }
+ },
+ "clients": [
+  {
+   "name": "qa-t7-01",
+   "entityId": 356,
+   "nSnap": 1200,
+   "nEntMax": 10,
+   "ticks": [
+    438462,
+    439661
+   ],
+   "hz": 20.000625377925825,
+   "gaps": 0,
+   "dupes": 0,
+   "arrival_ms": {
+    "n": 1199,
+    "p50": 50.13232421875,
+    "p95": 50.7490234375,
+    "min": 46.645263671875,
+    "max": 53.205810546875
+   },
+   "oneWay_ms": {
+    "n": 1200,
+    "p50": 6.068115234375,
+    "p95": 6.628173828125,
+    "min": 5.220458984375,
+    "max": 9.815185546875
+   },
+   "arrivalPhase_ms": {
+    "p50": 31.4189453125,
+    "p95": 31.97900390625,
+    "jitterP50": 0.26025390625,
+    "jitterP95": 0.663330078125,
+    "maxDev": 3.7470703125
+   },
+   "rtt_ms": {
+    "n": 2,
+    "p50": 28.990478515625,
+    "p95": 29.087158203125,
+    "min": 28.990478515625,
+    "max": 29.087158203125
+   },
+   "nWrap": 0,
+   "wrapSpan_ms": 0
+  },
+  {
+   "name": "qa-t7-02",
+   "entityId": 358,
+   "nSnap": 1200,
+   "nEntMax": 10,
+   "ticks": [
+    438462,
+    439661
+   ],
+   "hz": 20.000495542407084,
+   "gaps": 0,
+   "dupes": 0,
+   "arrival_ms": {
+    "n": 1199,
+    "p50": 50.145751953125,
+    "p95": 50.751220703125,
+    "min": 46.718505859375,
+    "max": 53.357421875
+   },
+   "oneWay_ms": {
+    "n": 1200,
+    "p50": 6.066162109375,
+    "p95": 6.63916015625,
+    "min": 5.294921875,
+    "max": 9.916259765625
+   },
+   "arrivalPhase_ms": {
+    "p50": 31.4169921875,
+    "p95": 31.989990234375,
+    "jitterP50": 0.26220703125,
+    "jitterP95": 0.646728515625,
+    "maxDev": 3.85009765625
+   },
+   "rtt_ms": {
+    "n": 2,
+    "p50": 28.64794921875,
+    "p95": 28.7119140625,
+    "min": 28.64794921875,
+    "max": 28.7119140625
+   },
+   "nWrap": 0,
+   "wrapSpan_ms": 0
+  },
+  {
+   "name": "qa-t7-03",
+   "entityId": 360,
+   "nSnap": 1200,
+   "nEntMax": 10,
+   "ticks": [
+    438462,
+    439661
+   ],
+   "hz": 20.000562659177447,
+   "gaps": 0,
+   "dupes": 0,
+   "arrival_ms": {
+    "n": 1199,
+    "p50": 50.13330078125,
+    "p95": 50.73193359375,
+    "min": 46.849609375,
+    "max": 53.1279296875
+   },
+   "oneWay_ms": {
+    "n": 1200,
+    "p50": 6.0693359375,
+    "p95": 6.65380859375,
+    "min": 5.25634765625,
+    "max": 9.760498046875
+   },
+   "arrivalPhase_ms": {
+    "p50": 31.420166015625,
+    "p95": 32.004638671875,
+    "jitterP50": 0.265380859375,
+    "jitterP95": 0.665771484375,
+    "maxDev": 3.691162109375
+   },
+   "rtt_ms": {
+    "n": 2,
+    "p50": 29.0908203125,
+    "p95": 29.156982421875,
+    "min": 29.0908203125,
+    "max": 29.156982421875
+   },
+   "nWrap": 0,
+   "wrapSpan_ms": 0
+  },
+  {
+   "name": "qa-t7-04",
+   "entityId": 362,
+   "nSnap": 1200,
+   "nEntMax": 10,
+   "ticks": [
+    438462,
+    439661
+   ],
+   "hz": 20.000647207400657,
+   "gaps": 0,
+   "dupes": 0,
+   "arrival_ms": {
+    "n": 1199,
+    "p50": 50.155029296875,
+    "p95": 50.76025390625,
+    "min": 46.67529296875,
+    "max": 53.285888671875
+   },
+   "oneWay_ms": {
+    "n": 1200,
+    "p50": 6.067138671875,
+    "p95": 6.616943359375,
+    "min": 5.22314453125,
+    "max": 9.873779296875
+   },
+   "arrivalPhase_ms": {
+    "p50": 31.41796875,
+    "p95": 31.9677734375,
+    "jitterP50": 0.2685546875,
+    "jitterP95": 0.655029296875,
+    "maxDev": 3.806640625
+   },
+   "rtt_ms": {
+    "n": 2,
+    "p50": 28.716796875,
+    "p95": 28.779052734375,
+    "min": 28.716796875,
+    "max": 28.779052734375
+   },
+   "nWrap": 0,
+   "wrapSpan_ms": 0
+  },
+  {
+   "name": "qa-t7-05",
+   "entityId": 364,
+   "nSnap": 1200,
+   "nEntMax": 10,
+   "ticks": [
+    438462,
+    439661
+   ],
+   "hz": 20.000662439189306,
+   "gaps": 0,
+   "dupes": 0,
+   "arrival_ms": {
+    "n": 1199,
+    "p50": 50.148681640625,
+    "p95": 50.73583984375,
+    "min": 46.846435546875,
+    "max": 53.3994140625
+   },
+   "oneWay_ms": {
+    "n": 1200,
+    "p50": 6.022705078125,
+    "p95": 6.60546875,
+    "min": 5.255126953125,
+    "max": 9.6845703125
+   },
+   "arrivalPhase_ms": {
+    "p50": 31.37353515625,
+    "p95": 31.956298828125,
+    "jitterP50": 0.26806640625,
+    "jitterP95": 0.65185546875,
+    "maxDev": 3.661865234375
+   },
+   "rtt_ms": {
+    "n": 2,
+    "p50": 28.670654296875,
+    "p95": 28.732421875,
+    "min": 28.670654296875,
+    "max": 28.732421875
+   },
+   "nWrap": 0,
+   "wrapSpan_ms": 0
+  }
+ ],
+ "global": {
+  "hz_min": 20.000495542407084,
+  "hz_max": 20.000662439189306,
+  "total_gaps": 0,
+  "total_dupes": 0,
+  "oneWay_p95_max_ms": 6.65380859375,
+  "jitter_p95_max_ms": 0.665771484375,
+  "arrivalPhase_p50_ms": 31.41796875,
+  "pinPredictedPhase_ms": 31.737548828125,
+  "total_wraps": 0,
+  "loopLag_ms": {
+   "n": 7,
+   "p50": 8.82,
+   "p95": 9.46,
+   "max": 9.46
+  }
+ },
+ "gate": {
+  "tickHz_20": true,
+  "oneWay_p95_lt_50ms": true,
+  "jitter_p95_lt_50ms": true
+ },
+ "notes": [
+  "one-way L(T) = (recvWall - T*50ms - C_phase) mod 50 ms; assumes L < 50 ms (local server + userspace port-forward, no clock domain change)",
+  "±~2 ms residual: port-forward userspace-proxy jitter (documented per task)",
+  "t_up = RTT_p50/2 (symmetric path); epoch pin re-run inside this process",
+  "recvNs = hrtime at frame decode (test/lib/ws.mjs _tryDecode)",
+  "input pattern: deterministic rotation + sprint window + 2 jumps/client (see pattern())",
+  "browser client qa-t7-00 (same-origin /ws via nginx) measured separately",
+  "arrivalPhase_ms: C-free metric — per-snapshot arrival phase (recvWall - T*50ms) mod 50; jitterP95 = p95 of circular deviation from its own median; immune to epoch-pin quantization",
+  "nWrap = snapshots with L > 40 ms (one tick late under the mod-50 wrap); loopLag_ms = harness event-loop stall intervals (> 8 ms over a 5 ms timer) — adjudicates self-inflicted decode delay vs a real delivery tail"
+ ]
+}

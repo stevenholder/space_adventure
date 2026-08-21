@@ -1,0 +1,17 @@
+{"client":"A","type":"hello_ack","detail":{"serverVer":1,"tickHz":20,"worldSeed":1337,"entityId":33},"atNs":"633653084613876"}
+{"client":"A","type":"spawn","detail":{"id":33,"name":"qa-t4-a"},"atNs":"633653084956956"}
+{"client":"B","type":"hello_ack","detail":{"serverVer":1,"tickHz":20,"worldSeed":1337,"entityId":34},"atNs":"633653089776760"}
+{"client":"B","type":"spawn","detail":{"id":33,"name":"qa-t4-a"},"atNs":"633653089851214"}
+{"client":"B","type":"spawn","detail":{"id":34,"name":"qa-t4-b"},"atNs":"633653089891087"}
+{"client":"A","type":"spawn","detail":{"id":34,"name":"qa-t4-b"},"atNs":"633653090042856"}
+{"client":"A","type":"despawn","detail":{"id":34},"atNs":"633654309972775"}
+{"client":"A","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"633654612212002"},"atNs":null}
+{"client":"A2","type":"hello_ack","detail":{"serverVer":1,"tickHz":20,"worldSeed":1337,"entityId":35},"atNs":"633654816642190"}
+{"client":"A2","type":"spawn","detail":{"id":35,"name":"qa-t4-a2"},"atNs":"633654816782309"}
+{"client":"B2","type":"hello_ack","detail":{"serverVer":1,"tickHz":20,"worldSeed":1337,"entityId":36},"atNs":"633654822233919"}
+{"client":"B2","type":"spawn","detail":{"id":35,"name":"qa-t4-a2"},"atNs":"633654822293452"}
+{"client":"B2","type":"spawn","detail":{"id":36,"name":"qa-t4-b2"},"atNs":"633654822329204"}
+{"client":"A2","type":"spawn","detail":{"id":36,"name":"qa-t4-b2"},"atNs":"633654822392878"}
+{"client":"A2","type":"despawn","detail":{"id":36},"atNs":"633664858622912"}
+{"client":"B2","type":"close","detail":{"reason":"TCP closed","atNs":"1787202212795000000"},"atNs":null}
+{"client":"A2","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"633665861048875"},"atNs":null}

@@ -1,0 +1,12 @@
+hello_ack: seed=1337 tickHz=20 entity=2; terrain faceGrid=65 radiiSha16=c80269c44a757a8f (expect c80269c44a757a8f)
+file:///home/steve/code/space_adventure/test/t10/live-lap.mjs:79
+const wpPoint = (w) => [w.dir[0] * w.r, w.dir[1] * w.r, w.dir[2] * w.r]
+                             ^
+
+TypeError: Cannot read properties of undefined (reading '0')
+    at wpPoint (file:///home/steve/code/space_adventure/test/t10/live-lap.mjs:79:30)
+    at Timeout.driveTick [as _onTimeout] (file:///home/steve/code/space_adventure/test/t10/live-lap.mjs:137:18)
+    at listOnTimeout (node:internal/timers:585:17)
+    at process.processTimers (node:internal/timers:521:7)
+
+Node.js v22.22.3

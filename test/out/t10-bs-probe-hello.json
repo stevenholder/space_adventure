@@ -1,0 +1,10 @@
+{
+ "helloAck": {
+  "serverVer": 1,
+  "tickHz": 20,
+  "worldSeed": 1337,
+  "entityId": 343
+ },
+ "terrainSha16": "c80269c44a757a8f",
+ "self": 343
+}
