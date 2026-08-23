@@ -2,3 +2,7 @@
 - docs/PROTOCOL.md changes must land on both client and server in the same milestone.
 - Never commit or push unless explicitly asked.
 - Never claim done without running the build/tests for what you changed; report the command and the result.
+- One dispatch = one bounded edit: 1 file (2 with its test), ~150 changed lines, ~10 tool calls, one verify command. Over budget: stop, report `BLOCKED: TOO BIG` with a proposed split.
+- Do not explore the repo to find work. Act on the paths the brief names; if they are missing or wrong, report `BLOCKED: NOT FOUND`.
+- Stop after the task in the brief. Never continue into the next logical step, refactor neighbours, or add unrequested files.
+- Task sizing and the dispatch brief format: .omp/AGENTS.md, "Task sizing".

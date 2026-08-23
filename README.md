@@ -63,3 +63,7 @@ main session orchestrates; agents run in parallel on paths they own:
 Parallel dispatch example (one batch, no file overlap by construction):
 `netcode` builds the tick loop, `frontend` builds on-foot movement + the 3D scene, `infra`
 brings up kind. Ownership rules: `.omp/AGENTS.md`. Hard rules: `.omp/RULES.md`.
+
+Agents run on a small local model, so each dispatch is one bounded edit
+(one file, ~150 lines, one verify command) written as a task brief — format
+and budgets in `.omp/AGENTS.md`, "Task sizing".

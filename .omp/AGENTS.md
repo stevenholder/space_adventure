@@ -57,6 +57,62 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 - Commits: conventional (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
   Never commit or push unless explicitly asked.
 
+## Task sizing (agents run on a small local model)
+
+Agent turns execute on a local ~8B model (Qwen3 via ninfer, `http://localhost:8080`).
+It is fast per token but weak at planning, and it degrades on long context long
+before the 196k window fills. **The main thread does the thinking; agents do one
+bounded edit.** A task that needs discovery, design, or more than a couple of
+files is a main-thread task or a chain of small agent tasks — never one dispatch.
+
+### Budget per dispatch (hard)
+
+| Limit | Value |
+|-------|-------|
+| Files edited | 1 (2 only if the second is a matching test) |
+| Lines changed | ~150 |
+| Tool calls before reporting | ~10 |
+| Prompt size handed to the agent | keep under ~16k tokens; paste the relevant snippets instead of pointing at the repo |
+| Verification | exactly one named command |
+
+Over budget = stop and report `BLOCKED: TOO BIG` with a proposed split. A
+cheap refusal beats an hour of thrash.
+
+### Task brief format (main thread writes this)
+
+```
+TASK:     <one sentence, one verb — "add X to Y", not "implement feature Z">
+FILES:    <exact paths, marked (edit)/(read-only)>. Touch nothing else.
+CONTRACT: <exact signature, struct layout, constants, or wire bytes>
+STEPS:    <at most 3, ordered>
+VERIFY:   <one command> → expect <exact string / exit 0>
+REPORT:   changed lines + that command's output. Then stop.
+BUDGET:   1 file, ~150 lines, 10 tool calls.
+```
+
+No `CONTRACT` = the task is underspecified for this model. Write the contract
+first (main thread, or a `game`/`netcode` design turn) and dispatch after.
+
+### Chaining instead of one big task
+
+Split by verifiable step, not by feature. Each block must compile/pass on its
+own and be dispatchable with a fresh agent context:
+
+1. types/constants only → `go build ./...`
+2. one function body → its unit test
+3. wire it into the caller → smoke command
+4. `qa` verifies the whole thing
+
+Sequential blocks that touch the same file go in one batch of dispatches only
+if they do **not** overlap; otherwise land them one at a time.
+
+### No discovery inside an agent turn
+
+Grepping the repo burns the small model's context and its planning ability.
+The main thread (or a read-only locator pass) finds `file:line` first and pastes
+it into the brief. Agents that cannot find what the brief names report
+`BLOCKED: NOT FOUND` rather than searching around for it.
+
 ## Definition of done
 
 An agent is done when the build/tests it touched pass **and** it ran the
