@@ -14,6 +14,8 @@
  *  6. Integrate (semi-implicit Euler: the velocity from 4–5 moves the body)
  *  7. resolve — the single writer of grounded (step-up / wall bisection /
  *     ground_snap glue / slopeOK)
+ *  8-9. resolveColliders — static collider push-out + terrain re-seat
+ *     (no-op when the tick's collider list is empty or omitted)
  *
  * No world-edge clamp (a sphere has no edge), no atan2 anywhere, no
  * variable dt. `step` is pure and total: it copies its state, never reads
@@ -22,6 +24,7 @@
 import type { Input, State, Terrain, Vec3 } from './types.js'
 import { ACTION, RULES, SPAWN_DIR, TICK_DT, clamp, vec } from './types.js'
 import { sampleRadius, slopeOK, surfaceNormal } from './terrain.js'
+import { resolveColliders } from './collide.js'
 
 const DEG = Math.PI / 180
 const EPS = RULES.epsDegen
@@ -181,7 +184,18 @@ export function step(
 
   // 7. Terrain resolution — the single writer of grounded
   const r = resolve(posOld, posNew, vel, mode, terrain)
-  return { pos: r.pos, vel: r.vel, facing, grounded: r.grounded }
+
+  // 8-9. Static collider resolution + terrain re-seat (GDD "Static
+  // colliders" -> "Integrator addition"). up is re-derived from step 7's
+  // (possibly wallSlide- or glue-adjusted) position — terrain resolution can
+  // move it — matching resolve's own internal recomputation. An
+  // empty/missing collider list is a documented no-op inside
+  // resolveColliders, leaving step 7's result bit-identical.
+  const upResolved = vec.norm(r.pos)
+  const c = resolveColliders(r.pos, r.vel, upResolved, r.grounded, input.colliders ?? [], (d) =>
+    sampleRadius(terrain, d),
+  )
+  return { pos: c.pos, vel: c.vel, facing, grounded: c.grounded }
 }
 
 // ---------------------------------------------------------------------------

@@ -11,6 +11,8 @@
  * replay reconciliation only converges when Go and TS step identically).
  */
 
+import type { Collider } from './collide.js'
+
 export interface Vec3 {
   x: number
   y: number
@@ -26,6 +28,12 @@ export interface Input {
   lookDir: Vec3
   /** 0x0001 sprint, 0x0002 jump (PROTOCOL action_mask) */
   actionMask: number
+  /**
+   * Static colliders for this tick's GDD steps 8-9 (ResolveColliders).
+   * Optional so existing callers that omit it keep taking the no-op path —
+   * mirrors Go's Input.Colliders, which is not part of the wire payload.
+   */
+  colliders?: Collider[]
 }
 
 /** Simulated body state. Mutated by `step` only through returned copies. */

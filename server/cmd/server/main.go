@@ -47,6 +47,9 @@ func run(args []string) error {
 	if len(args) > 0 && args[0] == "codec" {
 		return runCodec(args[1:])
 	}
+	if len(args) > 0 && args[0] == "collide" {
+		return runCollide(args[1:])
+	}
 	return runServer(args)
 }
 

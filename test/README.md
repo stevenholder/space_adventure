@@ -2,7 +2,17 @@
 
 - Owner: `qa` (reports bugs, never fixes product code)
 
-**Cross-language parity (`t12-codec-parity.mjs`, Phase 2).** The Go and
+**Cross-language parity (`t12-codec-parity.mjs`, `t13-collide-parity.mjs`,
+Phase 2).** Anything implemented twice — once in Go, once in TypeScript — needs
+a test that runs BOTH and diffs. Per-side unit tests exercise one
+implementation against itself and prove nothing about agreement, and this
+project has been bitten by that twice: the strafe axis was wrong in both sims
+for all of M1 (they agreed, so C5 passed and every criterion stayed green), and
+the Phase 2 codecs were each internally consistent while disagreeing on
+framing. `t13` exists because the C5 route has no colliders on any tick, so the
+trajectory diff cannot see that mirror pair at all.
+
+ The Go and
 TypeScript codecs are two independent implementations of `docs/PROTOCOL.md`,
 and each one's unit tests only prove it round-trips *itself*. That is not the
 property that matters. Phase 2's first cut compiled on both ends and passed
