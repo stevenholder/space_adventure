@@ -92,7 +92,14 @@ export class ProtocolError extends Error {
 // Frame helpers
 // ---------------------------------------------------------------------------
 
-function frame(type: number, payload: Uint8Array): Uint8Array<ArrayBuffer> {
+/**
+ * Wrap a payload in the `u16 type | payload` frame. Exported because EVERY
+ * encoder must use it: an encoder that returns a bare payload looks identical
+ * at the call site and puts the message's first two bytes on the wire as its
+ * type. Phase 2's first cut did exactly that and only surfaced in a
+ * Go-parses-TS cross-check.
+ */
+export function frame(type: number, payload: Uint8Array): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(2 + payload.length)
   const dv = new DataView(out.buffer)
   dv.setUint16(0, type, true)

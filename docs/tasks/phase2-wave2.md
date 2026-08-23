@@ -100,10 +100,12 @@ FILES:    server/internal/defs/defs.go (new)
           server/internal/defs/defs_test.go (new)
 CONTRACT: package defs
 
-          //go:embed all:data
-          // (the data directory is symlinked or moved under the package;
-          //  if server/data cannot be embedded from here, report
-          //  BLOCKED: NOT FOUND with the path you tried)
+          The embed already exists and is NOT your job: server/data/embed.go
+          declares `package data` with `//go:embed *.json zones/*.json` and
+          exports `var FS embed.FS`. Import it as
+          `space-adventure/server/data` and read through data.FS. (go:embed
+          cannot reach a parent directory, which is why the embed lives beside
+          the JSON rather than here.)
 
           type Weapon struct {
               Damage        int     `json:"damage"`

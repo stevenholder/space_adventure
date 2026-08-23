@@ -26,8 +26,8 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 
 | Agent | Owns | Never touches |
 |-------|------|---------------|
-| `game` | `docs/GDD.md`, `server/data/**` (item/NPC/zone/loot data), gameplay rule files (e.g. `server/gameplay/` once it exists), balance data | client rendering, transport, infra, assets |
-| `netcode` | `server/` (except `server/data/**` and gameplay rule files), `docs/PROTOCOL.md` only when explicitly instructed | `client/`, `deploy/`, `art/` |
+| `game` | `docs/GDD.md`, `server/data/**.json` (item/NPC/zone/loot data), gameplay rule files (e.g. `server/gameplay/` once it exists), balance data | client rendering, transport, infra, assets |
+| `netcode` | `server/` (except `server/data/**.json` and gameplay rule files; `server/data/embed.go` IS netcode's), `docs/PROTOCOL.md` only when explicitly instructed | `client/`, `deploy/`, `art/` |
 | `frontend` | `client/` | `server/`, `deploy/`, `art/` (consumes assets, doesn't edit) |
 | `art` | `art/` | all code directories |
 | `infra` | `deploy/`, root `Makefile` (root `Dockerfile*` from scale-out) | game logic, client code |
