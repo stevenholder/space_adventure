@@ -120,3 +120,38 @@ func TestResolveColliders_EmptyIsNoOp(t *testing.T) {
 		t.Fatalf("outGrounded = %v, want true (unchanged)", outGrounded)
 	}
 }
+
+// TestResolveColliders_EmptyNoOpBelowSurface is the case the original
+// empty-slice test missed.
+//
+// Step 9 (terrain re-seat) used to run even with no colliders, so whenever
+// |pos| sat an ulp under the sampled radius it re-seated and re-rounded the
+// position. That perturbed every trajectory by ~1e-13 per tick — far below
+// C5's 5% bar, so the conformance test still passed, but it broke the
+// byte-identical property of the committed dumps, which is the evidence that
+// the Phase 2 wire work never touched the sim.
+//
+// The original test placed the body exactly ON the surface, where the re-seat
+// branch never fires. This one puts it just under.
+func TestResolveColliders_EmptyNoOpBelowSurface(t *testing.T) {
+	const r = 150.0
+	radiusAt := func([3]float64) float64 { return r }
+
+	// One ulp below the surface along +Y — exactly where step 9 would bite.
+	pos := [3]float64{0, math.Nextafter(r, 0), 0}
+	vel := [3]float64{1.5, -0.25, 0.75}
+	up := [3]float64{0, 1, 0}
+
+	for _, cs := range [][]protocol.Collider{nil, {}} {
+		gotPos, gotVel, gotGrounded := ResolveColliders(pos, vel, up, true, cs, radiusAt)
+		if gotPos != pos {
+			t.Errorf("pos moved with no colliders: %v -> %v", pos, gotPos)
+		}
+		if gotVel != vel {
+			t.Errorf("vel changed with no colliders: %v -> %v", vel, gotVel)
+		}
+		if !gotGrounded {
+			t.Error("grounded flipped with no colliders")
+		}
+	}
+}

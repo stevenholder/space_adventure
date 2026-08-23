@@ -13,6 +13,7 @@ package sim
 import (
 	"math"
 
+	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/terrain"
 )
 
@@ -71,6 +72,13 @@ type Input struct {
 	MoveY      float64 // forward, clamped to [−1, 1]
 	Look       Vec     // desired look direction (arbitrary length)
 	ActionMask uint16
+
+	// Colliders is not part of the 24-byte wire payload: it is the zone's
+	// static collider list (GDD "Static colliders"), threaded through Input
+	// because it is state the step already has access to. Nil/empty is a
+	// no-op (GDD integrator step 8 skips its loop; step 9's re-seat then
+	// leaves step 7's result untouched too).
+	Colliders []protocol.Collider
 }
 
 // Quat is a rotation quaternion in (x, y, z, w) component order — the wire
@@ -188,6 +196,16 @@ func Step(s *State, in Input, prevLook Vec, t *terrain.Field, dt float64) Vec {
 
 	// 7. Terrain resolution.
 	resolve(s, pOld, mode, t)
+
+	// 8-9. Static collider resolution + terrain re-seat (GDD "Static
+	// colliders" -> "Integrator addition"). Immediately after step 7, the
+	// single writer of Grounded above; an empty/nil collider list is a
+	// documented no-op so this leaves step 7's result bit-identical. up is
+	// re-derived from step 7's (possibly wallSlide- or glue-adjusted)
+	// position, matching resolve's own internal recomputation.
+	up = terrain.Normalize(s.Pos)
+	s.Pos, s.Vel, s.Grounded = ResolveColliders(s.Pos, s.Vel, up, s.Grounded, in.Colliders,
+		func(d [3]float64) float64 { return t.SampleRadius(Vec(d)) })
 	return look
 }
 

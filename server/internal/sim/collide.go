@@ -29,6 +29,17 @@ const degenEps = 1e-9
 func ResolveColliders(pos, vel, up [3]float64, grounded bool,
 	cs []protocol.Collider,
 	radiusAt func([3]float64) float64) (outPos, outVel [3]float64, outGrounded bool) {
+	// No colliders: nothing to push out of, and step 9 exists ONLY to repair a
+	// push-out that sank the feet below the terrain (GDD "Integrator
+	// addition"). Running it anyway re-seats whenever |pos| sits an ulp under
+	// the sampled radius, which re-rounds pos and perturbs the trajectory by
+	// ~1e-13 per tick. Harmless against C5's 5% bar, but it silently voids the
+	// byte-identical property that is the evidence the wire work never touched
+	// the sim -- and a drift you cannot distinguish from noise is a drift you
+	// stop noticing.
+	if len(cs) == 0 {
+		return pos, vel, grounded
+	}
 
 	p := Vec(pos)
 	v := Vec(vel)
