@@ -11,6 +11,8 @@
 // that starts "it only happens sometimes".
 package sim
 
+import "space-adventure/server/internal/protocol"
+
 // EntityKind mirrors protocol.EntityType* values (protocol.EntityTypePlayer,
 // EntityTypeNPC, EntityTypeTarget, ...).
 type EntityKind uint16
@@ -35,7 +37,13 @@ type Ent struct {
 // StepCtx is passed to every per-Kind step function. It is intentionally
 // minimal for now — the per-kind behaviours (NPC AI, target respawn, ...)
 // land in later briefs and will grow this struct as they need inputs.
-type StepCtx struct{}
+type StepCtx struct {
+	// Events, if non-nil, collects world events (e.g. a target's death)
+	// emitted by step functions during this Step call. Nil is valid — a
+	// caller that doesn't care about events (most tests) simply omits it,
+	// and step functions must treat a nil Events as "don't record".
+	Events *[]protocol.Event
+}
 
 // StepFunc steps a single entity forward by dt.
 type StepFunc func(e *Ent, dt float64, ctx StepCtx)
