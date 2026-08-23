@@ -1,13 +1,13 @@
 # Space Adventure — local kind deployment
 #
 #   make up    cluster (if absent) -> build + load images -> apply manifests
-#              -> restart deployments onto the new images -> port-forwards ->
-#              print access URLs. Safe to re-run: existing cluster is reused,
-#              pods are always replaced so re-running deploys current code,
-#              stale port-forwards are replaced, missing toolchain or a busy
-#              port fails fast.
-#   make down  stop port-forwards (verifies ports are actually free), delete
-#              the cluster, remove logs. Leaves nothing running.
+#              -> restart deployments onto the new images -> wait for the
+#              mapped host ports to answer -> print access URLs. Safe to
+#              re-run: existing cluster is reused and pods are always replaced,
+#              so re-running deploys current code. Host ports come from
+#              deploy/kind.yaml's extraPortMappings, not a proxy process.
+#   make down  delete the cluster (which releases the mapped host ports) and
+#              remove logs. Leaves nothing running.
 #   make test-pg  start a throwaway Postgres container, wait for readiness,
 #              run the Go store tests against it, then always remove the
 #              container (even on test failure).
@@ -28,7 +28,6 @@ ROOT   ?= .
 LOGDIR := deploy/.logs
 # always pin the context: kubectl's current-context may point elsewhere
 KUBECTL := kubectl --context kind-$(CLUSTER)
-PF      := $(KUBECTL) -n $(NAMESPACE) port-forward
 
 .PHONY: up down check cluster images apply forward test-pg
 
@@ -71,20 +70,14 @@ apply:
 	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/server --timeout=120s
 	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/client --timeout=120s
 
+# No proxy process: deploy/kind.yaml maps the host ports straight onto the
+# NodePort services, so "forwarding" is now just waiting for the stack to
+# answer. See deploy/kind.yaml for why port-forward was removed.
 forward:
 	@mkdir -p $(LOGDIR)
 	@pkill -f 'space-adventure port-forward svc/clien[t]' 2>/dev/null || true
 	@pkill -f 'space-adventure port-forward svc/serve[r]' 2>/dev/null || true
-	@sleep 1
-	@for p in $(CLIENT_PORT) $(SERVER_PORT); do \
-		if ss -ltnH | awk '{print $$4}' | grep -Eq "[:.]$$p$$"; then \
-			echo "ERROR: port $$p is already in use — free it or override CLIENT_PORT/SERVER_PORT" >&2; \
-			exit 1; \
-		fi; \
-	done
-	@nohup $(PF) svc/client $(CLIENT_PORT):80 >$(LOGDIR)/client.log 2>&1 & \
-	nohup $(PF) svc/server $(SERVER_PORT):8080 >$(LOGDIR)/server.log 2>&1 &
-	@for i in $$(seq 1 30); do \
+	@for i in $$(seq 1 60); do \
 		if curl -fsS -o /dev/null http://127.0.0.1:$(CLIENT_PORT)/ \
 		   && curl -fsS -o /dev/null http://127.0.0.1:$(SERVER_PORT)/healthz; then \
 			break; \
@@ -92,32 +85,38 @@ forward:
 		sleep 1; \
 	done
 	@curl -fsS -o /dev/null http://127.0.0.1:$(CLIENT_PORT)/ \
-		|| { echo "ERROR: client not reachable on :$(CLIENT_PORT) — see $(LOGDIR)/client.log" >&2; exit 1; }
+		|| { echo "ERROR: client not reachable on :$(CLIENT_PORT)" >&2; exit 1; }
 	@curl -fsS -o /dev/null http://127.0.0.1:$(SERVER_PORT)/healthz \
-		|| { echo "ERROR: server not reachable on :$(SERVER_PORT) — see $(LOGDIR)/server.log" >&2; exit 1; }
+		|| { echo "ERROR: server not reachable on :$(SERVER_PORT)" >&2; exit 1; }
 	@echo ""
 	@echo "space-adventure is up:"
 	@echo "  client : http://localhost:$(CLIENT_PORT)   (WS: ws://localhost:$(CLIENT_PORT)/ws, same-origin)"
 	@echo "  server : http://localhost:$(SERVER_PORT)/healthz   (WS: ws://localhost:$(SERVER_PORT)/ws, direct)"
 
 down:
+	# Legacy cleanup: earlier revisions ran kubectl port-forward (and, briefly,
+	# a supervisor loop around it). Harmless if nothing matches.
 	@pkill -f 'space-adventure port-forward svc/clien[t]' 2>/dev/null || true
 	@pkill -f 'space-adventure port-forward svc/serve[r]' 2>/dev/null || true
-	@ok=1; \
-	for p in $(CLIENT_PORT) $(SERVER_PORT); do \
-		if ss -ltnH | awk '{print $$4}' | grep -Eq "[:.]$$p$$"; then \
-			echo "ERROR: port $$p still in use — a process other than ours holds it" >&2; \
-			ok=0; \
-		fi; \
-	done; \
-	[ $$ok -eq 1 ] || exit 1
 	@if kind get clusters 2>/dev/null | grep -qx '$(CLUSTER)'; then \
 		kind delete cluster --name $(CLUSTER); \
 	else \
 		echo "cluster $(CLUSTER): not running"; \
 	fi
+	# Ports are checked AFTER the cluster is deleted, not before: kind's
+	# extraPortMappings are held by docker for as long as the node container
+	# exists, so checking first would fail every single time.
+	@sleep 1
+	@ok=1; \
+	for p in $(CLIENT_PORT) $(SERVER_PORT); do \
+		if ss -ltnH | awk '{print $$4}' | grep -Eq "[:.]$$p$$"; then \
+			echo "ERROR: port $$p still in use after teardown — something else holds it" >&2; \
+			ok=0; \
+		fi; \
+	done; \
+	[ $$ok -eq 1 ] || exit 1
 	@rm -rf $(LOGDIR)
-	@echo "down: port-forwards stopped, cluster removed, nothing left running"
+	@echo "down: cluster removed, host ports released, nothing left running"
 
 PG_TEST_CONTAINER := sa-test-pg
 PG_TEST_URL        := postgres://test:test@localhost:55432/test?sslmode=disable

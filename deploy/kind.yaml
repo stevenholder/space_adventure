@@ -1,6 +1,28 @@
 # kind cluster for local Space Adventure development.
-# Single control-plane node; workloads are reached from the host via
-# `kubectl port-forward` (root Makefile), so no extraPortMappings.
+#
+# Single control-plane node. Workloads are reached from the host through
+# extraPortMappings onto NodePort services -- NOT `kubectl port-forward`.
+#
+# Why: port-forward is a userspace proxy that EXITS on any broken pipe
+# ("error: lost connection to pod"). One abruptly-dropped WebSocket takes the
+# whole forward down, which makes the game unreachable in the browser and
+# breaks the e2e suite mid-run -- and t4 drops connections abruptly on purpose,
+# because that is the behaviour it exists to test. It also added its own
+# latency jitter to the criterion 7 measurement. A kind port mapping is
+# kernel-level: nothing to supervise, nothing to restart, no added jitter.
+#
+# The host ports are fixed at cluster-creation time, so changing them means
+# recreating the cluster (`make down && make up CLIENT_PORT=... SERVER_PORT=...`
+# will not move them on its own).
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: space-adventure
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30000   # client Service nodePort -> host :3000
+        hostPort: 3000
+        protocol: TCP
+      - containerPort: 30080   # server Service nodePort -> host :18080
+        hostPort: 18080
+        protocol: TCP

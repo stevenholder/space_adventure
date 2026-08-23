@@ -55,9 +55,13 @@ metadata:
     app.kubernetes.io/name: client
     app.kubernetes.io/part-of: space-adventure
 spec:
+  # NodePort + kind extraPortMappings: reachable on the host with no
+  # port-forward proxy in the path (deploy/kind.yaml).
+  type: NodePort
   selector:
     app.kubernetes.io/name: client
   ports:
     - name: http
       port: 80
+      nodePort: 30000
       targetPort: http
