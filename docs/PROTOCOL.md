@@ -1,8 +1,16 @@
 # Wire protocol (client ↔ server)
 
-Status: **v2 — M2 implements exactly this set.** Both ends implement
-from this file. A change requires both ends updated in the same milestone;
-the main thread coordinates the edit.
+Status: **v2 — frozen for Phase 2. Both ends implement exactly this set.**
+A change requires both ends updated in the same phase; the main thread
+coordinates the edit.
+
+> **Phase 4/5 sections are marked as such.** `board`, `disembark`,
+> `seat_result`, input mode `1` (pilot) and the entity row's
+> `parent_id`/`seat` fields are specified here in full but are **not built in
+> Phase 2** — they land with the ground vehicle in Phase 4 and are reused by
+> the ship in Phase 5. Phase 2 encodes `parent_id = 0` and `seat = 0` and
+> ignores mode `1`. The row is sized once now so the codec churns once, not
+> twice (`docs/ROADMAP.md`).
 
 ## Transport
 
@@ -26,7 +34,7 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 
 | id | name | dir | payload |
 |----|------|-----|---------|
-| `0x0001` | `hello` | C→S | `u16 client_ver` \| `u32 name_len` \| `bytes name` |
+| `0x0001` | `hello` | C→S | `u16 client_ver` \| `u32 name_len` \| `bytes name` \| `u32 token_len` \| `bytes token` |
 | `0x0002` | `hello_ack` | S→C | `u16 server_ver` \| `u16 tick_hz` \| `u32 world_seed` \| `u32 entity_id` |
 | `0x0003` | `input` | C→S | `u8 mode` \| `f32 v[5]` \| `u16 action_mask` \| `u16 seq` |
 | `0x0004` | `snapshot` | S→C | `u32 tick` \| `u16 ack_seq` \| `u16 count` \| `entity × count` |
@@ -36,31 +44,64 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 | `0x0008` | `ping` | C→S | `u32 ts_ms` |
 | `0x0009` | `pong` | S→C | `u32 ts_ms` (echo of ping) |
 | `0x000A` | `terrain` | S→C | `u16 face_grid` \| `f32 radius_min` \| `f32 radius_max` \| `u16 radii[6 × face_grid × face_grid]` |
-| `0x000B` | `board` | C→S | `u32 vehicle_id` \| `u16 seat` |
-| `0x000C` | `disembark` | C→S | (no payload) |
-| `0x000D` | `seat_result` | S→C | `u32 entity_id` \| `u16 seat` \| `u8 result` |
+| `0x000B` | `board` | C→S | `u32 vehicle_id` \| `u16 seat` — **Phase 4** |
+| `0x000C` | `disembark` | C→S | (no payload) — **Phase 4** |
+| `0x000D` | `seat_result` | S→C | `u32 entity_id` \| `u16 seat` \| `u8 result` — **Phase 4** |
+| `0x000E` | `cmd` | C→S | `u16 seq` \| `u16 opcode` \| `u32 data_len` \| `bytes data` (UTF-8 JSON) |
+| `0x000F` | `cmd_result` | S→C | `u16 seq` \| `u16 opcode` \| `u8 status` \| `u32 data_len` \| `bytes data` (UTF-8 JSON) |
+| `0x0010` | `defs` | S→C | `u32 data_len` \| `bytes data` (UTF-8 JSON) |
+| `0x0011` | `fire` | C→S | `u16 seq` \| `f32 dir[3]` |
+| `0x0012` | `colliders` | S→C | `u16 count` \| `collider × count` |
 
-`entity` (inside `snapshot`):
+`entity` (inside `snapshot`) — **54 bytes, fixed**:
 
 ```
-u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3] | u32 parent_id | u16 seat
+u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3]
+| u32 parent_id | u16 seat | u16 health | u8 flags | i8 pitch_q
+```
+
+`collider` (inside `colliders`) — **42 bytes, fixed**:
+
+```
+u8 kind | u8 _pad | f32 center[3] | f32 half[3] | f32 quat[4]
 ```
 
 Constants:
 
-- `entity_type`: `0x0001` player body; `0x0002` ship (M2, manifest id
-  `ship.v1`).
+- `entity_type`: `0x0001` player body; `0x0002` ship (Phase 5, manifest id
+  `ship.v1`); `0x0003` NPC; `0x0004` target dummy; `0x0005` ground vehicle
+  (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3).
 - `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
-  boost (mode 1, M2). Other bits ignored.
+  boost (mode 1, Phase 5). Other bits ignored.
 - `input` mode: `0` on foot — `v = [move_x, move_y, look_dir.x, look_dir.y,
-  look_dir.z]`; `1` pilot — `v = [thrust, roll, yaw_rate, pitch_rate,
-  0.0]`. Mode ≥ 2 is reserved; the server treats it as 0.
-- `seat`: `0` not aboard; `1` pilot; `2`–`3` passenger (`ship.v1`'s bench;
-  the field is u16 — more seats later is a rule-table change, not a wire
-  change).
-- `seat_result` `result`: `0` granted; `1` seat occupied; `2` out of range;
-  `3` not seated / invalid.
-- `event_id`: `0x0001` explosion (reserved for later)
+  look_dir.z]`; `1` pilot (Phase 5) — `v = [thrust, roll, yaw_rate,
+  pitch_rate, 0.0]`; `2` ground vehicle (Phase 4) — `v = [throttle, steer, 0,
+  0, 0]`. Mode ≥ 3 is reserved; the server treats it as 0.
+- `seat` (Phase 4): `0` not aboard; `1` driver/pilot; `2`–`3` passenger. The
+  field is u16 — more seats later is a rule-table change, not a wire change.
+- `seat_result` `result` (Phase 4): `0` granted; `1` seat occupied; `2` out of
+  range; `3` not seated / invalid.
+- `health`: current hit points, `0` = dead. Maximum comes from the entity's
+  def in `defs`, not the wire. An entity with no health concept (loot, a
+  projectile) sends `0` and sets no `dead` flag.
+- `flags` bits: `0x01` grounded, `0x02` sprinting, `0x04` dead, `0x08` firing
+  (set on the tick a shot is resolved). `0x10`–`0x80` reserved, sent as 0.
+- `pitch_q`: the entity's view pitch quantised as
+  `round(pitch / (π/2) · 127)`, clamped to `[−127, 127]` — about 0.7° of
+  resolution. **Visual only.** Hit resolution never reads it; the server uses
+  its own record of the shooter's aim (see `fire`).
+- `collider` `kind`: `0` box (`half` = half-extents along the collider's local
+  axes), `1` sphere (`half[0]` = radius, `half[1]`/`half[2]` sent as 0 and
+  ignored). `_pad` is sent as 0 so the row stays 4-byte aligned for readers
+  that care.
+- `cmd` `opcode`: `0x0001` `shop_list`; `0x0002` `shop_buy`; `0x0003` `equip`;
+  `0x0004` `inventory`; `0x0005` `reload`. `0x0006`–`0x000F` reserved for
+  Phase 3 (`pickup`, `drop`); `0x0010`+ reserved for Phase 4/5.
+- `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
+  `3` refused by a game rule (cannot afford, out of range, unknown item,
+  magazine full); `4` rate limited; `5` target not found.
+- `event_id`: `0x0001` explosion (reserved); `0x0002` shot fired; `0x0003`
+  hit; `0x0004` death; `0x0005` loot dropped (Phase 3).
 
 ## Semantics
 
@@ -69,14 +110,14 @@ Constants:
   client's `entity_id`, then `terrain`, then includes the entity in snapshots.
   A client must not simulate before `terrain` arrives — it has no ground to
   stand on until then.
-- `input` carries **command state with a mode** in M2. Mode `0` is the M1
-  on-foot layout: `move_x`/`move_y` are the wish direction in the body's
+- `input` carries **command state with a mode**. Mode `0` is the on-foot
+  layout and the only one Phase 2 implements: `move_x`/`move_y` are the wish direction in the body's
   tangent frame, each in [−1, 1] and jointly clamped to unit length;
   `look_dir` is the absolute world-space unit vector the eyes point along —
   not angles, not rates. Mode `1` is the pilot layout: `thrust` ∈ [−1, 1],
   `roll` ∈ [−1, 1], `yaw_rate`/`pitch_rate` ∈ [−`angvel_max`,
   `angvel_max`] rad/s — sanitised (clamped, non-finite → 0) per the GDD
-  "Flight model — M2 context".
+  "Flight model" (Phase 5).
 - **The mode byte is a declaration, not authority.** The server interprets
   the payload by its own occupancy: a seated pilot's input is read as pilot
   fields; an on-foot or seated-passenger input is read as on-foot fields,
@@ -97,7 +138,7 @@ Constants:
     near-vertical look has too-short a tangent to define a stable azimuth, so
     recomputing would spin the body on mouse jitter. Both ends run this in the
     integrator (GDD "Integrator" step 2).
-- **`board` / `disembark` are events, not command state**: processed once,
+- **`board` / `disembark` are events, not command state** (Phase 4): processed once,
   in receive order, on the tick they arrive — not idempotent, not replayed.
   `board` is validated server-side (GDD "Seats and occupancy"): the
   requester's body within `board_dist` of the vehicle origin, `seat` in
@@ -105,7 +146,7 @@ Constants:
   request gets a `seat_result`, **unicast to the requester**, granted or
   refused (codes above); the authoritative occupancy change is visible to
   all clients in the next snapshot.
-- **The ship in the snapshot.** The ship (entity_type `0x0002`) appears
+- **A vehicle in the snapshot** (Phase 4/5). The vehicle appears
   every tick with its full rigid-body state (`pos`/`quat`/`vel`, f32). A
   seated body's `entity` carries `parent_id` = the ship's `entity_id` and
   `seat` = the seat index; its `pos`/`quat`/`vel` are the **server-composed
@@ -116,8 +157,9 @@ Constants:
 - `quat` in a body's `entity` carries the body's **full orientation** — facing
   plus which way is up for it, which on a round world differs per player and
   is needed to draw a remote character standing correctly on the far side of
-  the planet. Head pitch is not transmitted in M1, so remote characters look
-  level along their own horizon.
+  the planet. Pitch is **not** in the quat — the body stays upright when you
+  look down (GDD "First-person body"). Where a remote entity is *aiming* rides
+  in `pitch_q` instead, applied to the head and the held weapon only.
 - Positions are world-space Cartesian with the planet centre at the origin.
   There is no world boundary.
 - `input` is **current command state**, not an event stream: the server
@@ -177,6 +219,132 @@ Constants:
 - Reconnect (M1): connection loss = entity despawns (after heartbeat
   timeout); reconnecting yields a new `entity_id`.
 
+### Identity token (Phase 2)
+
+`hello` carries a `token` alongside the display name: an opaque client-generated
+string (≤ 64 bytes, printable ASCII) that the client stores locally and reuses
+on every connect. The server looks up the `player` row for that token, creating
+it with the starting loadout if absent, and the player's credits, inventory and
+equipped item come back with it (`docs/ARCHITECTURE.md`, "Persistence").
+
+> **This is not authentication.** The token is a bearer string with no
+> verification: anyone who has it *is* that player. It exists so a reconnect
+> restores your stuff on a machine you control, and so the seam that real
+> accounts slot into exists before there is anything worth stealing. It must
+> not be shipped to untrusted players as-is — real accounts are the named
+> prerequisite in `docs/ROADMAP.md`, "Deferred".
+
+An empty or malformed token is treated as absent, and an absent token means an
+**ephemeral session whose progress is not saved**. The server never generates or
+returns a token — handing out a credential over an unauthenticated channel is
+exactly the thing this design is trying not to normalise. Generating and keeping
+one is the client's job (`crypto.getRandomValues` → `localStorage`).
+
+### `cmd` / `cmd_result` — the reliable channel (Phase 2)
+
+Everything that is a question rather than a continuous control goes through one
+pair of messages instead of growing the protocol a message at a time: shops,
+inventory, equipping, reloading, and later looting.
+
+- `data` is UTF-8 JSON, **≤ 4 KiB**. Malformed UTF-8, malformed JSON, or an
+  oversized body is `status` 2 — never a connection close, because a buggy
+  client should not be indistinguishable from a hostile one.
+- Every `cmd` gets exactly one `cmd_result`, **unicast to the requester**,
+  echoing `seq` and `opcode`. `seq` is a per-connection counter independent of
+  `input.seq`.
+- `cmd` is **processed once, in receive order, on the tick it arrives** — not
+  idempotent, not replayed, not predicted. A client shows the outcome when the
+  result arrives; it never assumes success.
+- **Rate limited server-side: 10 `cmd` per connection per second, burst 20.**
+  Excess gets `status` 4 and is not executed. This is a trust boundary — a
+  purchase loop is otherwise free to hammer the store — so the limit is
+  enforced regardless of what the client believes it sent.
+- **Every rule is re-checked server-side**, including ones the client also
+  checks: interaction range, affordability, item existence, stock. A client
+  range check is a UI affordance, never a gate.
+- Authoritative side effects (credits, inventory, equipment) are applied by the
+  server and reflected in the result body and, where visible to others, in the
+  next snapshot.
+
+Bodies per opcode:
+
+| opcode | request | success body |
+|---|---|---|
+| `shop_list` | `{"npc": <entity_id>}` | `{"stock":[{"item":"weapon.pulse","price":250}]}` |
+| `shop_buy` | `{"npc": <entity_id>, "item":"weapon.pulse", "qty":1}` | `{"credits":750,"inventory":[{"item":"weapon.pulse","qty":1}]}` |
+| `equip` | `{"slot":"primary","item":"weapon.pulse"}` | `{"equipped":{"primary":"weapon.pulse"}}` |
+| `inventory` | `{}` | `{"credits":750,"inventory":[…],"equipped":{…}}` |
+| `reload` | `{}` | `{"magazine":30,"reserve":90}` |
+
+A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
+`insufficient_credits`, `out_of_range`, `unknown_item`, `no_stock`,
+`magazine_full`, `no_ammo`. The client maps codes to text; the server never
+sends prose for display.
+
+### `defs` — the data the client needs (Phase 2)
+
+Sent once, **after `terrain` and before the first `snapshot`**. UTF-8 JSON: the
+item table, weapon rule tables, entity-type hitboxes and max health, and the
+interactable metadata for the zone. It is the server's own `server/data/`
+content, filtered to what a client needs to render and predict.
+
+The client **must not fire, predict damage, or draw an inventory before `defs`
+arrives** — the same rule as `terrain`, for the same reason: it has no data to
+do it with. One source of truth, shipped, rather than a copy of the same JSON
+checked into `client/`.
+
+Like `terrain`, it is one message and therefore capped at 64 KiB. That is
+generous for Phase 2 and is a known, bounded place where chunking becomes
+necessary later — not a surprise to discover at runtime.
+
+### `fire` — shooting (Phase 2)
+
+`fire` is an **event**: processed once, in receive order, on the tick it
+arrives. Not command state, not idempotent, not replayed.
+
+- `seq` is the `input.seq` in effect when the client pulled the trigger. It
+  correlates the shot with the input stream and, with the server's own RTT
+  measurement, tells the server how far to rewind.
+- `dir` is the world-space unit aim vector. Non-finite or non-unit values are
+  rejected (the shot is dropped, no event).
+- **The origin is never client-supplied.** The server uses its own recorded eye
+  position for that shooter at the rewound tick. A client that could name its
+  own muzzle position could shoot from anywhere on the planet.
+- **Rewind is bounded by the server's measurement, not the client's claim.**
+  The server rewinds candidate targets by its own smoothed RTT/2 for that
+  connection, clamped to `[0, 500] ms`. A client cannot ask for more.
+- Cadence is enforced server-side from the weapon's rule table with one tick of
+  tolerance; an early shot is dropped, not queued. Ammunition is likewise
+  checked and decremented server-side.
+- A resolved shot produces broadcast `event`s — `shot fired` always, `hit` and
+  `death` when applicable — so every client draws the same tracer and the same
+  outcome. There is no `fire_result`: the shooter learns what happened from the
+  same events as everyone else.
+
+`event` payloads (binary, little-endian, following the `event` header):
+
+| event | `entity_id` | `data` |
+|---|---|---|
+| shot fired `0x0002` | shooter | `f32 origin[3]` \| `f32 dir[3]` \| `f32 dist` |
+| hit `0x0003` | victim | `u32 shooter` \| `f32 point[3]` \| `u16 damage` \| `u16 health_after` |
+| death `0x0004` | victim | `u32 killer` (0 = none) |
+
+### `colliders` — static world geometry (Phase 2)
+
+Sent once, after `terrain` and before the first `snapshot`. The list is
+**world-space** and absolute: the server composes it at load from zone files
+authored in a local tangent frame, so neither the client nor the sim ever does
+that composition (GDD "Static colliders").
+
+- Both sims resolve against this exact list, in the exact order the GDD
+  integrator specifies. A mismatch is a player standing inside a wall on one
+  screen and outside it on the other.
+- Rock props remain client-scattered and **non-collidable** — they are not in
+  this list and the server does not know about them (ARCHITECTURE, "Client").
+  Anything the player must not walk through is authored into a zone file.
+- One message, 42 B per collider: **1,560 colliders is the cap** at the 64 KiB
+  frame limit. Same bounded-change note as `terrain`.
+
 ## Terrain sampling (pinned — both ends implement this exactly)
 
 The radius field is consumed identically by the server generator, the server
@@ -202,5 +370,6 @@ left to the GDD's prose.
 
 ## Versioning
 
-`client_ver` / `server_ver` are u16 protocol versions; M1 = `1`, M2 = `2`.
-rejects `hello` with a different major version by closing (code 1002).
+`client_ver` / `server_ver` are u16 protocol versions: Phase 1 = `1`,
+Phase 2 = `2`. The server rejects a `hello` carrying a different version by
+closing the connection (code 1002).

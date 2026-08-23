@@ -6,14 +6,17 @@ surface vehicles, load back up and leave (`docs/GDD.md`, "Core loop").
 Browser client (Three.js + TypeScript) ↔ authoritative Go server (WebSocket,
 binary protocol), run locally as two processes via `make up`.
 
-Current milestone: **M1 — multiplayer first person on a small round world** —
-two browser clients walk around a low-poly asteroid (150 m radius, a lap in a
-couple of minutes) and see each other move; the server is authoritative at
-20 Hz. M1 builds one verb of the loop, the "explore on foot" one: **the player
-is a body, not a vehicle**, and there are no ships, no space, and no flight
-until M2. The world being round is load-bearing — up is `normalize(pos)`
-everywhere, never `+Y`. See `docs/ROADMAP.md`.
-(Containers and kind land at the scale-out milestone, not now.)
+Current phase: **Phase 2 — buy a weapon from an NPC and shoot a target range.**
+Phase 1 (multiplayer first person on a small round world) is **done and
+verified** — two browser clients walk a low-poly asteroid (150 m radius, a lap
+in a couple of minutes) and see each other move, server-authoritative at 20 Hz.
+Phase 2 adds identity + persistence, a reliable `cmd` channel, a general entity
+store, static colliders, interaction, inventory/currency, weapons and hitscan
+combat. **There are no vehicles until Phase 4 and no ships or space until Phase
+5** — do not build them, even if `docs/PROTOCOL.md`'s v2 sections describe
+them. The world being round stays load-bearing: up is `normalize(pos)`
+everywhere, never `+Y`. Task list, contracts and acceptance criteria:
+`docs/ROADMAP.md`.
 
 ## Module ownership (parallel safety)
 
@@ -23,8 +26,8 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 
 | Agent | Owns | Never touches |
 |-------|------|---------------|
-| `game` | `docs/GDD.md`, gameplay rule files (e.g. `server/gameplay/` once it exists), balance data | client rendering, transport, infra, assets |
-| `netcode` | `server/` (except gameplay rule files), `docs/PROTOCOL.md` only when explicitly instructed | `client/`, `deploy/`, `art/` |
+| `game` | `docs/GDD.md`, `server/data/**` (item/NPC/zone/loot data), gameplay rule files (e.g. `server/gameplay/` once it exists), balance data | client rendering, transport, infra, assets |
+| `netcode` | `server/` (except `server/data/**` and gameplay rule files), `docs/PROTOCOL.md` only when explicitly instructed | `client/`, `deploy/`, `art/` |
 | `frontend` | `client/` | `server/`, `deploy/`, `art/` (consumes assets, doesn't edit) |
 | `art` | `art/` | all code directories |
 | `infra` | `deploy/`, root `Makefile` (root `Dockerfile*` from scale-out) | game logic, client code |
@@ -48,6 +51,13 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 - Go: module `space-adventure/server`, gofmt-clean, stdlib-first
   (`net/http`, `encoding/binary`), gorilla/websocket for WS, wrap errors
   (`%w`), no global mutable state.
+- Storage: plain `database/sql`, driver chosen from `DATABASE_URL`'s scheme
+  (`modernc.org/sqlite` pure-Go locally, `pgx/v5/stdlib` deployed). **No ORM,
+  no repository interface, no dialect branches in query code.** Portable SQL
+  only: `$1` placeholders, ids generated in Go, booleans as `INTEGER`, JSON as
+  `TEXT`, times and money as Unix-millis `BIGINT` (never `INTEGER` — int4 in
+  Postgres, overflows any real timestamp). Never query from the tick path.
+  Rules: `docs/ARCHITECTURE.md`, "Persistence".
 - Protocol: little-endian binary, one message per WebSocket message —
   `docs/PROTOCOL.md`.
 - Assets: glTF 2.0 binary (`.glb`) only, flat-shaded low-poly, reproducible

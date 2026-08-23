@@ -1,0 +1,18 @@
+{
+  "$comment": "NPC archetypes. Contract: docs/GDD.md 'Shop NPCs'. Prices live on the NPC, not the item, so the same item can cost differently elsewhere later.",
+  "version": 1,
+  "npcs": [
+    {
+      "id": "npc.quartermaster",
+      "name": "Quartermaster Vex",
+      "asset": "npc.shopkeeper",
+      "kind": "shop",
+      "verb": "Talk",
+      "greeting": "shop.quartermaster.greeting",
+      "stock": [
+        { "item": "weapon.pulse", "price": 250 },
+        { "item": "ammo.cell", "price": 1 }
+      ]
+    }
+  ]
+}

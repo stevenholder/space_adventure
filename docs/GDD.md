@@ -1067,6 +1067,233 @@ Edge cases already settled: backward thrust is `accel · 0.5` under the same
 speed); the same fixed-step semi-implicit integrator and replay reconciliation
 apply, with orientation normalized every step.
 
+## Phase 2 — items, weapons, combat, interaction
+
+Spec for `netcode` + `frontend`, same contract status as the on-foot rules
+above: every number lives in a table, every rule is implementable from this
+section alone. Phase 2's playable proof is buying a rifle from an NPC and
+shooting a target range (`docs/ROADMAP.md`).
+
+### Items and currency
+
+- **Credits** are a single integer on the player row. Starting balance
+  `start_credits`. There is no banking, no trading and no drop-on-death in
+  Phase 2 — credits only move through `shop_buy`.
+- An **item id** is a string defined in `server/data/items.json` (`weapon.pulse`,
+  `ammo.cell`). The client never invents one; it learns the table from `defs`.
+- **Inventory** is a list of `{item, qty}` stacks on the player row, at most
+  `inv_slots` stacks, each capped at that item's `stack_max`. A purchase that
+  would exceed either is refused (`no_space`).
+- **Equipment** is one map, `{slot: item}`. Phase 2 has exactly one slot,
+  `primary`, holding a weapon. Equipping an item you do not own is refused.
+- Ammunition is an item like any other. The weapon's `magazine` is *not* in the
+  inventory — it is loaded rounds, held per equipped weapon; `reload` moves
+  rounds from the `ammo.cell` stack into the magazine.
+
+| Param | Value | Note |
+|---|---|---|
+| `start_credits` | 1000 | new player row |
+| `start_items` | `ammo.cell × 120` | new player row; the rifle is bought, not given |
+| `inv_slots` | 20 | stacks, not items |
+| `stack_max` (weapon) | 1 | weapons do not stack |
+| `stack_max` (ammo) | 300 | |
+
+### Weapons (rule table)
+
+Phase 2 ships one weapon. It is **hitscan** — no projectile, no travel time, no
+drop. NPC projectiles arrive in Phase 3 and are a separate entity type.
+
+| Param | `weapon.pulse` | Unit | Note |
+|---|---|---|---|
+| `price` | 250 | credits | |
+| `damage` | 25 | hp | before falloff |
+| `fire_interval` | 0.15 | s | 400 rpm; server-enforced with 1 tick tolerance |
+| `magazine` | 30 | rounds | |
+| `reload_time` | 2.0 | s | cannot fire while reloading |
+| `ammo_item` | `ammo.cell` | — | |
+| `max_range` | 120 | m | beyond this the ray misses, full stop |
+| `falloff_start` | 40 | m | full damage at or below |
+| `falloff_end` | 120 | m | |
+| `falloff_min` | 0.35 | × | damage multiplier at `falloff_end` |
+| `spread_base` | 0.6 | deg | cone half-angle at rest |
+| `spread_max` | 2.5 | deg | |
+| `spread_per_shot` | 0.35 | deg | added per shot fired |
+| `spread_decay` | 3.0 | deg/s | recovery toward `spread_base` |
+
+Damage is `round(damage · falloff)`, with `falloff` linearly interpolated from
+`1.0` at `falloff_start` to `falloff_min` at `falloff_end`, clamped at both ends.
+
+**Spread is resolved server-side and is not predicted.** The client draws its
+crosshair from the same numbers so the cone is honest, but the actual deviation
+applied to `dir` is drawn from the server's per-connection RNG. A client-chosen
+deviation is a client-chosen hit.
+
+**No headshots in Phase 2.** One hitbox per entity (below). Split hitboxes and a
+head multiplier land in Phase 3 with enemies worth aiming at — they change every
+damage number, and doing that once, against real enemies, beats doing it twice.
+
+### Health and damage
+
+- `health` is an integer, `0` = dead, maximum from the entity's def.
+- **Hitbox: one vertical capsule per entity**, `hitbox_radius` around the
+  segment from `pos` (feet) to `pos + up · hitbox_height`. Target dummies use
+  the same capsule shape with their own numbers. `up` is the entity's own
+  radial up, not the shooter's.
+- Damage applies server-side only, on the tick the shot resolves, and emits a
+  `hit` event; reaching 0 emits `death` and sets the `dead` flag.
+- **Players cannot be damaged in Phase 2.** Only target dummies take damage.
+  Player damage, death and respawn are Phase 3 — with them come the rules that
+  make dying mean something, and shipping the mechanic before those rules exist
+  just means building it twice.
+
+| Param | Value | Unit | Note |
+|---|---|---|---|
+| `hitbox_radius` (player) | 0.35 | m | |
+| `hitbox_height` (player) | 1.8 | m | feet to crown |
+| `max_health` (player) | 100 | hp | |
+| `max_health` (target) | 100 | hp | |
+| `target_respawn` | 3.0 | s | full health, same position |
+| `rewind_max` | 0.5 | s | hard clamp on lag-compensation rewind |
+
+**Lag compensation.** The server keeps `rewind_max` of position history per
+entity at tick granularity. A shot is resolved against target positions rewound
+by the server's own smoothed RTT/2 for that connection, clamped to
+`[0, rewind_max]`. The shooter's eye position comes from that same history —
+never from the client. Without rewind, a hit at 100 ms and 7.5 m/s misses by
+0.4 m, which is most of a body.
+
+### Interaction
+
+One mechanism, reused by shop NPCs now, loot in Phase 3, and vehicles in
+Phase 4/5.
+
+- An entity is **interactable** if its def carries a `verb` (`"Talk"`,
+  `"Pick up"`, `"Board"`).
+- A candidate must be within `interact_dist` of the player's eye **and** inside
+  the look cone: `dot(look_dir, normalize(target_eye − eye)) ≥ cos(interact_cone)`.
+- Among candidates, the one with the **largest** dot product wins — the thing
+  you are most directly looking at, not the nearest. Nearest picks the wrong
+  target when two NPCs stand together.
+- The client shows a prompt with the verb; `E` sends the opcode that verb maps
+  to. **The server re-validates distance and cone on the `cmd`** — the client
+  check is a UI affordance and nothing more.
+
+| Param | Value | Unit |
+|---|---|---|
+| `interact_dist` | 3.0 | m |
+| `interact_cone` | 20 | deg (half-angle) |
+
+### Shop NPCs
+
+- Entity type `0x0003`, no AI, no movement, no health. Placed by a zone file,
+  facing a fixed direction, standing on the terrain.
+- Defined in `server/data/npcs.json`: display name, model asset id, `verb`, and
+  a `stock` list of `{item, price}`. Prices live on the NPC, not the item, so
+  the same item can cost different amounts in different places later.
+- `shop_list` returns the stock. `shop_buy` validates, in this order: the NPC
+  exists and is a shop; the player is in range and in cone; the item is in
+  stock; the player can afford `price × qty`; there is inventory space. Then it
+  debits and grants **atomically** — a purchase never half-applies.
+- Stock is unlimited in Phase 2. Finite stock is a field in the same JSON when
+  it is wanted; nothing else changes.
+
+### Static colliders
+
+Rocks stay client-scattered and non-collidable. **Anything the player must not
+walk through is authored into a zone file** and shipped in the `colliders`
+message (`docs/PROTOCOL.md`).
+
+**Authoring frame.** Authoring boxes in world space on a sphere is not humanly
+possible, so a zone file is written in a **local tangent frame** at the zone's
+`origin_dir` and composed to world space by the server at load:
+
+```
+# zone frame, once per zone
+up     ← normalize(origin_dir)
+ref    ← (0,0,1)  unless |dot(ref, up)| > 0.999, then (1,0,0)
+north  ← normalize(ref − up·dot(ref, up))
+east   ← cross(up, north)
+origin ← up · radius(terrain, up)
+
+# per object, from its local p = (x, y, z)
+dir      ← normalize(origin + east·p.x + north·p.z)      # walk out along the surface
+world_pos ← dir · (radius(terrain, dir) + p.y)           # y is height ABOVE the ground
+
+# re-derive the frame at the object's own position, so it stands on its own up
+north_p  ← normalize(north − dir·dot(north, dir))
+east_p   ← cross(dir, north_p)
+world_quat ← quatFromBasis(east_p, dir, north_p) · local_quat
+```
+
+Local `+y` is up, `+x` is east, `+z` is north, and the frame is right-handed —
+so a zone file reads like a flat level, which is the whole point.
+
+Two details that are easy to get wrong and expensive to find later:
+
+- **`y` is height above the ground, not height above the zone origin.** A zone
+  40 m across on a 150 m planet drops ~5 m at its edge; authoring against the
+  origin plane would bury the far wall.
+- **Each object is oriented by its own local up**, re-derived at its own
+  position, not by the zone origin's. Using the origin frame throughout leans
+  the far wall by `40/150` ≈ 15°, which reads as broken from ten metres away.
+
+**The site is flattened, not assumed flat.** A zone declares `flatten_radius`
+and `flatten_falloff`; the terrain generator levels the radius field to the
+zone origin's radius inside `flatten_radius` and blends out over
+`flatten_falloff`, **before** the field is encoded for the wire. Both ends
+therefore see the flattened terrain with no special case, and a retune of the
+noise cannot put a wall halfway underground. Flattening only ever makes terrain
+more walkable, so ROADMAP criterion 9 still holds.
+
+**Player collision shape: one sphere at chest height**, radius `body_radius`
+centred at `pos + up · body_sphere_h`. Not a capsule.
+
+> `ponytail:` a chest sphere blocks walls and cannot be stepped over or crawled
+> under, which is right for Phase 2's walls and posts. It cannot express a
+> waist-high railing you vault or a low gap you crouch through. Upgrade to a
+> swept capsule when a zone wants one — the resolve step is the only caller.
+
+**Integrator addition.** The on-foot `step` gains one stage between the existing
+terrain resolution and the end of the tick:
+
+```
+  # 7.  Terrain resolution (unchanged) — the single writer of grounded
+  (pos, vel, grounded) ← resolve(pos_old, pos, vel, mode, terrain)
+
+  # 8.  Static collider resolution
+  c ← pos + up·body_sphere_h
+  for each collider in colliders:                 # world order, as received
+      (hit, n, depth) ← nearest(c, body_radius, collider)
+      if hit:
+          pos ← pos + n·depth                     # push out along the exit normal
+          c   ← pos + up·body_sphere_h
+          if dot(vel, n) < 0:
+              vel ← vel − n·dot(vel, n)           # cancel velocity into the surface
+          if dot(n, up) ≥ cos(max_slope):         # standing on top of it
+              grounded ← true
+
+  # 9.  Re-seat on the terrain if step 8 pushed the feet under it
+  r ← radius(terrain, normalize(pos))
+  if |pos| < r:
+      pos ← normalize(pos)·r
+      vel ← vel − up·min(dot(vel, up), 0)
+```
+
+Order is binding on both ends. `nearest` is sphere-vs-OBB (transform the sphere
+centre into the collider's local frame, clamp to `±half`, transform back) and
+sphere-vs-sphere; both are total and neither allocates.
+
+> `ponytail:` one push-out pass, not an iterative solver. A player wedged into
+> an interior corner of two colliders can resolve to a slightly wrong spot.
+> Iterate the loop 2–3 times if a zone's geometry makes that visible — same
+> code, one outer loop.
+
+| Param | Value | Unit | Note |
+|---|---|---|---|
+| `body_radius` | 0.35 | m | collision sphere |
+| `body_sphere_h` | 0.9 | m | chest height above the feet |
+| `collider_max` | 1560 | — | one 64 KiB `colliders` message |
+
 ## Open questions (main thread decides)
 
 M1:
@@ -1100,7 +1327,26 @@ M1:
   from the spec as written.
 - Concurrent player target for local dev: assume 10–50.
 
-M2 (decided at wave 0, 2026-08-22 — see "Vehicles and crew (M2 spec)"):
+Phase 2:
+
+- **Weapon numbers are first guesses.** 25 damage / 400 rpm / 30 rounds kills a
+  100 hp dummy in four hits and empties a magazine in 4.5 s. Whether that
+  *feels* like a rifle is a look-at-it question; the rule table is where it
+  moves, and nothing else has to change.
+- **Is server-resolved spread the right call?** It is the honest one, but at
+  100 ms the client's tracer is drawn along its own `dir` while the server's
+  ray went somewhere marginally else. If the mismatch reads as bad hit
+  registration, the fix is drawing the tracer from the `shot fired` event
+  instead of locally — one client change, no rule change.
+- **Chest-sphere collision vs a swept capsule.** Decided lazy (above). The
+  trigger to revisit is the first zone that wants a vaultable railing.
+- **Does the target range need scoring?** A hit counter and a timer are ~30
+  lines of client HUD and make the range a thing you *use* rather than a thing
+  you shoot at once. Deferred until the shooting feels right; scoring a bad
+  gun is polish on the wrong layer.
+
+M2 → now Phase 4/5 (decided at the old M2 wave 0, 2026-08-22 — see "Vehicles
+and crew (M2 spec)"; the decisions stand, the phase number moved):
 
 - **Motion sickness in a hull-fixed cockpit.** Decided: the pilot keeps the
   welded camera (no camera damping, no free-look head — pillar 2, one rig)

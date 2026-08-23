@@ -1,0 +1,62 @@
+{
+  "$comment": "Item table. Contract: docs/GDD.md 'Items and currency' + 'Weapons'. Owned by the `game` agent. Shipped to clients in the `defs` message; never duplicated under client/.",
+  "version": 1,
+  "start_credits": 1000,
+  "start_items": [{ "item": "ammo.cell", "qty": 120 }],
+  "inv_slots": 20,
+  "items": [
+    {
+      "id": "weapon.pulse",
+      "name": "Pulse Rifle",
+      "kind": "weapon",
+      "slot": "primary",
+      "asset": "weapon.pulse",
+      "stack_max": 1,
+      "weapon": {
+        "damage": 25,
+        "fire_interval": 0.15,
+        "magazine": 30,
+        "reload_time": 2.0,
+        "ammo_item": "ammo.cell",
+        "max_range": 120.0,
+        "falloff_start": 40.0,
+        "falloff_end": 120.0,
+        "falloff_min": 0.35,
+        "spread_base": 0.6,
+        "spread_max": 2.5,
+        "spread_per_shot": 0.35,
+        "spread_decay": 3.0
+      }
+    },
+    {
+      "id": "ammo.cell",
+      "name": "Energy Cell",
+      "kind": "ammo",
+      "stack_max": 300
+    }
+  ],
+  "entity_defs": [
+    {
+      "type": "player",
+      "asset": "char.player",
+      "max_health": 100,
+      "hitbox": { "radius": 0.35, "height": 1.8 },
+      "damageable": false
+    },
+    {
+      "type": "npc",
+      "asset": "npc.shopkeeper",
+      "max_health": 0,
+      "hitbox": { "radius": 0.35, "height": 1.8 },
+      "damageable": false
+    },
+    {
+      "type": "target",
+      "asset": "prop.target",
+      "max_health": 100,
+      "hitbox": { "radius": 0.45, "height": 1.8 },
+      "damageable": true,
+      "respawn": 3.0
+    }
+  ]
+}

@@ -7,9 +7,12 @@ Board a ship with your friends, fly it to a planet, climb out and explore on
 foot, drive a rover across the surface, load back up and leave. Vehicles are
 shared spaces: one player flies, the rest are aboard. See `docs/GDD.md`.
 
-**M1 builds the middle of that loop first:** a body on foot, with other
-players, on a small round world you can walk all the way around in a couple of
-minutes. Ships arrive at M2, space at M3 — `docs/ROADMAP.md`.
+**Phase 1 built the middle of that loop first, and is done:** a body on foot,
+with other players, on a small round world you can walk all the way around in a
+couple of minutes. From there the game grows outward in the order things depend
+on each other — NPCs and gun combat (Phase 2), fighting an enemy encampment
+(Phase 3), a rover you climb into and drive (Phase 4), then a ship you buy,
+board and fly into space (Phase 5). See `docs/ROADMAP.md`.
 
 - **Client:** Three.js + TypeScript, 3D-first UI
 - **Server:** Go, authoritative fixed-tick simulation over WebSocket
@@ -31,20 +34,19 @@ minutes. Ships arrive at M2, space at M3 — `docs/ROADMAP.md`.
 
 ## Reading order
 
-1. `docs/ROADMAP.md` — where we are, what M1 is
+1. `docs/ROADMAP.md` — where we are, what each phase is, and the task list
 2. `docs/ARCHITECTURE.md` — how the system works
 3. `docs/PROTOCOL.md` — the wire contract between client and server
 4. `docs/GDD.md` — the game itself
 5. `.omp/AGENTS.md` — how the agents divide the work
+6. `docs/tasks/` — the dispatch-ready task briefs for the current phase
 
-## Local development (from M1 onward)
+## Local development
 
 ```sh
 make up     # kind cluster + server/client images + manifests + port-forwards
 make down   # tear down the cluster, forwards, and logs
 ```
-
-The Makefile lands with M1 — `infra` owns it.
 
 ## Agent-first development
 

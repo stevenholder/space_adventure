@@ -1,0 +1,17 @@
+{
+  "$comment": "Spawn zone. Contract: docs/GDD.md 'Static colliders' (authoring frame). Local frame: +x east, +y up (height ABOVE the terrain surface), +z north; yaw in degrees about +y, 0 = facing +z. The spawn disc is already flat, so no flattening.",
+  "version": 1,
+  "id": "spawn",
+  "origin_dir": [0.0, 1.0, 0.0],
+  "flatten_radius": 0.0,
+  "flatten_falloff": 0.0,
+  "colliders": [],
+  "entities": [
+    {
+      "type": "npc",
+      "def": "npc.quartermaster",
+      "pos": [3.0, 0.0, 2.0],
+      "yaw": -124.0
+    }
+  ]
+}

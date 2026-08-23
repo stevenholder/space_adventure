@@ -1,6 +1,7 @@
 # Architecture
 
-Status: v0 (scaffold) — updated as M1 lands.
+Status: v1 — reflects Phase 1 as built. Updated as each phase lands
+(`docs/ROADMAP.md`).
 
 ## System overview
 
@@ -22,10 +23,11 @@ flowchart LR
   instance).
 - Browser clients connect over WebSocket; all world state is
   server-authoritative.
-- M1 runs as **two local processes** (`go run` + `vite`), started by `make up`.
-  Vite proxies `/ws` to the server so client and server are same-origin.
-- Containers and Kubernetes arrive at the scale-out milestone, not before — see
-  "Deployment".
+- `make up` runs the whole stack on a local **kind** cluster — server, nginx-
+  backed client, and (from Phase 2) Postgres — so the deployed path is the
+  development path. See "Deployment".
+- What kind does *not* exercise is sharding, delta snapshots and load; that is
+  the scale-out phase's job, not now.
 
 ## Client (`client/`) — Three.js + TypeScript
 
@@ -99,7 +101,9 @@ flowchart LR
 - Components: connection manager, entity/component store, tick loop, snapshot
   encoder, gameplay rules (from `docs/GDD.md`, owned by `game`).
 - Full snapshot every tick in M1; delta compression is a post-M1 optimization.
-- No persistence in M1: in-memory world, seed-based.
+- No persistence in Phase 1: in-memory world, seed-based. From Phase 2 the
+  world stays in memory and a store is loaded/saved around it — see
+  "Persistence"; the tick loop still never touches a database.
 - Terrain: generated procedurally once at startup from the world seed as a
   cube-sphere — six `face_grid × face_grid` grids of surface radii, layering
   base relief, masked mountain ridges, detail noise and subtractive craters
@@ -123,6 +127,138 @@ flowchart LR
   this input moves" as a lookup rather than a fixed field on the connection —
   that lookup is exactly what taking a pilot seat repoints (GDD "Vehicles and
   crew").
+
+## Persistence (`server/internal/store`) — from Phase 2
+
+One rule makes the database swappable, and it is not an abstraction layer:
+**the tick loop never touches the database.** World state lives in memory and
+is simulated at 20 Hz; the store is read on join, written on leave, and
+snapshotted periodically from a background goroutine. Database latency
+therefore never enters the 50 ms tick budget, which is what makes "SQLite file
+on a laptop" and "Postgres across a network in a cluster" interchangeable at
+all. Get this wrong — a `SELECT` on the hot path — and no amount of interface
+polish saves it.
+
+### One driver seam: `database/sql` + a DSN
+
+`database/sql` **is** the portability layer. There is no repository interface,
+no two implementations of a `Store` trait, no dialect strategy object. There is
+one `store` package holding one set of queries, and the driver is chosen from
+the scheme of `DATABASE_URL`:
+
+| `DATABASE_URL` | Driver | Used for |
+|---|---|---|
+| unset | `sqlite` → `./data/world.db` | bare `go run`, unit tests, the `qa` harness |
+| `sqlite:///path/world.db` | `modernc.org/sqlite` | explicit local file |
+| `postgres://user:pw@host/db` | `jackc/pgx/v5/stdlib` | kind, and every real deployment |
+
+`modernc.org/sqlite` is **pure Go on purpose**: `Dockerfile.server` builds with
+`CGO_ENABLED=0` into a distroless static image, so a cgo SQLite driver
+(`mattn/go-sqlite3`) would break the image build, not just the tests.
+
+The only dialect-aware code is one `open(dsn)` function: pick the driver, set
+the pool (`MaxOpenConns(1)` on SQLite, WAL mode on; a real pool on Postgres),
+run migrations. Everything downstream is plain `database/sql`.
+
+### Portable SQL — the rules that keep one query set working on both
+
+Small, specific, and cheap to follow from the start; expensive to retrofit:
+
+- **`$1` placeholders, never `?`.** SQLite accepts `$N` natively, Postgres
+  requires it. One style works on both.
+- **No `AUTOINCREMENT` / `SERIAL`.** Ids are generated in Go and inserted
+  explicitly, so entity ids match the ones already on the wire.
+- **No `BOOLEAN`, no `JSONB`, no `TIMESTAMP`.** Booleans are `INTEGER` 0/1,
+  JSON blobs are `TEXT` marshalled in Go. Every one of those is a type whose
+  behaviour differs between the two engines.
+- **Times and money are `BIGINT`, never `INTEGER`.** Postgres `INTEGER` is
+  int4 — it tops out at 2,147,483,647, and a Unix-millis timestamp is about
+  1.79 *trillion*. SQLite's `INTEGER` is dynamically sized up to 64 bits and
+  stores it without complaint, so this is invisible until the first Postgres
+  write. `BIGINT` has INTEGER affinity in SQLite and is 64-bit in Postgres,
+  so one spelling is correct on both. This rule was written the wrong way
+  round first and caught by the dual-engine test on its first real run —
+  which is exactly what that test is for.
+- **`INSERT … ON CONFLICT … DO UPDATE` and `RETURNING` are fine** — both
+  engines support them (SQLite ≥ 3.24 / ≥ 3.35).
+- **No stored procedures, no triggers, no engine-specific extensions.**
+
+### The `player` table (pinned — Phase 2 schema)
+
+```sql
+CREATE TABLE IF NOT EXISTS player (
+  token       TEXT    PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  credits     BIGINT  NOT NULL,
+  inventory   TEXT    NOT NULL,   -- JSON: [{"item":"ammo.cell","qty":120}]
+  equipped    TEXT    NOT NULL,   -- JSON: {"primary":"weapon.pulse"}
+  pos_x       REAL    NOT NULL,
+  pos_y       REAL    NOT NULL,
+  pos_z       REAL    NOT NULL,
+  created_ms  BIGINT  NOT NULL,   -- Unix millis: BIGINT, not INTEGER
+  updated_ms  BIGINT  NOT NULL
+);
+```
+
+Every column obeys the portable-SQL rules above: no `SERIAL`, no `JSONB`, no
+`TIMESTAMP`, no `BOOLEAN`, and `BIGINT` for the millis and money columns. `REAL` is `double precision` on Postgres and an
+8-byte float on SQLite — identical enough for a respawn position, and the sim
+never round-trips through it mid-tick.
+
+Reads and writes are one statement each:
+
+```sql
+SELECT … FROM player WHERE token = $1;
+INSERT INTO player (…) VALUES ($1, …)
+  ON CONFLICT (token) DO UPDATE SET
+    name = $2, credits = $3, inventory = $4, equipped = $5,
+    pos_x = $6, pos_y = $7, pos_z = $8, updated_ms = $9;
+```
+
+**`token` is a bearer string, not authentication** — see `docs/PROTOCOL.md`,
+"Identity token". The row it selects is the whole account model in Phase 2, and
+real accounts replace exactly this lookup and nothing else.
+
+### Migrations without a dependency
+
+Numbered `.sql` files in `server/internal/store/migrations/`, `go:embed`ed and
+applied in order at startup against a `schema_version` table. That is roughly
+forty lines and it removes a dependency, a CLI, and a "did you run migrate?"
+failure mode. A migration that genuinely cannot be written portably gets a
+`NNN.postgres.sql` sibling — the escape hatch exists, and needing it is a
+signal the schema drifted, not a routine event.
+
+### What actually keeps it honest
+
+Not the design — the test. **The store's test suite runs against both
+engines**: SQLite always (no service required, so it runs everywhere), and
+Postgres when `TEST_DATABASE_URL` is set. `make test-pg` starts a Postgres
+container and sets it. Portability that is not executed on both engines is
+portability that is already broken.
+
+And the deployed path uses the real thing: **the kind stack runs Postgres**
+(`deploy/manifests/30-postgres.yaml`, a single pod with a PVC), for the same
+reason kind itself was chosen in Phase 1 — the acceptance criteria are measured
+on the path the product actually takes. SQLite is the developer convenience;
+Postgres is the deployed default. If those two ever disagree, the kind stack
+finds it, not production.
+
+Config comes from the environment (`DATABASE_URL`), supplied by a K8s Secret.
+No DSN in the image, no DSN in a committed manifest.
+
+### Redis and friends: not yet, and here is the trigger
+
+There is no cache and no message bus, because with one server process the
+in-memory world **is** the cache and a function call **is** the message bus.
+Adding Redis now buys a dependency, a failure mode and a serialization
+boundary in exchange for nothing.
+
+It earns its place the moment a second server process needs to see the first
+one's state — cross-shard presence, pub/sub between zone servers, sessions
+shared across a fleet (Phase 6 territory, `docs/ROADMAP.md` "Deferred"). The
+seam that makes that cheap is not an interface written today; it is keeping
+presence and session lookups behind ordinary functions in one package, so the
+map inside them can become a client later without changing a caller.
 
 ## Network model
 
