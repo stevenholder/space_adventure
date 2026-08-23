@@ -1,11 +1,16 @@
 # Space Adventure — local kind deployment
 #
 #   make up    cluster (if absent) -> build + load images -> apply manifests
-#              -> port-forwards -> print access URLs. Safe to re-run:
-#              existing cluster is reused, stale port-forwards are replaced,
-#              missing toolchain or a busy port fails fast.
+#              -> restart deployments onto the new images -> port-forwards ->
+#              print access URLs. Safe to re-run: existing cluster is reused,
+#              pods are always replaced so re-running deploys current code,
+#              stale port-forwards are replaced, missing toolchain or a busy
+#              port fails fast.
 #   make down  stop port-forwards (verifies ports are actually free), delete
 #              the cluster, remove logs. Leaves nothing running.
+#   make test-pg  start a throwaway Postgres container, wait for readiness,
+#              run the Go store tests against it, then always remove the
+#              container (even on test failure).
 #
 # Overrides: make up CLIENT_PORT=8081 SERVER_PORT=18081
 
@@ -25,7 +30,7 @@ LOGDIR := deploy/.logs
 KUBECTL := kubectl --context kind-$(CLUSTER)
 PF      := $(KUBECTL) -n $(NAMESPACE) port-forward
 
-.PHONY: up down check cluster images apply forward
+.PHONY: up down check cluster images apply forward test-pg
 
 up: check cluster images apply forward
 	@echo "make up complete"
@@ -56,6 +61,13 @@ images:
 
 apply:
 	$(KUBECTL) apply -f deploy/manifests/
+	# Both images are tagged :latest, so `apply` reports "unchanged" and
+	# Kubernetes keeps the running pods — on freshly built code. Without this
+	# restart, `make up` silently serves whatever was built last time, which
+	# looks exactly like a code change that did nothing. `kind load` has
+	# already replaced the image under the tag on the node, so the new pods
+	# come up on the new build.
+	$(KUBECTL) -n $(NAMESPACE) rollout restart deploy/server deploy/client
 	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/server --timeout=120s
 	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/client --timeout=120s
 
@@ -106,3 +118,28 @@ down:
 	fi
 	@rm -rf $(LOGDIR)
 	@echo "down: port-forwards stopped, cluster removed, nothing left running"
+
+PG_TEST_CONTAINER := sa-test-pg
+PG_TEST_URL        := postgres://test:test@localhost:55432/test?sslmode=disable
+
+test-pg:
+	@docker rm -f $(PG_TEST_CONTAINER) >/dev/null 2>&1 || true
+	@docker run -d --rm --name $(PG_TEST_CONTAINER) \
+		-e POSTGRES_PASSWORD=test -e POSTGRES_USER=test -e POSTGRES_DB=test \
+		-p 55432:5432 postgres:17-alpine >/dev/null
+	@ok=0; \
+	for i in $$(seq 1 30); do \
+		if docker exec $(PG_TEST_CONTAINER) pg_isready -U test >/dev/null 2>&1; then \
+			ok=1; break; \
+		fi; \
+		sleep 1; \
+	done; \
+	if [ $$ok -ne 1 ]; then \
+		echo "ERROR: postgres not ready after 30s" >&2; \
+		docker rm -f $(PG_TEST_CONTAINER) >/dev/null; \
+		exit 1; \
+	fi
+	@cd server && TEST_DATABASE_URL='$(PG_TEST_URL)' go test -count=1 ./internal/store/...; \
+	status=$$?; \
+	docker rm -f $(PG_TEST_CONTAINER) >/dev/null; \
+	exit $$status
