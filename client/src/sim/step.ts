@@ -136,7 +136,9 @@ export function step(
   const tang = vec.sub(clamped, vec.scale(up, vec.dot(clamped, up)))
   const facing =
     vec.len(tang) >= RULES.facingHold ? vec.norm(tang) : vec.copy(prev.facing)
-  const right = vec.cross(up, facing)
+  // right = facing × up, NOT up × facing: in a right-handed frame the latter
+  // points LEFT, which inverted A and D (GDD "Axis mapping": move_x is +right).
+  const right = vec.cross(facing, up)
 
   // 3. Mode (from state carried out of the previous step)
   const inContact = vec.len(prev.pos) - sampleRadius(terrain, up) <= RULES.groundSnap

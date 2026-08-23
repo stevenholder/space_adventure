@@ -628,3 +628,41 @@ func TestInvariantsRandomWalk(t *testing.T) {
 		prevPos = s.Pos
 	}
 }
+
+// TestStrafeDirection pins the handedness of the strafe axis.
+//
+// This is the regression guard for a bug that shipped through all of M1: the
+// wish vector used right = up × facing, which in a right-handed frame is the
+// player's LEFT, so A and D were swapped. Nothing caught it — both sims agreed
+// (they implement the same GDD line), every acceptance criterion passed, and
+// the conformance and circumnavigation routes are pure forward motion with
+// move_x == 0 on every tick. It was visible only to a human holding the keys.
+//
+// GDD "M1 on-foot movement" → "Axis mapping": move_x is +right, along
+// facing × up.
+func TestStrafeDirection(t *testing.T) {
+	f := flatField(150)
+	s := SpawnState(f)
+
+	up := terrain.Normalize(s.Pos)
+	facing := s.Facing
+	// Right-handed frame: right = forward × up. (up × forward is LEFT.)
+	trueRight := terrain.Normalize(terrain.Cross(facing, up))
+
+	start := s.Pos
+	in := Input{MoveX: 1, MoveY: 0, Look: facing}
+	look := facing
+	for i := 0; i < 20; i++ {
+		look = Step(&s, in, look, f, DT)
+	}
+
+	d := s.Pos.Sub(start)
+	along := d.Dot(trueRight)
+	if along <= 0 {
+		t.Fatalf("move_x=+1 displaced %.3f m along the player's right; want positive "+
+			"(A and D inverted — check the cross-product order in the wish vector)", along)
+	}
+	if lateral := d.Sub(trueRight.Scale(along)); lateral.Len() > 0.2 {
+		t.Errorf("strafe drifted %.3f m off the right axis; want purely lateral", lateral.Len())
+	}
+}

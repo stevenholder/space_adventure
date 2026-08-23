@@ -102,13 +102,13 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 
 	// --- player A joins with an empty name (fallback "Player 1") ---
 	a := dialWS(t, url)
-	a.sendFrame(t, protocol.EncodeHello(protocol.Hello{ClientVer: protocol.VersionM1, Name: ""}))
+	a.sendFrame(t, protocol.EncodeHello(protocol.Hello{ClientVer: protocol.VersionPhase2, Name: ""}))
 
 	ha, err := protocol.DecodeHelloAck(a.nextOf(t, protocol.MsgHelloAck))
 	if err != nil {
 		t.Fatalf("hello_ack: %v", err)
 	}
-	if ha.EntityID != 1 || ha.WorldSeed != 1337 || ha.TickHz != 20 || ha.ServerVer != protocol.VersionM1 {
+	if ha.EntityID != 1 || ha.WorldSeed != 1337 || ha.TickHz != 20 || ha.ServerVer != protocol.VersionPhase2 {
 		t.Fatalf("hello_ack = %+v, want id=1 seed=1337 tickHz=20", ha)
 	}
 
@@ -170,7 +170,7 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 
 	// --- player B joins with a control-laden name ---
 	b := dialWS(t, url)
-	b.sendFrame(t, protocol.EncodeHello(protocol.Hello{ClientVer: protocol.VersionM1, Name: "\x01bob\x1f\x7f"}))
+	b.sendFrame(t, protocol.EncodeHello(protocol.Hello{ClientVer: protocol.VersionPhase2, Name: "\x01bob\x1f\x7f"}))
 
 	haB, err := protocol.DecodeHelloAck(b.nextOf(t, protocol.MsgHelloAck))
 	if err != nil {

@@ -128,7 +128,9 @@ func Step(s *State, in Input, prevLook Vec, t *terrain.Field, dt float64) Vec {
 	if tang.Len() >= FacingHold {
 		s.Facing = terrain.Normalize(tang)
 	}
-	right := terrain.Cross(up, s.Facing)
+	// right = facing × up, NOT up × facing. In a right-handed frame the latter
+	// points LEFT, which inverted A and D (GDD "Axis mapping": move_x is +right).
+	right := terrain.Cross(s.Facing, up)
 
 	// 3. Mode (from the state carried in).
 	inContact := s.Pos.Len()-t.SampleRadius(up) <= GroundSnap

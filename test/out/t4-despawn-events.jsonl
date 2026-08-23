@@ -86,3 +86,20 @@
 {"client":"B2","type":"close","detail":{"reason":"TCP closed","atNs":"1787505007367000000"},"atNs":null}
 {"client":"A2","type":"despawn","detail":{"id":6},"atNs":"136522277131437"}
 {"client":"A2","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"136522579070252"},"atNs":null}
+{"client":"A","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":33},"atNs":"137276840817585"}
+{"client":"A","type":"spawn","detail":{"id":33,"name":"qa-t4-a"},"atNs":"137276841393742"}
+{"client":"B","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":34},"atNs":"137276844681131"}
+{"client":"B","type":"spawn","detail":{"id":33,"name":"qa-t4-a"},"atNs":"137276844939892"}
+{"client":"B","type":"spawn","detail":{"id":34,"name":"qa-t4-b"},"atNs":"137276845002767"}
+{"client":"A","type":"spawn","detail":{"id":34,"name":"qa-t4-b"},"atNs":"137276845194003"}
+{"client":"A","type":"despawn","detail":{"id":34},"atNs":"137277079239877"}
+{"client":"A","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"137277382782843"},"atNs":null}
+{"client":"A2","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":35},"atNs":"137277585588373"}
+{"client":"A2","type":"spawn","detail":{"id":35,"name":"qa-t4-a2"},"atNs":"137277585911479"}
+{"client":"B2","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":36},"atNs":"137277588747710"}
+{"client":"B2","type":"spawn","detail":{"id":35,"name":"qa-t4-a2"},"atNs":"137277588993751"}
+{"client":"B2","type":"spawn","detail":{"id":36,"name":"qa-t4-b2"},"atNs":"137277589063186"}
+{"client":"A2","type":"spawn","detail":{"id":36,"name":"qa-t4-b2"},"atNs":"137277589166775"}
+{"client":"B2","type":"close","detail":{"reason":"TCP closed","atNs":"1787505772674000000"},"atNs":null}
+{"client":"A2","type":"despawn","detail":{"id":36},"atNs":"137287627667898"}
+{"client":"A2","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"137287929695136"},"atNs":null}

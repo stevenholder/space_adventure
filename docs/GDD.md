@@ -185,7 +185,13 @@ Sanitize before use:
 | `action_mask` | `0x0001` sprint, `0x0002` jump; other bits ignored | 0 |
 
 - **Axis mapping:** `move_y` is forward (along the facing), `move_x` is right
-  (along `up × facing`) — W = +y, D = +x, S is exactly −forward.
+  (along `facing × up`) — W = +y, D = +x, S is exactly −forward.
+  - **The order of that cross product is load-bearing.** This world is
+    right-handed, so `facing × up` is the player's right and `up × facing` is
+    their left. Written the wrong way round, A and D are silently swapped:
+    every other rule still holds, the two sims still agree, and the
+    conformance test still passes — because no scripted route strafes. It is
+    only visible to a human with their hands on the keys.
 - **Silent/missing input:** the server holds the last input it received on
   every tick (PROTOCOL "latest arrival wins"). If it has never received an
   input frame, the defaults row above applies: the body stands still, with
@@ -369,7 +375,7 @@ step(state, input, terrain, dt):
   # else: facing holds its carried value — a near-vertical look has too short
   #       a tangent to define a stable azimuth, so recomputing would spin the
   #       body on mouse jitter (facing_hold = 0.1, rule table)
-  right  ← up × facing
+  right  ← facing × up                               # right-handed: up × facing is LEFT
 
   # 3. Mode (from state carried out of the previous step)
   in_contact ← |pos| − radius(terrain, up) ≤ ground_snap
