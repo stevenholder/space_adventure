@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/binary"
 	"errors"
 	"math"
 	"testing"
@@ -172,5 +173,36 @@ func TestColliderPadIgnoredOnRead(t *testing.T) {
 	}
 	if got.List[0].Kind != ColliderBox {
 		t.Fatalf("Kind = %d, want %d", got.List[0].Kind, ColliderBox)
+	}
+}
+
+// TestParseCollidersRejectsNonFinite: a non-finite centre reaches the sim's
+// push-out, propagates into the player's position, and is then written to the
+// player row — so it outlives the session rather than glitching a frame.
+func TestParseCollidersRejectsNonFinite(t *testing.T) {
+	good := EncodeColliders(Colliders{List: []Collider{{
+		Kind: ColliderBox, Center: [3]float32{1, 2, 3},
+		Half: [3]float32{1, 1, 1}, Quat: [4]float32{0, 0, 0, 1},
+	}}})
+	payload := good[2:] // strip the frame type
+	if _, err := ParseColliders(payload); err != nil {
+		t.Fatalf("precondition: good colliders failed to parse: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		off  int // byte offset of the f32 to poison, within the payload
+	}{
+		{"centre", 2 + 2},         // count(2) + kind/pad(2)
+		{"half", 2 + 2 + 12},      // ... + center(12)
+		{"quat", 2 + 2 + 12 + 12}, // ... + half(12)
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := append([]byte(nil), payload...)
+			binary.LittleEndian.PutUint32(bad[tc.off:tc.off+4], math.Float32bits(float32(math.NaN())))
+			if _, err := ParseColliders(bad); !errors.Is(err, ErrBadPayload) {
+				t.Errorf("NaN %s accepted (err=%v), want ErrBadPayload", tc.name, err)
+			}
+		})
 	}
 }

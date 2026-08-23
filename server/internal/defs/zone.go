@@ -116,6 +116,38 @@ func quatMul(a, b quat) quat {
 // (local tangent frame) into world-space colliders and placements, per
 // docs/GDD.md "Static colliders" -> "Authoring frame".
 func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.Collider, placements []Placement, err error) {
+	// Zone files are hand-authored, so this is the likelier source of a bad
+	// number than the wire. A non-finite value here survives the composition
+	// and ends up in the sim's push-out, which writes it into the player's
+	// position — and positions are persisted, so it outlives the session.
+	// Fail the load instead: a zone that will not compose is a startup error,
+	// not a runtime surprise.
+	for i, c := range z.Colliders {
+		for j := 0; j < 3; j++ {
+			if !isFinite(c.Pos[j]) || !isFinite(c.Half[j]) {
+				return nil, nil, fmt.Errorf("zone %s: collider %d has a non-finite pos/half", z.ID, i)
+			}
+		}
+		if !isFinite(c.Yaw) {
+			return nil, nil, fmt.Errorf("zone %s: collider %d has a non-finite yaw", z.ID, i)
+		}
+	}
+	for i, e := range z.Entities {
+		for j := 0; j < 3; j++ {
+			if !isFinite(e.Pos[j]) {
+				return nil, nil, fmt.Errorf("zone %s: entity %d (%s) has a non-finite pos", z.ID, i, e.Def)
+			}
+		}
+		if !isFinite(e.Yaw) {
+			return nil, nil, fmt.Errorf("zone %s: entity %d (%s) has a non-finite yaw", z.ID, i, e.Def)
+		}
+	}
+	for j := 0; j < 3; j++ {
+		if !isFinite(z.OriginDir[j]) {
+			return nil, nil, fmt.Errorf("zone %s: non-finite origin_dir", z.ID)
+		}
+	}
+
 	// zone frame, once per zone
 	up := vNormalize(z.OriginDir)
 	ref := [3]float64{0, 0, 1}
@@ -176,3 +208,6 @@ func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.
 
 	return colliders, placements, nil
 }
+
+// isFinite reports whether v is neither NaN nor an infinity.
+func isFinite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }

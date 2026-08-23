@@ -157,3 +157,42 @@ func TestComposeZone_ColliderKindMapping(t *testing.T) {
 		t.Fatalf("colliders[1].Kind = %d, want ColliderSphere", colliders[1].Kind)
 	}
 }
+
+// TestComposeZoneRejectsNonFinite: zone files are hand-authored, so this is
+// the likelier source of a bad number than the wire. A non-finite value
+// survives composition into the sim's push-out and ends up written to the
+// player row, outliving the session. Failing the load makes it a startup
+// error instead.
+func TestComposeZoneRejectsNonFinite(t *testing.T) {
+	nan := math.NaN()
+	base := func() Zone {
+		return Zone{
+			ID: "t", OriginDir: [3]float64{0, 1, 0},
+			Colliders: []ZoneCollider{{Kind: "box", Pos: [3]float64{1, 0, 1}, Half: [3]float64{1, 1, 1}}},
+			Entities:  []ZoneEntity{{Type: "target", Def: "target", Pos: [3]float64{2, 0, 0}}},
+		}
+	}
+	r := func([3]float64) float64 { return 150 }
+
+	if _, _, err := ComposeZone(base(), r); err != nil {
+		t.Fatalf("precondition: clean zone failed: %v", err)
+	}
+
+	cases := map[string]func(*Zone){
+		"collider pos":  func(z *Zone) { z.Colliders[0].Pos[1] = nan },
+		"collider half": func(z *Zone) { z.Colliders[0].Half[0] = nan },
+		"collider yaw":  func(z *Zone) { z.Colliders[0].Yaw = nan },
+		"entity pos":    func(z *Zone) { z.Entities[0].Pos[2] = nan },
+		"entity yaw":    func(z *Zone) { z.Entities[0].Yaw = nan },
+		"origin_dir":    func(z *Zone) { z.OriginDir[0] = nan },
+	}
+	for name, poison := range cases {
+		t.Run(name, func(t *testing.T) {
+			z := base()
+			poison(&z)
+			if _, _, err := ComposeZone(z, r); err == nil {
+				t.Errorf("non-finite %s accepted, want an error", name)
+			}
+		})
+	}
+}

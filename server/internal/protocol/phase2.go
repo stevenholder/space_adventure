@@ -201,6 +201,12 @@ func ParseColliders(p []byte) (Colliders, error) {
 	if err := need(p, 2+int(count)*ColliderSize, "colliders list"); err != nil {
 		return c, err
 	}
+	// finite() is applied per collider below. A non-finite centre or extent
+	// reaches the sim's push-out, propagates into the player's position, and
+	// is then WRITTEN TO THE PLAYER ROW (docs/ARCHITECTURE.md, "Persistence")
+	// — so one bad value does not just glitch a frame, it bricks that player
+	// across every future reconnect. Reject it at the boundary, like ParseFire
+	// already rejects a non-finite aim vector.
 	c.List = make([]Collider, count)
 	off := 2
 	for i := range c.List {
@@ -216,7 +222,23 @@ func ParseColliders(p []byte) (Colliders, error) {
 		for j := 0; j < 4; j++ {
 			col.Quat[j] = f32(p[off+26+4*j : off+30+4*j])
 		}
+		for j := 0; j < 3; j++ {
+			if !isFiniteF32(col.Center[j]) || !isFiniteF32(col.Half[j]) {
+				return Colliders{}, fmt.Errorf("%w: collider %d has a non-finite centre/extent", ErrBadPayload, i)
+			}
+		}
+		for j := 0; j < 4; j++ {
+			if !isFiniteF32(col.Quat[j]) {
+				return Colliders{}, fmt.Errorf("%w: collider %d has a non-finite quaternion", ErrBadPayload, i)
+			}
+		}
 		off += ColliderSize
 	}
 	return c, nil
+}
+
+// isFiniteF32 reports whether v is neither NaN nor an infinity.
+func isFiniteF32(v float32) bool {
+	f := float64(v)
+	return !math.IsNaN(f) && !math.IsInf(f, 0)
 }
