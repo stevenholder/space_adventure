@@ -9,6 +9,15 @@
  * global yaw/pitch is ever stored — on a sphere there is no global frame
  * for yaw that is singularity-free.
  *
+ * Look is clamped to `look_clamp_deg` off ±up as STATE (not only on the
+ * wire): GDD — the client clamps its own camera, "it must not be able to
+ * view the poles the server would reject", using the same formula as the
+ * server's clampLook (server/internal/sim/sim.go). Keeping look off the
+ * poles also keeps the pitch axis (look × up) from degenerating or
+ * flipping. A pitch event is dropped (dead stop, like an FPS pitch
+ * clamp) when it would push look closer to a pole it is already
+ * clamped against.
+ *
  * Jump is level-triggered (Space held → re-jumps on every landing): the
  * server rule is level-triggered too, so prediction and authority agree.
  */
@@ -19,7 +28,32 @@ import { quatFromAxisAngle, quatRotate } from '../util/quat.js'
 /** Radians of view per pixel of mouse movement. */
 const LOOK_SENS = 0.0022
 
+/** cos(look_clamp_deg): the max |dot(look, up)| of a clamped look. */
+const COS_LOOK_CLAMP = Math.cos((RULES.lookClampDeg * Math.PI) / 180)
+/** sin(look_clamp_deg), the tangent pair of COS_LOOK_CLAMP. */
+const SIN_LOOK_CLAMP = Math.sin((RULES.lookClampDeg * Math.PI) / 180)
+
 const PREVENT_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+
+/**
+ * GDD "clampLook", mirroring the server (server/internal/sim/sim.go):
+ * push a unit look onto the circle `look_clamp_deg` off ±up, keeping its
+ * tangent direction; unit by construction. The tangent is never zero on
+ * client state (a clamped look stays >= look_clamp_deg off a pole), so
+ * the server's prevFacing azimuth fallback is not needed here.
+ */
+function clampLook(l: Vec3, up: Vec3): Vec3 {
+  const c = vec.dot(l, up)
+  if (c > COS_LOOK_CLAMP) {
+    const t = vec.norm(vec.sub(l, vec.scale(up, c)))
+    return vec.add(vec.scale(up, COS_LOOK_CLAMP), vec.scale(t, SIN_LOOK_CLAMP))
+  }
+  if (c < -COS_LOOK_CLAMP) {
+    const t = vec.norm(vec.sub(l, vec.scale(up, c)))
+    return vec.add(vec.scale(up, -COS_LOOK_CLAMP), vec.scale(t, SIN_LOOK_CLAMP))
+  }
+  return l
+}
 
 export class Controls {
   /** Called when pointer lock is acquired/released (for the hint overlay). */
@@ -89,15 +123,35 @@ export class Controls {
     const up = this.up
     let l = this.look
     if (dx !== 0) {
-      // Yaw about local up: +θ turns the view toward up × look (right).
-      l = quatRotate(quatFromAxisAngle(up, dx * LOOK_SENS), l)
+      // Yaw about local up: a +θ rotation about up moves look toward
+      // up × look — the player's LEFT (right is look × up, the
+      // quatFromForwardUp convention) — so a rightward drag (dx > 0)
+      // needs a negative angle.
+      l = quatRotate(quatFromAxisAngle(up, -dx * LOOK_SENS), l)
     }
     if (dy !== 0) {
-      // Pitch about the horizontal right axis: +θ pitches the view down.
-      const right = vec.norm(vec.sub(l, vec.scale(up, vec.dot(l, up))))
-      l = quatRotate(quatFromAxisAngle(right, dy * LOOK_SENS), l)
+      const angle = -dy * LOOK_SENS // down drag (dy > 0) < 0
+      const du = vec.dot(l, up)
+      // Dead stop at the GDD clamp: dropping the event keeps the pitch
+      // axis (look × up) from ever pointing past a pole — an event
+      // across the pole would end the clamped look on the far side with
+      // the axis azimuth flipped. The step carries look along a great
+      // circle toward the pole, so it crosses exactly when look is
+      // closer to that pole than the step is long.
+      const cosStep = Math.cos(Math.abs(angle))
+      const deadStop =
+        (angle < 0 && (du <= -COS_LOOK_CLAMP || du <= -cosStep)) ||
+        (angle > 0 && (du >= COS_LOOK_CLAMP || du >= cosStep))
+      if (!deadStop) {
+        // Pitch about the local right axis (look × up, perpendicular to
+        // look): a +θ rotation moves look toward up (looking up), hence
+        // the negative angle for a downward drag.
+        const right = vec.norm(vec.cross(l, up))
+        l = quatRotate(quatFromAxisAngle(right, angle), l)
+      }
     }
-    this.look = vec.norm(l)
+    // Clamp the state itself, not just the wire value (see header).
+    this.look = clampLook(l, up)
   }
 
   /**
@@ -118,14 +172,7 @@ export class Controls {
       (k.has('Space') ? ACTION.JUMP : 0)
 
     const up = this.up
-    const cosMax = Math.cos((RULES.lookClampDeg * Math.PI) / 180)
-    let look = this.look
-    const du = vec.dot(look, up)
-    if (du > cosMax) {
-      look = vec.norm(vec.sub(look, vec.scale(up, du - cosMax)))
-    } else if (du < -cosMax) {
-      look = vec.norm(vec.sub(look, vec.scale(up, du + cosMax)))
-    }
+    const look = clampLook(this.look, up)
     return { moveX: mx, moveY: my, lookDir: look, actionMask }
   }
 }
