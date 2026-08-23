@@ -1,270 +1,270 @@
 {
   "criterion": "C3 (ROADMAP #3): server-authoritative correction within one tick",
   "run": {
-    "ts": "2026-08-23T17:22:55.973Z",
+    "ts": "2026-08-23T19:32:55.956Z",
     "endpoint": "ws://127.0.0.1:3000/ws (nginx)",
     "name": "qa-t3",
-    "entity_id": 37
+    "entity_id": 15
   },
   "method": "real client Predictor (client/src/net/predictor.ts) vs live server; client wire codec (net/protocol.ts) + client sim terrain (sim/); raw-TCP transport (test/lib/ws.mjs); loop mirrors client/src/main.ts tickStep/processSnapshot",
   "phases": {
     "walk_ms": 1500,
     "rest_vel_threshold_mps": 0.005,
     "last_rest_snapshot": {
-      "tick": 15877,
-      "ackSeq": 48,
+      "tick": 146794,
+      "ackSeq": 47,
       "pos": {
-        "x": 7.104586601257324,
-        "y": 149.8318328857422,
+        "x": 6.879831314086914,
+        "y": 149.8423309326172,
         "z": 0
       },
       "vel": {
-        "x": 0.0022494993172585964,
-        "y": -0.00010666466550901532,
+        "x": 0.00224965694360435,
+        "y": -0.00010329030192224309,
         "z": 0
       },
-      "at_ms": 2502.33,
-      "auth_pos_m": 150.00018
+      "at_ms": 2458.588,
+      "auth_pos_m": 150.00019
     }
   },
   "corruption": {
-    "at_ms": 2502.33,
-    "tick": 15877,
+    "at_ms": 2458.588,
+    "tick": 146794,
     "offset_m": 4,
     "dir": [
-      0.99888,
-      -0.04736,
+      0.99895,
+      -0.04587,
       0
     ],
     "pre_dist_m": 4,
     "forced_pos": [
-      11.1001,
-      149.64238,
+      10.87562,
+      149.65887,
       0
     ]
   },
   "correction": {
-    "snapshot_tick": 15878,
-    "snapshot_ack_seq": 49,
-    "snapshot_at_ms": 2552.429,
+    "snapshot_tick": 146795,
+    "snapshot_ack_seq": 48,
+    "snapshot_at_ms": 2508.518,
     "authoritative_pos": {
-      "x": 7.10466194152832,
-      "y": 149.8318328857422,
+      "x": 6.87990665435791,
+      "y": 149.84231567382812,
       "z": 0
     },
     "corrected_pos": {
-      "x": 7.10466194152832,
-      "y": 149.8318328857422,
+      "x": 6.87990665435791,
+      "y": 149.84231567382812,
       "z": 0
     },
     "snap_dist_m": 0,
     "tolerance_m": 0.001,
-    "elapsed_from_corrupt_ms": 50.09900000000016,
+    "elapsed_from_corrupt_ms": 49.929999999999836,
     "one_tick_budget_ms": 100,
     "tick_delta": 1,
     "single_step": true
   },
   "recent_snapshots": [
     {
-      "tick": 15855,
+      "tick": 146772,
+      "ackSeq": 25,
+      "ok": true,
+      "at_ms": 1358.557,
+      "vel_mps": 4.5,
+      "pos_m": 150.0002
+    },
+    {
+      "tick": 146773,
       "ackSeq": 26,
       "ok": true,
-      "at_ms": 1402.228,
+      "at_ms": 1408.905,
       "vel_mps": 4.5,
       "pos_m": 150.0002
     },
     {
-      "tick": 15856,
+      "tick": 146774,
       "ackSeq": 27,
       "ok": true,
-      "at_ms": 1452.8,
+      "at_ms": 1459.191,
       "vel_mps": 4.5,
       "pos_m": 150.0002
     },
     {
-      "tick": 15857,
+      "tick": 146775,
       "ackSeq": 28,
       "ok": true,
-      "at_ms": 1502.284,
+      "at_ms": 1508.442,
       "vel_mps": 4.5,
       "pos_m": 150.0002
     },
     {
-      "tick": 15858,
+      "tick": 146776,
       "ackSeq": 29,
       "ok": true,
-      "at_ms": 1552.682,
-      "vel_mps": 4.5,
-      "pos_m": 150.0002
-    },
-    {
-      "tick": 15859,
-      "ackSeq": 30,
-      "ok": true,
-      "at_ms": 1602.513,
+      "at_ms": 1559.074,
       "vel_mps": 3.016,
       "pos_m": 150.0002
     },
     {
-      "tick": 15860,
-      "ackSeq": 31,
+      "tick": 146777,
+      "ackSeq": 30,
       "ok": true,
-      "at_ms": 1652.986,
+      "at_ms": 1608.439,
       "vel_mps": 2.022,
       "pos_m": 150.0002
     },
     {
-      "tick": 15861,
-      "ackSeq": 32,
+      "tick": 146778,
+      "ackSeq": 31,
       "ok": true,
-      "at_ms": 1702.385,
+      "at_ms": 1658.674,
       "vel_mps": 1.355,
       "pos_m": 150.0002
     },
     {
-      "tick": 15862,
-      "ackSeq": 33,
+      "tick": 146779,
+      "ackSeq": 32,
       "ok": true,
-      "at_ms": 1752.879,
+      "at_ms": 1709.275,
       "vel_mps": 0.9085,
       "pos_m": 150.0002
     },
     {
-      "tick": 15863,
-      "ackSeq": 34,
+      "tick": 146780,
+      "ackSeq": 33,
       "ok": true,
-      "at_ms": 1802.42,
+      "at_ms": 1758.482,
       "vel_mps": 0.609,
       "pos_m": 150.0002
     },
     {
-      "tick": 15864,
-      "ackSeq": 35,
+      "tick": 146781,
+      "ackSeq": 34,
       "ok": true,
-      "at_ms": 1852.951,
+      "at_ms": 1809.163,
       "vel_mps": 0.4082,
       "pos_m": 150.0002
     },
     {
-      "tick": 15865,
-      "ackSeq": 36,
+      "tick": 146782,
+      "ackSeq": 35,
       "ok": true,
-      "at_ms": 1902.456,
+      "at_ms": 1858.532,
       "vel_mps": 0.2736,
       "pos_m": 150.0002
     },
     {
-      "tick": 15866,
-      "ackSeq": 37,
+      "tick": 146783,
+      "ackSeq": 36,
       "ok": true,
-      "at_ms": 1952.96,
+      "at_ms": 1908.814,
       "vel_mps": 0.1834,
       "pos_m": 150.0002
     },
     {
-      "tick": 15867,
-      "ackSeq": 38,
+      "tick": 146784,
+      "ackSeq": 37,
       "ok": true,
-      "at_ms": 2002.579,
+      "at_ms": 1959.183,
       "vel_mps": 0.123,
       "pos_m": 150.0002
     },
     {
-      "tick": 15868,
-      "ackSeq": 39,
+      "tick": 146785,
+      "ackSeq": 38,
       "ok": true,
-      "at_ms": 2052.051,
+      "at_ms": 2008.897,
       "vel_mps": 0.08242,
       "pos_m": 150.0002
     },
     {
-      "tick": 15869,
-      "ackSeq": 40,
+      "tick": 146786,
+      "ackSeq": 39,
       "ok": true,
-      "at_ms": 2102.544,
+      "at_ms": 2058.274,
       "vel_mps": 0.05525,
       "pos_m": 150.0002
     },
     {
-      "tick": 15870,
-      "ackSeq": 41,
+      "tick": 146787,
+      "ackSeq": 40,
       "ok": true,
-      "at_ms": 2153.032,
+      "at_ms": 2108.852,
       "vel_mps": 0.03703,
       "pos_m": 150.0002
     },
     {
-      "tick": 15871,
-      "ackSeq": 42,
+      "tick": 146788,
+      "ackSeq": 41,
       "ok": true,
-      "at_ms": 2202.636,
+      "at_ms": 2159.29,
       "vel_mps": 0.02482,
       "pos_m": 150.0002
     },
     {
-      "tick": 15872,
-      "ackSeq": 43,
+      "tick": 146789,
+      "ackSeq": 42,
       "ok": true,
-      "at_ms": 2252.318,
+      "at_ms": 2208.603,
       "vel_mps": 0.01664,
       "pos_m": 150.0002
     },
     {
-      "tick": 15873,
-      "ackSeq": 44,
+      "tick": 146790,
+      "ackSeq": 43,
       "ok": true,
-      "at_ms": 2302.872,
+      "at_ms": 2258.891,
       "vel_mps": 0.01115,
       "pos_m": 150.0002
     },
     {
-      "tick": 15874,
-      "ackSeq": 45,
+      "tick": 146791,
+      "ackSeq": 44,
       "ok": true,
-      "at_ms": 2352.244,
+      "at_ms": 2309.505,
       "vel_mps": 0.007477,
       "pos_m": 150.0002
     },
     {
-      "tick": 15875,
-      "ackSeq": 46,
+      "tick": 146792,
+      "ackSeq": 45,
       "ok": true,
-      "at_ms": 2402.306,
+      "at_ms": 2358.747,
       "vel_mps": 0.005012,
       "pos_m": 150.0002
     },
     {
-      "tick": 15876,
-      "ackSeq": 47,
+      "tick": 146793,
+      "ackSeq": 46,
       "ok": true,
-      "at_ms": 2452.877,
+      "at_ms": 2409.175,
       "vel_mps": 0.00336,
       "pos_m": 150.0002
     },
     {
-      "tick": 15877,
-      "ackSeq": 48,
+      "tick": 146794,
+      "ackSeq": 47,
       "ok": true,
-      "at_ms": 2502.33,
+      "at_ms": 2458.588,
       "vel_mps": 0.002252,
       "pos_m": 150.0002
     },
     {
-      "tick": 15878,
-      "ackSeq": 49,
+      "tick": 146795,
+      "ackSeq": 48,
       "ok": true,
-      "at_ms": 2552.429,
+      "at_ms": 2508.518,
       "vel_mps": 0.00151,
       "pos_m": 150.0002
     }
   ],
-  "inputs_sent": 50,
+  "inputs_sent": 49,
   "overall": "PASS",
   "checks": [
     {
       "id": "c3a: forced +4 m tangent applied to the live predicted state",
       "pass": true,
-      "detail": "preDist=4.0000 m (target 4.000), dir=(0.9989,-0.0474,0.0000) at tick 15877"
+      "detail": "preDist=4.0000 m (target 4.000), dir=(0.9989,-0.0459,0.0000) at tick 146794"
     },
     {
       "id": "c3b: corrected state snaps <1e-3 m from the authoritative position in one step",
@@ -274,7 +274,7 @@
     {
       "id": "c3c: correction within one tick (50 ms + network) of the forced state",
       "pass": true,
-      "detail": "corrupt -> corrected in 50.09900000000016 ms (budget 100 ms = 1 tick + network), tick delta 1"
+      "detail": "corrupt -> corrected in 49.929999999999836 ms (budget 100 ms = 1 tick + network), tick delta 1"
     }
   ]
 }

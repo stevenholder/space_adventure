@@ -40,6 +40,37 @@ REPORT:   changed lines and that command's output. Then stop.
 BUDGET:   1 file, ~50 lines, 10 tool calls.
 ```
 
+### W3-1b · `qa` · Give the conformance route a strafe leg
+
+```
+TASK:     Add a lateral leg to the C5 route so the conformance diff can see
+          the strafe axis at all.
+FILES:    test/t5/prerun.ts (edit)
+CONTRACT: Every tick of the current C5 script carries move_x == 0 (all 1993 of
+          them), and the C10 lap hardcodes moveX: 0. That is how
+          right = up x facing -- the player's LEFT in a right-handed frame --
+          shipped through all of M1 with A and D swapped: both sims agreed, so
+          the diff passed, and no scripted route ever pressed A or D.
+
+          Add a leg on flat ground that strafes right for ~2 s, then left for
+          ~2 s, then a diagonal (move_x and move_y both non-zero, which also
+          exercises the joint unit-length clamp in GDD "Input").
+
+          The existing tolerance and diff logic are unchanged -- this only
+          widens what the route covers.
+
+          Both sims already assert the axis in isolation
+          (server/internal/sim TestStrafeDirection, client/tools/smoke.ts).
+          What neither covers is the two ends AGREEING while strafing, which is
+          exactly what replay convergence depends on and exactly what a
+          per-sim unit test cannot see.
+STEPS:    1. Add the leg to the route builder.
+          2. Regenerate both scripts and both dumps; re-run test/t5/diff.mjs.
+VERIFY:   node test/t5/diff.mjs  -> VERDICT: PASS
+REPORT:   the new leg's tick range and per-leg dPos/dVel. Then stop.
+BUDGET:   1 file, ~60 lines, 10 tool calls.
+```
+
 ### W3-2 · `qa` · Re-run the Phase 1 regression suite
 
 ```
