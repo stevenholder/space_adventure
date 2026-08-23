@@ -30,7 +30,33 @@ const BUDGETS = [
   [/^char\./, 1500],
   [/^ship\./, 2000],
   [/^prop\./, 500],
+  [/^npc\./, 1500],
+  [/^weapon\./, 400],
+  [/^struct\./, 200],
 ];
+
+// Node-name contracts: the client mounts things by these names, so a rename
+// in a generator is a silent runtime break. `eyeHeadSiblings` additionally
+// asserts eye is not under head — hiding head for a local body must not hide
+// the camera.
+const NODE_CONTRACTS = {
+  "char.player": {
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    eyeHeadSiblings: true,
+  },
+  "npc.shopkeeper": {
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    eyeHeadSiblings: true,
+  },
+  "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
+  "weapon.pulse": { nodes: ["grip", "muzzle"] },
+  "prop.target": { nodes: ["plate"] },
+};
+
+// Optional id argument: verify one asset. Lets an asset be verified while its
+// siblings do not exist yet, so a generator task is not gated on the rest of
+// its wave.
+const onlyId = process.argv[2] ?? null;
 
 function budgetFor(id) {
   for (const [re, n] of BUDGETS) if (re.test(id)) return n;
@@ -65,7 +91,15 @@ function loadGlb(file) {
 const failures = [];
 const rows = [];
 
-for (const asset of manifest.assets) {
+const selected = onlyId
+  ? manifest.assets.filter((a) => a.id === onlyId)
+  : manifest.assets;
+if (onlyId && selected.length === 0) {
+  console.error(`no manifest asset with id ${onlyId}`);
+  process.exit(1);
+}
+
+for (const asset of selected) {
   const budget = budgetFor(asset.id);
   if (budget === null) {
     failures.push(`${asset.id}: no budget rule for id class`);
@@ -90,18 +124,15 @@ for (const asset of manifest.assets) {
   // GLTFLoader sanitizes Object3D names on load (strips the dots in
   // arm.l / seat.pilot), but the .glb file is the contract.
   const names = new Set(gltf.parser.json.nodes.map((n) => n.name));
-  if (asset.id === "char.player") {
-    for (const need of ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"])
+  const contract = NODE_CONTRACTS[asset.id];
+  if (contract) {
+    for (const need of contract.nodes)
       if (!names.has(need)) problems.push(`missing node ${need}`);
-    if (names.has("eye") && names.has("head")) {
+    if (contract.eyeHeadSiblings && names.has("eye") && names.has("head")) {
       const eye = findByName(gltf.scene, "eye")[0];
       if (eye.parent && eye.parent.name === "head")
         problems.push("eye is a child of head: hiding head would hide the camera");
     }
-  }
-  if (asset.id === "ship.v1") {
-    for (const need of ["seat.pilot", "seat.passenger.0", "seat.passenger.1"])
-      if (!names.has(need)) problems.push(`missing node ${need}`);
   }
 
   rows.push({ id: asset.id, file: asset.file, tris, budget, ok: problems.length === 0 });

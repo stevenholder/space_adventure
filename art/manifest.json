@@ -40,6 +40,46 @@
       "license": "CC0",
       "source": "tools/gen_ship.py",
       "description": "Hero scout ship for M2 (built early so M2 does not wait on art). -Z forward, origin at ground level. Carries the seat contract: seat.pilot plus seat.passenger.0/1 empty nodes at the eye point. Walk-in cockpit with open canopy, glass (alphaMode BLEND), floor, dash, lit console panel and seats; hull is double-sided so the interior renders from the pilot seat."
+    },
+    {
+      "id": "weapon.pulse",
+      "file": "weapons/pulse.glb",
+      "tris": 180,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Phase 2 pulse rifle. -Z forward. Named empty nodes: `grip` (where the character's right hand holds it, at the origin of the hand pose) and `muzzle` (barrel tip, -Z, where the flash and tracer originate). Reads in silhouette from 30 m and from the first-person down-view at 0.5 m."
+    },
+    {
+      "id": "npc.shopkeeper",
+      "file": "chars/shopkeeper.glb",
+      "tris": 220,
+      "license": "CC0",
+      "source": "tools/gen_npc.py",
+      "description": "Phase 2 quartermaster NPC. Same segmented node layout as char.player (eye/head/torso/arm.l/arm.r/leg.l/leg.r) so the client's procedural animation and nametag code work unchanged; different palette so it does not read as a player."
+    },
+    {
+      "id": "prop.target",
+      "file": "props/target.glb",
+      "tris": 64,
+      "license": "CC0",
+      "source": "tools/gen_target.py",
+      "description": "Phase 2 target dummy. Base at origin, up +Y, faces -Z. Concentric plate on a post, ~1.8 m tall. Node `plate` is coloured by the client to show hit/reset state."
+    },
+    {
+      "id": "struct.wall",
+      "file": "structs/wall.glb",
+      "tris": 24,
+      "license": "CC0",
+      "source": "tools/gen_struct.py",
+      "description": "Phase 2 range wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Visual only \u2014 the authoritative shape is the `colliders` message."
+    },
+    {
+      "id": "struct.post",
+      "file": "structs/post.glb",
+      "tris": 48,
+      "license": "CC0",
+      "source": "tools/gen_struct.py",
+      "description": "Phase 2 cover post. Unit sphere, centre at origin, scaled to the sphere collider's radius. Visual only, as above."
     }
   ]
 }
