@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"errors"
 	"math"
 	"reflect"
 	"testing"
@@ -26,12 +27,45 @@ func roundTrip(t *testing.T, typ uint16, frame []byte, decode func([]byte) (any,
 }
 
 func TestHelloRoundTrip(t *testing.T) {
-	h := Hello{ClientVer: VersionM1, Name: "Steve \xf0\x9f\x9a\x80"}
+	h := Hello{ClientVer: VersionM1, Name: "Steve \xf0\x9f\x9a\x80", Token: "tok-abc123"}
 	roundTrip(t, MsgHello, EncodeHello(h), func(p []byte) (any, error) { return DecodeHello(p) }, h)
 
-	// Empty name.
+	// Empty name, empty token.
 	h2 := Hello{ClientVer: 2, Name: ""}
 	roundTrip(t, MsgHello, EncodeHello(h2), func(p []byte) (any, error) { return DecodeHello(p) }, h2)
+}
+
+// TestHelloTokenLessPayload verifies backward compatibility: a hello payload
+// that ends right after the name (no token fields at all, as an old client
+// sends) parses as Token == "" rather than an error.
+func TestHelloTokenLessPayload(t *testing.T) {
+	p := []byte{1, 0, 5, 0, 0, 0, 'S', 't', 'e', 'v', 'e'}
+	got, err := DecodeHello(p)
+	if err != nil {
+		t.Fatalf("DecodeHello: %v", err)
+	}
+	want := Hello{ClientVer: 1, Name: "Steve", Token: ""}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("decoded = %#v, want %#v", got, want)
+	}
+}
+
+func TestHelloTokenOverLongRejected(t *testing.T) {
+	tok := make([]byte, MaxTokenLen+1)
+	for i := range tok {
+		tok[i] = 'a'
+	}
+	h := Hello{ClientVer: VersionM1, Name: "Steve", Token: string(tok)}
+	if _, err := DecodeHello(EncodeHello(h)[2:]); !errors.Is(err, ErrBadPayload) {
+		t.Fatalf("DecodeHello over-long token: err = %v, want ErrBadPayload", err)
+	}
+}
+
+func TestHelloTokenNonPrintableRejected(t *testing.T) {
+	h := Hello{ClientVer: VersionM1, Name: "Steve", Token: "bad\x00tok"}
+	if _, err := DecodeHello(EncodeHello(h)[2:]); !errors.Is(err, ErrBadPayload) {
+		t.Fatalf("DecodeHello non-printable token: err = %v, want ErrBadPayload", err)
+	}
 }
 
 func TestHelloAckRoundTrip(t *testing.T) {
@@ -57,6 +91,16 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		Entities: []Entity{
 			{ID: 1, Pos: [3]float32{-150.5, 0, 0}, Quat: [4]float32{0, 0, 0, 1}, Vel: [3]float32{0, 0, 4.5}},
 			{ID: 2, Pos: [3]float32{0, 150.5, 0.25}, Quat: [4]float32{0.5, 0.5, 0.5, 0.5}, Vel: [3]float32{-1, 2, -3}},
+			// Every Phase 2 field non-zero, and PitchQ NEGATIVE. The struct
+			// comparison below covers the new fields only if a fixture
+			// actually sets them — an all-zero row round-trips through a
+			// sign-losing decode (uint8 instead of int8) without complaint,
+			// which is exactly how looking-down would come back as
+			// looking-up on a remote body.
+			{
+				ID: 3, Pos: [3]float32{1, 2, 3}, Quat: [4]float32{0, 1, 0, 0}, Vel: [3]float32{4, 5, 6},
+				ParentID: 7, Seat: 2, Health: 65535, Flags: FlagGrounded | FlagFiring, PitchQ: -127,
+			},
 		},
 	}
 	frame := EncodeSnapshot(s)
@@ -80,8 +124,8 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		}
 	}
 
-	// Frame is exactly u16 type + 8-byte header + 44 bytes per entity.
-	if got, want := len(frame), 2+8+2*EntitySize; got != want {
+	// Frame is exactly u16 type + 8-byte header + EntitySize per entity.
+	if got, want := len(frame), 2+8+3*EntitySize; got != want {
 		t.Fatalf("frame size = %d, want %d", got, want)
 	}
 

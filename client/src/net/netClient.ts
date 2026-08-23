@@ -128,7 +128,10 @@ export class NetClient {
       this.netState = 'open'
       this.lastSentAt = performance.now()
       if (wasReconnecting) this.events.onReconnect?.()
-      this.sendRaw(encodeHello(PROTOCOL_VERSION, this.name))
+      // Empty token: an ephemeral session the server does not save, which is
+      // exactly today's behaviour. Generating and persisting a real token is
+      // a later brief (W2-17, client/src/net/identity.ts).
+      this.sendRaw(encodeHello(PROTOCOL_VERSION, this.name, ''))
       this.events.onState?.('open', 'connected')
     }
 

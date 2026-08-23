@@ -20,41 +20,103 @@ import (
 
 // Message type ids (PROTOCOL.md "Message types").
 const (
-	MsgHello    uint16 = 0x0001
-	MsgHelloAck uint16 = 0x0002
-	MsgInput    uint16 = 0x0003
-	MsgSnapshot uint16 = 0x0004
-	MsgSpawn    uint16 = 0x0005
-	MsgDespawn  uint16 = 0x0006
-	MsgEvent    uint16 = 0x0007
-	MsgPing     uint16 = 0x0008
-	MsgPong     uint16 = 0x0009
-	MsgTerrain  uint16 = 0x000A
+	MsgHello      uint16 = 0x0001
+	MsgHelloAck   uint16 = 0x0002
+	MsgInput      uint16 = 0x0003
+	MsgSnapshot   uint16 = 0x0004
+	MsgSpawn      uint16 = 0x0005
+	MsgDespawn    uint16 = 0x0006
+	MsgEvent      uint16 = 0x0007
+	MsgPing       uint16 = 0x0008
+	MsgPong       uint16 = 0x0009
+	MsgTerrain    uint16 = 0x000A
+	MsgBoard      uint16 = 0x000B // Phase 4
+	MsgDisembark  uint16 = 0x000C // Phase 4
+	MsgSeatResult uint16 = 0x000D // Phase 4
+	MsgCmd        uint16 = 0x000E
+	MsgCmdResult  uint16 = 0x000F
+	MsgDefs       uint16 = 0x0010
+	MsgFire       uint16 = 0x0011
+	MsgColliders  uint16 = 0x0012
 )
 
 // entity_type values (PROTOCOL.md constants).
 const (
-	EntityTypePlayer uint16 = 0x0001
-	EntityTypeShip   uint16 = 0x0002 // reserved, M2
+	EntityTypePlayer     uint16 = 0x0001
+	EntityTypeShip       uint16 = 0x0002 // Phase 5
+	EntityTypeNPC        uint16 = 0x0003
+	EntityTypeTarget     uint16 = 0x0004
+	EntityTypeVehicle    uint16 = 0x0005 // Phase 4
+	EntityTypeLoot       uint16 = 0x0006 // Phase 3
+	EntityTypeProjectile uint16 = 0x0007 // Phase 3
 )
 
 // action_mask bits (PROTOCOL.md constants).
 const (
 	ActionSprint uint16 = 0x0001
 	ActionJump   uint16 = 0x0002
-	ActionBoost  uint16 = 0x0004 // reserved, M2
+	ActionBoost  uint16 = 0x0004 // Phase 5
+)
+
+// Entity.Flags bits (PROTOCOL.md constants). 0x10-0x80 reserved, sent as 0.
+const (
+	FlagGrounded  uint8 = 0x01
+	FlagSprinting uint8 = 0x02
+	FlagDead      uint8 = 0x04
+	FlagFiring    uint8 = 0x08
+)
+
+// cmd opcodes (PROTOCOL.md constants).
+const (
+	OpShopList  uint16 = 0x0001
+	OpShopBuy   uint16 = 0x0002
+	OpEquip     uint16 = 0x0003
+	OpInventory uint16 = 0x0004
+	OpReload    uint16 = 0x0005
+)
+
+// cmd_result status codes (PROTOCOL.md constants).
+const (
+	StatusOK            uint8 = 0
+	StatusUnknownOpcode uint8 = 1
+	StatusMalformed     uint8 = 2
+	StatusRefused       uint8 = 3
+	StatusRateLimited   uint8 = 4
+	StatusNotFound      uint8 = 5
 )
 
 // event_id values (PROTOCOL.md constants).
 const (
-	EventExplosion uint16 = 0x0001 // reserved for later
+	EventExplosion   uint16 = 0x0001 // reserved for later
+	EventShotFired   uint16 = 0x0002
+	EventHit         uint16 = 0x0003
+	EventDeath       uint16 = 0x0004
+	EventLootDropped uint16 = 0x0005
+)
+
+// collider kinds (PROTOCOL.md `colliders`).
+const (
+	ColliderBox    uint8 = 0
+	ColliderSphere uint8 = 1
 )
 
 // VersionM1 is the M1 protocol version (client_ver / server_ver).
 const VersionM1 uint16 = 1
 
+// VersionPhase2 is the Phase 2 protocol version (client_ver / server_ver).
+const VersionPhase2 uint16 = 2
+
 // MaxMessageSize is the maximum WebSocket message size in bytes (64 KiB).
 const MaxMessageSize = 64 << 10
+
+// MaxCmdBody is the cmd/cmd_result JSON body cap in bytes (4 KiB).
+const MaxCmdBody = 4 << 10
+
+// ColliderSize is the wire size of one collider row in bytes.
+const ColliderSize = 1 + 1 + 3*4 + 3*4 + 4*4 // 42
+
+// ColliderMax is how many colliders fit one 64 KiB message.
+const ColliderMax = 1560
 
 // Errors.
 var (
@@ -63,11 +125,16 @@ var (
 	ErrUnknownMsg = errors.New("unknown message type")
 )
 
-// Hello is the C→S join message: u16 client_ver | u32 name_len | bytes name.
+// Hello is the C→S join message: u16 client_ver | u32 name_len | bytes name |
+// u32 token_len | bytes token.
 type Hello struct {
 	ClientVer uint16
 	Name      string
+	Token     string
 }
+
+// MaxTokenLen is the maximum accepted hello token length in bytes.
+const MaxTokenLen = 64
 
 // HelloAck is the S→C reply: u16 server_ver | u16 tick_hz | u32 world_seed |
 // u32 entity_id.
@@ -88,17 +155,25 @@ type Input struct {
 	Seq        uint16
 }
 
-// Entity is one snapshot row:
-// u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3] (44 bytes).
+// Entity is one snapshot row (PROTOCOL.md, 54 bytes):
+// u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3]
+// | u32 parent_id | u16 seat | u16 health | u8 flags | i8 pitch_q
+//
+// ParentID and Seat are always 0 in Phase 2; Phase 4 fills them in.
 type Entity struct {
-	ID   uint32
-	Pos  [3]float32
-	Quat [4]float32
-	Vel  [3]float32
+	ID       uint32
+	Pos      [3]float32
+	Quat     [4]float32
+	Vel      [3]float32
+	ParentID uint32
+	Seat     uint16
+	Health   uint16
+	Flags    uint8
+	PitchQ   int8
 }
 
 // EntitySize is the wire size of one snapshot entity row in bytes.
-const EntitySize = 4 + 3*4 + 4*4 + 3*4
+const EntitySize = 4 + 3*4 + 4*4 + 3*4 + 4 + 2 + 2 + 1 + 1 // 54
 
 // Snapshot is the S→C full state per tick:
 // u32 tick | u16 ack_seq | u16 count | entity × count.
@@ -187,7 +262,9 @@ func EncodeHello(h Hello) []byte {
 	b := putU16(nil, MsgHello)
 	b = putU16(b, h.ClientVer)
 	b = putU32(b, uint32(len(h.Name)))
-	return append(b, h.Name...)
+	b = append(b, h.Name...)
+	b = putU32(b, uint32(len(h.Token)))
+	return append(b, h.Token...)
 }
 
 // EncodeHelloAck renders a hello_ack frame.
@@ -233,6 +310,11 @@ func AppendEntity(buf []byte, e Entity) []byte {
 	for i := 0; i < 3; i++ {
 		buf = putF32(buf, e.Vel[i])
 	}
+	buf = binary.LittleEndian.AppendUint32(buf, e.ParentID)
+	buf = binary.LittleEndian.AppendUint16(buf, e.Seat)
+	buf = binary.LittleEndian.AppendUint16(buf, e.Health)
+	buf = append(buf, e.Flags)
+	buf = append(buf, byte(e.PitchQ))
 	return buf
 }
 
@@ -310,7 +392,9 @@ func f32(b []byte) float32 {
 	return math.Float32frombits(binary.LittleEndian.Uint32(b))
 }
 
-// DecodeHello parses a hello payload.
+// DecodeHello parses a hello payload. A payload that ends after the name
+// (no token fields at all) is a token-less hello from an older client, not a
+// protocol violation: it parses with Token == "".
 func DecodeHello(p []byte) (Hello, error) {
 	var h Hello
 	if len(p) < 6 {
@@ -318,10 +402,32 @@ func DecodeHello(p []byte) (Hello, error) {
 	}
 	h.ClientVer = binary.LittleEndian.Uint16(p[0:2])
 	n := binary.LittleEndian.Uint32(p[2:6])
-	if uint32(len(p)-6) != n {
+	if uint32(len(p)-6) < n {
 		return h, fmt.Errorf("%w: hello name_len %d != payload %d", ErrBadPayload, n, len(p)-6)
 	}
-	h.Name = string(p[6:])
+	rest := p[6:]
+	h.Name = string(rest[:n])
+	rest = rest[n:]
+	if len(rest) == 0 {
+		return h, nil
+	}
+	if len(rest) < 4 {
+		return h, fmt.Errorf("%w: hello token_len needs 4 bytes, have %d", ErrBadPayload, len(rest))
+	}
+	tn := binary.LittleEndian.Uint32(rest[0:4])
+	rest = rest[4:]
+	if uint32(len(rest)) != tn {
+		return h, fmt.Errorf("%w: hello token_len %d != payload %d", ErrBadPayload, tn, len(rest))
+	}
+	if tn > MaxTokenLen {
+		return h, fmt.Errorf("%w: hello token_len %d exceeds max %d", ErrBadPayload, tn, MaxTokenLen)
+	}
+	for _, c := range rest {
+		if c < 0x21 || c > 0x7E {
+			return h, fmt.Errorf("%w: hello token has non-printable byte 0x%02x", ErrBadPayload, c)
+		}
+	}
+	h.Token = string(rest)
 	return h, nil
 }
 
@@ -380,6 +486,11 @@ func DecodeSnapshot(p []byte) (Snapshot, error) {
 		for j := 0; j < 3; j++ {
 			e.Vel[j] = f32(p[off+32+4*j : off+36+4*j])
 		}
+		e.ParentID = binary.LittleEndian.Uint32(p[off+44 : off+48])
+		e.Seat = binary.LittleEndian.Uint16(p[off+48 : off+50])
+		e.Health = binary.LittleEndian.Uint16(p[off+50 : off+52])
+		e.Flags = p[off+52]
+		e.PitchQ = int8(p[off+53])
 		off += EntitySize
 	}
 	return s, nil

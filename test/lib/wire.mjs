@@ -19,7 +19,10 @@ export const MSG = {
   TERRAIN: 0x000a,
 }
 
-export const PROTOCOL_VERSION = 1
+// Must track the server: it closes 1002 on any other client_ver
+// (docs/PROTOCOL.md "Versioning"). The harness still sends a token-less hello
+// on purpose — that is the backward-compatible path, and it stays tested.
+export const PROTOCOL_VERSION = 2
 export const ACTION = { SPRINT: 0x0001, JUMP: 0x0002 }
 
 // ---------------------------------------------------------------- encode
@@ -78,22 +81,30 @@ export function decodeTerrain(p) {
 
 /**
  * snapshot: u32 tick | u16 ack_seq | u16 count | entity × count
- * entity: u32 id | f32 pos[3] | f32 quat[4] | f32 vel[3] (44 B)
+ * entity: u32 id | f32 pos[3] | f32 quat[4] | f32 vel[3] | u32 parent_id
+ *         | u16 seat | u16 health | u8 flags | i8 pitch_q (54 B)
  */
+const ENTITY_BYTES = 54
+
 export function decodeSnapshot(p) {
   if (p.length < 8) throw new Error(`snapshot: bad size ${p.length}`)
   const tick = p.readUInt32LE(0)
   const ackSeq = p.readUInt16LE(4)
   const count = p.readUInt16LE(6)
-  if (p.length !== 8 + 44 * count) throw new Error(`snapshot: size ${p.length} != ${8 + 44 * count}`)
+  if (p.length !== 8 + ENTITY_BYTES * count) throw new Error(`snapshot: size ${p.length} != ${8 + ENTITY_BYTES * count}`)
   const entities = []
   for (let i = 0; i < count; i++) {
-    const o = 8 + i * 44
+    const o = 8 + i * ENTITY_BYTES
     const e = {
       id: p.readUInt32LE(o),
       pos: [p.readFloatLE(o + 4), p.readFloatLE(o + 8), p.readFloatLE(o + 12)],
       quat: [p.readFloatLE(o + 16), p.readFloatLE(o + 20), p.readFloatLE(o + 24), p.readFloatLE(o + 28)],
       vel: [p.readFloatLE(o + 32), p.readFloatLE(o + 36), p.readFloatLE(o + 40)],
+      parentId: p.readUInt32LE(o + 44),
+      seat: p.readUInt16LE(o + 48),
+      health: p.readUInt16LE(o + 50),
+      flags: p.readUInt8(o + 52),
+      pitchQ: p.readInt8(o + 53),
     }
     entities.push(e)
   }

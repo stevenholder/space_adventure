@@ -20,11 +20,64 @@ export const MSG = {
   ping: 0x0008,
   pong: 0x0009,
   terrain: 0x000A,
+  board: 0x000b,
+  disembark: 0x000c,
+  seat_result: 0x000d,
+  cmd: 0x000e,
+  cmd_result: 0x000f,
+  defs: 0x0010,
+  fire: 0x0011,
+  colliders: 0x0012,
 } as const
 
 export const ENTITY_TYPE_PLAYER = 0x0001
+export const ENTITY_TYPE_SHIP = 0x0002
+export const ENTITY_TYPE_NPC = 0x0003
+export const ENTITY_TYPE_TARGET = 0x0004
+export const ENTITY_TYPE_VEHICLE = 0x0005
+export const ENTITY_TYPE_LOOT = 0x0006
+export const ENTITY_TYPE_PROJECTILE = 0x0007
 
-export const PROTOCOL_VERSION = 1
+export const FLAG = {
+  grounded: 0x01,
+  sprinting: 0x02,
+  dead: 0x04,
+  firing: 0x08,
+} as const
+
+export const OP = {
+  shop_list: 0x0001,
+  shop_buy: 0x0002,
+  equip: 0x0003,
+  inventory: 0x0004,
+  reload: 0x0005,
+} as const
+
+export const STATUS = {
+  ok: 0,
+  unknown_opcode: 1,
+  malformed: 2,
+  refused: 3,
+  rate_limited: 4,
+  not_found: 5,
+} as const
+
+export const EVENT = {
+  explosion: 0x0001,
+  shot_fired: 0x0002,
+  hit: 0x0003,
+  death: 0x0004,
+  loot_dropped: 0x0005,
+} as const
+
+export const COLLIDER_BOX = 0
+export const COLLIDER_SPHERE = 1
+export const MAX_CMD_BODY = 4 * 1024
+export const COLLIDER_SIZE = 42
+export const COLLIDER_MAX = 1560
+
+// Wire is v2: the 54-byte entity row and the hello token are landed on both ends.
+export const PROTOCOL_VERSION = 2
 /** PROTOCOL: a message over 64 KiB closes the connection (code 1009). */
 export const MAX_MESSAGE_SIZE = 64 * 1024
 
@@ -68,13 +121,17 @@ function need(p: Uint8Array, n: number, what: string): void {
 // Encoders (C→S)
 // ---------------------------------------------------------------------------
 
-export function encodeHello(clientVer: number, name: string): Uint8Array<ArrayBuffer> {
+export function encodeHello(clientVer: number, name: string, token: string): Uint8Array<ArrayBuffer> {
   const nameBytes = new TextEncoder().encode(name)
-  const out = new Uint8Array(2 + 4 + nameBytes.length)
+  const tokenBytes = new TextEncoder().encode(token)
+  const out = new Uint8Array(2 + 4 + nameBytes.length + 4 + tokenBytes.length)
   const dv = new DataView(out.buffer)
   dv.setUint16(0, clientVer, true)
   dv.setUint32(2, nameBytes.length, true)
   out.set(nameBytes, 6)
+  const tokenOffset = 6 + nameBytes.length
+  dv.setUint32(tokenOffset, tokenBytes.length, true)
+  out.set(tokenBytes, tokenOffset + 4)
   return frame(MSG.hello, out)
 }
 
@@ -120,6 +177,11 @@ export interface EntityState {
   pos: [number, number, number]
   quat: [number, number, number, number]
   vel: [number, number, number]
+  parentId: number
+  seat: number
+  health: number
+  flags: number
+  pitchQ: number
 }
 
 export interface Snapshot {
@@ -159,7 +221,7 @@ export function decodeHelloAck(p: Uint8Array): HelloAck {
   }
 }
 
-const ENTITY_BYTES = 4 + 12 + 16 + 12 // id | pos | quat | vel
+const ENTITY_BYTES = 4 + 12 + 16 + 12 + 4 + 2 + 2 + 1 + 1 // id | pos | quat | vel | parentId | seat | health | flags | pitchQ
 
 export function decodeSnapshot(p: Uint8Array): Snapshot {
   need(p, 8, 'snapshot')
@@ -183,6 +245,11 @@ export function decodeSnapshot(p: Uint8Array): Snapshot {
         dv.getFloat32(o + 28, true),
       ],
       vel: [dv.getFloat32(o + 32, true), dv.getFloat32(o + 36, true), dv.getFloat32(o + 40, true)],
+      parentId: dv.getUint32(o + 44, true),
+      seat: dv.getUint16(o + 48, true),
+      health: dv.getUint16(o + 50, true),
+      flags: dv.getUint8(o + 52),
+      pitchQ: dv.getInt8(o + 53),
     }
   }
   return { tick, ackSeq, entities }

@@ -189,6 +189,10 @@ func (s *Server) encodeSnapshot(tick uint32) []byte {
 // order is hello_ack, terrain, spawn(s), then snapshots (FIFO per
 // connection).
 func (s *Server) join(c *client, h protocol.Hello) {
+	if h.ClientVer != protocol.VersionPhase2 {
+		c.fail() // wrong protocol version (PROTOCOL.md "Versioning"): close 1002
+		return
+	}
 	s.mu.Lock()
 	if c.entity != nil || s.closing {
 		s.mu.Unlock()
@@ -222,7 +226,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 		Data:       []byte(name),
 	})
 	c.send(msg{data: protocol.EncodeHelloAck(protocol.HelloAck{
-		ServerVer: protocol.VersionM1,
+		ServerVer: protocol.VersionPhase2,
 		TickHz:    s.tickHz,
 		WorldSeed: uint32(s.seed),
 		EntityID:  id,

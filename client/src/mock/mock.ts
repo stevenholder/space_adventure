@@ -173,6 +173,21 @@ export class MockServer {
     return out
   }
 
+  /**
+   * Phase 2 entity fields the mock does not simulate. parentId/seat stay 0
+   * until Phase 4; the mock has no combat, so health sits at full and no
+   * flags are set. Spelled out rather than defaulted so that adding a field
+   * to EntityState fails this file's type check instead of silently
+   * shipping a zero the renderer then treats as real state.
+   */
+  private static readonly PHASE2_DEFAULTS = {
+    parentId: 0,
+    seat: 0,
+    health: 100,
+    flags: 0,
+    pitchQ: 0,
+  } as const
+
   private makeSnapshot(): Snapshot {
     const entities: EntityState[] = [
       {
@@ -180,6 +195,7 @@ export class MockServer {
         pos: [this.state.pos.x, this.state.pos.y, this.state.pos.z],
         quat: quatToTuple(quatFromBasis(vec.norm(this.state.pos), this.state.facing)),
         vel: [this.state.vel.x, this.state.vel.y, this.state.vel.z],
+        ...MockServer.PHASE2_DEFAULTS,
       },
       ...this.walkers.map((w) => this.walkerEntity(w)),
     ]
@@ -204,6 +220,7 @@ export class MockServer {
       pos: [pos.x, pos.y, pos.z],
       quat: quatToTuple(quatFromBasis(d, facing)),
       vel: [vel.x, vel.y, vel.z],
+      ...MockServer.PHASE2_DEFAULTS,
     }
   }
 }
