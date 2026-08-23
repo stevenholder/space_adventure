@@ -785,57 +785,265 @@ scatters them identically. They cost the server nothing and the wire nothing.
   and gives the eye something to judge distance by on a world whose horizon is
   23 m away.
 
-## Vehicles and crew (design direction — M2, not yet a spec)
+## Vehicles and crew (M2 spec)
 
-Not buildable yet and deliberately not numbered here. It is written down
-because it constrains decisions M1 makes *now*, and rewriting those later is
-far more expensive than reading this paragraph.
+M2 adds one ship to the M1 world and the crew relation between a body and a
+seat. The design direction this section replaces is kept intact as
+principles below; everything after the principles is a rule — numbered,
+unit'd, and binding on both ends the same way the on-foot table is. The ship
+is modeled ahead of this milestone (`art` `ship.v1`, `ships/v1.glb`, built
+against a frozen seat contract), so the spec adopts the asset's conventions
+(crew of three, seat nodes at the eye points, origin at ground level) rather
+than re-deriving them.
 
-- **A vehicle is a place, not a mount.** It is a world entity with an interior
-  and a set of seats. It exists whether or not anyone is in it, and it keeps
-  its position and velocity when empty.
-- **Seats, and exactly one control seat.** A vehicle has one pilot/driver seat
-  and N passenger seats. Only the occupant of the control seat produces input
-  that moves the vehicle; passengers produce no vehicle input at all. This is
-  server-enforced, never a client-side UI lock.
-- **Seat claims are server-authoritative.** Two players reaching for the same
-  seat is a race the server resolves; the loser is told no. Boarding is
+**Principles (the M1 design direction, kept as-is):**
+
+- **A vehicle is a place, not a mount.** It is a world entity with an
+  interior and a set of seats. It exists whether or not anyone is in it, and
+  it keeps its position and velocity when empty.
+- **Seats, and exactly one control seat.** A vehicle has one pilot seat and
+  N passenger seats. Only the occupant of the control seat produces input
+  that moves the vehicle; passengers produce no vehicle input at all. This
+  is server-enforced, never a client-side UI lock.
+- **Seat claims are server-authoritative.** Two players reaching for the
+  same seat is a race the server resolves; the loser is told no. Boarding is
   proximity + interact, never teleport.
 - **Passengers are attached, not co-simulated.** A player aboard a moving
   vehicle has a position *relative to the vehicle interior*; the server
-  composes that with the vehicle transform. Sending passengers as free-floating
-  world positions would make walking around a moving ship a jitter nightmare.
-- **Control handoff is a normal event.** The pilot standing up, disconnecting,
-  or dying leaves the vehicle unpiloted and coasting (space) or stopping
-  (ground). Another player can take the seat. Nobody is trapped and nothing is
-  destroyed by a disconnect.
-- **The camera never changes mode.** First person on foot, first person in the
-  pilot seat, first person in a passenger seat. Different control mapping, same
-  rig — the mount point moves from the body's eye height to a `seat.*` node in
-  the vehicle model.
+  composes that with the vehicle transform.
+- **Control handoff is a normal event.** The pilot standing up,
+  disconnecting, or dying leaves the vehicle unpiloted and coasting or
+  stopping. Another player can take the seat. Nobody is trapped and nothing
+  is destroyed by a disconnect.
+- **The camera never changes mode.** First person on foot, first person in
+  the pilot seat, first person in a passenger seat. Different control
+  mapping, same rig — the mount point moves.
 
-Because M1 makes the player a body rather than a vehicle, M2 **adds** the
-vehicle entity and the occupancy relation between the two; it does not have to
-unpick an identity. `netcode` should still treat "the entity whose movement
-this connection's input drives" as a lookup rather than a fixed field, since
-that is exactly what taking a pilot seat repoints.
+The connection drives "the entity whose movement this connection's input
+drives" as a lookup, not a fixed field (ARCHITECTURE "Server") — taking the
+pilot seat is what repoints it.
 
-Known contract changes M2 will force (**not** made now, since a
-`docs/PROTOCOL.md` change must land on both ends in one milestone):
+### Scope
 
-- `snapshot` entities need an optional parent/attachment reference and a
-  local-space transform for anything riding a vehicle.
-- New message types for board / take seat / leave seat, with server refusal as
-  a first-class reply.
-- `input` needs a mode, or a per-context meaning, so the same fields can drive
-  a body on foot and a vehicle from its control seat.
+- One ship per world: entity type `0x0002`, manifest id `ship.v1`. It exists
+  whether or not anyone is in it and never despawns in M2 (empty-vehicle
+  persistence is M5).
+- Boarding, seats, one control seat, two passengers, control handoff, and
+  the "Flight model" below — flown on the M1 planet and set back down.
+  **No space, no orbital transition** (M3). The protocol's `parent_id`/
+  `seat` fields already support more ships and seats; M2 ships one.
+- The interior is **seat-locked in M2** (walkable interiors parked for
+  M3+).
 
-## Flight model (parked — lands with M2/M3, kept because it is already spec'd)
+### Ship entity and local frame
 
-Not M1. This was written as the M1 spec before the milestone order changed;
-it is preserved intact rather than rewritten later. When vehicles land, this
-becomes the ship's movement model, and the world/spawn rows get revisited in
-whatever context it flies in (planet atmosphere at M2, open space at M3).
+- Ship state: `pos` (vec3, f64), `quat` (unit, f64), `vel` (vec3, f64),
+  `ω` angular velocity (vec3, f64, carried), `grounded` (bool). Same world
+  space as a body; the `quat` carries the full attitude — no `facing` (a
+  body's facing is one axis; a ship's is all three). `ω` and `grounded` are
+  carried state, **not on the wire** (like a body's `facing`): the client's
+  predictor carries its own copies and reconciliation (pos/quat/vel snap +
+  replay) reconverges them — `angvel_tau` 0.15 s means an ω skew decays
+  within a few ticks.
+- **Local frame: origin at ground level** — the hull's flat bottom / gear
+  contact point, the ship's "feet" — with **+X right, +Y up, +Z forward**
+  (right-handed; the same +Z-forward wire convention as bodies, so the
+  art's −Z-forward model uses the existing 180°-Y flip). The hull
+  (`ship.v1`) is ≈ 7.1 m long (z ∈ [−3.55, +3.55]), ≈ 6.3 m wingspan
+  (x ∈ [−3.15, +3.15]), ≈ 2.5 m tall (y ∈ [0, 2.5]), open-canopy cockpit.
+- **Collision is at the origin point, exactly like a body's foot point**
+  (M1 rule: terrain collision uses the foot point). The hull's volume is
+  visual-only: a diving ship's nose can clip terrain visually before the
+  origin registers contact — accepted in M2 (a hull-shape collision is a
+  post-M2 candidate if the clipping reads as a problem).
+
+### Ship spawn
+
+Deterministic from the world seed, fixed per world:
+
+```
+p0      ← spawn_pos = spawn_dir · radius(terrain, spawn_dir)   # the spawn point (0, 1, 0)
+bearing ← the spawn facing (tangent projection of world +X at p0 — GDD "Spawn" look)
+dir     ← normalize(p0 + bearing · 15)                          # 15 m from the spawn plain
+if slope(terrain, dir) > max_slope:
+    dir ← normalize(p0 + bearing · (15 + 10·k)), k = 1..7       # first walkable candidate, else the last tried
+pos     ← dir · radius(terrain, dir)                            # origin on the surface
+up      ← dir
+forward ← normalize(bearing − up · dot(bearing, up))
+quat    ← basis with +X = up × forward, +Y = up, +Z = forward
+vel     ← 0, ω ← 0, grounded ← slopeOK(terrain, dir)
+```
+
+15 m sits inside the 25 m spawn flat disc, so the ship is on
+contract-guaranteed flat ground **and** visible from spawn — the horizon is
+23.7 m, and a ship at 40 m is over it, which kills the milestone's hook
+(walk to the ship, board). The ship faces the spawn (bow-on, along the
+bearing). Two servers with the same seed park the same ship.
+
+### Seats and occupancy
+
+The seat table is in the ship's local frame. Both ends use these numbers
+(the server composes from the table; the client's camera mounts agree); the
+`ship.v1` glb's `seat.*` nodes are the same points in the art frame — the
+180°-Y flip of this table, (x, y, z) → (−x, y, −z):
+
+| seat | role | `seat_pos` (body origin / feet, m) | `seat_eye` (camera, m) |
+|------|------|------------------------------------|------------------------|
+| 1 | pilot — the only control seat | (0.0, 1.44, +1.90) | (0.0, 2.21, +1.90) |
+| 2 | passenger | (+0.35, 1.44, +0.75) | (+0.35, 2.21, +0.75) |
+| 3 | passenger | (−0.35, 1.44, +0.75) | (−0.35, 2.21, +0.75) |
+
+- **`crew_size` 3** (1 pilot + 2 passengers) — decided against what `art`
+  built (a bench layout that grows to 4; the wire `seat` field is u16, so a
+  bigger crew later is a rule-table change, not a wire change).
+- **`board_dist` 8 m** — the requesting body must be this far from the
+  ship's origin (server-measured at the tick the request is processed).
+- **`disembark_local` (4.0, 0.0, 1.5)** m, ship frame — bow-side, 4.3 m from
+  the origin: outside the hull (wingtip at 3.15 m) and inside `board_dist`,
+  so a disembarked player can re-board.
+- **Boarding** is proximity + interact (E within `board_dist`), never a
+  teleport: the player walks up and requests a specific empty seat (the
+  `board` message). Server-authoritative, first request processed wins; the
+  loser is told no (`seat_result` 1); out of range → 2.
+- **Disembarking** is always available (E) at any time — including
+  mid-flight at `vmax` and while the ship is airborne. The body is placed
+  with the M1 `spawn` placement rule at `ship_pos + rotate(ship_quat,
+  disembark_local)` projected radially onto the surface (`pos =
+  normalize(p) · radius(terrain, normalize(p))`): on the ground, `vel = 0`,
+  `facing` = the ship's forward projected to the local tangent plane (M1's
+  spawn-facing fallback when degenerate). The body's pre-boarding state is
+  **not** restored. A non-seated disembark request → result 3.
+- **A seated body is attached, not co-simulated.** Per tick the server
+  composes the snapshot transform: `pos = ship.pos + rotate(ship.quat,
+  seat_pos[seat])`, `quat = ship.quat`, `vel = ship.vel`, `grounded =
+  ship.grounded`. The body integrator does not step a seated body.
+- **A seated body is not rendered** (client rule, binding): a standing
+  character at a seat clips the hull (the head pokes through the canopy),
+  and a seated pose is a post-M2 art item. The snapshot transform remains
+  authoritative data (HUD, seat occupancy, the conformance criteria) — the
+  client simply draws no character mesh and no nametag for an entity with
+  `parent_id ≠ 0`.
+- **One control seat, server-enforced.** Only the occupant of seat 1
+  produces input that moves the ship. A passenger's input is read as an
+  on-foot frame and its movement ignored — the body is composed from the
+  ship. Never a client UI lock.
+- **Control handoff is a normal event.** The pilot's connection dies (or the
+  pilot disembarks) → the seat frees and the ship runs the same step with
+  zero input: `ω` decays (τ 0.15 s), `damp` decays `vel` (half-life 1.4 s),
+  gravity descends it, origin-point collision stops it on the terrain.
+  Another player can take the seat. Nobody is trapped; nothing is destroyed
+  by a disconnect.
+- **No body-vs-ship collision in M2** (M1 has no body-vs-body collision): a
+  player walking around the parked ship can visually clip the hull until
+  they board. Accepted for M2; a post-M2 candidate.
+
+### The flight model — M2 context
+
+The base model is the "Flight model" section below, unchanged (first-order
+rotation toward the input's target angular velocity, thrust along ship
+forward with the `vmax` clamps, `damp` when unthrottled, the same
+fixed-step semi-implicit integrator and replay). M2 adds the context it
+flies in:
+
+| name | value | unit | justification |
+|------|-------|------|---------------|
+| `angvel_max_roll` | 2.0 | rad/s | roll capped below `angvel_max` 4.0 (yaw/pitch): the open question — a welded camera rolling at 229°/s is a known nausea source; 114°/s is still lively (a `vmax` lap ≈ 24 s). The pilot keeps the welded camera (pillar 2, one rig); the free-look head goes to the passengers instead. Resolves the open question as a rule-table change, per its own option |
+| `k_rate` | 0.0022 | rad/px | mouse-to-rate scale, the M1 `LOOK_SENS` value: a mouse at ≈1800 px/s reaches the yaw/pitch cap, so the mouse feels like M1's look |
+
+The M1 `gravity` row (9.8 m/s²) applies along local −up while the ship is
+airborne — same world, one gravity. No `terminal_speed` row: the `vmax`
+clamp (40 m/s) caps the descent too.
+
+**Input mapping (M2, pilot seat).** The base section's "mouse —
+yaw/pitch/roll rates" assumes a 3-axis mouse; this project's control device
+is a 2D mouse, so M2 pins the mapping (PROTOCOL v2, mode 1):
+
+- W/S → `thrust` ∈ [−1, +1] (forward positive; the base model's 0.5×
+  backward factor applies server-side)
+- mouse X per second since the last input frame · `k_rate` → `yaw_rate`
+  target; sign: rightward drag (dx > 0) → negative rate (positive is a left
+  turn — right-hand rule about local +Y)
+- mouse Y per second · `k_rate` → `pitch_rate` target; sign: upward drag
+  (dy < 0) → positive rate (nose up about local +X)
+- A/D → `roll` ∈ {+1, 0, −1} (A = roll left, D = roll right); the server's
+  target is `roll · angvel_max_roll`
+- Shift → `action_mask` bit `0x0004` boost (scales thrust, not speed — the
+  base rule)
+
+The client sends the **target rates as values** — current command state,
+latest wins, the M1 input semantics — so replay re-integrates the buffered
+rates deterministically. The pilot's camera is hull-fixed (below): the mouse
+steers the ship, not the view.
+
+**The step, both ends (Go and TypeScript mirror; `ω` carried):**
+
+```
+stepShip(s, input, terrain, dt):     # input = (thrust, roll, yaw_rate, pitch_rate, boost), sanitized
+  up   ← normalize(s.pos)
+  # 1. Rotation — first-order toward the target, ship frame
+  ω_t  ← (pitch_rate, yaw_rate, roll · angvel_max_roll)      # about local +X, +Y, +Z
+  ω    ← ω_t + (s.ω − ω_t) · e^(−dt / angvel_tau)
+  q    ← normalize(s.quat ⊗ axisAngle(rotate(s.quat, ω) · dt))   # post-multiply: rotate about local axes
+  # 2. Translation — thrust along ship forward (semi-implicit, base model)
+  fwd  ← rotate(s.quat, (0, 0, 1))
+  a    ← fwd · (boost ? accel_boost : accel) · (thrust > 0 ? thrust : 0.5 · thrust)
+  v    ← s.vel + a · dt
+  if thrust = 0:   v ← v · e^(−damp · dt)
+  if ‖v‖ > (boost ? vmax_boost : vmax):  v ← v · ((boost ? vmax_boost : vmax) / ‖v‖)
+  # 3. M2 context — gravity (airborne only), integrate
+  if not in_contact(s.pos, terrain):  v ← v − up · gravity · dt
+  pos  ← s.pos + v · dt
+  # 4. Origin-point collision (terrain), exactly like a body's foot point
+  dir  ← normalize(pos)
+  R    ← radius(terrain, dir)
+  if ‖pos‖ < R:
+      pos ← dir · R
+      vr  ← dot(v, dir)
+      if vr < 0:  v ← v − dir · vr        # kill inward radial velocity
+  in_contact ← ‖pos‖ ≤ R + ground_snap    # the M1 margin row, reused
+  return (pos, q, v, ω, in_contact)
+```
+
+Zero input (no pilot) runs the same step — the "unpiloted ship coasts and
+stops" behaviour falls out of the base model's `damp` + τ + gravity, no
+special case.
+
+### Camera and rig (client, binding)
+
+The camera never changes mode: one first-person rig, the mount moves
+(pillar 2; ARCHITECTURE). The cockpit is a real modeled space in `ship.v1`
+(open canopy, double-sided hull, floor, dash, lit console, seats) — no hull
+culling, no windshield trick: the local seated player sees the interior and,
+through the canopy, the world.
+
+- **On foot:** unchanged from M1 (eye height above the feet, radial up, free
+  look clamped 1° off ±up).
+- **Pilot (seat 1):** hull-fixed. The camera mounts at the ship's
+  `seat.pilot` node (`seat_eye[1]` of the table); orientation = the ship's
+  attitude (up = ship up, forward = ship +Z — the node carries no rotation,
+  so the mount inherits the ship frame). The pilot's mouse never moves the
+  camera.
+- **Passenger (seats 2–3):** the seat's eye, free look. The camera mounts at
+  the `seat.passenger.i` node; orientation = the client's `look_dir`,
+  clamped 1° off ±(ship up) — the M1 clamp applied to the camera's up, which
+  for a seated player is the ship's up, not radial.
+- **Prediction:** the pilot predicts the ship with `stepShip` (the client
+  has the same rules; conformance criterion 6 keeps Go and TS in step) and
+  reconciles by replay exactly like the M1 body (snap to the snapshot's
+  pos/quat/vel, re-run the buffered inputs). Every other client interpolates
+  the ship from snapshots (~100 ms buffer) like a remote entity; a local
+  passenger rides the interpolated ship — no prediction for a seated body.
+- **HUD (DOM; the diegetic cockpit HUD stays a later option):** ship speed
+  while seated (|ship vel|), "press E to board <name>" on foot within
+  `board_dist`, the local role (pilot / passenger).
+
+## Flight model (lands with M2)
+
+Written before the milestone order changed and preserved intact: this is
+the ship's movement model, used as-is by "Vehicles and crew (M2 spec)".
+The M2 context it flies in (gravity, origin-point terrain collision, the
+roll cap, the pilot input mapping) is pinned in that section; open space at
+M3 revisits the world/spawn rows, not this model.
 
 - Controls: W/S — thrust forward/back; mouse — yaw/pitch/roll rates;
   Shift — boost.
@@ -892,18 +1100,19 @@ M1:
   from the spec as written.
 - Concurrent player target for local dev: assume 10–50.
 
-M2 and later:
+M2 (decided at wave 0, 2026-08-22 — see "Vehicles and crew (M2 spec)"):
 
-- **Motion sickness in a hull-fixed cockpit at `angvel_max` 4 rad/s (229°/s).**
-  A camera welded to a ship rolling that fast is a known nausea source. Options
-  are damping the camera relative to the hull, capping roll rate, or a
-  free-look head that decouples view from hull. Now an M2 question rather than
-  an M1 one, but it can still force `angvel_max` down — a rule-table change.
-- **Crew size per vehicle** — 4? 8? Drives ship interior scale, so `art` needs
-  the answer before it models a real hull.
-- **Do vehicle interiors stay walkable during flight, or lock to seats in
-  transit?** Walkable is the vision; seat-locked is enormously cheaper and can
-  ship first. M2 decision.
+- **Motion sickness in a hull-fixed cockpit.** Decided: the pilot keeps the
+  welded camera (no camera damping, no free-look head — pillar 2, one rig)
+  and roll is capped at `angvel_max_roll` 2.0 rad/s against `angvel_max`
+  4.0 for yaw/pitch; the free-look head goes to the passengers instead
+  (their camera is decoupled from the hull).
+- **Crew size per vehicle** — decided: 3 (1 pilot + 2 passengers), against
+  what `art` built (`ship.v1`, a bench layout that grows to 4); the wire
+  `seat` field is u16, so a bigger crew later is a rule-table change, not a
+  protocol change.
+- **Walkable interiors during flight** — decided: seat-locked in M2
+  (enormously cheaper; the vision stays parked for M3+).
 - **Landing: seamless or a transition?** Pillar 1 wants seamless; a short
   scripted descent is far cheaper and still keeps the crew together. M3
   decision, and it drives whether space and surface are one world or two.

@@ -1,6 +1,6 @@
 # Wire protocol (client ↔ server)
 
-Status: **v0 draft — M1 implements exactly this set.** Both ends implement
+Status: **v2 — M2 implements exactly this set.** Both ends implement
 from this file. A change requires both ends updated in the same milestone;
 the main thread coordinates the edit.
 
@@ -28,7 +28,7 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 |----|------|-----|---------|
 | `0x0001` | `hello` | C→S | `u16 client_ver` \| `u32 name_len` \| `bytes name` |
 | `0x0002` | `hello_ack` | S→C | `u16 server_ver` \| `u16 tick_hz` \| `u32 world_seed` \| `u32 entity_id` |
-| `0x0003` | `input` | C→S | `f32 move_x` \| `f32 move_y` \| `f32 look_dir[3]` \| `u16 action_mask` \| `u16 seq` |
+| `0x0003` | `input` | C→S | `u8 mode` \| `f32 v[5]` \| `u16 action_mask` \| `u16 seq` |
 | `0x0004` | `snapshot` | S→C | `u32 tick` \| `u16 ack_seq` \| `u16 count` \| `entity × count` |
 | `0x0005` | `spawn` | S→C | `u32 entity_id` \| `u16 entity_type` \| `u32 data_len` \| `bytes data` (M1: UTF-8 display name) |
 | `0x0006` | `despawn` | S→C | `u32 entity_id` |
@@ -36,18 +36,30 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 | `0x0008` | `ping` | C→S | `u32 ts_ms` |
 | `0x0009` | `pong` | S→C | `u32 ts_ms` (echo of ping) |
 | `0x000A` | `terrain` | S→C | `u16 face_grid` \| `f32 radius_min` \| `f32 radius_max` \| `u16 radii[6 × face_grid × face_grid]` |
+| `0x000B` | `board` | C→S | `u32 vehicle_id` \| `u16 seat` |
+| `0x000C` | `disembark` | C→S | (no payload) |
+| `0x000D` | `seat_result` | S→C | `u32 entity_id` \| `u16 seat` \| `u8 result` |
 
 `entity` (inside `snapshot`):
 
 ```
-u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3]
+u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3] | u32 parent_id | u16 seat
 ```
 
 Constants:
 
-- `entity_type`: `0x0001` player body. `0x0002` ship — reserved, M2.
-- `action_mask` bits: `0x0001` sprint, `0x0002` jump. `0x0004` boost —
-  reserved, M2.
+- `entity_type`: `0x0001` player body; `0x0002` ship (M2, manifest id
+  `ship.v1`).
+- `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
+  boost (mode 1, M2). Other bits ignored.
+- `input` mode: `0` on foot — `v = [move_x, move_y, look_dir.x, look_dir.y,
+  look_dir.z]`; `1` pilot — `v = [thrust, roll, yaw_rate, pitch_rate,
+  0.0]`. Mode ≥ 2 is reserved; the server treats it as 0.
+- `seat`: `0` not aboard; `1` pilot; `2`–`3` passenger (`ship.v1`'s bench;
+  the field is u16 — more seats later is a rule-table change, not a wire
+  change).
+- `seat_result` `result`: `0` granted; `1` seat occupied; `2` out of range;
+  `3` not seated / invalid.
 - `event_id`: `0x0001` explosion (reserved for later)
 
 ## Semantics
@@ -57,10 +69,20 @@ Constants:
   client's `entity_id`, then `terrain`, then includes the entity in snapshots.
   A client must not simulate before `terrain` arrives — it has no ground to
   stand on until then.
-- `input` carries **on-foot** command state in M1: `move_x`/`move_y` are the
-  wish direction in the body's tangent frame, each in [−1, 1] and jointly
-  clamped to unit length; `look_dir` is the absolute world-space unit vector
-  the eyes point along — not angles, not rates.
+- `input` carries **command state with a mode** in M2. Mode `0` is the M1
+  on-foot layout: `move_x`/`move_y` are the wish direction in the body's
+  tangent frame, each in [−1, 1] and jointly clamped to unit length;
+  `look_dir` is the absolute world-space unit vector the eyes point along —
+  not angles, not rates. Mode `1` is the pilot layout: `thrust` ∈ [−1, 1],
+  `roll` ∈ [−1, 1], `yaw_rate`/`pitch_rate` ∈ [−`angvel_max`,
+  `angvel_max`] rad/s — sanitised (clamped, non-finite → 0) per the GDD
+  "Flight model — M2 context".
+- **The mode byte is a declaration, not authority.** The server interprets
+  the payload by its own occupancy: a seated pilot's input is read as pilot
+  fields; an on-foot or seated-passenger input is read as on-foot fields,
+  and a seated passenger's movement is ignored (the body is composed from
+  the ship). The client keeps the mode consistent with the occupancy it
+  reads from the snapshot (`parent_id`/`seat`).
 - `look_dir` is **client-authoritative**: the server takes it as given (after
   normalizing and clamping it away from local up/down per the GDD) rather than
   simulating it. Aim must be instant, so look is never predicted, never
@@ -75,6 +97,22 @@ Constants:
     near-vertical look has too-short a tangent to define a stable azimuth, so
     recomputing would spin the body on mouse jitter. Both ends run this in the
     integrator (GDD "Integrator" step 2).
+- **`board` / `disembark` are events, not command state**: processed once,
+  in receive order, on the tick they arrive — not idempotent, not replayed.
+  `board` is validated server-side (GDD "Seats and occupancy"): the
+  requester's body within `board_dist` of the vehicle origin, `seat` in
+  1..3, seat empty. `disembark` requires the requester to be seated. Every
+  request gets a `seat_result`, **unicast to the requester**, granted or
+  refused (codes above); the authoritative occupancy change is visible to
+  all clients in the next snapshot.
+- **The ship in the snapshot.** The ship (entity_type `0x0002`) appears
+  every tick with its full rigid-body state (`pos`/`quat`/`vel`, f32). A
+  seated body's `entity` carries `parent_id` = the ship's `entity_id` and
+  `seat` = the seat index; its `pos`/`quat`/`vel` are the **server-composed
+  world transform** (ship transform × the GDD `seat_pos` offset — the local
+  transform is the shared GDD table, not wire data): the client renders it
+  like a remote body and never re-composes. Unboarded entities and the ship
+  itself carry `parent_id = 0`, `seat = 0`.
 - `quat` in a body's `entity` carries the body's **full orientation** — facing
   plus which way is up for it, which on a round world differs per player and
   is needed to draw a remote character standing correctly on the far side of
@@ -106,7 +144,10 @@ Constants:
     player's screen, so it is untrusted input crossing a trust boundary. The
     client must also render it as text only, never as markup.
 - `spawn`/`despawn` are sent to clients as entities enter/leave the world
-  (M1: player join/leave, heartbeat timeout).
+  (M1: player join/leave, heartbeat timeout). A joining client receives
+  `spawn` for every entity already in the world (M1: existing players; M2:
+  the ship, which exists from server start — its `spawn.data` is the display
+  name, fixed `Ship` in M2).
 - Heartbeat: client sends `ping` every 2 s if no other traffic; server
   answers `pong` and drops connections silent for 10 s.
 - `ts_ms` is a **client-local monotonic** millisecond value
@@ -161,5 +202,5 @@ left to the GDD's prose.
 
 ## Versioning
 
-`client_ver` / `server_ver` are u16 protocol versions; M1 = `1`. The server
+`client_ver` / `server_ver` are u16 protocol versions; M1 = `1`, M2 = `2`.
 rejects `hello` with a different major version by closing (code 1002).

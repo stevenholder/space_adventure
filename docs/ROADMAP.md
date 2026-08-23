@@ -132,22 +132,107 @@ contract** for this milestone: `netcode` and `frontend` each implement it, and
 they must agree on face order, axis assignment and seam values or players fall
 through the ground at specific edges.
 
-## M2+ — draft (not committed)
+## M2 — board a ship and fly it
+
+The ship (`ship.v1`, built early in M1 against a frozen seat contract) sits
+on the M1 planet as a world entity you can walk up to, walk into, and take
+the pilot seat of. Boarding, seats, one control seat, passengers riding
+along, control handoff, and the flight model already spec'd in the GDD
+("Flight model") — flown around the planet and set back down. **Deliberately
+no space and no orbital transition**: everything happens in the M1 world, so
+the milestone's only new problem is crewed vehicles, not crewed vehicles
+*plus* a world transition. This is where the protocol debt in GDD
+"Vehicles and crew" gets paid — attachment transforms, seat messages, input
+modes (PROTOCOL v2).
+
+### Deliverables
+
+- `server/` — protocol v2 codec (input mode byte, entity `parent_id`/`seat`,
+  `board`/`disembark`/`seat_result`), the ship entity (deterministic spawn,
+  state, snapshot encode), the `stepShip` flight-model step per the GDD
+  "The flight model — M2 context" (Go), board/disembark/seat logic +
+  `seat_result` + control handoff, origin-point terrain collision, the
+  trajectory dump extended to ship state
+- `client/` — protocol v2 codec, ship rendering (manifest `ship.v1`,
+  placeholder fallback), board/disembark interaction (E, seat request), the
+  pilot camera mount (hull-fixed) + passenger free-look, the input-mode
+  switch (pilot mapping: thrust/roll/yaw-pitch rates/boost), ship prediction
+  + replay, HUD (ship speed, board prompt, role), seated bodies not rendered
+- `art/` — `ship.v1` already exists (manifest entry + `ships/v1.glb` with
+  the `seat.*` eye-point nodes); wave 1 verifies the nodes against the GDD
+  seat table, cockpit polish deferred
+- `test/` — the M2 harness (t11+), against the criteria below
+
+### Acceptance criteria (`qa` verifies all; M1's C1–C10 keep holding as regression)
+
+1. `make up` from a clean clone: server and client both running, the ship
+   visible from the client (`spawn` received, rendered from the snapshot
+   with the correct attitude, on the terrain).
+2. **Boarding and occupancy.** Two clients: A within `board_dist` boards the
+   pilot seat; B sees the occupancy (A's entity `parent_id`/`seat`) within
+   1 s; A's body is reported at the composed seat position — deviation
+   < 1e-2 m against the f32-decoded
+   `ship.pos + rotate(ship.quat, seat_pos[1])`.
+3. **Server authority over the ship.** A dev override forces the ship to a
+   bad state (e.g. 4 m below the surface, or 200 m off from a valid
+   position): the next snapshot shows it on the surface, no penetration,
+   < 1e-3 m deviation — one tick of correction, the M1 criterion 3 analog.
+4. **Seat race.** Two clients request the same empty seat; exactly one
+   receives `seat_result` 0 and the other 1; the snapshot shows a single
+   occupant.
+5. **Refusals.** A board from outside `board_dist` is refused (result 2); a
+   disembark by a non-seated player is refused (result 3).
+6. **Flight-model conformance.** The same input script (thrust/roll/
+   yaw-rate/pitch-rate/boost sequence: a hover, a banked turn, a boost run
+   to `vmax`, a dive and landing) through the Go sim and the TS sim →
+   per-tick pos/quat/vel deviation ≤ 1e-6 (f64, ≥ 1000 ticks) and conformance
+   to the GDD flight-model table within 5% (thrust response, `vmax` clamp,
+   `damp` half-life, τ response). The trajectory dump extends to
+   `{tick, pos, quat, vel, grounded}` on both ends, so this is a file diff,
+   like M1 criterion 5.
+7. **Passengers produce no vehicle input.** A seated passenger inputs
+   movement and look; across those ticks the ship's pos/quat/vel are
+   invariant, and the passenger's body stays at the composed seat position
+   (deviation < 1e-2 m).
+8. **Control handoff.** The pilot's connection is killed mid-flight: the
+   ship coasts — angular velocity < 0.1 rad/s within 5 s, descends and lands
+   grounded on the terrain (no penetration), velocity < 1 m/s within 30 s.
+   Another client then boards the pilot seat within range and a thrust input
+   produces acceleration within 1 tick.
+9. **Latency/feel.** A pilot input is visible in the snapshot within 1 tick
+   (the Δvel matches the flight model); at 100 ms injected latency a
+   scripted pilot run (boost run, banked turn, landing) keeps p95
+   |predicted − authoritative| position error under 0.5 m with no visible
+   snap-back — the M1 criterion 6 analog, scaled to `vmax` 40.
+10. **No one is trapped.** A seated player disembarks at any time —
+    including mid-flight at `vmax` and while the ship is airborne — and the
+    body is on the terrain surface (no penetration) within 1 s of the
+    request, within 10 m of the ship.
+
+### Parallel task split (suggested dispatch)
+
+| Wave | Agents (run in parallel) | Task |
+|------|--------------------------|------|
+| 1 | `netcode`, `frontend` | protocol v2 codec on both ends; parked inert ship (state, deterministic spawn, snapshot entity, spawn-on-join — no movement); ship rendering from the manifest + placeholder fallback; verify `ship.v1`'s `seat.*` nodes against the GDD seat table |
+| 2 | `netcode`, `frontend`, `game` | `stepShip` flight-model step + conformance dump (Go, then TS); board/disembark/seat logic + `seat_result` + handoff; origin-point collision; ship prediction + replay; board/disembark UI; camera mounts; input-mode switch; feel/balance pass on the flight numbers |
+| 3 | `qa` | e2e harness against criteria 1–10; PASS/FAIL report |
+
+Wave 0 (main, done at this milestone's kickoff) froze the contracts the same
+way M1 did: `docs/PROTOCOL.md` v2 (the wire, for `netcode` + `frontend`), the
+GDD "Vehicles and crew (M2 spec)" + "The flight model — M2 context" (the
+sim, for `netcode` + `frontend`), `art/manifest.json` (`ship.v1`, for
+`frontend`). Wave 1 ships the wire shape with none of the substance — a
+parked ship, the v2 codec — so wave 2 runs in parallel with nothing blocked;
+`frontend` never waits on `netcode`'s flight model, and `art` is already
+done (the asset was built early against the seat contract).
+
+## M3+ — draft (not committed)
 
 The target loop is board → fly → land → explore on foot → drive → load up →
 leave, all first person, all with a crew (`docs/GDD.md`, "Core loop"). M1
 builds the *explore on foot* verb. The rest arrives in dependency order rather
 than narrative order — each milestone adds one hard thing to a working game:
 
-- **M2 — walk into a ship and fly it.** The ship sits on the M1 planet as a
-  world entity you can walk up to, walk into, and take the pilot seat of.
-  Boarding, seats, one control seat, passengers riding along, control handoff,
-  and the flight model already spec'd in the GDD ("Flight model") — flown
-  around the planet and set back down. **Deliberately no space and no orbital
-  transition**: everything happens in the M1 world, so the milestone's only new
-  problem is crewed vehicles, not crewed vehicles *plus* a world transition.
-  This is where the protocol debt in GDD "Vehicles and crew" gets paid —
-  attachment transforms, seat messages, input modes.
 - **M3 — leave the atmosphere.** Space as a place, the surface↔space
   transition with the crew aboard, and more than one destination. The
   transition is the genuinely hard problem and it lands last of the three,

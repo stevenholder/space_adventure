@@ -128,8 +128,8 @@ flowchart LR
 
 - Wire contract: `docs/PROTOCOL.md` (little-endian binary, one message per
   WebSocket message).
-- Server sends a snapshot (all entities: id, pos, quat, vel + tick + `ack_seq`)
-  every tick.
+- Server sends a snapshot (all entities: id, pos, quat, vel, parent_id,
+  seat + tick + `ack_seq`) every tick.
 - Client sends `input` as **current command state** (latest wins, idempotent),
   tagged with a `seq` counter. The server echoes the `seq` it last applied as
   `ack_seq`.
@@ -212,8 +212,9 @@ not a rewrite.
   small. The round world adds a second copy of this: the cube-sphere face
   selection and seam handling must match between Go and TypeScript too, and a
   mismatch is invisible until someone walks over a specific edge.
-- Snapshot bandwidth grows linearly with entity count (44 B/entity/tick →
-  ~44 KB/s per client at 50 players); delta snapshots come after M1.
+- Snapshot bandwidth grows linearly with entity count (50 B/entity/tick at
+  the M2 entity layout → ~50 KB/s per client at 50 players); delta
+  snapshots come after M1.
 - On-foot movement is **less** forgiving of latency than flight: a walking
   player changes direction instantly and often, where a ship's momentum smooths
   corrections. Replay reconciliation (above) is what makes this viable, and
