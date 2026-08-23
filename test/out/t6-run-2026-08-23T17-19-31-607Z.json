@@ -1,0 +1,174 @@
+{
+ "criterion": "C6 — prediction quality at 100 ms injected latency",
+ "method": "GATE — same-instant pairing: err = |post-reconcile client state at ack M − authoritative pos at ack M+1|; snap-back = along-track (auth_{M+1} − post_M) < −0.15 m. Diagnostic only — cross-instant pairing |P_M − snapshot(ack M)|, which is structurally one tick of motion (~0.375 m at sprint) and cannot be beaten by any client; the strict same-wall-time metric has a proven 0.356 m floor. See test/out/t6-c6-measurement-resolution.md.",
+ "commands": [
+  "client/node_modules/.bin/tsx test/t6-prediction.mjs",
+  "node test/lib/proxy.mjs 28092 127.0.0.1 18080   (spawned by the harness; 50 ms/direction)"
+ ],
+ "thresholds": {
+  "errP95": 0.25,
+  "snapback": 0,
+  "rttTargetMs": 100
+ },
+ "directTerrainSha": "c80269c44a757a8f",
+ "directHello": {
+  "serverVer": 2,
+  "tickHz": 20,
+  "worldSeed": 1337,
+  "entityId": 25
+ },
+ "routes": [
+  {
+   "az": 132.5,
+   "flatLen": 43,
+   "slopeRun": {
+    "from": 44,
+    "to": 63,
+    "len": 19
+   }
+  }
+ ],
+ "route": {
+  "az": 132.5,
+  "flatLen": 43,
+  "slopeRun": {
+   "from": 44,
+   "to": 63,
+   "len": 19
+  },
+  "jumpTick": 302
+ },
+ "scenario": {
+  "checks": {
+   "flatSlope": true,
+   "sprint": true,
+   "reversal": true,
+   "jump": true
+  },
+  "stats": {
+   "maxSpeedSprint": 7.499976562667086,
+   "minTrackVelReversal": -7.49995312540741,
+   "airTicks": 19,
+   "landing": {
+    "tick": 321,
+    "s": 45.32865417082974,
+    "slopeDeg": 21.904500643678077
+   },
+   "flatLen": 43,
+   "slopeRun": {
+    "from": 44,
+    "to": 63,
+    "len": 19
+   }
+  }
+ },
+ "attempts": [
+  {
+   "n": 1,
+   "anchorHrMs": 137086850,
+   "psiMs": 30.810632,
+   "pEstMs": 30.643190000000004,
+   "summary": {
+    "snapshots": 371,
+    "snapshotsWithErr": 371,
+    "errM0": {
+     "p50": 2.7940245672652964e-9,
+     "max": 2.7940245672652964e-9
+    },
+    "err": {
+     "p50": 0.000003607224770844947,
+     "p95": 0.000007558651964441253,
+     "max": 0.22546979163908837,
+     "n": 357,
+     "snapbacks": 0
+    },
+    "errCrossInstant": {
+     "p50": 0.374998751391931,
+     "p95": 0.3751070691414288,
+     "max": 0.4246837845389727,
+     "n": 367
+    },
+    "reconD": {
+     "min": -0.24999960937688046,
+     "max": 0.25000124033594306,
+     "p95": 0.0000023769482450714553
+    },
+    "snapbackCount": 0,
+    "snapbackCountReconcile": 1,
+    "rttMs": {
+     "p50": 151.383964,
+     "p95": 153.8337237,
+     "min": 148.822622,
+     "max": 154.114752,
+     "n": 8
+    },
+    "entityCounts": {
+     "min": 1,
+     "max": 1
+    },
+    "bursts": [
+     {
+      "tick": 1,
+      "n": 1
+     }
+    ]
+   }
+  }
+ ],
+ "summary": {
+  "snapshots": 371,
+  "snapshotsWithErr": 371,
+  "errM0": {
+   "p50": 2.7940245672652964e-9,
+   "max": 2.7940245672652964e-9
+  },
+  "err": {
+   "p50": 0.000003607224770844947,
+   "p95": 0.000007558651964441253,
+   "max": 0.22546979163908837,
+   "n": 357,
+   "snapbacks": 0
+  },
+  "errCrossInstant": {
+   "p50": 0.374998751391931,
+   "p95": 0.3751070691414288,
+   "max": 0.4246837845389727,
+   "n": 367
+  },
+  "reconD": {
+   "min": -0.24999960937688046,
+   "max": 0.25000124033594306,
+   "p95": 0.0000023769482450714553
+  },
+  "snapbackCount": 0,
+  "snapbackCountReconcile": 1,
+  "rttMs": {
+   "p50": 151.383964,
+   "p95": 153.8337237,
+   "min": 148.822622,
+   "max": 154.114752,
+   "n": 8
+  },
+  "entityCounts": {
+   "min": 1,
+   "max": 1
+  },
+  "bursts": [
+   {
+    "tick": 1,
+    "n": 1
+   }
+  ]
+ },
+ "proxiedTerrainSha": "c80269c44a757a8f",
+ "terrainSameAsDirect": true,
+ "verdict": "FAIL",
+ "reasons": [
+  "RTT p50 151.4 ms not ~100 ms (latency injection broken)"
+ ],
+ "evidence": {
+  "run": "test/out/t6-run-2026-08-23T17-19-31-607Z.json",
+  "snapshots": "test/out/t6-snapshots-2026-08-23T17-19-31-607Z.jsonl",
+  "proxyLog": "test/out/t6-proxy-2026-08-23T17-19-31-607Z.log"
+ }
+}
