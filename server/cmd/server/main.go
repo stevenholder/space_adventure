@@ -6,6 +6,8 @@
 //	server            run the server (default)
 //	server dump       run a JSONL input script through the sim and emit a
 //	                  JSONL trajectory dump (see ARCHITECTURE "Client")
+//	server codec      emit/parse wire frames as hex, for the cross-language
+//	                  codec parity test (test/t12-codec-parity.mjs)
 package main
 
 import (
@@ -41,6 +43,9 @@ func main() {
 func run(args []string) error {
 	if len(args) > 0 && args[0] == "dump" {
 		return runDump(args[1:])
+	}
+	if len(args) > 0 && args[0] == "codec" {
+		return runCodec(args[1:])
 	}
 	return runServer(args)
 }

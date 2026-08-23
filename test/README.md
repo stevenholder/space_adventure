@@ -1,6 +1,16 @@
 # test — cross-module verification
 
 - Owner: `qa` (reports bugs, never fixes product code)
+
+**Cross-language parity (`t12-codec-parity.mjs`, Phase 2).** The Go and
+TypeScript codecs are two independent implementations of `docs/PROTOCOL.md`,
+and each one's unit tests only prove it round-trips *itself*. That is not the
+property that matters. Phase 2's first cut compiled on both ends and passed
+both suites while still disagreeing: the TS encoders returned bare payloads
+where the Go parsers expected `u16 type | payload`, so the seq would have gone
+on the wire as the message type. Run it with tsx (it imports the client codec
+directly); the Go half is the `server codec emit|parse` subcommand, the same
+file-in/file-out shape as `server dump` for the C5 diff.
 - Verifies `docs/ROADMAP.md` M1 acceptance criteria 1–10, PASS/FAIL per
   criterion
 
