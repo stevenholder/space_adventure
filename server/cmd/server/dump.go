@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"space-adventure/server/internal/defs"
 
 	"space-adventure/server/internal/sim"
 	"space-adventure/server/internal/terrain"
@@ -81,7 +82,28 @@ func runDump(args []string) error {
 	defer f.Close()
 
 	worldSeed := uint64(*seed)
-	field := terrain.Generate(worldSeed)
+	// The same field the server runs on, zone flattening included. A raw
+	// terrain.Generate here would put the Go sim on unflattened ground while
+	// the client sim runs on the flattened field it received over the wire,
+	// and the C5 conformance diff would compare two different worlds.
+	reg, err := defs.Load()
+	if err != nil {
+		return fmt.Errorf("dump: loading defs: %w", err)
+	}
+	field := defs.BuildTerrain(worldSeed, reg)
+	// Round-trip through the wire encoding so this sim runs on the EXACT
+	// quantized field a client receives. Without it the Go sim uses f64
+	// radii while the TypeScript sim uses the u16 wire values, and the C5
+	// diff measures that representation gap on top of any real divergence —
+	// which is precisely what it must not do. Zone flattening made the gap
+	// visible: its smoothstep blend band quantizes unevenly, and the seam leg
+	// drifted 0.02 m, nearly twice the 0.01125 m bar, with both sims correct.
+	if q, err := terrain.Decode(field.Encode()); err == nil {
+		q.Seed = field.Seed
+		field = q
+	} else {
+		return fmt.Errorf("dump: re-decoding terrain: %w", err)
+	}
 	state := sim.SpawnState(field)
 	var prevLook sim.Vec
 	havePrevLook, inputSeen, stateSeen := false, false, false
@@ -120,7 +142,7 @@ func runDump(args []string) error {
 				return fmt.Errorf("dump: line %d: seed must precede state and input lines", lineNo)
 			}
 			worldSeed = *l.Seed
-			field = terrain.Generate(worldSeed)
+			field = defs.BuildTerrain(worldSeed, reg)
 			state = sim.SpawnState(field)
 		case l.State != nil:
 			if inputSeen {

@@ -112,10 +112,9 @@ func New(t *terrain.Field, seed uint64) *Server {
 	}
 	sort.Strings(zoneIDs)
 
-	for _, id := range zoneIDs {
-		z := reg.Zones[id]
-		terrain.Flatten(t, z.OriginDir, z.FlattenRadius, z.FlattenFalloff)
-	}
+	// Shared with the `dump` subcommand so the two cannot end up on different
+	// planets (defs.BuildTerrain's doc comment has the detail).
+	defs.ApplyZoneFlattening(t, reg)
 
 	radiusFn := func(d [3]float64) float64 { return t.SampleRadius(terrain.Vec(d)) }
 

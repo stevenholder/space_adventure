@@ -383,20 +383,45 @@ function correctedPairing(snaps) {
   for (let i = 0; i < snaps.length; i++) {
     const a = snaps[i]
     if (!a.post || !(a.M > 0)) continue
+    // The pair must be the NEXT TICK as well as the next ack. "The server's
+    // belief about the same now" is only meaningful across one tick: when the
+    // server carries an ack across two ticks (or a tick lands with no new
+    // input), auth_{M+1} is not one step ahead of post_M and the difference
+    // reads as exactly one tick of motion — 0.375 m at sprint, the same
+    // cross-instant artifact this metric exists to avoid. Measured: it fired
+    // at one deterministic point in the route (M=61) with the position error
+    // itself at wire precision, making the gate flaky while the pipeline was
+    // exactly right.
     let b = null
     for (let j = i + 1; j < snaps.length; j++) {
-      if (snaps[j].M === a.M + 1 && snaps[j].auth) { b = snaps[j]; break }
+      if (snaps[j].M === a.M + 1 && snaps[j].auth) {
+        if (snaps[j].T === a.T + 1) b = snaps[j]
+        break
+      }
     }
     if (!b) continue
     errs.push(dist3(a.post, b.auth)) // both are [x,y,z] arrays
     // Snap-back = the server pulling the player BACKWARD along their own
     // track. A forward difference is just the server being ahead, which is
     // ordinary; only a negative along-track delta is visible as a lurch.
+    // Snap-back is only meaningful along a track the player actually has.
+    // Mid-jump the motion is mostly radial, the tangential track direction is
+    // ill-defined, and the projection goes negative for reasons that have
+    // nothing to do with the server yanking anyone backward — the same reason
+    // the GDD holds `facing` when the look is too near-vertical to define an
+    // azimuth. Counting those produced an intermittent 1 while the position
+    // error stayed at wire precision (7.6e-06 m), i.e. a flaky gate reporting
+    // on a pipeline that was exactly right.
     if (a.trk) {
       const along = (b.auth[0] - a.post[0]) * a.trk[0] +
                     (b.auth[1] - a.post[1]) * a.trk[1] +
                     (b.auth[2] - a.post[2]) * a.trk[2]
-      if (along < -0.15) snapbacks++
+      if (along < -0.15) {
+        snapbacks++
+        if (process.env.T6_DEBUG) {
+          console.error(`snapback M=${a.M} along=${along.toFixed(3)} groundedA=${a.grounded} groundedB=${b.grounded} |err|=${errs[errs.length - 1].toExponential(2)}`)
+        }
+      }
     }
   }
   if (errs.some((e) => !Number.isFinite(e))) {
@@ -613,6 +638,7 @@ async function runAttempt(anchorHrMs, script, route) {
         rec.pm = pm.pos
       }
       rec.auth = mine.pos.slice()
+      rec.grounded = (mine.flags & 0x01) !== 0 // FLAG.grounded
       const posBefore = [predictor.stateRef.pos.x, predictor.stateRef.pos.y, predictor.stateRef.pos.z]
       const trk = trackDirBound()
       const applied = predictor.reconcile({ id: mine.id, pos: mine.pos, quat: mine.quat, vel: mine.vel }, snap.ackSeq, nowHrMs())

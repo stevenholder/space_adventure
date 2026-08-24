@@ -1,11 +1,11 @@
 {
-  "$comment": "Target range, ~60 m from spawn. Contract: docs/GDD.md 'Static colliders'. Local frame: +x east (away from spawn \u2014 the player arrives from -x), +y up as height ABOVE the terrain surface, +z north. Lane runs along +x; yaw in degrees about +y, 0 = facing +z.",
+  "$comment": "Target range, 110 m from spawn. Contract: docs/GDD.md 'Static colliders'. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; lane runs along +x; yaw in degrees about +y, 0 = facing +z. SITE CHOICE IS LOAD-BEARING: flatten_radius 32 + flatten_falloff 12 levels terrain out to 44 m, so the origin must clear both the spawn disc and every landmark by more than that. The first placement was 60 m from spawn on a bearing that put it 8 m from the 'beacon' landmark -- it flattened the landmark away (t9 read 154 m against an expected 165 m) and its falloff band tilted the spawn disc to 2.59 m against a 0.5 m tolerance. This site is 110 m from spawn and 161 m from the nearest landmark.",
   "version": 1,
   "id": "range",
   "origin_dir": [
-    0.3894183,
-    0.921061,
-    0.0
+    -0.6547229,
+    0.7429474,
+    0.1391657
   ],
   "flatten_radius": 32.0,
   "flatten_falloff": 12.0,
