@@ -17,12 +17,17 @@ import (
 // sim.NPCState (post, respawn timer) which the sim package owns. Splitting by
 // owner keeps the sim testable without the ai package and vice versa.
 type npcAI struct {
-	ent    *sim.Ent
-	arch   defs.NPC
-	brain  ai.Brain
-	steer  ai.Steerer
-	melee  ai.MeleeState
-	ranged ai.RangedState
+	ent  *sim.Ent
+	arch defs.NPC
+	// dropped guards the loot roll. Death is observed by polling health here,
+	// so without it every tick between health hitting 0 and the sim setting
+	// FlagDead would roll the table again — an NPC that dies once paying out
+	// several times over.
+	dropped bool
+	brain   ai.Brain
+	steer   ai.Steerer
+	melee   ai.MeleeState
+	ranged  ai.RangedState
 }
 
 // ticksOf converts a duration in seconds to whole ticks. The tick rate is
@@ -71,9 +76,15 @@ func (s *Server) stepNPCs(tick uint32) {
 	cands := s.npcCandidates()
 
 	for _, n := range s.npcAI {
-		if n.ent.Flags&protocol.FlagDead != 0 {
-			continue // the sim's respawn timer owns a dead NPC
+		if n.ent.Health <= 0 {
+			s.dropNPCLoot(n)
+			continue
 		}
+		if n.ent.Flags&protocol.FlagDead != 0 {
+			n.dropped = false // respawning: arm the next death's roll
+			continue          // the sim's respawn timer owns a dead NPC
+		}
+		n.dropped = false
 		arch := n.arch
 		self := n.ent.Pos
 		selfUp := [3]float64(terrain.Normalize(terrain.Vec(self)))
@@ -283,4 +294,48 @@ func (s *Server) broadcast(frame []byte) {
 	for _, c := range s.clients {
 		c.send(msg{data: frame})
 	}
+}
+
+// dropNPCLoot rolls a dead NPC's table once, at the spot it fell.
+//
+// Loot is rolled HERE rather than inside the sim's NPC step because the roll
+// needs the registry, the id counter and the server's RNG — all server-owned.
+// Keeping the RNG on the server side also keeps drops unpredictable to a
+// client that knows the world seed.
+func (s *Server) dropNPCLoot(n *npcAI) {
+	if n.dropped || n.arch.Loot == "" {
+		return
+	}
+	n.dropped = true
+	sim.DropLoot(s.world, s.reg, n.arch.Loot, n.ent.Pos, s.nextWorldID, s.rng,
+		sim.StepCtx{World: s.world})
+	// Newly created drops have to reach worldEnts too, or they are simulated
+	// but never appear in a snapshot — the same shape as the Phase 2 bug where
+	// NPCs existed server-side and no client could see them.
+	s.syncWorldEnts()
+}
+
+// nextWorldID hands out ids for runtime-spawned entities, continuing the
+// zone-placed range so player ids are never touched.
+func (s *Server) nextWorldID() uint32 {
+	s.worldID++
+	return s.worldID
+}
+
+// syncWorldEnts rebuilds the stable-order snapshot cache from the world.
+//
+// worldEnts exists so encodeSnapshot can iterate deterministically; anything
+// added at runtime (loot, projectiles) must be folded in or it is invisible.
+func (s *Server) syncWorldEnts() {
+	order := s.world.Order()
+	if len(order) == len(s.worldEnts) {
+		return
+	}
+	ents := make([]*sim.Ent, 0, len(order))
+	for _, id := range order {
+		if e := s.world.Ents[id]; e != nil {
+			ents = append(ents, e)
+		}
+	}
+	s.worldEnts = ents
 }

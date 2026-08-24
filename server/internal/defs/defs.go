@@ -81,6 +81,8 @@ type NPC struct {
 	AttackWindup    float64 `json:"attack_windup"`
 	ProjectileSpeed float64 `json:"projectile_speed"`
 	TurnRate        float64 `json:"turn_rate"`
+	// Loot is the table id rolled when this archetype dies (loot.json).
+	Loot string `json:"loot"`
 }
 
 // ZoneCollider is one static collider authored in a zone's local tangent

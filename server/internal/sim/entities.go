@@ -137,3 +137,10 @@ func (w *World) Step(dt float64, ctx StepCtx) {
 		fn(e, dt, ctx)
 	}
 }
+
+// Order returns the deterministic iteration order of the world's entity ids.
+//
+// Exported so callers that keep their own parallel cache (the server's
+// snapshot list) can rebuild it in the same order the sim steps in. Returns
+// the live slice: callers must not mutate it.
+func (w *World) Order() []uint32 { return w.order }
