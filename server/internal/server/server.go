@@ -65,8 +65,14 @@ type Server struct {
 	// they must still exist here so MsgFire has something for
 	// sim.ResolveShot to hit.
 	worldEnts []*sim.Ent
-	history   *sim.History
-	rng       *rand.Rand // ResolveShot's shared RNG; guarded by mu (fire() and tick() both hold it)
+	// npcAI is the per-tick AI runner state for the combat NPCs, parallel to
+	// the subset of worldEnts that are combat NPCs. Shop NPCs have no entry.
+	npcAI []*npcAI
+	// worldID is the next id for a runtime-spawned world entity (projectiles,
+	// loot). It continues the zone-placed range so the two never collide.
+	worldID uint32
+	history *sim.History
+	rng     *rand.Rand // ResolveShot's shared RNG; guarded by mu (fire() and tick() both hold it)
 
 	// store is the persistence backend. It is nil until something wires a
 	// *store.Store into New (out of scope here: New's signature is shared
@@ -147,7 +153,15 @@ func New(t *terrain.Field, seed uint64) *Server {
 			var data any
 			if p.Type == "npc" {
 				kind = sim.EntityKind(protocol.EntityTypeNPC)
-				data = p.Def
+				// sim.NPCState carries the post and respawn timer the sim
+				// owns; the AI runner's own state lives separately in
+				// Server.npcAI, split by which package owns the rule.
+				data = &sim.NPCState{
+					Archetype: p.Def,
+					Post:      p.Pos,
+					PostQuat:  p.Quat,
+					MaxHealth: reg.NPCs[p.Def].MaxHealth,
+				}
 			}
 			ent := &sim.Ent{
 				ID:     worldID,
@@ -157,6 +171,11 @@ func New(t *terrain.Field, seed uint64) *Server {
 				Health: reg.Entities[entityDefKind(kind)].MaxHealth,
 				Def:    p.Def,
 				Data:   data,
+			}
+			if kind == sim.EntityKind(protocol.EntityTypeNPC) {
+				if h := reg.NPCs[p.Def].MaxHealth; h > 0 {
+					ent.Health = h
+				}
 			}
 			world.Add(ent)
 			worldEnts = append(worldEnts, ent)
@@ -177,6 +196,15 @@ func New(t *terrain.Field, seed uint64) *Server {
 		history:   sim.NewHistory(sim.HistoryTicks),
 		rng:       rand.New(rand.NewSource(int64(seed))),
 		colliders: allColliders,
+		worldID:   worldID,
+	}
+	for _, e := range worldEnts {
+		if e.Kind != sim.EntityKind(protocol.EntityTypeNPC) {
+			continue
+		}
+		if n := newNPCAI(e, reg.NPCs[e.Def]); n != nil {
+			s.npcAI = append(s.npcAI, n)
+		}
 	}
 	// The terrain frame is pre-encoded once, AFTER flattening above: it is
 	// just the 2-byte type prefix over the field's canonical payload
@@ -279,8 +307,17 @@ func (s *Server) tick() {
 		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		s.list = append(s.list, c)
 	}
+	s.stepNPCs(tick)
+	s.stepPlayerVitals()
+
 	var events []protocol.Event
-	s.world.Step(sim.DT, sim.StepCtx{Events: &events})
+	s.world.Step(sim.DT, sim.StepCtx{
+		Events:    &events,
+		World:     s.world,
+		Terrain:   s.terrain,
+		Colliders: s.colliders,
+		DefOf:     s.entityDef,
+	})
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
 	}
@@ -395,6 +432,11 @@ func (s *Server) join(c *client, h protocol.Hello) {
 		Health: s.reg.Entities["player"].MaxHealth,
 	}
 	c.entity.PrevLook = c.entity.State.Facing
+	// Vitals must start at full health. Zero-valued Vitals means Health 0, and
+	// stepPlayerVitals copies that onto the entity every tick — so a player
+	// would join already dead, unable to fire, with nothing on screen saying
+	// why. Seed it from the same def the entity's health came from.
+	c.vitals = sim.Vitals{Health: c.entity.Health}
 	c.rate = newCmdRate(time.Now())
 	token := h.Token
 	if s.store == nil {
@@ -507,8 +549,12 @@ func (s *Server) findNPC(entityID uint32) (defs.NPC, sim.Vec, bool) {
 	if e == nil || e.Kind != sim.EntityKind(protocol.EntityTypeNPC) {
 		return defs.NPC{}, sim.Vec{}, false
 	}
-	archetype, _ := e.Data.(string)
-	npc, ok := s.reg.NPCs[archetype]
+	// Ent.Def is the archetype id and is set for every placement. Data used to
+	// hold it as a bare string, but NPCs now carry *sim.NPCState there, and a
+	// type assertion for the old shape fails silently — shop_list then answers
+	// StatusNotFound with an empty body, which reads as "the shop is broken"
+	// rather than "the lookup changed shape".
+	npc, ok := s.reg.NPCs[e.Def]
 	if !ok {
 		return defs.NPC{}, sim.Vec{}, false
 	}
@@ -641,6 +687,10 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 func (s *Server) entityDef(e *sim.Ent) defs.EntityDef {
 	return s.reg.Entities[entityDefKind(e.Kind)]
 }
+
+func appendU32(b []byte, v uint32) []byte { return binary.LittleEndian.AppendUint32(b, v) }
+
+func appendU16(b []byte, v uint16) []byte { return binary.LittleEndian.AppendUint16(b, v) }
 
 func appendF32(b []byte, v float32) []byte {
 	return binary.LittleEndian.AppendUint32(b, math.Float32bits(v))

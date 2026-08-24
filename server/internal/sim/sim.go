@@ -311,6 +311,11 @@ func (s *State) OrientationQuat() Quat {
 
 // quatFromBasis builds the quaternion whose rotation has column vectors
 // x, y, z (local X → x, local Y → y, local Z → z).
+// QuatFromBasis builds the quaternion whose rotation has the given column
+// vectors. Exported so the server can orient NPCs with the same convention the
+// player body uses instead of writing a fourth copy of this maths.
+func QuatFromBasis(x, y, z Vec) Quat { return quatFromBasis(x, y, z) }
+
 func quatFromBasis(x, y, z Vec) Quat {
 	m00, m11, m22 := x[0], y[1], z[2]
 	tr := m00 + m11 + m22

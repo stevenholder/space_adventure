@@ -47,7 +47,7 @@ async function session(token, doBuy) {
     const pv = new DataView(ev.data, 2), t = new DataView(ev.data).getUint16(0, true)
     const p = new Uint8Array(ev.data, 2)
     if (t === 0x0002) myId = pv.getUint32(8, true)
-    else if (t === 0x0005) spawns.set(pv.getUint32(0, true), pv.getUint16(4, true))
+    else if (t === 0x0005) spawns.set(pv.getUint32(0, true), { type: pv.getUint16(4, true), def: dec.decode(p.subarray(10)) })
     else if (t === 0x0004) { const n = pv.getUint16(6, true)
       for (let i = 0; i < n; i++) { const o = 8 + i * 54
         ents.set(pv.getUint32(o, true), [pv.getFloat32(o+4,true), pv.getFloat32(o+8,true), pv.getFloat32(o+12,true)]) } }
@@ -55,7 +55,8 @@ async function session(token, doBuy) {
   })
   const wait = async (fn, ms=4000) => { const t0=Date.now(); while(Date.now()-t0<ms){const v=fn(); if(v) return v; await sleep(25)} return null }
   await wait(() => myId && ents.size > 1)
-  const npcId = [...spawns].find(([, v]) => v === 3)?.[0]
+  // The shopkeeper specifically: camp NPCs share entity_type 3 and sort first.
+  const npcId = [...spawns].find(([, v]) => v.type === 3 && v.def === 'npc.quartermaster')?.[0]
   let seq = 1
   if (doBuy) {
     const npcPos = ents.get(npcId), me = () => ents.get(myId)

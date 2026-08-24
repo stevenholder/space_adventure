@@ -142,3 +142,34 @@ func clampf(x, lo, hi float64) float64 {
 	}
 	return x
 }
+
+// SegmentHitsColliders reports whether the segment from `from` along `dir` for
+// `length` metres is blocked by any static collider.
+//
+// Used for NPC line of sight (GDD, "AI state machine"). It tests the static
+// colliders only — never the terrain: at combat ranges the horizon does not
+// occlude, and marching the radius field along a ray costs far more than the
+// handful of box tests it replaces.
+func SegmentHitsColliders(from, dir [3]float64, length float64, cs []protocol.Collider) bool {
+	if len(cs) == 0 || length <= 0 {
+		return false
+	}
+	// Sample along the segment against the same sphere-vs-shape test the
+	// push-out uses, with a probe radius of zero. Step by half the smallest
+	// collider extent so nothing thinner than a step is skipped.
+	const step = 0.4
+	steps := int(length/step) + 1
+	for i := 0; i <= steps; i++ {
+		t := float64(i) * step
+		if t > length {
+			t = length
+		}
+		p := [3]float64{from[0] + dir[0]*t, from[1] + dir[1]*t, from[2] + dir[2]*t}
+		for _, c := range cs {
+			if hit, _, _ := nearest(p, 0, c, Vec{0, 1, 0}); hit {
+				return true
+			}
+		}
+	}
+	return false
+}

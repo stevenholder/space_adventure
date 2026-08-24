@@ -52,9 +52,14 @@ function fire(seq, dir) {
 const norm = (v) => { const l = Math.hypot(...v); return v.map(x => x / l) }
 const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]]
 
+// A FRESH token per run. Persistence is real now, so a fixed token carries the
+// previous run's rifle and credits into this one — the second run then starts
+// at 750 and the buy assertion fails against a player who already owns it.
+// This test is about a first purchase; it has to start as a new player.
+const token = 'e2e-loop-' + Date.now()
 const ws = new WebSocket('ws://127.0.0.1:18080/ws'); ws.binaryType = 'arraybuffer'
 let myId = 0, ents = new Map(), spawns = new Map(), results = [], events = [], defs = null
-ws.addEventListener('open', () => ws.send(hello('shopper', 'e2e-loop-token-0001')))
+ws.addEventListener('open', () => ws.send(hello('shopper', token)))
 ws.addEventListener('message', (ev) => {
   const dv = new DataView(ev.data), t = dv.getUint16(0, true), p = new Uint8Array(ev.data, 2)
   const pv = new DataView(ev.data, 2)
@@ -74,7 +79,12 @@ const wait = async (fn, ms = 4000) => { const t0 = Date.now(); while (Date.now()
 
 await wait(() => myId && defs && ents.size > 1)
 console.log(`joined id=${myId}, ${spawns.size} spawns, defs ${JSON.stringify(defs).length} B`)
-const npcId = [...spawns].find(([, v]) => v.type === 3)?.[0]
+// Select the SHOPKEEPER by name, not "the first NPC". Zones compose in sorted
+// id order, so once the camp existed its grunts and gunners took the lowest
+// entity ids and this picked a hostile 272 m away — every shop cmd then failed
+// with an empty refusal and the loop looked broken rather than mis-targeted.
+const npcId = [...spawns].find(([, v]) => v.type === 3 && v.data === 'npc.quartermaster')?.[0]
+if (!npcId) { console.log('FAIL: no quartermaster in spawns'); process.exit(1) }
 const targetIds = [...spawns].filter(([, v]) => v.type === 4).map(([k]) => k)
 console.log(`npc=${npcId} (${spawns.get(npcId)?.data}), targets=${targetIds.length}`)
 
@@ -130,4 +140,21 @@ const after = ents.get(tid).health
 const shot = events.filter(e => e.ev === 2).length
 const hits = events.filter(e => e.ev === 3).length
 console.log(`fire -> shot_fired=${shot} hit=${hits} target health ${before} -> ${after}`)
-process.exit(0)
+
+// ASSERT, do not merely report. This script printed shot_fired=0 / no damage
+// while still exiting 0, so a regression that stopped firing entirely was
+// recorded as a PASS — a test that cannot fail is not a test.
+const checks = [
+  ['shop_list returned stock', list?.status === 0 && Array.isArray(list.body.stock) && list.body.stock.length > 0],
+  ['shop_buy granted the rifle', buy?.status === 0 && buy.body.credits === 750],
+  ['equip set primary', eq?.status === 0 && eq.body.equipped?.primary === 'weapon.pulse'],
+  ['fire produced a shot_fired event', shot > 0],
+  ['the shot hit the target', hits > 0],
+  ['the target lost health', after < before],
+]
+let bad = 0
+for (const [name, ok] of checks) {
+  if (!ok) { console.log(`FAIL ${name}`); bad++ }
+}
+console.log(bad ? `OVERALL: FAIL (${bad}/${checks.length})` : `OVERALL: PASS (${checks.length} checks)`)
+process.exit(bad ? 1 : 0)

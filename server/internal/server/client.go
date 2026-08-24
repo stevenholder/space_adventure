@@ -54,6 +54,10 @@ type msg struct {
 
 // client is one WebSocket connection and the entity it drives.
 type client struct {
+	// vitals is this player's health, death timer and regen state. Server-side
+	// only: the client renders what the snapshot and events tell it, and never
+	// decides it died (docs/GDD.md, "Player death and respawn").
+	vitals sim.Vitals
 	srv    *Server
 	conn   *websocket.Conn
 	id     uint32
