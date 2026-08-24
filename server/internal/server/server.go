@@ -93,6 +93,14 @@ type Server struct {
 // entity placements to world space — all before t is encoded for the wire,
 // so the terrain payload a client receives already agrees with the
 // colliders and target/NPC positions it also receives.
+// SetStore attaches the persistence backend.
+//
+// Kept separate from New so cmd/server owns the DSN and the migration, and so
+// a nil store stays a supported mode rather than a special case: without it
+// every session is ephemeral, which is exactly what an empty token already
+// means (docs/PROTOCOL.md, "Identity token"). Call before serving.
+func (s *Server) SetStore(st *store.Store) { s.store = st }
+
 func New(t *terrain.Field, seed uint64) *Server {
 	reg, err := defs.Load()
 	if err != nil {
@@ -390,7 +398,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	c.rate = newCmdRate(time.Now())
 	token := h.Token
 	if s.store == nil {
-		token = "" // no persistence backend wired yet: every session is ephemeral
+		token = "" // no store attached: sessions are ephemeral by design (SetStore)
 	}
 	c.ident = joinIdentity(context.Background(), s.store, s.reg, token, name, [3]float64(spawnState.Pos))
 
@@ -562,11 +570,13 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 
 	rewindTicks := c.rewindTicks()
 	rewindTick := tick - uint32(rewindTicks)
-	eyePos, eyeUp, ok := s.history.At(rewindTick, c.entity.ID)
-	if !ok {
+	// Early-out before spending a round: ResolveShot also needs this sample,
+	// but a shot it cannot resolve should not cost the player ammunition.
+	// The origin itself comes back on the returned Ray — computing it here as
+	// well would be two copies of one rule, free to drift apart.
+	if _, _, ok := s.history.At(rewindTick, c.entity.ID); !ok {
 		return // no history for this shooter at the rewound tick yet
 	}
-	origin := sim.Vec(eyePos).Add(sim.Vec(eyeUp).Scale(eyeHeightMeters))
 	dir := sim.Vec{float64(f.Dir[0]), float64(f.Dir[1]), float64(f.Dir[2])}
 
 	c.entity.Magazine--
@@ -580,18 +590,23 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 		RewindTicks:   rewindTicks,
 		ConeHalfAngle: wp.SpreadBase * math.Pi / 180,
 	}
-	hit, found := sim.ResolveShot(s.world, s.history, shot, wp, s.entityDef, s.rng)
+	ray, hit, found := sim.ResolveShot(s.world, s.history, shot, wp, s.entityDef, s.rng)
 
+	// Broadcast the ray the SERVER resolved — its rewound origin and its
+	// post-spread direction — not the client's aim. The server owns spread, so
+	// the client's direction is not where the shot went; drawing it would put
+	// every player's tracer along a line that disagrees with the hit markers.
+	rayOrigin := sim.Vec(ray.Origin)
 	dist := wp.MaxRange
 	if found {
-		dist = origin.Sub(hit.Point).Len()
+		dist = rayOrigin.Sub(hit.Point).Len()
 	}
 	shotData := make([]byte, 0, 28)
 	for i := 0; i < 3; i++ {
-		shotData = appendF32(shotData, float32(origin[i]))
+		shotData = appendF32(shotData, float32(ray.Origin[i]))
 	}
 	for i := 0; i < 3; i++ {
-		shotData = appendF32(shotData, float32(dir[i]))
+		shotData = appendF32(shotData, float32(ray.Dir[i]))
 	}
 	shotData = appendF32(shotData, float32(dist))
 	shotFrame := protocol.EncodeEvent(protocol.Event{

@@ -15,9 +15,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"space-adventure/server/internal/store"
 	"syscall"
 	"time"
 
@@ -63,6 +65,30 @@ func runServer(args []string) error {
 
 	field := terrain.Generate(uint64(*seed))
 	world := server.New(field, uint64(*seed))
+
+	// Persistence is opt-in on DATABASE_URL. A failure here is fatal at
+	// STARTUP on purpose: silently falling back to ephemeral sessions would
+	// look identical to working, right up until players noticed their
+	// progress was never saved. An unset DATABASE_URL is a deliberate
+	// choice (every session ephemeral); a set-but-broken one is a mistake.
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		st, err := store.Open(dsn)
+		if err != nil {
+			return fmt.Errorf("opening store: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err = st.Migrate(ctx)
+		cancel()
+		if err != nil {
+			st.Close()
+			return fmt.Errorf("migrating store: %w", err)
+		}
+		world.SetStore(st)
+		defer st.Close()
+		log.Printf("persistence: enabled (%s)", st.Dialect)
+	} else {
+		log.Printf("persistence: disabled (DATABASE_URL unset) — sessions are ephemeral")
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

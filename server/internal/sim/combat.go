@@ -50,6 +50,19 @@ type Shot struct {
 	ConeHalfAngle float64
 }
 
+// Ray is the shot as the SERVER actually resolved it: the rewound eye it left
+// from and the direction it went after spread was applied.
+//
+// It is returned whether or not anything was hit, because the `shot fired`
+// event needs it either way. Broadcasting the client's own aim instead would
+// draw every player a tracer along a line the shot did not take — and since
+// the server owns spread, that line disagrees with the hit markers, which
+// reads as broken hit registration and sends you debugging the netcode.
+type Ray struct {
+	Origin [3]float64
+	Dir    [3]float64
+}
+
 // Hit is the outcome of a shot that hit something.
 type Hit struct {
 	Victim      uint32
@@ -81,13 +94,13 @@ type Hit struct {
 // randomised per run, which would make which of two overlapping targets is
 // hit non-deterministic.
 func ResolveShot(w *World, h *History, s Shot, wp defs.Weapon,
-	defOf func(*Ent) defs.EntityDef, rng *rand.Rand) (Hit, bool) {
+	defOf func(*Ent) defs.EntityDef, rng *rand.Rand) (Ray, Hit, bool) {
 
 	rewindTick := s.Tick - uint32(s.RewindTicks)
 
 	eyePos, eyeUp, ok := h.At(rewindTick, s.Shooter)
 	if !ok {
-		return Hit{}, false
+		return Ray{}, Hit{}, false
 	}
 	origin := Vec(eyePos).Add(Vec(eyeUp).Scale(eyeHeightMeters))
 
@@ -95,6 +108,7 @@ func ResolveShot(w *World, h *History, s Shot, wp defs.Weapon,
 	if s.ConeHalfAngle > 0 {
 		dir = deviate(dir, s.ConeHalfAngle, rng)
 	}
+	ray := Ray{Origin: [3]float64(origin), Dir: [3]float64(dir)}
 
 	bestT := math.Inf(1)
 	var bestID uint32
@@ -130,7 +144,7 @@ func ResolveShot(w *World, h *History, s Shot, wp defs.Weapon,
 	}
 
 	if !found {
-		return Hit{}, false
+		return ray, Hit{}, false
 	}
 
 	damage := int(math.Round(float64(wp.Damage) * falloffAt(bestT, wp)))
@@ -141,7 +155,7 @@ func ResolveShot(w *World, h *History, s Shot, wp defs.Weapon,
 		victim.Health = 0
 	}
 
-	return Hit{
+	return ray, Hit{
 		Victim:      bestID,
 		Point:       bestPoint,
 		Damage:      damage,

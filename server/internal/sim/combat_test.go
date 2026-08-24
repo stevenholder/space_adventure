@@ -73,7 +73,7 @@ func TestResolveShot(t *testing.T) {
 		newShooter(w, h, shooterID, tick)
 		addTarget(w, h, 2, tick, 0, 30)
 
-		hit, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, hit, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if !ok {
 			t.Fatalf("expected a hit")
 		}
@@ -94,7 +94,7 @@ func TestResolveShot(t *testing.T) {
 		newShooter(w, h, shooterID, tick)
 		addTarget(w, h, 2, tick, 1, 30) // 1m off the ray's x=0 axis, radius 0.5
 
-		_, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, _, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if ok {
 			t.Fatalf("expected a miss for a 1m lateral offset against a 0.5m radius capsule")
 		}
@@ -106,7 +106,7 @@ func TestResolveShot(t *testing.T) {
 		newShooter(w, h, shooterID, tick)
 		addTarget(w, h, 2, tick, 0, 130) // beyond MaxRange 120
 
-		_, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, _, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if ok {
 			t.Fatalf("expected no hit beyond max_range")
 		}
@@ -118,7 +118,7 @@ func TestResolveShot(t *testing.T) {
 		newShooter(w, h, shooterID, tick)
 		addTarget(w, h, 2, tick, 0, 80)
 
-		hit, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, hit, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if !ok {
 			t.Fatalf("expected a hit")
 		}
@@ -140,7 +140,7 @@ func TestResolveShot(t *testing.T) {
 		addTarget(w, h, 2, tick, 0, 30)
 		w.Ents[2].Flags |= protocol.FlagDead
 
-		_, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, _, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if ok {
 			t.Fatalf("expected no hit against a dead entity")
 		}
@@ -153,7 +153,7 @@ func TestResolveShot(t *testing.T) {
 		w.Add(&Ent{ID: 2, Kind: EntityKind(protocol.EntityTypeNPC), Health: 100, Def: "nondamageable"})
 		h.Record(tick, 2, [3]float64{0, 0, 30}, [3]float64{0, 1, 0})
 
-		_, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, _, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if ok {
 			t.Fatalf("expected no hit against a non-damageable entity")
 		}
@@ -166,7 +166,7 @@ func TestResolveShot(t *testing.T) {
 		addTarget(w, h, 2, tick, 0, 50) // far
 		addTarget(w, h, 3, tick, 0, 30) // near, added second: order must not matter
 
-		hit, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		_, hit, ok := ResolveShot(w, h, shotDown(), wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
 		if !ok {
 			t.Fatalf("expected a hit")
 		}
@@ -174,4 +174,55 @@ func TestResolveShot(t *testing.T) {
 			t.Fatalf("expected the nearer target (id 3) to be hit, got %d", hit.Victim)
 		}
 	})
+}
+
+// TestResolveShotReturnsDeviatedRay: the returned Ray must be what the server
+// actually fired, not what the client asked for.
+//
+// The `shot fired` event is built from this, and fire.ts draws its tracer from
+// that event precisely because the server owns spread. If the ray echoed the
+// client's aim, every tracer would follow a line the shot did not take and
+// disagree with the hit markers — which reads as broken hit registration and
+// sends you debugging the netcode instead of the renderer.
+func TestResolveShotReturnsDeviatedRay(t *testing.T) {
+	const shooterID = uint32(1)
+	const tick = uint32(100)
+	defsByKey := map[string]defs.EntityDef{"target": targetDef(), "player": targetDef()}
+	wp := testWeapon()
+	aim := [3]float64{0, 0, 1}
+
+	shoot := func(cone float64) Ray {
+		w := NewWorld()
+		h := NewHistory(0)
+		newShooter(w, h, shooterID, tick)
+		addTarget(w, h, 2, tick, 0, 30)
+		ray, _, _ := ResolveShot(w, h,
+			Shot{Shooter: shooterID, Dir: aim, Tick: tick, ConeHalfAngle: cone},
+			wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		return ray
+	}
+
+	// No spread: the ray is exactly the aim.
+	if d := vecDist(shoot(0).Dir, aim); d > 1e-12 {
+		t.Errorf("with no spread the ray deviated by %g, want the aim exactly", d)
+	}
+
+	// A wide cone must actually move it — if this equals the aim, spread is
+	// being applied somewhere the broadcast cannot see.
+	ray := shoot(0.15)
+	if d := vecDist(ray.Dir, aim); d < 1e-9 {
+		t.Error("with a 0.15 rad cone the ray equals the client's aim — spread is not reaching the broadcast")
+	}
+	if l := math.Sqrt(ray.Dir[0]*ray.Dir[0] + ray.Dir[1]*ray.Dir[1] + ray.Dir[2]*ray.Dir[2]); math.Abs(l-1) > 1e-9 {
+		t.Errorf("deviated ray length %g, want 1", l)
+	}
+	// Origin is the shooter's rewound EYE: (0,0,0) + up*1.7.
+	if math.Abs(ray.Origin[1]-eyeHeightMeters) > 1e-9 {
+		t.Errorf("ray origin y = %g, want the eye height %g", ray.Origin[1], eyeHeightMeters)
+	}
+}
+
+func vecDist(a, b [3]float64) float64 {
+	dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
+	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
