@@ -33,6 +33,7 @@ import {
   type SpawnMsg,
   type TerrainWire,
 } from './protocol.js'
+import { getToken } from './identity.js'
 import type { Vec3 } from '../sim/index.js'
 
 export type NetState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
@@ -128,10 +129,10 @@ export class NetClient {
       this.netState = 'open'
       this.lastSentAt = performance.now()
       if (wasReconnecting) this.events.onReconnect?.()
-      // Empty token: an ephemeral session the server does not save, which is
-      // exactly today's behaviour. Generating and persisting a real token is
-      // a later brief (W2-17, client/src/net/identity.ts).
-      this.sendRaw(encodeHello(PROTOCOL_VERSION, this.name, ''))
+      // getToken() returns "" if localStorage is unavailable, which the
+      // server treats as absent: an ephemeral session that is not saved
+      // (docs/PROTOCOL.md, "Identity token").
+      this.sendRaw(encodeHello(PROTOCOL_VERSION, this.name, getToken()))
       this.events.onState?.('open', 'connected')
     }
 
