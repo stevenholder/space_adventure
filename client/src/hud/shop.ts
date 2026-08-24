@@ -98,6 +98,18 @@ export class ShopPanel {
   private credits = 0
   private openFlag = false
 
+  /**
+   * Swap in the live registry.
+   *
+   * `defs` arrives after this panel is constructed (join order is hello_ack,
+   * terrain, defs, colliders — docs/PROTOCOL.md), so the registry captured at
+   * construction is the empty one. Without this the stock list renders prices
+   * with no item names and never recovers.
+   */
+  setRegistry(registry: Registry): void {
+    this.registry = registry
+  }
+
   constructor(registry: Registry, port: ShopPort) {
     this.registry = registry
     this.port = port

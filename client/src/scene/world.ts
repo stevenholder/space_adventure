@@ -14,11 +14,23 @@
  * Remotes: server quat applied (with the art-frame flip), through the
  * ~100 ms interpolation buffer. Nametags are plain DOM text (names are
  * untrusted — textContent, never markup), fading out past ~40 m.
+ *
+ * Phase 2 entities: NPC (`npc.shopkeeper`) and target dummies
+ * (`prop.target`, `plate` node recoloured while dead) render through the
+ * same remote pipeline as players, self-loaded via this module's own
+ * `AssetLib` (art/manifest.json is a cache-by-id contract, so a second
+ * instance is cheap and keeps this file free of a `main.ts` wiring
+ * dependency). `pitch_q` is applied to the `head` node and the held weapon
+ * ONLY — never the body (GDD "First-person body"). Static colliders render
+ * visually only; the `colliders` message is the sole authority for shape.
  */
 import * as THREE from 'three'
 import type { Terrain, Vec3 } from '../sim/index.js'
 import { RULES } from '../sim/index.js'
 import type { EntityState } from '../net/protocol.js'
+import { ENTITY_TYPE_NPC, ENTITY_TYPE_PLAYER, ENTITY_TYPE_TARGET, FLAG } from '../net/protocol.js'
+import type { Collider } from '../net/phase2.js'
+import { COLLIDER_BOX } from '../net/phase2.js'
 import { InterpBuffer, type RemoteRender } from '../net/interp.js'
 import type { Quat } from '../util/quat.js'
 import { QUAT_FLIP_Y, quatFromForwardUpUnit, quatMulInto } from '../util/quat.js'
@@ -27,15 +39,31 @@ import { buildSky } from './sky.js'
 import type { RockPlacement } from './rocks.js'
 import { buildRockGroup, scatterRocks } from './rocks.js'
 import type { CharRig } from './character.js'
-import { makePlaceholderRig } from './character.js'
+import { makePlaceholderRig, makeRigFromGltf } from './character.js'
+import type { WeaponHandle } from './weapon.js'
+import { attachWeapon, detachWeapon } from './weapon.js'
+import { AssetLib } from './assets.js'
 
 const TAG_FADE_START = 40 // m (GDD: fading out past ~40 m)
 const TAG_FADE_END = 45 // m (fully gone)
 const TAG_HEIGHT = 2.1 // m above the entity origin
+const TARGET_DEAD_COLOR = 0x8a2020
+
+type ColorMat = THREE.Material & { color: THREE.Color }
+
+interface TargetVisual {
+  root: THREE.Object3D
+  plateMats: ColorMat[]
+  aliveColors: number[]
+}
 
 interface RemoteView {
+  id: number
+  entityType: number
   anchor: THREE.Group
   rig: CharRig | null
+  target: TargetVisual | null
+  weapon: WeaponHandle | null
   tagEl: HTMLDivElement
   interp: InterpBuffer
   /** Reused interpolation output (renderInto writes here — no allocation). */
@@ -43,6 +71,10 @@ interface RemoteView {
   pos: THREE.Vector3
   quat: THREE.Quaternion
   speed: number
+  /** Latest raw wire fields (not interpolated — display-only). */
+  flags: number
+  pitchQ: number
+  targetDead: boolean
   /** Last applied tag state — DOM writes are skipped when unchanged. */
   tagX: number
   tagY: number
@@ -68,6 +100,12 @@ export class World {
   private toTag = new THREE.Vector3()
   private fwd = new THREE.Vector3()
   private anchorV = new THREE.Vector3()
+  /** Own asset loader (art/manifest.json is a cache-by-id contract — a
+   *  second AssetLib instance costs one extra manifest fetch, not a second
+   *  loading mechanism). */
+  private assets = new AssetLib()
+  private manifestReady: Promise<void>
+  private colliderGroup = new THREE.Group()
 
   constructor(tagsEl: HTMLElement) {
     this.camera = new THREE.PerspectiveCamera(
@@ -77,12 +115,14 @@ export class World {
       RULES.farClip,
     )
     this.tagsEl = tagsEl
+    this.manifestReady = this.assets.loadManifest()
 
     this.scene.add(buildSky())
     const sun = new THREE.DirectionalLight(0xfff2df, 2.2)
     sun.position.set(0.55, 0.7, -0.45).normalize().multiplyScalar(100)
     this.scene.add(sun)
     this.scene.add(new THREE.HemisphereLight(0x8899bb, 0x1a2016, 0.7))
+    this.scene.add(this.colliderGroup)
   }
 
   setAspect(w: number, h: number): void {
@@ -116,7 +156,7 @@ export class World {
     const old = this.localRig
     if (old) {
       this.localAnchor.remove(old.root)
-      disposeRig(old)
+      disposeGroup(old.root)
     }
     if (rig.head) rig.head.visible = false
     this.localRig = rig
@@ -178,12 +218,13 @@ export class World {
 
   // --------------------------------------------------------------- remotes
 
-  upsertRemote(id: number, name: string): void {
+  /** `entityType` (protocol ENTITY_TYPE_*) selects the renderer: player
+   *  (default, unchanged Phase 1 body + weapon), NPC (`npc.shopkeeper`),
+   *  or target dummy (`prop.target`). */
+  upsertRemote(id: number, name: string, entityType: number = ENTITY_TYPE_PLAYER): void {
     let rv = this.remotes.get(id)
     if (!rv) {
       const anchor = new THREE.Group()
-      const rig = makePlaceholderRig()
-      anchor.add(rig.root)
       const tagEl = document.createElement('div')
       tagEl.className = 'tag'
       tagEl.textContent = name // untrusted name: text, never markup
@@ -192,8 +233,12 @@ export class World {
       tagEl.style.top = '0px'
       this.tagsEl.appendChild(tagEl)
       rv = {
+        id,
+        entityType,
         anchor,
-        rig,
+        rig: null,
+        target: null,
+        weapon: null,
         tagEl,
         interp: new InterpBuffer(),
         rr: {
@@ -205,6 +250,9 @@ export class World {
         pos: new THREE.Vector3(),
         quat: new THREE.Quaternion(),
         speed: 0,
+        flags: 0,
+        pitchQ: 0,
+        targetDead: false,
         tagX: -1,
         tagY: -1,
         tagO: -1,
@@ -212,15 +260,87 @@ export class World {
       }
       this.remotes.set(id, rv)
       this.scene.add(anchor)
+      this.spawnVisual(rv)
     } else {
       rv.tagEl.textContent = name
     }
+  }
+
+  /** Build the entity_type-appropriate placeholder and kick off the real
+   *  asset load. */
+  private spawnVisual(rv: RemoteView): void {
+    if (rv.entityType === ENTITY_TYPE_TARGET) {
+      const ph = buildTargetPlaceholder()
+      const { mats, colors } = collectPlateMats(ph)
+      rv.target = { root: ph, plateMats: mats, aliveColors: colors }
+      rv.anchor.add(ph)
+      void this.loadTargetVisual(rv)
+      return
+    }
+    const rig = makePlaceholderRig()
+    rv.rig = rig
+    rv.anchor.add(rig.root)
+    if (rv.entityType === ENTITY_TYPE_NPC) {
+      void this.loadCharacterAsset(rv, 'npc.shopkeeper')
+    } else {
+      // Player body itself keeps the Phase 1 path (main.ts's setRemoteRig
+      // swaps in char.player); only the weapon is new here.
+      void this.attachWeaponTo(rv)
+    }
+  }
+
+  private async loadAsset(id: string): Promise<THREE.Object3D | null> {
+    await this.manifestReady
+    return this.assets.loadGltf(id)
+  }
+
+  private async loadCharacterAsset(rv: RemoteView, assetId: string): Promise<void> {
+    const obj = await this.loadAsset(assetId)
+    if (!obj || this.remotes.get(rv.id) !== rv) return
+    const rig = makeRigFromGltf(obj.clone(true))
+    const old = rv.rig
+    if (old) {
+      rv.anchor.remove(old.root)
+      disposeGroup(old.root)
+    }
+    rv.rig = rig
+    rv.anchor.add(rig.root)
+  }
+
+  private async loadTargetVisual(rv: RemoteView): Promise<void> {
+    const obj = await this.loadAsset('prop.target')
+    if (!obj || this.remotes.get(rv.id) !== rv) return
+    const clone = obj.clone(true)
+    const { mats, colors } = collectPlateMats(clone)
+    const old = rv.target
+    if (old) {
+      rv.anchor.remove(old.root)
+      disposeGroup(old.root)
+    }
+    rv.target = { root: clone, plateMats: mats, aliveColors: colors }
+    rv.anchor.add(clone)
+    if (rv.targetDead) for (const m of mats) m.color.setHex(TARGET_DEAD_COLOR)
+  }
+
+  /** Attach `weapon.pulse` to the current rig's `arm.r` (players only). */
+  private async attachWeaponTo(rv: RemoteView): Promise<void> {
+    const armR = rv.rig?.armR
+    if (!armR) return
+    await this.manifestReady
+    const handle = await attachWeapon(this.assets, armR, 'weapon.pulse')
+    if (this.remotes.get(rv.id) !== rv || rv.rig?.armR !== armR) {
+      detachWeapon(handle) // stale: rig swapped or remote gone while loading
+      return
+    }
+    rv.weapon = handle
   }
 
   /** Feed one snapshot entity row into the interpolation buffer. */
   feedRemote(id: number, e: EntityState, tick: number, nowMs: number): void {
     const rv = this.remotes.get(id)
     if (!rv) return
+    rv.flags = e.flags
+    rv.pitchQ = e.pitchQ
     rv.interp.push({
       tick,
       pos: { x: e.pos[0], y: e.pos[1], z: e.pos[2] },
@@ -234,7 +354,9 @@ export class World {
     const rv = this.remotes.get(id)
     if (!rv) return
     this.scene.remove(rv.anchor)
-    if (rv.rig) disposeRig(rv.rig)
+    if (rv.rig) disposeGroup(rv.rig.root)
+    if (rv.target) disposeGroup(rv.target.root)
+    if (rv.weapon) detachWeapon(rv.weapon)
     rv.tagEl.remove()
     this.remotes.delete(id)
   }
@@ -251,10 +373,38 @@ export class World {
     const old = rv.rig
     if (old) {
       rv.anchor.remove(old.root)
-      disposeRig(old)
+      disposeGroup(old.root)
+    }
+    if (rv.weapon) {
+      detachWeapon(rv.weapon)
+      rv.weapon = null
     }
     rv.rig = rig
     rv.anchor.add(rig.root)
+    if (rv.entityType !== ENTITY_TYPE_NPC && rv.entityType !== ENTITY_TYPE_TARGET) {
+      void this.attachWeaponTo(rv)
+    }
+  }
+
+  /** Render the static collider list. VISUAL ONLY — the `colliders`
+   *  message is the sole authority for shape on both sims. */
+  async setColliders(list: Collider[]): Promise<void> {
+    clearGroup(this.colliderGroup)
+    await this.manifestReady
+    const [wall, post] = await Promise.all([
+      this.assets.loadGltf('struct.wall'),
+      this.assets.loadGltf('struct.post'),
+    ])
+    for (const c of list) {
+      const isBox = c.kind === COLLIDER_BOX
+      const src = isBox ? wall : post
+      const obj = src ? src.clone(true) : isBox ? buildWallPlaceholder() : buildPostPlaceholder()
+      if (isBox) obj.scale.set(c.half[0], c.half[1], c.half[2])
+      else obj.scale.setScalar(c.half[0])
+      obj.position.set(c.center[0], c.center[1], c.center[2])
+      obj.quaternion.set(c.quat[0], c.quat[1], c.quat[2], c.quat[3])
+      this.colliderGroup.add(obj)
+    }
   }
 
   /** Interpolate + place remotes, animate them, position nametags. */
@@ -273,8 +423,28 @@ export class World {
       rv.speed = Math.hypot(r.vel.x, r.vel.y, r.vel.z)
       rv.anchor.position.copy(rv.pos)
       rv.anchor.quaternion.copy(rv.quat)
-      rv.rig?.animate(dt, rv.speed)
+      if (rv.rig) {
+        rv.rig.animate(dt, rv.speed)
+        // PROTOCOL pitch_q -> radians, head + held weapon ONLY. The body
+        // stays upright (GDD "First-person body") — pitch on the torso is
+        // exactly the bug this field exists to avoid.
+        const pitchRad = (rv.pitchQ * (Math.PI / 2)) / 127
+        if (rv.rig.head) rv.rig.head.rotation.x = pitchRad
+        if (rv.weapon) rv.weapon.root.rotation.x = pitchRad
+      }
+      if (rv.target) this.updateTargetDead(rv)
       this.placeTag(rv, lp)
+    }
+  }
+
+  private updateTargetDead(rv: RemoteView): void {
+    const dead = (rv.flags & FLAG.dead) !== 0
+    if (dead === rv.targetDead) return
+    rv.targetDead = dead
+    const t = rv.target
+    if (!t) return
+    for (let i = 0; i < t.plateMats.length; i++) {
+      t.plateMats[i].color.setHex(dead ? TARGET_DEAD_COLOR : t.aliveColors[i])
     }
   }
 
@@ -367,16 +537,82 @@ function proceduralRockGeoms(): THREE.BufferGeometry[] {
   ]
 }
 
-function disposeRig(rig: CharRig): void {
-  rig.root.traverse((o) => {
-    const m = o as THREE.Mesh
-    if (m.geometry) m.geometry.dispose()
+/** First descendant (or self) named `name`, or null. */
+function findNamed(root: THREE.Object3D, name: string): THREE.Object3D | null {
+  if (root.name === name) return root
+  let found: THREE.Object3D | null = null
+  root.traverse((o) => {
+    if (found === null && o.name === name) found = o
   })
+  return found
 }
 
-function disposeGroup(g: THREE.Group): void {
-  g.traverse((o) => {
+/**
+ * Own-material every mesh under `root`'s `plate` node (a GLTF clone shares
+ * material instances with every other clone from the same cached scene —
+ * character.ts hits the same issue swapping materials on load) and return
+ * them plus their spawn-time colors, so dead/alive recoloring never bleeds
+ * across target instances.
+ */
+function collectPlateMats(root: THREE.Object3D): { mats: ColorMat[]; colors: number[] } {
+  const plate = findNamed(root, 'plate')
+  const mats: ColorMat[] = []
+  const colors: number[] = []
+  if (!plate) return { mats, colors }
+  plate.traverse((o) => {
     const m = o as THREE.Mesh
+    if (!m.isMesh || !m.material) return
+    const src = (Array.isArray(m.material) ? m.material[0] : m.material) as ColorMat
+    const owned = src.clone() as ColorMat
+    m.material = owned
+    mats.push(owned)
+    colors.push(owned.color.getHex())
+  })
+  return { mats, colors }
+}
+
+/** Flat-shaded placeholder target: a post + a recolourable `plate`, ~1.8 m
+ *  tall, matching prop.target's authored silhouette (art/manifest.json). */
+function buildTargetPlaceholder(): THREE.Object3D {
+  const postMat = new THREE.MeshLambertMaterial({ color: 0x55524a, flatShading: true })
+  const plateMat = new THREE.MeshLambertMaterial({ color: 0xd6d0c4, flatShading: true })
+  const root = new THREE.Group()
+  root.name = 'target'
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.4, 0.08), postMat)
+  post.position.y = 0.7
+  root.add(post)
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.08, 8), plateMat)
+  plate.name = 'plate'
+  plate.rotation.x = Math.PI / 2
+  plate.position.y = 1.55
+  root.add(plate)
+  return root
+}
+
+/** Unit box (half-extent 1 on every axis) — the client scales it to each
+ *  box collider's half-extents. */
+function buildWallPlaceholder(): THREE.Object3D {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x77716a, flatShading: true })
+  return new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat)
+}
+
+/** Unit sphere (radius 1) — the client scales it to each sphere collider's
+ *  radius. */
+function buildPostPlaceholder(): THREE.Object3D {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x6d6a63, flatShading: true })
+  return new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), mat)
+}
+
+function clearGroup(group: THREE.Group): void {
+  for (const child of [...group.children]) {
+    group.remove(child)
+    disposeGroup(child)
+  }
+}
+
+function disposeGroup(o: THREE.Object3D): void {
+  o.traverse((c) => {
+    const m = c as THREE.Mesh
     if (m.geometry) m.geometry.dispose()
   })
 }

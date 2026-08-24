@@ -61,6 +61,14 @@ export interface NetEvents {
   onSpawn?: (spawn: SpawnMsg) => void
   onDespawn?: (entityId: number) => void
   onEvent?: (event: EventMsg) => void
+  /** `defs` — the item/entity tables. Arrives once, after terrain, before the
+   *  first snapshot. The client must not fire, predict damage or draw an
+   *  inventory before it (docs/PROTOCOL.md). */
+  onDefs?: (payload: Uint8Array) => void
+  /** `colliders` — the world's static geometry, once, after terrain. */
+  onColliders?: (payload: Uint8Array) => void
+  /** `cmd_result` — the reply to one `cmd`. Exactly one per request. */
+  onCmdResult?: (payload: Uint8Array) => void
   onPong?: (tsMs: number, rttMs: number) => void
 }
 
@@ -248,6 +256,21 @@ export class NetClient {
     }
   }
 
+  /**
+   * Send an already-framed message (the phase2 encoders return complete
+   * frames). Exists so shop.ts and fire.ts do not each reach into the socket
+   * themselves — one place owns the connection state and the drop-when-closed
+   * rule. Returns false when the socket is not open.
+   */
+  sendFramed(bytes: Uint8Array<ArrayBuffer>): boolean {
+    return this.sendRaw(bytes)
+  }
+
+  /** The seq of the last input sent — `fire` correlates a shot with it. */
+  lastInputSeq(): number {
+    return this.seq === 0 ? 0 : (this.seq - 1) & 0xffff
+  }
+
   private sendRaw(bytes: Uint8Array<ArrayBuffer>): boolean {
     const ws = this.ws
     if (!ws || ws.readyState !== WebSocket.OPEN) return false
@@ -285,6 +308,15 @@ export class NetClient {
         break
       case MSG.despawn:
         this.events.onDespawn?.(decodeDespawn(payload))
+        break
+      case MSG.defs:
+        this.events.onDefs?.(payload)
+        break
+      case MSG.colliders:
+        this.events.onColliders?.(payload)
+        break
+      case MSG.cmd_result:
+        this.events.onCmdResult?.(payload)
         break
       case MSG.event:
         this.events.onEvent?.(decodeEvent(payload))

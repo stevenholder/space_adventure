@@ -18,10 +18,16 @@ import type { Terrain, Vec3 } from './sim/index.js'
 import { Predictor } from './net/predictor.js'
 import { NetClient } from './net/netClient.js'
 import { PROTOCOL_VERSION } from './net/protocol.js'
+import { ENTITY_TYPE_NPC, ENTITY_TYPE_TARGET, OP } from './net/protocol.js'
+import { decodeColliders, decodeCmdResult, encodeCmd, type Collider } from './net/phase2.js'
+import { emptyRegistry, parseDefs, type Registry } from './net/defs.js'
+import { pickInteractable, type Interactable } from './input/interact.js'
+import { ShopPanel } from './hud/shop.js'
+import { FireController } from './net/fire.js'
 import type { Snapshot } from './net/protocol.js'
 import { MockServer, MOCK_SEED } from './mock/mock.js'
 import { World } from './scene/world.js'
-import { Hud } from './hud/hud.js'
+import { Hud, type HudData } from './hud/hud.js'
 import { Controls } from './input/controls.js'
 import { AssetLib } from './scene/assets.js'
 import { makeRigFromGltf, rigIsComplete } from './scene/character.js'
@@ -77,7 +83,39 @@ let corruptSide: Vec3 = { x: 0, y: 0, z: 0 }
 const CORRUPT_DIST = 4
 
 const remoteIds = new Set<number>()
-const hudData = { speed: null as number | null, nearest: null as number | null, conn: '' }
+const hudData: HudData = { speed: null, nearest: null, conn: '' }
+
+/** Eye height above the feet (GDD "First-person body"). */
+const EYE_HEIGHT = 1.7
+const scratchEye = { x: 0, y: 0, z: 0 }
+/** Reused every frame — the render pass allocates nothing. */
+const fireState = {
+  locked: false,
+  registry: emptyRegistry(),
+  equippedItem: null as string | null,
+  reloading: false,
+  seq: 0,
+  lookDir: [0, 0, 1] as [number, number, number],
+}
+
+// ------------------------------------------------------- Phase 2 session
+// Registry and colliders both arrive once, after terrain and before the first
+// snapshot (docs/PROTOCOL.md). Until defs lands the client must not fire,
+// predict damage, or draw an inventory — `registry.ready` is that gate.
+let registry: Registry = emptyRegistry()
+let colliders: Collider[] = []
+let credits: number | null = null
+let equippedItem: string | null = null
+let reloading = false
+let lookingAt: Interactable | null = null
+/** entity id -> what it is, so the interaction pass knows which are NPCs. */
+const entityKinds = new Map<number, number>()
+/** entity id -> display name (from `spawn`), used to look an NPC's def up. */
+const entityNames = new Map<number, string>()
+/** entity id -> last authoritative position, for interaction range/cone.
+ *  Read from the snapshots this file already walks rather than adding a
+ *  second position accessor to World. */
+const entityPos = new Map<number, Vec3>()
 
 function flashStatus(text: string): void {
   statusEl.textContent = text
@@ -126,22 +164,32 @@ window.addEventListener('resize', () => {
 function processSnapshot(snap: Snapshot, nowMs: number): void {
   for (const e of snap.entities) {
     if (e.id === myId) predictor.reconcile(e, snap.ackSeq, nowMs)
-    else world.feedRemote(e.id, e, snap.tick, nowMs)
+    else {
+      world.feedRemote(e.id, e, snap.tick, nowMs)
+      entityPos.set(e.id, { x: e.pos[0], y: e.pos[1], z: e.pos[2] })
+    }
   }
 }
 
-function onSpawn(id: number, name: string): void {
+function onSpawn(id: number, name: string, entityType = 1): void {
   // Own entity: the predictor + local body are its entry. The server
   // re-anchors it via its snapshot rows (and the fresh SPAWN on join);
   // upserting it as a remote would duplicate the body.
   if (id === myId) return
-  world.upsertRemote(id, name)
+  world.upsertRemote(id, name, entityType)
+  entityKinds.set(id, entityType)
+  entityNames.set(id, name)
   remoteIds.add(id)
   // Late joiner (asset already loaded): give it the real model.
-  if (playerScene) world.setRemoteRig(id, makeRigFromGltf(playerScene.clone(true)))
+  if (playerScene && entityType !== ENTITY_TYPE_NPC && entityType !== ENTITY_TYPE_TARGET) {
+    world.setRemoteRig(id, makeRigFromGltf(playerScene.clone(true)))
+  }
 }
 
 function onDespawn(id: number): void {
+  entityKinds.delete(id)
+  entityNames.delete(id)
+  entityPos.delete(id)
   world.removeRemote(id)
   remoteIds.delete(id)
 }
@@ -205,7 +253,18 @@ function startLive(): void {
       onTerrain(decodeTerrain(wire.faceGrid, wire.radiusMin, wire.radiusMax, wire.radii))
     },
     onSnapshot: (snap) => processSnapshot(snap, performance.now()),
-    onSpawn: (sp) => onSpawn(sp.entityId, sp.name),
+    onDefs: (payload) => {
+      registry = parseDefs(payload)
+      shop.setRegistry(registry)
+      hudPush(true)
+    },
+    onColliders: (payload) => {
+      colliders = decodeColliders(payload)
+      world.setColliders(colliders)
+    },
+    onCmdResult: (payload) => onCmdResult(payload),
+    onEvent: (ev) => fire?.handleEvent(ev),
+    onSpawn: (sp) => onSpawn(sp.entityId, sp.name, sp.entityType),
     onDespawn: (id) => onDespawn(id),
     onReconnect: () => onResync(),
     onPong: () => hudPush(true),
@@ -213,10 +272,90 @@ function startLive(): void {
   net.connect(cfg.wsUrl, cfg.name)
 }
 
+// ------------------------------------------------------------ Phase 2 net
+/**
+ * Apply one cmd_result. The server is the only authority on credits and
+ * inventory: everything here reads the reply rather than predicting it, which
+ * is why the shop never shows an item optimistically (a cmd is not idempotent
+ * and not replayed — docs/PROTOCOL.md).
+ */
+function onCmdResult(payload: Uint8Array): void {
+  const res = decodeCmdResult(payload)
+  shop?.handleResult(res)
+
+  const body = res.body as Record<string, unknown> | null
+  if (body && typeof body === 'object') {
+    if (typeof body.credits === 'number') credits = body.credits
+    const eq = body.equipped
+    if (eq && typeof eq === 'object') {
+      const primary = (eq as Record<string, unknown>).primary
+      equippedItem = typeof primary === 'string' ? primary : null
+    }
+    if (typeof body.magazine === 'number' && typeof body.reserve === 'number') {
+      hudData.ammo = { magazine: body.magazine, reserve: body.reserve }
+    }
+  }
+  if (res.opcode === OP.reload) reloading = false
+  hudData.credits = credits
+  hudData.reloading = reloading
+  hudPush(true)
+}
+
+const shop = new ShopPanel(registry, {
+  sendCmd: (opcode, body) => {
+    if (!net) return -1
+    const seq = net.lastInputSeq()
+    return net.sendFramed(encodeCmd(seq, opcode, body)) ? seq : -1
+  },
+  setPointerLock: (locked) => {
+    if (locked) renderer.domElement.requestPointerLock()
+    else document.exitPointerLock()
+  },
+  credits: () => credits ?? 0,
+})
+
+const fire = new FireController(renderer.domElement, {
+  scene: world.scene,
+  camera: world.camera,
+  overlay: tagsEl,
+  send: (bytes) => net?.sendFramed(bytes) ?? false,
+})
+
+/**
+ * Pick what the player is looking at, once per frame.
+ *
+ * Only NPCs are interactable in Phase 2. `pickInteractable` takes the largest
+ * dot product rather than the nearest candidate — at a shop counter two NPCs
+ * stand together and nearest picks the wrong one.
+ */
+function updateInteraction(eye: { x: number; y: number; z: number }): void {
+  const look = controls.lookDir
+  const candidates: Interactable[] = []
+  for (const [id, kind] of entityKinds) {
+    if (kind !== ENTITY_TYPE_NPC) continue
+    const pos = entityPos.get(id)
+    if (!pos) continue
+    const npc = registry.npcs[entityNames.get(id) ?? '']
+    candidates.push({ entityId: id, pos, verb: npc?.verb ?? 'Talk' })
+  }
+  lookingAt = pickInteractable(eye, look, candidates)
+  hudData.prompt = lookingAt ? { verb: lookingAt.verb, key: 'E' } : null
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyE' || !lookingAt || !registry.ready) return
+  shop.open(lookingAt.entityId)
+})
+
 // ----------------------------------------------------------------- ticks
 /** One fixed 50 ms step: sample input, predict, hand to the authority. */
 function tickStep(nowMs: number): void {
   const input = controls.input()
+  // The predicted step must resolve against the SAME colliders the server
+  // does, or prediction diverges from authority at every wall and replay
+  // fights it every tick. Empty until the `colliders` message lands, which is
+  // the no-op path in both sims.
+  input.colliders = colliders
   if (mock) {
     const s = seq++ & 0xffff
     predictor.predict(input, s, nowMs)
@@ -275,10 +414,27 @@ function frame(now: number): void {
     }
 
     world.setLocal(pos, rs.facing, controls.lookDir)
+
+    // Interaction and the weapon both hang off the eye, which is the body
+    // position plus eye height along the local radial up.
+    scratchEye.x = pos.x + scratchUp.x * EYE_HEIGHT
+    scratchEye.y = pos.y + scratchUp.y * EYE_HEIGHT
+    scratchEye.z = pos.z + scratchUp.z * EYE_HEIGHT
+    updateInteraction(scratchEye)
+
+    fireState.locked = controls.isLocked
+    fireState.registry = registry
+    fireState.equippedItem = equippedItem
+    fireState.reloading = reloading
+    fireState.seq = net ? net.lastInputSeq() : 0
+    fireState.lookDir[0] = controls.lookDir.x
+    fireState.lookDir[1] = controls.lookDir.y
+    fireState.lookDir[2] = controls.lookDir.z
     hudData.speed = vel ? vec.len(vel) : null
   }
 
   world.frameRemotes(now, frameDt, rs ? rs.pos : scratchPos)
+  fire.update(now, frameDt, fireState)
   hudData.nearest = rs ? world.nearestDist(rs.pos) : null
   hudData.conn = connText()
   hud.update(hudData)
