@@ -8,15 +8,21 @@ package server
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 
+	"space-adventure/server/internal/defs"
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
+	"space-adventure/server/internal/store"
 	"space-adventure/server/internal/terrain"
 )
 
@@ -34,14 +40,40 @@ const (
 	// state, so when the queue is full the newest snapshot is dropped
 	// rather than blocking the tick loop.
 	outQueue = 32
+	// worldEntityIDBase is where zone-placed NPC/target entity ids start
+	// (see New): far above where player ids, which start at 1 and increment
+	// per join, will reach in one server run.
+	worldEntityIDBase = 1 << 20
 )
 
 // Server owns the world. All methods are safe for concurrent use.
 type Server struct {
-	terrain  *terrain.Field
-	seed     uint64
-	tickHz   uint16
-	terrainF []byte // pre-encoded terrain frame, sent on every join
+	terrain    *terrain.Field
+	seed       uint64
+	tickHz     uint16
+	terrainF   []byte // pre-encoded terrain frame, sent on every join
+	defsF      []byte // pre-encoded defs frame, built once at startup
+	collidersF []byte // pre-encoded colliders frame, built once at startup
+	colliders  []protocol.Collider
+
+	reg   *defs.Registry
+	world *sim.World // static NPC/target entities, composed from zones
+	// worldEnts is a stable-order cache over world.Ents, never mutated after
+	// New. It is server-internal only: NPC/target entities are not yet
+	// broadcast as spawn/snapshot rows (a client can't render or interact
+	// with them until a later task wires that up — see the report), but
+	// they must still exist here so MsgFire has something for
+	// sim.ResolveShot to hit.
+	worldEnts []*sim.Ent
+	history   *sim.History
+	rng       *rand.Rand // ResolveShot's shared RNG; guarded by mu (fire() and tick() both hold it)
+
+	// store is the persistence backend. It is nil until something wires a
+	// *store.Store into New (out of scope here: New's signature is shared
+	// with cmd/server/main.go, which does not construct one yet) — every
+	// session is therefore ephemeral for now, per PROTOCOL "Identity token"
+	// ("An empty or malformed token is treated as absent").
+	store *store.Store
 
 	upgrader websocket.Upgrader
 
@@ -55,8 +87,75 @@ type Server struct {
 	snapPool sync.Pool // []byte fan-out buffers (per-client ack_seq patch)
 }
 
-// New builds a Server over the generated terrain field.
+// New builds a Server over the generated terrain field. It loads the content
+// registry, flattens every zone into t (GDD "Static colliders" -> "The site
+// is flattened, not assumed flat"), and composes each zone's colliders and
+// entity placements to world space — all before t is encoded for the wire,
+// so the terrain payload a client receives already agrees with the
+// colliders and target/NPC positions it also receives.
 func New(t *terrain.Field, seed uint64) *Server {
+	reg, err := defs.Load()
+	if err != nil {
+		// The content registry is embedded, repo-controlled data (server/data).
+		// A failure here is a broken build, not a runtime condition — same
+		// judgment call defs.ComposeZone's own doc comment makes for a zone
+		// that will not compose. New has no error return (its signature is
+		// shared with cmd/server/main.go), so this is the load-bearing check.
+		panic(fmt.Errorf("server: load defs: %w", err))
+	}
+
+	// Zone iteration order must be deterministic (world entity ids are
+	// assigned in this order), and map range order is not — sort zone ids.
+	zoneIDs := make([]string, 0, len(reg.Zones))
+	for id := range reg.Zones {
+		zoneIDs = append(zoneIDs, id)
+	}
+	sort.Strings(zoneIDs)
+
+	for _, id := range zoneIDs {
+		z := reg.Zones[id]
+		terrain.Flatten(t, z.OriginDir, z.FlattenRadius, z.FlattenFalloff)
+	}
+
+	radiusFn := func(d [3]float64) float64 { return t.SampleRadius(terrain.Vec(d)) }
+
+	world := sim.NewWorld()
+	var worldEnts []*sim.Ent
+	var allColliders []protocol.Collider
+	// World entity ids are drawn from a separate range above where player
+	// ids (Server.nextID, starting at 1) will ever reach in a single run, so
+	// the two id spaces never collide and player ids keep starting at 1
+	// regardless of how many targets/NPCs a zone places.
+	worldID := uint32(worldEntityIDBase)
+	for _, id := range zoneIDs {
+		z := reg.Zones[id]
+		cols, placements, err := defs.ComposeZone(z, radiusFn)
+		if err != nil {
+			panic(fmt.Errorf("server: compose zone %q: %w", id, err))
+		}
+		allColliders = append(allColliders, cols...)
+		for _, p := range placements {
+			worldID++
+			kind := sim.EntityKind(protocol.EntityTypeTarget)
+			var data any
+			if p.Type == "npc" {
+				kind = sim.EntityKind(protocol.EntityTypeNPC)
+				data = p.Def
+			}
+			ent := &sim.Ent{
+				ID:     worldID,
+				Kind:   kind,
+				Pos:    p.Pos,
+				Quat:   p.Quat,
+				Health: reg.Entities[entityDefKind(kind)].MaxHealth,
+				Def:    p.Def,
+				Data:   data,
+			}
+			world.Add(ent)
+			worldEnts = append(worldEnts, ent)
+		}
+	}
+
 	s := &Server{
 		terrain: t,
 		seed:    seed,
@@ -64,17 +163,45 @@ func New(t *terrain.Field, seed uint64) *Server {
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(*http.Request) bool { return true },
 		},
-		clients: make(map[uint32]*client),
+		clients:   make(map[uint32]*client),
+		reg:       reg,
+		world:     world,
+		worldEnts: worldEnts,
+		history:   sim.NewHistory(sim.HistoryTicks),
+		rng:       rand.New(rand.NewSource(int64(seed))),
+		colliders: allColliders,
 	}
-	// The terrain frame is pre-encoded once: it is just the 2-byte type
-	// prefix over the field's canonical payload (PROTOCOL "terrain").
-	payload := t.Encode()
-	frame := make([]byte, 2+len(payload))
-	binary.LittleEndian.PutUint16(frame[0:2], protocol.MsgTerrain)
-	copy(frame[2:], payload)
-	s.terrainF = frame
+	// The terrain frame is pre-encoded once, AFTER flattening above: it is
+	// just the 2-byte type prefix over the field's canonical payload
+	// (PROTOCOL "terrain"). Encoding it before flatten would ship a field
+	// that disagrees with the colliders/placements just composed against it.
+	s.terrainF = frame(protocol.MsgTerrain, t.Encode())
+	s.defsF = protocol.EncodeDefs(protocol.Defs{Data: reg.Payload})
+	s.collidersF = protocol.EncodeColliders(protocol.Colliders{List: allColliders})
 	s.snapPool.New = func() any { return []byte(nil) }
 	return s
+}
+
+// frame prepends the 2-byte little-endian message type to payload.
+func frame(typ uint16, payload []byte) []byte {
+	b := make([]byte, 2+len(payload))
+	binary.LittleEndian.PutUint16(b[0:2], typ)
+	copy(b[2:], payload)
+	return b
+}
+
+// entityDefKind maps a world entity's Kind back to its defs.Registry.Entities
+// key (the generic "player"/"npc"/"target" row, not the specific archetype
+// carried in Ent.Def/Data).
+func entityDefKind(k sim.EntityKind) string {
+	switch uint16(k) {
+	case protocol.EntityTypeNPC:
+		return "npc"
+	case protocol.EntityTypeTarget:
+		return "target"
+	default:
+		return "player"
+	}
 }
 
 // HandleWS upgrades /ws and runs the connection's reader and writer.
@@ -87,6 +214,7 @@ func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	// (PROTOCOL: max message size 64 KiB).
 	conn.SetReadLimit(protocol.MaxMessageSize)
 	c := &client{srv: s, conn: conn, out: make(chan msg, outQueue), done: make(chan struct{})}
+	conn.SetPongHandler(c.onPong)
 	conn.SetReadDeadline(time.Now().Add(silentTimeout))
 	go c.writer()
 	c.reader() // blocks until the connection dies
@@ -140,8 +268,14 @@ func (s *Server) tick() {
 	tick := s.tickNo
 	s.list = s.list[:0]
 	for _, c := range s.clients {
-		c.step(s.terrain)
+		c.step(s.terrain, s.colliders)
+		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		s.list = append(s.list, c)
+	}
+	var events []protocol.Event
+	s.world.Step(sim.DT, sim.StepCtx{Events: &events})
+	for _, e := range s.worldEnts {
+		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
 	}
 	body := s.encodeSnapshot(tick)
 	// Fan out under the lock: sendSnapshot is a non-blocking channel
@@ -149,6 +283,12 @@ func (s *Server) tick() {
 	// while copies are in flight.
 	for _, c := range s.list {
 		c.sendSnapshot(body, uint16(c.ackSeq.Load()))
+	}
+	for _, ev := range events {
+		f := protocol.EncodeEvent(ev)
+		for _, c := range s.list {
+			c.send(msg{data: f})
+		}
 	}
 	s.mu.Unlock()
 	step := time.Since(t0)
@@ -161,7 +301,11 @@ func (s *Server) tick() {
 // clients; ack_seq is patched per client in sendSnapshot). Must be called
 // with s.mu held.
 func (s *Server) encodeSnapshot(tick uint32) []byte {
-	n := len(s.list)
+	// Players first, then the world's NPCs and targets. Both go out every
+	// tick: without them a client can see neither the shopkeeper it is meant
+	// to buy from nor the targets it is meant to shoot, which is the whole of
+	// Phase 2's playable loop.
+	n := len(s.list) + len(s.worldEnts)
 	size := 2 + 8 + n*protocol.EntitySize // type | tick,ack,count | rows
 	if cap(s.snapBuf) < size {
 		s.snapBuf = make([]byte, 0, size)
@@ -173,21 +317,54 @@ func (s *Server) encodeSnapshot(tick uint32) []byte {
 		q := c.entity.State.OrientationQuat()
 		p, v := c.entity.State.Pos, c.entity.State.Vel
 		b = protocol.AppendEntity(b, protocol.Entity{
-			ID:   c.entity.ID,
-			Pos:  [3]float32{float32(p[0]), float32(p[1]), float32(p[2])},
-			Quat: [4]float32{float32(q[0]), float32(q[1]), float32(q[2]), float32(q[3])},
-			Vel:  [3]float32{float32(v[0]), float32(v[1]), float32(v[2])},
+			ID:     c.entity.ID,
+			Pos:    v3f32(p),
+			Quat:   v4f32([4]float64(q)),
+			Vel:    v3f32(v),
+			Health: healthU16(c.entity.Health),
+			Flags:  c.flags(tick),
+			PitchQ: c.pitchQ(),
+		})
+	}
+	for _, e := range s.worldEnts {
+		b = protocol.AppendEntity(b, protocol.Entity{
+			ID:     e.ID,
+			Pos:    v3f32(e.Pos),
+			Quat:   v4f32(e.Quat),
+			Vel:    v3f32(e.Vel),
+			Health: healthU16(e.Health),
+			Flags:  e.Flags,
+			PitchQ: e.PitchQ,
 		})
 	}
 	return b
 }
 
-// join registers c as a new player: allocates the entity, enqueues the join
-// handshake (hello_ack, terrain, spawn for every existing entity, spawn for
-// self), then publishes c to the world so the next tick includes it. The
-// handshake is fully enqueued before publication, so the client's stream
-// order is hello_ack, terrain, spawn(s), then snapshots (FIFO per
-// connection).
+func healthU16(h int) uint16 {
+	if h < 0 {
+		return 0
+	}
+	if h > math.MaxUint16 {
+		return math.MaxUint16
+	}
+	return uint16(h)
+}
+
+func v3f32(v [3]float64) [3]float32 {
+	return [3]float32{float32(v[0]), float32(v[1]), float32(v[2])}
+}
+
+func v4f32(v [4]float64) [4]float32 {
+	return [4]float32{float32(v[0]), float32(v[1]), float32(v[2]), float32(v[3])}
+}
+
+// join registers c as a new player: allocates the entity and identity,
+// enqueues the join handshake (hello_ack, terrain, defs, colliders, spawn
+// for every existing entity, spawn for self), then publishes c to the world
+// so the next tick includes it. The handshake is fully enqueued before
+// publication, so the client's stream order is hello_ack, terrain, defs,
+// colliders, spawn(s), then snapshots (FIFO per connection; PROTOCOL.md
+// "terrain"/"defs"/"colliders").
 func (s *Server) join(c *client, h protocol.Hello) {
 	if h.ClientVer != protocol.VersionPhase2 {
 		c.fail() // wrong protocol version (PROTOCOL.md "Versioning"): close 1002
@@ -203,14 +380,33 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	id := s.nextID
 	c.id = id
 	name := SanitizeName(h.Name, id)
+	spawnState := sim.SpawnState(s.terrain)
 	c.entity = &entity{
-		ID:    id,
-		Name:  name,
-		State: sim.SpawnState(s.terrain),
+		ID:     id,
+		Name:   name,
+		State:  spawnState,
+		Health: s.reg.Entities["player"].MaxHealth,
 	}
 	c.entity.PrevLook = c.entity.State.Facing
-	// Collect existing players' spawn rows before publishing self.
-	others := make([]msg, 0, len(s.clients))
+	c.rate = newCmdRate(time.Now())
+	token := h.Token
+	if s.store == nil {
+		token = "" // no persistence backend wired yet: every session is ephemeral
+	}
+	c.ident = joinIdentity(context.Background(), s.store, s.reg, token, name, [3]float64(spawnState.Pos))
+
+	// Collect the world's entities and the existing players' spawn rows before
+	// publishing self. World entities exist from server start and never
+	// despawn, so a joining client learns them exactly once, here — the same
+	// contract PROTOCOL states for any entity already in the world.
+	others := make([]msg, 0, len(s.clients)+len(s.worldEnts))
+	for _, e := range s.worldEnts {
+		others = append(others, msg{data: protocol.EncodeSpawn(protocol.Spawn{
+			EntityID:   e.ID,
+			EntityType: uint16(e.Kind),
+			Data:       []byte(e.Def),
+		})})
+	}
 	for _, oc := range s.clients {
 		others = append(others, msg{data: protocol.EncodeSpawn(protocol.Spawn{
 			EntityID:   oc.entity.ID,
@@ -232,6 +428,8 @@ func (s *Server) join(c *client, h protocol.Hello) {
 		EntityID:  id,
 	})})
 	c.send(msg{data: s.terrainF})
+	c.send(msg{data: s.defsF})
+	c.send(msg{data: s.collidersF})
 	for _, m := range others {
 		c.send(m)
 	}
@@ -257,7 +455,12 @@ func (s *Server) leave(c *client) {
 	}
 	id := c.entity.ID
 	delete(s.clients, id)
+	s.history.Forget(id)
 	s.mu.Unlock()
+
+	if c.ident != nil {
+		c.ident.Close(context.Background())
+	}
 
 	f := protocol.EncodeDespawn(protocol.Despawn{EntityID: id})
 	s.mu.Lock()
@@ -265,4 +468,166 @@ func (s *Server) leave(c *client) {
 		oc.send(msg{data: f})
 	}
 	s.mu.Unlock()
+}
+
+// doCmd builds the requester's server-truth cmdWorld and runs their cmd
+// through handleCmd (docs/tasks/phase2-wave2.md "W2-14"). It snapshots the
+// identity's player row, hands handleCmd a pointer to the copy (safe: the
+// copy is only ever touched by this connection's own reader goroutine), and
+// writes any mutation back — the same read/mutate/write-back shape
+// identity.go's Mutate doc comment calls for.
+func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
+	var result protocol.CmdResult
+	c.ident.Mutate(func(p *store.Player) {
+		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
+			Player:  p,
+			Reg:     s.reg,
+			Pos:     c.entity.State.Pos,
+			Up:      terrain.Normalize(c.entity.State.Pos),
+			Look:    c.lookDir(),
+			FindNPC: s.findNPC,
+		})
+	})
+	return result
+}
+
+// findNPC looks up a shop NPC's archetype and world position by entity id,
+// for cmd.go's inRange/shop rules — cmdWorld.FindNPC.
+func (s *Server) findNPC(entityID uint32) (defs.NPC, sim.Vec, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := s.world.Ents[entityID]
+	if e == nil || e.Kind != sim.EntityKind(protocol.EntityTypeNPC) {
+		return defs.NPC{}, sim.Vec{}, false
+	}
+	archetype, _ := e.Data.(string)
+	npc, ok := s.reg.NPCs[archetype]
+	if !ok {
+		return defs.NPC{}, sim.Vec{}, false
+	}
+	return npc, sim.Vec(e.Pos), true
+}
+
+// weaponFor resolves id (a player's equipped primary item) to its weapon
+// rule table. false when id names no item, or an item with no weapon table.
+func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
+	if id == "" {
+		return defs.Weapon{}, false
+	}
+	item, ok := s.reg.Items[id]
+	if !ok || item.Weapon == nil {
+		return defs.Weapon{}, false
+	}
+	return *item.Weapon, true
+}
+
+// fire resolves one MsgFire request (docs/PROTOCOL.md "fire — shooting"):
+// cadence and ammunition are enforced server-side against the shooter's
+// equipped weapon and this connection's ephemeral magazine; the rewind is
+// bounded by the server's own smoothed RTT/2 (never a client value); a
+// resolved shot broadcasts shot_fired always, hit when it lands (death
+// follows a tick later from sim.StepTarget's own health check, reused
+// rather than duplicated here).
+func (s *Server) fire(c *client, f protocol.Fire) {
+	primary := c.ident.Snapshot().Equipped["primary"]
+	wp, ok := s.weaponFor(primary)
+	if !ok {
+		return // nothing equipped, or an unknown item: drop the shot
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tick := s.tickNo
+	intervalTicks := uint32(math.Round(wp.FireInterval * sim.TickHz))
+	tolerance := uint32(1)
+	if c.entity.LastFireTick != 0 {
+		minTick := c.entity.LastFireTick + intervalTicks
+		if minTick > tolerance {
+			minTick -= tolerance
+		} else {
+			minTick = 0
+		}
+		if tick < minTick {
+			return // too soon: dropped, not queued
+		}
+	}
+
+	if primary != c.entity.EquippedWeapon {
+		c.entity.EquippedWeapon = primary
+		c.entity.Magazine = wp.Magazine
+	}
+	if c.entity.Magazine <= 0 {
+		return // empty magazine: dropped
+	}
+
+	rewindTicks := c.rewindTicks()
+	rewindTick := tick - uint32(rewindTicks)
+	eyePos, eyeUp, ok := s.history.At(rewindTick, c.entity.ID)
+	if !ok {
+		return // no history for this shooter at the rewound tick yet
+	}
+	origin := sim.Vec(eyePos).Add(sim.Vec(eyeUp).Scale(eyeHeightMeters))
+	dir := sim.Vec{float64(f.Dir[0]), float64(f.Dir[1]), float64(f.Dir[2])}
+
+	c.entity.Magazine--
+	c.entity.LastFireTick = tick
+	c.entity.FiringTick = tick
+
+	shot := sim.Shot{
+		Shooter:       c.entity.ID,
+		Dir:           [3]float64(dir),
+		Tick:          tick,
+		RewindTicks:   rewindTicks,
+		ConeHalfAngle: wp.SpreadBase * math.Pi / 180,
+	}
+	hit, found := sim.ResolveShot(s.world, s.history, shot, wp, s.entityDef, s.rng)
+
+	dist := wp.MaxRange
+	if found {
+		dist = origin.Sub(hit.Point).Len()
+	}
+	shotData := make([]byte, 0, 28)
+	for i := 0; i < 3; i++ {
+		shotData = appendF32(shotData, float32(origin[i]))
+	}
+	for i := 0; i < 3; i++ {
+		shotData = appendF32(shotData, float32(dir[i]))
+	}
+	shotData = appendF32(shotData, float32(dist))
+	shotFrame := protocol.EncodeEvent(protocol.Event{
+		EntityID: c.entity.ID,
+		EventID:  protocol.EventShotFired,
+		Data:     shotData,
+	})
+	for _, oc := range s.clients {
+		oc.send(msg{data: shotFrame})
+	}
+
+	if found {
+		hitData := make([]byte, 0, 20)
+		hitData = binary.LittleEndian.AppendUint32(hitData, c.entity.ID)
+		for i := 0; i < 3; i++ {
+			hitData = appendF32(hitData, float32(hit.Point[i]))
+		}
+		hitData = binary.LittleEndian.AppendUint16(hitData, uint16(hit.Damage))
+		hitData = binary.LittleEndian.AppendUint16(hitData, uint16(hit.HealthAfter))
+		hitFrame := protocol.EncodeEvent(protocol.Event{
+			EntityID: hit.Victim,
+			EventID:  protocol.EventHit,
+			Data:     hitData,
+		})
+		for _, oc := range s.clients {
+			oc.send(msg{data: hitFrame})
+		}
+	}
+}
+
+// entityDef is ResolveShot's defOf callback.
+func (s *Server) entityDef(e *sim.Ent) defs.EntityDef {
+	return s.reg.Entities[entityDefKind(e.Kind)]
+}
+
+func appendF32(b []byte, v float32) []byte {
+	return binary.LittleEndian.AppendUint32(b, math.Float32bits(v))
 }

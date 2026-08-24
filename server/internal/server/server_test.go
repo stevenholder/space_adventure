@@ -108,8 +108,8 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hello_ack: %v", err)
 	}
-	if ha.EntityID != 1 || ha.WorldSeed != 1337 || ha.TickHz != 20 || ha.ServerVer != protocol.VersionPhase2 {
-		t.Fatalf("hello_ack = %+v, want id=1 seed=1337 tickHz=20", ha)
+	if ha.EntityID == 0 || ha.WorldSeed != 1337 || ha.TickHz != 20 || ha.ServerVer != protocol.VersionPhase2 {
+		t.Fatalf("hello_ack = %+v, want nonzero id, seed=1337, tickHz=20", ha)
 	}
 
 	// Terrain must arrive before the first snapshot (client must not
@@ -134,25 +134,42 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 		t.Fatalf("terrain payload does not round-trip (%d vs %d bytes)", len(re), len(terr))
 	}
 
-	sp, err := protocol.DecodeSpawn(a.nextOf(t, protocol.MsgSpawn))
-	if err != nil {
-		t.Fatalf("spawn: %v", err)
+	// The world contains NPCs and targets placed from server/data/zones, so a
+	// joining client receives a spawn for each of them alongside its own. The
+	// property that matters is that THIS client's body arrives, not that the
+	// world is empty — asserting "the first spawn is mine" made a test of the
+	// join sequence into a test that no content exists, which then blocked
+	// content from shipping.
+	var sp protocol.Spawn
+	for {
+		got, err := protocol.DecodeSpawn(a.nextOf(t, protocol.MsgSpawn))
+		if err != nil {
+			t.Fatalf("spawn: %v", err)
+		}
+		if got.EntityID == ha.EntityID {
+			sp = got
+			break
+		}
 	}
-	if sp.EntityID != 1 || sp.EntityType != protocol.EntityTypePlayer || string(sp.Data) != "Player 1" {
-		t.Fatalf("spawn = %+v, want id=1 name=Player 1", sp)
+	if sp.EntityType != protocol.EntityTypePlayer || string(sp.Data) != "Player 1" {
+		t.Fatalf("own spawn = %+v, want type=player name=\"Player 1\"", sp)
 	}
 
-	// First snapshot: entity 1 at spawn, at rest.
+	// First snapshot: our own entity, at spawn, at rest.
 	snap, err := protocol.DecodeSnapshot(a.nextOf(t, protocol.MsgSnapshot))
 	if err != nil {
 		t.Fatalf("snapshot: %v", err)
 	}
-	if len(snap.Entities) != 1 {
-		t.Fatalf("snapshot has %d entities, want 1", len(snap.Entities))
+	var e protocol.Entity
+	found := false
+	for _, row := range snap.Entities {
+		if row.ID == ha.EntityID {
+			e, found = row, true
+			break
+		}
 	}
-	e := snap.Entities[0]
-	if e.ID != 1 {
-		t.Fatalf("entity id %d, want 1", e.ID)
+	if !found {
+		t.Fatalf("own entity %d absent from first snapshot (%d entities)", ha.EntityID, len(snap.Entities))
 	}
 	r := rad(e.Pos)
 	if r < 124 || r > 190 {
@@ -182,20 +199,29 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 	if typ, _ := b.next(t); typ != protocol.MsgTerrain {
 		t.Fatalf("B: expected terrain before first snapshot, got %04x", typ)
 	}
-	// B learns A first, then itself.
-	spA, err := protocol.DecodeSpawn(b.nextOf(t, protocol.MsgSpawn))
-	if err != nil {
-		t.Fatalf("spawn A (for B): %v", err)
+	// B learns the world's entities and A, then itself. Collect the player
+	// spawns and assert on those: the world's NPCs and targets are also
+	// announced here, and their order relative to players is not a contract.
+	var spA, spB protocol.Spawn
+	for spA.EntityID == 0 || spB.EntityID == 0 {
+		got, err := protocol.DecodeSpawn(b.nextOf(t, protocol.MsgSpawn))
+		if err != nil {
+			t.Fatalf("spawn (for B): %v", err)
+		}
+		if got.EntityType != protocol.EntityTypePlayer {
+			continue // world entity (NPC / target)
+		}
+		if got.EntityID == ha.EntityID {
+			spA = got
+		} else if got.EntityID == haB.EntityID {
+			spB = got
+		}
 	}
-	if spA.EntityID != 1 || string(spA.Data) != "Player 1" {
-		t.Fatalf("B's spawn of A = %+v, want id=1 Player 1", spA)
+	if string(spA.Data) != "Player 1" {
+		t.Fatalf("B's spawn of A = %+v, want name %q", spA, "Player 1")
 	}
-	spB, err := protocol.DecodeSpawn(b.nextOf(t, protocol.MsgSpawn))
-	if err != nil {
-		t.Fatalf("spawn B: %v", err)
-	}
-	if spB.EntityID != 2 || string(spB.Data) != "bob" {
-		t.Fatalf("B's own spawn = %+v, want id=2 name=bob (controls stripped)", spB)
+	if string(spB.Data) != "bob" {
+		t.Fatalf("B's own spawn = %+v, want name=bob (controls stripped)", spB)
 	}
 
 	// A learns about B.
@@ -214,8 +240,12 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot A: %v", err)
 	}
-	if len(snapA.Entities) != 2 {
-		t.Fatalf("A snapshot has %d entities, want 2", len(snapA.Entities))
+	// Both players must be in the snapshot. The exact row count is not a
+	// contract: the world's NPCs and targets are in there too, and pinning the
+	// number turns a "do both players appear" check into "no content exists".
+	if !hasEntity(snapA, ha.EntityID) || !hasEntity(snapA, haB.EntityID) {
+		t.Fatalf("A snapshot missing a player: ids %v, want both %d and %d",
+			entityIDs(snapA), ha.EntityID, haB.EntityID)
 	}
 	snapB, err := protocol.DecodeSnapshot(b.nextOf(t, protocol.MsgSnapshot))
 	if err != nil {
@@ -290,13 +320,17 @@ func TestJoinSnapshotAndAck(t *testing.T) {
 	if dp.EntityID != 2 {
 		t.Fatalf("despawn id = %d, want 2", dp.EntityID)
 	}
-	// And the next A snapshot has A only.
+	// And the next A snapshot still has A but no longer B. The world's NPCs
+	// and targets remain — they are not players and do not leave.
 	snapA, err = protocol.DecodeSnapshot(a.nextOf(t, protocol.MsgSnapshot))
 	if err != nil {
 		t.Fatalf("snapshot A (after leave): %v", err)
 	}
-	if len(snapA.Entities) != 1 || snapA.Entities[0].ID != 1 {
-		t.Fatalf("after B left, snapshot = %+v, want only entity 1", snapA.Entities)
+	if !hasEntity(snapA, ha.EntityID) {
+		t.Fatalf("after B left, A is missing from its own snapshot: ids %v", entityIDs(snapA))
+	}
+	if hasEntity(snapA, haB.EntityID) {
+		t.Fatalf("after B left, B %d is still present: ids %v", haB.EntityID, entityIDs(snapA))
 	}
 }
 
@@ -312,4 +346,23 @@ func TestInputBeforeHelloIsRejected(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected read failure after pre-hello input, got a message")
 	}
+}
+
+// hasEntity reports whether a snapshot contains the given entity id.
+func hasEntity(s protocol.Snapshot, id uint32) bool {
+	for _, e := range s.Entities {
+		if e.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// entityIDs lists a snapshot's entity ids, for failure messages.
+func entityIDs(s protocol.Snapshot) []uint32 {
+	out := make([]uint32, 0, len(s.Entities))
+	for _, e := range s.Entities {
+		out = append(out, e.ID)
+	}
+	return out
 }

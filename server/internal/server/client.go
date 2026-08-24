@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +13,17 @@ import (
 	"space-adventure/server/internal/terrain"
 )
 
+// rttPingInterval is how often the server sends its own WebSocket-level
+// ping control frame to measure this connection's RTT. This is distinct
+// from the app-level ping/pong (PROTOCOL.md MsgPing/MsgPong): that pair
+// carries a client-local clock the server only echoes, so it cannot be used
+// as the server's own RTT measurement (PROTOCOL.md "fire" — rewind is
+// bounded by "the server's own smoothed RTT/2 ... never a client value").
+const rttPingInterval = 3 * time.Second
+
+// rttSmoothing is the EWMA weight given to each new RTT sample (1/n).
+const rttSmoothing = 5
+
 // entity is one body in the world. The connection's input moves this
 // entity — a lookup, not an identity: in M1 it is the player's own body,
 // and from M2 a player in a pilot seat drives the vehicle instead.
@@ -20,6 +32,18 @@ type entity struct {
 	Name     string
 	State    sim.State
 	PrevLook sim.Vec
+
+	Health int // current hit points (PROTOCOL "health"); players are not
+	// damageable in Phase 2 (GDD "Health and damage"), so this only ever
+	// reflects the def's max_health.
+
+	// Ephemeral per-connection weapon state (docs/PROTOCOL.md "fire").
+	// Not persisted: store.Player carries no magazine/reserve field yet
+	// (internal/server/cmd.go, OpReload).
+	EquippedWeapon string // last primary item id observed, to detect a re-equip
+	Magazine       int
+	LastFireTick   uint32 // tick of the last accepted shot (0 = never fired)
+	FiringTick     uint32 // tick a shot last resolved, for the snapshot's firing flag
 }
 
 // msg is one outbound frame on the client's outbound queue.
@@ -33,19 +57,27 @@ type client struct {
 	srv    *Server
 	conn   *websocket.Conn
 	id     uint32
-	entity *entity // nil until hello succeeds
+	entity *entity   // nil until hello succeeds
+	ident  *identity // nil until hello succeeds
+	rate   *cmdRate  // nil until hello succeeds
 
 	input  atomic.Pointer[protocol.Input] // latest command state (latest wins)
 	ackSeq atomic.Uint32                  // seq of the input last applied
+
+	rttMu      sync.Mutex
+	rttEWMA    time.Duration
+	pingSentAt time.Time
 
 	out  chan msg
 	done chan struct{}
 	once sync.Once
 }
 
-// step advances this client's entity by one tick with its latest input.
-// Called by the tick loop under the world lock.
-func (c *client) step(t *terrain.Field) {
+// step advances this client's entity by one tick with its latest input,
+// against the shared static colliders (docs/PROTOCOL.md "colliders") so the
+// server's own movement resolves against the exact geometry it ships to
+// clients.
+func (c *client) step(t *terrain.Field, colliders []protocol.Collider) {
 	var in sim.Input
 	if w := c.input.Load(); w != nil {
 		in = sim.Input{
@@ -53,9 +85,109 @@ func (c *client) step(t *terrain.Field) {
 			MoveY:      float64(w.MoveY),
 			Look:       sim.Vec{float64(w.LookDir[0]), float64(w.LookDir[1]), float64(w.LookDir[2])},
 			ActionMask: w.ActionMask,
+			Colliders:  colliders,
 		}
 	}
 	c.entity.PrevLook = sim.Step(&c.entity.State, in, c.entity.PrevLook, t, sim.DT)
+}
+
+// lookDir is the last raw look direction this connection sent (normalized),
+// falling back to the entity's held facing before any input has arrived.
+// Used for the fire-adjacent interaction re-check (cmdWorld.Look) and for
+// the snapshot's pitch_q.
+func (c *client) lookDir() sim.Vec {
+	look := c.entity.State.Facing
+	if w := c.input.Load(); w != nil {
+		l := sim.Vec{float64(w.LookDir[0]), float64(w.LookDir[1]), float64(w.LookDir[2])}
+		if l.Len() > 1e-9 {
+			look = terrain.Normalize(l)
+		}
+	}
+	return look
+}
+
+// flags computes the snapshot entity row's flags byte (PROTOCOL.md "flags
+// bits") from server-truth state: grounded/sprinting from movement, dead
+// from health, firing when a shot resolved on this exact tick.
+func (c *client) flags(tick uint32) uint8 {
+	var f uint8
+	if c.entity.State.Grounded {
+		f |= protocol.FlagGrounded
+	}
+	if w := c.input.Load(); w != nil && w.ActionMask&protocol.ActionSprint != 0 {
+		f |= protocol.FlagSprinting
+	}
+	if c.entity.Health <= 0 {
+		f |= protocol.FlagDead
+	}
+	if c.entity.FiringTick == tick {
+		f |= protocol.FlagFiring
+	}
+	return f
+}
+
+// pitchQ computes the snapshot entity row's pitch_q (PROTOCOL.md "pitch_q"):
+// the look direction's angle off the local tangent plane, quantised to
+// [-127, 127]. Visual only — hit resolution never reads it.
+func (c *client) pitchQ() int8 {
+	up := terrain.Normalize(c.entity.State.Pos)
+	s := up.Dot(c.lookDir())
+	if s > 1 {
+		s = 1
+	} else if s < -1 {
+		s = -1
+	}
+	pitch := math.Asin(s)
+	q := int(math.Round(pitch / (math.Pi / 2) * 127))
+	if q > 127 {
+		q = 127
+	} else if q < -127 {
+		q = -127
+	}
+	return int8(q)
+}
+
+// onPong is the WebSocket-level pong handler: it closes out this
+// connection's own RTT measurement (see rttPingInterval) and folds it into
+// an EWMA. Called on the connection's read goroutine per gorilla/websocket.
+func (c *client) onPong(string) error {
+	c.rttMu.Lock()
+	defer c.rttMu.Unlock()
+	if c.pingSentAt.IsZero() {
+		return nil
+	}
+	sample := time.Since(c.pingSentAt)
+	c.pingSentAt = time.Time{}
+	if c.rttEWMA == 0 {
+		c.rttEWMA = sample
+	} else {
+		c.rttEWMA += (sample - c.rttEWMA) / rttSmoothing
+	}
+	return nil
+}
+
+// rewindTicks is this connection's smoothed RTT/2, expressed in ticks and
+// clamped to [0, sim.HistoryTicks] (docs/PROTOCOL.md "fire": "Rewind is
+// bounded by the server's measurement, not the client's claim").
+func (c *client) rewindTicks() int {
+	c.rttMu.Lock()
+	rtt := c.rttEWMA
+	c.rttMu.Unlock()
+	sec := rtt.Seconds() / 2
+	if sec < 0 {
+		sec = 0
+	}
+	if sec > sim.RewindMaxSeconds {
+		sec = sim.RewindMaxSeconds
+	}
+	ticks := int(math.Round(sec * sim.TickHz))
+	if ticks < 0 {
+		ticks = 0
+	}
+	if ticks > sim.HistoryTicks {
+		ticks = sim.HistoryTicks
+	}
+	return ticks
 }
 
 // reader is the connection's inbound loop: it dispatches protocol messages
@@ -93,6 +225,29 @@ func (c *client) reader() {
 			}
 			c.input.Store(&in)
 			c.ackSeq.Store(uint32(in.Seq))
+		case protocol.MsgFire:
+			if c.entity == nil {
+				c.closeCode(websocket.CloseProtocolError) // fire before hello
+				return
+			}
+			f, err := protocol.ParseFire(payload)
+			if err != nil {
+				c.closeCode(websocket.CloseProtocolError)
+				return
+			}
+			c.srv.fire(c, f)
+		case protocol.MsgCmd:
+			if c.entity == nil {
+				c.closeCode(websocket.CloseProtocolError) // cmd before hello
+				return
+			}
+			req, err := protocol.ParseCmd(payload)
+			if err != nil {
+				c.closeCode(websocket.CloseProtocolError)
+				return
+			}
+			res := c.srv.doCmd(c, req)
+			c.send(msg{data: protocol.EncodeCmdResult(res)})
 		case protocol.MsgPing:
 			p, err := protocol.DecodePing(payload)
 			if err != nil {
@@ -107,8 +262,12 @@ func (c *client) reader() {
 	}
 }
 
-// writer drains the outbound queue in order.
+// writer drains the outbound queue in order, and periodically sends a
+// WebSocket-level ping control frame to measure this connection's RTT (see
+// onPong).
 func (c *client) writer() {
+	pinger := time.NewTicker(rttPingInterval)
+	defer pinger.Stop()
 	for {
 		select {
 		case m := <-c.out:
@@ -121,6 +280,12 @@ func (c *client) writer() {
 				c.teardown()
 				return
 			}
+		case <-pinger.C:
+			c.rttMu.Lock()
+			c.pingSentAt = time.Now()
+			c.rttMu.Unlock()
+			c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+			_ = c.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeTimeout))
 		case <-c.done:
 			// Drain and recycle any queued pooled buffers, then exit.
 			for {
@@ -174,7 +339,8 @@ func (c *client) closeCode(code int) {
 }
 
 // teardown is the idempotent connection death: stop the writer, remove the
-// entity from the world (broadcasting despawn), and close the socket.
+// entity from the world (broadcasting despawn, closing the identity), and
+// close the socket.
 func (c *client) teardown() {
 	c.once.Do(func() {
 		close(c.done)
