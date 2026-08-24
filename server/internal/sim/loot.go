@@ -12,10 +12,8 @@
 package sim
 
 import (
-	"encoding/json"
 	"math/rand"
 
-	"space-adventure/server/data"
 	"space-adventure/server/internal/defs"
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/store"
@@ -40,57 +38,19 @@ type LootState struct {
 	Claimed   bool
 }
 
-// lootEntry mirrors one row of a table in server/data/loot.json.
-type lootEntry struct {
-	Item   string  `json:"item"`
-	Qty    int     `json:"qty"`
-	Chance float64 `json:"chance"`
-}
-
-// lootFile mirrors server/data/loot.json as a whole.
-type lootFile struct {
-	Tables map[string][]lootEntry `json:"tables"`
-}
-
-// lootTables reads and parses server/data/loot.json from the embedded data
-// package on every call. defs.Registry does not expose loot tables yet, so
-// this reads the same embedded server/data content defs.Load itself reads,
-// rather than reimplementing or forking that data.
-func lootTables() (map[string][]lootEntry, error) {
-	raw, err := data.FS.ReadFile("loot.json")
-	if err != nil {
-		return nil, err
-	}
-	var f lootFile
-	if err := json.Unmarshal(raw, &f); err != nil {
-		return nil, err
-	}
-	return f.Tables, nil
-}
-
-func init() {
-	RegisterStep(EntityKind(protocol.EntityTypeLoot), StepLoot)
-}
-
-// DropLoot rolls table (server/data/loot.json) and adds one loot entity per
-// entry that rolls successfully to w, at pos. Each entry rolls
-// independently against rng; a chance of 1.0 always drops. reg validates
-// each entry names a known item — an entry for an item the registry doesn't
-// have is skipped rather than handed to a player unequippable. nextID
-// allocates the new entity's id; one EventLootDropped is emitted per drop
-// via ctx.Events (nil-safe, like every other step/spawn path in this
-// package).
 func DropLoot(w *World, reg *defs.Registry, table string, pos [3]float64,
 	nextID func() uint32, rng *rand.Rand, ctx StepCtx) {
 	if w == nil || nextID == nil || rng == nil {
 		return
 	}
-	tables, err := lootTables()
-	if err != nil {
+	if reg == nil {
 		return
 	}
-	for _, entry := range tables[table] {
-		if reg != nil {
+	// The registry is the one parser over server/data. This file briefly had
+	// its own copy of the loot.json schema, which is a second thing to update
+	// when the schema moves and a silent divergence when someone forgets.
+	for _, entry := range reg.Loot[table] {
+		{
 			if _, ok := reg.Items[entry.Item]; !ok {
 				continue
 			}

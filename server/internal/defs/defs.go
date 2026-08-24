@@ -100,6 +100,18 @@ type Zone struct {
 	Entities       []ZoneEntity   `json:"entities"`
 }
 
+// LootEntry is one row of a loot table in server/data/loot.json: an item, how
+// many, and an independent roll chance.
+type LootEntry struct {
+	Item   string  `json:"item"`
+	Qty    int     `json:"qty"`
+	Chance float64 `json:"chance"`
+}
+
+type lootFile struct {
+	Tables map[string][]LootEntry `json:"tables"`
+}
+
 // Registry is the indexed, parsed content of server/data, plus the built
 // `defs` message payload.
 type Registry struct {
@@ -113,6 +125,7 @@ type Registry struct {
 	Entities map[string]EntityDef
 	NPCs     map[string]NPC
 	Zones    map[string]Zone
+	Loot     map[string][]LootEntry
 	Payload  []byte
 }
 
@@ -154,12 +167,26 @@ func Load() (*Registry, error) {
 		return nil, fmt.Errorf("defs: parse npcs.json: %w", err)
 	}
 
+	// Loot tables live in the registry with everything else under
+	// server/data. They were briefly parsed in internal/sim instead, which
+	// meant two parsers over one embedded dataset — the second one drifts the
+	// moment the schema moves.
+	raw, err = data.FS.ReadFile("loot.json")
+	if err != nil {
+		return nil, fmt.Errorf("defs: read loot.json: %w", err)
+	}
+	var lootF lootFile
+	if err := json.Unmarshal(raw, &lootF); err != nil {
+		return nil, fmt.Errorf("defs: parse loot.json: %w", err)
+	}
+
 	zoneFiles, err := fs.Glob(data.FS, "zones/*.json")
 	if err != nil {
 		return nil, fmt.Errorf("defs: glob zones: %w", err)
 	}
 
 	reg := &Registry{
+		Loot:         lootF.Tables,
 		StartCredits: itemsF.StartCredits,
 		StartItems:   itemsF.StartItems,
 		InvSlots:     itemsF.InvSlots,

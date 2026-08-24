@@ -15,6 +15,11 @@ func lootTestRegistry() *defs.Registry {
 		Items: map[string]defs.Item{
 			"ammo.cell": {ID: "ammo.cell", StackMax: 300},
 		},
+		// Loot tables come from the registry now, not a parser inside this
+		// package — one source over server/data.
+		Loot: map[string][]defs.LootEntry{
+			"loot.grunt": {{Item: "ammo.cell", Qty: 15, Chance: 1.0}},
+		},
 	}
 }
 
