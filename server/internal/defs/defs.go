@@ -68,6 +68,10 @@ type NPC struct {
 		Item  string `json:"item"`
 		Price int64  `json:"price"`
 	} `json:"stock"`
+	// MaxHealth is the combat archetype's full health pool (docs/GDD.md,
+	// "NPC archetypes" table). Zero for non-combat (shop) NPCs, which don't
+	// carry a "max_health" key in npcs.json.
+	MaxHealth int `json:"max_health"`
 }
 
 // ZoneCollider is one static collider authored in a zone's local tangent
