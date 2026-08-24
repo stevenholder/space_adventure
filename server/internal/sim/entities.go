@@ -11,7 +11,11 @@
 // that starts "it only happens sometimes".
 package sim
 
-import "space-adventure/server/internal/protocol"
+import (
+	"space-adventure/server/internal/defs"
+	"space-adventure/server/internal/protocol"
+	"space-adventure/server/internal/terrain"
+)
 
 // EntityKind mirrors protocol.EntityType* values (protocol.EntityTypePlayer,
 // EntityTypeNPC, EntityTypeTarget, ...).
@@ -43,6 +47,19 @@ type StepCtx struct {
 	// caller that doesn't care about events (most tests) simply omits it,
 	// and step functions must treat a nil Events as "don't record".
 	Events *[]protocol.Event
+
+	// World, Terrain, Colliders and DefOf are the sibling-entity/terrain
+	// context a step function needs but cannot reach through its own Ent
+	// alone (e.g. a projectile's swept collision against other entities'
+	// capsules, or stopping on the ground/a wall). This is the "grow this
+	// struct as they need inputs" the doc above anticipates. All four are
+	// nil-safe: a step function that doesn't need them (most kinds) simply
+	// ignores them, and a caller/test that doesn't set them gets a world
+	// with nothing to collide against rather than a panic.
+	World     *World
+	Terrain   *terrain.Field
+	Colliders []protocol.Collider
+	DefOf     func(*Ent) defs.EntityDef
 }
 
 // StepFunc steps a single entity forward by dt.
