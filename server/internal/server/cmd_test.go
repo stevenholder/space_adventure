@@ -22,17 +22,28 @@ func testWorld(p *store.Player, npc defs.NPC, dist float64) cmdWorld {
 	return cmdWorld{
 		Player: p,
 		Reg:    reg,
-		Pos:    sim.Vec{0, 0, 0},
-		Up:     sim.Vec{0, 1, 0},
-		Look:   sim.Vec{1, 0, 0},
+		// On the surface, not at the planet's centre: inRange raises the
+		// target to its own eye height along ITS own radial up, so a fixture
+		// at the origin has no meaningful up and the geometry is nonsense.
+		// The NPC stands at its FEET, like every real placement — the old
+		// fixture pre-raised it to eye height, which quietly compensated for
+		// the feet-vs-eye bug this test is meant to cover.
+		Pos:  sim.Vec{0, planetSurfaceY, 0},
+		Up:   sim.Vec{0, 1, 0},
+		Look: sim.Vec{1, 0, 0},
 		FindNPC: func(id uint32) (defs.NPC, sim.Vec, bool) {
 			if id != 1 {
 				return defs.NPC{}, sim.Vec{}, false
 			}
-			return npc, sim.Vec{dist, eyeHeightMeters, 0}, true
+			return npc, sim.Vec{dist, planetSurfaceY, 0}, true
 		},
 	}
 }
+
+// planetSurfaceY is a stand-in surface radius for these fixtures; the exact
+// value does not matter, only that the player is ON the sphere rather than at
+// its centre.
+const planetSurfaceY = 150.0
 
 func shopNPC() defs.NPC {
 	n := defs.NPC{ID: "trader", Kind: "shop"}

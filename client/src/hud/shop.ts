@@ -27,6 +27,14 @@ export interface ShopPort {
   setPointerLock(locked: boolean): void
   /** The player's last known credit balance, read once when the panel opens. */
   credits(): number
+  /**
+   * Called after a purchase the server GRANTED, with the item id.
+   *
+   * Buying puts an item in the inventory; it does not equip it. Without this
+   * the player owns a rifle they can never draw — the shop had no way to tell
+   * anyone a purchase happened, so nothing ever sent `equip`.
+   */
+  onPurchased?: (item: string) => void
 }
 
 interface StockEntry {
@@ -94,6 +102,7 @@ export class ShopPanel {
   private npcId = -1
   private pendingSeq = -1
   private pendingKind: 'list' | 'buy' | null = null
+  private pendingItem: string | null = null
   private stock: StockEntry[] = []
   private credits = 0
   private openFlag = false
@@ -170,8 +179,10 @@ export class ShopPanel {
   handleResult(result: CmdResult): void {
     if (!this.openFlag || result.seq !== this.pendingSeq) return
     const kind = this.pendingKind
+    const item = this.pendingItem
     this.pendingSeq = -1
     this.pendingKind = null
+    this.pendingItem = null
     if (result.status !== STATUS.ok) {
       this.msgEl.textContent = resultMessage(result)
       return
@@ -179,7 +190,10 @@ export class ShopPanel {
     this.msgEl.textContent = ''
     const body = isRecord(result.body) ? result.body : {}
     if (kind === 'list') this.stock = parseStock(body.stock)
-    else if (kind === 'buy') this.credits = num(body.credits, this.credits)
+    else if (kind === 'buy') {
+      this.credits = num(body.credits, this.credits)
+      if (item) this.port.onPurchased?.(item)
+    }
     this.renderStock()
   }
 
@@ -187,6 +201,7 @@ export class ShopPanel {
     if (this.pendingKind) return // one outstanding request at a time
     this.msgEl.textContent = ''
     this.pendingKind = 'buy'
+    this.pendingItem = item
     this.pendingSeq = this.port.sendCmd(OP.shop_buy, { npc: this.npcId, item, qty: 1 })
   }
 

@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"space-adventure/server/internal/terrain"
 	"time"
 	"unicode/utf8"
 
@@ -87,9 +88,21 @@ type cmdWorld struct {
 // inRange re-validates interact_dist and interact_cone (GDD "Interaction")
 // against the requester's own server-truth eye/look, never anything the
 // client sent.
+// inRange reports whether the requester is close enough to `target` and looking
+// near enough at it, per GDD "Interaction".
+//
+// `target` is an entity ORIGIN, which for a standing character is at its feet.
+// The GDD specifies the check against the target's EYE, and the difference is
+// not cosmetic: from a 1.7 m eye at 2 m away, the vector to another character's
+// feet points ~40 degrees downward — outside the 20 degree cone — so a player
+// had to stare at the floor to talk to a shopkeeper standing right in front of
+// them. Measured as a live out_of_range refusal at 2.04 m against a 3.0 m
+// interact_dist. Raise the target to its own eye height along its own up.
 func inRange(w cmdWorld, target sim.Vec) bool {
 	eye := w.Pos.Add(w.Up.Scale(eyeHeightMeters))
-	to := target.Sub(eye)
+	targetUp := terrain.Normalize(terrain.Vec(target))
+	targetEye := target.Add(sim.Vec(targetUp).Scale(eyeHeightMeters))
+	to := targetEye.Sub(eye)
 	d := to.Len()
 	if d > interactDist {
 		return false

@@ -24,6 +24,18 @@ export const INTERACT_CONE_DEG = 20 // deg, half-angle
 const COS_INTERACT_CONE = Math.cos((INTERACT_CONE_DEG * Math.PI) / 180)
 
 /** An entity whose def carries a `verb` (`"Talk"`, `"Pick up"`, `"Board"`). */
+/**
+ * Eye height above the feet (GDD "First-person body").
+ *
+ * Candidates are entity ORIGINS — a standing character's feet. The GDD's
+ * interaction rule is against the target's EYE, and the difference decides the
+ * check: from a 1.7 m eye at 2 m away, the vector to another character's feet
+ * points ~40 degrees down, outside the 20 degree cone. Testing feet meant the
+ * prompt never appeared for someone standing in front of you, and the server
+ * refused with out_of_range if you sent it anyway.
+ */
+const EYE_HEIGHT = 1.7
+
 export interface Interactable {
   entityId: number
   pos: Vec3
@@ -42,7 +54,13 @@ export function pickInteractable(
   let best: Interactable | null = null
   let bestDot = -Infinity
   for (const c of candidates) {
-    const toTarget = vec.sub(c.pos, eye)
+    // Raise the candidate to its own eye height along ITS radial up — the
+    // GDD checks against the target's eye, and on a round world "up" differs
+    // per entity. Must match the server's inRange or the prompt appears for
+    // interactions the server then refuses.
+    const targetUp = vec.norm(c.pos)
+    const targetEye = vec.add(c.pos, vec.scale(targetUp, EYE_HEIGHT))
+    const toTarget = vec.sub(targetEye, eye)
     const dist = vec.len(toTarget)
     // Degenerate (co-located with the eye) is not a valid look direction;
     // never a real candidate.

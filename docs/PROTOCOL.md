@@ -36,7 +36,7 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 |----|------|-----|---------|
 | `0x0001` | `hello` | C→S | `u16 client_ver` \| `u32 name_len` \| `bytes name` \| `u32 token_len` \| `bytes token` |
 | `0x0002` | `hello_ack` | S→C | `u16 server_ver` \| `u16 tick_hz` \| `u32 world_seed` \| `u32 entity_id` |
-| `0x0003` | `input` | C→S | `u8 mode` \| `f32 v[5]` \| `u16 action_mask` \| `u16 seq` |
+| `0x0003` | `input` | C→S | `f32 move_x` \| `f32 move_y` \| `f32 look_dir[3]` \| `u16 action_mask` \| `u16 seq` (24 B) |
 | `0x0004` | `snapshot` | S→C | `u32 tick` \| `u16 ack_seq` \| `u16 count` \| `entity × count` |
 | `0x0005` | `spawn` | S→C | `u32 entity_id` \| `u16 entity_type` \| `u32 data_len` \| `bytes data` (M1: UTF-8 display name) |
 | `0x0006` | `despawn` | S→C | `u32 entity_id` |
@@ -73,10 +73,20 @@ Constants:
   (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3).
 - `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
   boost (mode 1, Phase 5). Other bits ignored.
-- `input` mode: `0` on foot — `v = [move_x, move_y, look_dir.x, look_dir.y,
-  look_dir.z]`; `1` pilot (Phase 5) — `v = [thrust, roll, yaw_rate,
-  pitch_rate, 0.0]`; `2` ground vehicle (Phase 4) — `v = [throttle, steer, 0,
-  0, 0]`. Mode ≥ 3 is reserved; the server treats it as 0.
+- **`input` has NO mode byte today.** It is the 24-byte on-foot layout above,
+  and both ends implement exactly that. This table previously documented a
+  leading `u8 mode` with a `f32 v[5]` union, which was written for Phase 4/5
+  and never built — following the doc instead of the code misaligns every
+  field by one byte, which is how it was found: a wire-level test wrote a
+  25-byte input, the server rejected it as malformed, and the connection went
+  silent.
+  - The mode byte lands with **Phase 4**, when there is a second control
+    scheme to select. At that point `input` becomes
+    `u8 mode | f32 v[5] | u16 action_mask | u16 seq`, with mode `0` on foot
+    (`v = [move_x, move_y, look_dir.x, look_dir.y, look_dir.z]`), `1` pilot
+    (Phase 5, `v = [thrust, roll, yaw_rate, pitch_rate, 0]`) and `2` ground
+    vehicle (`v = [throttle, steer, 0, 0, 0]`). It is a wire break on both
+    ends plus the harness, so it moves with a version bump, not quietly.
 - `seat` (Phase 4): `0` not aboard; `1` driver/pilot; `2`–`3` passenger. The
   field is u16 — more seats later is a rule-table change, not a wire change.
 - `seat_result` `result` (Phase 4): `0` granted; `1` seat occupied; `2` out of

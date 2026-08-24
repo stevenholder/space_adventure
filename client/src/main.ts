@@ -20,7 +20,7 @@ import { NetClient } from './net/netClient.js'
 import { PROTOCOL_VERSION } from './net/protocol.js'
 import { ENTITY_TYPE_NPC, ENTITY_TYPE_TARGET, OP } from './net/protocol.js'
 import { decodeColliders, decodeCmdResult, encodeCmd, type Collider } from './net/phase2.js'
-import { emptyRegistry, parseDefs, type Registry } from './net/defs.js'
+import { emptyRegistry, itemDef, parseDefs, type Registry } from './net/defs.js'
 import { pickInteractable, type Interactable } from './input/interact.js'
 import { ShopPanel } from './hud/shop.js'
 import { FireController } from './net/fire.js'
@@ -256,6 +256,10 @@ function startLive(): void {
     onDefs: (payload) => {
       registry = parseDefs(payload)
       shop.setRegistry(registry)
+      // Without this the HUD shows credits as "—" and the player's already-
+      // owned weapon is never drawn, because equippedItem is only ever learned
+      // from a cmd_result.
+      sendCmd(OP.inventory, {})
       hudPush(true)
     },
     onColliders: (payload) => {
@@ -301,17 +305,26 @@ function onCmdResult(payload: Uint8Array): void {
   hudPush(true)
 }
 
+function sendCmd(opcode: number, body: unknown): number {
+  if (!net) return -1
+  const seq = net.lastInputSeq()
+  return net.sendFramed(encodeCmd(seq, opcode, body)) ? seq : -1
+}
+
 const shop = new ShopPanel(registry, {
-  sendCmd: (opcode, body) => {
-    if (!net) return -1
-    const seq = net.lastInputSeq()
-    return net.sendFramed(encodeCmd(seq, opcode, body)) ? seq : -1
-  },
+  sendCmd,
   setPointerLock: (locked) => {
     if (locked) renderer.domElement.requestPointerLock()
     else document.exitPointerLock()
   },
   credits: () => credits ?? 0,
+  // Buying puts the rifle in the inventory; it does not draw it. Equip the
+  // moment the server GRANTS the purchase, so the player is not left owning a
+  // weapon they cannot fire.
+  onPurchased: (item) => {
+    const def = itemDef(registry, item)
+    if (def?.slot) sendCmd(OP.equip, { slot: def.slot, item })
+  },
 })
 
 const fire = new FireController(renderer.domElement, {
