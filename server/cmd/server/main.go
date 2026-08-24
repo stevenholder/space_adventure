@@ -52,6 +52,12 @@ func run(args []string) error {
 	if len(args) > 0 && args[0] == "collide" {
 		return runCollide(args[1:])
 	}
+	if len(args) > 0 && args[0] == "route" {
+		return runRoute(args[1:])
+	}
+	if len(args) > 0 && args[0] == "reach" {
+		return runReach(args[1:])
+	}
 	return runServer(args)
 }
 

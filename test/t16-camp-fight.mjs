@@ -7,22 +7,10 @@
  * unit test covers one rule; this is the only one that walks a player into a
  * camp, which is the thing Phase 3 claims to deliver.
  *
- * STATUS: the fight assertions do not run yet, because the walk to the camp
- * does not arrive. That is NOT a movement bug — measured headlessly, a player
- * sprinting from spawn toward the camp meets a 68.8 degree scarp at ~45 m, and
- * max_slope is 50: steep ground is slid, not climbed (GDD "Rule table"). The
- * player is not stuck (turning moves it again), it simply cannot go straight
- * through a wall.
- *
- * Walking a straight line at a destination on this planet is the naive thing
- * that terrain like this exists to defeat, which is why C10's lap route came
- * out of a 13,920-candidate scan rather than a bearing. This test needs the
- * same treatment: a waypoint route from spawn to the camp, or a camp site
- * chosen for reachability as well as for clearance from landmarks and craters.
- *
- * It is committed red on purpose. The camp, its NPCs and their archetype
- * health are all verified real by the checks that DO run; what is unproven is
- * that a player can walk there and get shot at.
+ * It follows a SOLVED route (test/out/route-camp.json, from `server route`).
+ * A straight line does not work: the player meets a 68.8 degree scarp at ~45 m
+ * and stops, because max_slope is 50 and steep ground is slid, not climbed.
+ * Routes on this planet are solved, not assumed.
  *
  * Run: node test/t16-camp-fight.mjs   (needs `make up`)
  */
@@ -58,15 +46,25 @@ const p0=[...ents.get(gid).pos]
 await sleep(2000)
 const idleDrift=Math.hypot(...sub(ents.get(gid).pos,p0))
 
-// Sprint to the camp. Aggro radius is 22-30 m, so stop just inside it.
+// Follow the SOLVED route, not a bearing. A straight line at the camp walks
+// into a 68.8 degree scarp at ~45 m and stops: max_slope is 50, and steep
+// ground is slid rather than climbed. `server route` BFSes the walkable
+// lattice and gets there in 352 m; the greedy version it replaced spiralled
+// for 3768 m without arriving.
+const { readFileSync } = await import('node:fs')
+const route = JSON.parse(readFileSync(new URL('./out/route-camp.json', import.meta.url), 'utf8'))
 const me=()=>ents.get(myId).pos
 let seq=1
 const t0=Date.now()
-while(Date.now()-t0<90000){
-  const d=sub(gpos,me()); const dist=Math.hypot(...d)
-  if(dist<=20) break
-  const u=norm(me()); const lk=norm(sub(d,u.map(x=>x*(d[0]*u[0]+d[1]*u[1]+d[2]*u[2]))))
-  ws.send(input(0,1,lk,0x0001,seq++)); await sleep(50)
+for (const wp of route.waypoints) {
+  const legT0 = Date.now()
+  while (Date.now()-legT0 < 20000 && Date.now()-t0 < 180000) {
+    const d=sub(wp,me()); const dist=Math.hypot(...d)
+    if (dist <= 6) break
+    const u=norm(me()); const lk=norm(sub(d,u.map(x=>x*(d[0]*u[0]+d[1]*u[1]+d[2]*u[2]))))
+    ws.send(input(0,1,lk,0x0001,seq++)); await sleep(50)
+  }
+  if (Math.hypot(...sub(gpos,me())) <= 20) break
 }
 const arrived=Math.hypot(...sub(gpos,me()))
 console.log(`walked in: ${arrived.toFixed(1)} m from the NPC`)
