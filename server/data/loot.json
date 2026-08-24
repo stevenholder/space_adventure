@@ -1,0 +1,20 @@
+{
+  "$comment": "Loot tables. Contract: docs/GDD.md 'Loot'. Each entry rolls independently against the server RNG; chance 1.0 is a guaranteed drop. Loot that will not fit in the inventory is left on the ground, never destroyed.",
+  "version": 1,
+  "tables": {
+    "loot.grunt": [
+      {
+        "item": "ammo.cell",
+        "qty": 15,
+        "chance": 1.0
+      }
+    ],
+    "loot.gunner": [
+      {
+        "item": "ammo.cell",
+        "qty": 25,
+        "chance": 1.0
+      }
+    ]
+  }
+}

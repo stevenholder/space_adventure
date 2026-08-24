@@ -1300,6 +1300,143 @@ sphere-vs-sphere; both are total and neither allocates.
 | `body_sphere_h` | 0.9 | m | chest height above the feet |
 | `collider_max` | 1560 | — | one 64 KiB `colliders` message |
 
+## Phase 3 — NPC combat at an encampment
+
+Spec for `netcode` + `game`. Phase 3's playable proof is clearing a hostile
+camp: enemies notice you, close or shoot, hurt you, and drop loot
+(`docs/ROADMAP.md`).
+
+### NPC archetypes (rule table)
+
+Two archetypes. One closes, one keeps its distance — that contrast is the
+whole fight, and a third variant adds nothing until these two feel right.
+
+| Param | `npc.grunt` (melee) | `npc.gunner` (ranged) | Unit |
+|---|---|---|---|
+| `max_health` | 60 | 40 | hp |
+| `move_speed` | 4.0 | 3.0 | m/s |
+| `aggro_radius` | 22 | 30 | m |
+| `leash_radius` | 45 | 45 | m — from its POST, not from the player |
+| `attack_range` | 2.0 | 26 | m |
+| `attack_damage` | 12 | 8 | hp |
+| `attack_interval` | 1.2 | 1.6 | s |
+| `attack_windup` | 0.35 | 0.25 | s — telegraph before damage lands |
+| `projectile_speed` | — | 45 | m/s |
+| `turn_rate` | 360 | 270 | deg/s |
+| `xp` / loot roll | `loot.grunt` | `loot.gunner` | — |
+
+**Leash is measured from the NPC's post, not from the player.** Chasing "until
+the player is far away" means a kited enemy follows forever, because the player
+controls the distance. Anchoring to the post bounds the fight to its camp.
+
+**Every attack has a windup.** Damage that lands the instant an enemy decides
+to attack is unreadable and unfair — the player needs a frame to react in. The
+windup is also when the animation would play, so the number is not decoration.
+
+### AI state machine (binding — implement this table, not the concept)
+
+States: `IDLE`, `PATROL`, `AGGRO`, `ATTACK`, `LEASH`, `DEAD`.
+
+| From | To | When |
+|---|---|---|
+| `IDLE` | `PATROL` | it has a patrol route and `idle_dwell` (3 s) has elapsed |
+| `IDLE`/`PATROL` | `AGGRO` | a living player is within `aggro_radius` and in line of sight |
+| `AGGRO` | `ATTACK` | target within `attack_range` and in line of sight |
+| `ATTACK` | `AGGRO` | target outside `attack_range · 1.15` (hysteresis) or LOS lost |
+| `AGGRO`/`ATTACK` | `LEASH` | distance from its POST exceeds `leash_radius` |
+| `LEASH` | `IDLE` | back within `post_arrive` (1.5 m) of its post |
+| any | `DEAD` | health reaches 0 |
+| `DEAD` | `IDLE` | `npc_respawn` (20 s) elapsed, at full health, at its post |
+
+**The `ATTACK`→`AGGRO` threshold is `attack_range · 1.15`, not `attack_range`.**
+Equal thresholds make an enemy at exactly that distance flip state every tick,
+which shows up as a stuttering, twitching model and a machine-gun attack
+cadence. Hysteresis is not polish here.
+
+**Target selection:** the closest living player inside `aggro_radius` with line
+of sight. Re-evaluated every `retarget_interval` (0.5 s), NOT every tick —
+per-tick re-evaluation makes an NPC oscillate between two equidistant players
+and never reach either.
+
+**Line of sight** is a ray from the NPC's eye to the target's eye against the
+static collider list only (GDD "Static colliders"). Terrain is not tested: at
+these ranges the horizon does not occlude, and sampling the field along a ray
+is far more expensive than the two box tests it replaces.
+
+| Param | Value | Unit |
+|---|---|---|
+| `idle_dwell` | 3.0 | s |
+| `retarget_interval` | 0.5 | s |
+| `post_arrive` | 1.5 | m |
+| `npc_respawn` | 20 | s |
+| `attack_range_hysteresis` | 1.15 | × |
+
+### Steering (binding)
+
+NPCs move on the sphere with the same radial-up frame the player uses. They do
+NOT run the player's on-foot integrator: no jump, no slide, no air control.
+
+```
+step(npc, dt):
+  up      ← normalize(pos)
+  toward  ← tangent(target − pos, up)          # projected into the tangent plane
+  desired ← normalize(toward) · move_speed
+  facing  ← rotateToward(facing, normalize(toward), turn_rate · dt)
+  vel     ← desired  if slopeOK(terrain, pos)  else  slide(vel, up, terrain)
+  pos     ← pos + vel · dt
+  pos     ← normalize(pos) · radius(terrain, normalize(pos))   # glued to the surface
+```
+
+**NPCs are glued to the surface** rather than simulating gravity: a walking
+enemy has no reason to leave the ground, and the moment it does, every
+airborne edge case in the player integrator becomes an NPC bug too.
+
+They resolve against static colliders with the same `ResolveColliders` the
+player uses — one wall rule, not two.
+
+**No pathfinding, no navmesh.** Direct steering with slope rejection is enough
+for an open camp on smooth terrain. The trigger to revisit is the first
+encampment whose geometry can trap an NPC in a concave corner.
+
+### Player death and respawn
+
+| Param | Value | Unit |
+|---|---|---|
+| `player_max_health` | 100 | hp |
+| `respawn_delay` | 5.0 | s |
+| `respawn_invuln` | 3.0 | s — after respawn |
+| `health_regen_delay` | 8.0 | s — out of combat |
+| `health_regen_rate` | 8 | hp/s |
+
+- Death: velocity zeroed, `dead` flag set, input ignored except look. The body
+  stays where it fell for the delay — an instant vanish reads as a disconnect.
+- Respawn at the spawn point, full health, with `respawn_invuln` of immunity.
+  Without it a camp that killed you once kills you again before you can move.
+- **Inventory and credits are kept on death.** Phase 3 has no way to recover a
+  dropped inventory, so dropping it is deletion, not risk.
+- Regeneration starts `health_regen_delay` after the last damage TAKEN, and
+  stops the moment damage lands again.
+
+### Loot
+
+- A killed NPC drops one entity per its loot table, at its own position.
+- Drops are picked up by walking within `loot_pickup_radius` (1.5 m) — no
+  prompt, no keypress. A pickup prompt for ammunition after every kill is
+  friction with no decision behind it.
+- **Pickup is server-authoritative and single-grant.** Two players walking over
+  one drop at the same tick: exactly one gets it, the other sees it vanish.
+- A drop nobody takes despawns after `loot_lifetime` (120 s).
+- Loot that will not fit in the inventory is left on the ground rather than
+  destroyed.
+
+| Param | Value | Unit |
+|---|---|---|
+| `loot_pickup_radius` | 1.5 | m |
+| `loot_lifetime` | 120 | s |
+
+Loot tables live in `server/data/loot.json`: each entry is a list of
+`{item, qty, chance}` rolled independently against the server's RNG.
+
 ## Open questions (main thread decides)
 
 M1:

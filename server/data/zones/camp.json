@@ -1,0 +1,173 @@
+{
+  "$comment": "Hostile encampment. Contract: docs/GDD.md 'Phase 3 - NPC combat at an encampment' and 'Static colliders' for the authoring frame. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; yaw in degrees about +y, 0 = facing +z. SITE: 272 m from spawn, 319 m from the range, and 160 m from the nearest landmark \u2014 flattening reaches 44 m, and the first range placement taught that a site chosen by distance alone can level a landmark and tilt the spawn disc. Chosen by sweeping the sphere for maximum clearance.",
+  "version": 1,
+  "id": "camp",
+  "origin_dir": [
+    0.6820342,
+    -0.2385,
+    0.6913372
+  ],
+  "flatten_radius": 30.0,
+  "flatten_falloff": 12.0,
+  "colliders": [
+    {
+      "$note": "perimeter wall, north",
+      "kind": "box",
+      "pos": [
+        0.0,
+        1.5,
+        14.0
+      ],
+      "half": [
+        16.0,
+        1.5,
+        0.4
+      ],
+      "yaw": 0.0
+    },
+    {
+      "$note": "perimeter wall, south",
+      "kind": "box",
+      "pos": [
+        0.0,
+        1.5,
+        -14.0
+      ],
+      "half": [
+        16.0,
+        1.5,
+        0.4
+      ],
+      "yaw": 0.0
+    },
+    {
+      "$note": "perimeter wall, east",
+      "kind": "box",
+      "pos": [
+        15.6,
+        1.5,
+        0.0
+      ],
+      "half": [
+        0.4,
+        1.5,
+        14.0
+      ],
+      "yaw": 0.0
+    },
+    {
+      "$note": "west wall, north half \u2014 the gap between these two is the entrance",
+      "kind": "box",
+      "pos": [
+        -15.6,
+        1.5,
+        8.0
+      ],
+      "half": [
+        0.4,
+        1.5,
+        6.0
+      ],
+      "yaw": 0.0
+    },
+    {
+      "$note": "west wall, south half",
+      "kind": "box",
+      "pos": [
+        -15.6,
+        1.5,
+        -8.0
+      ],
+      "half": [
+        0.4,
+        1.5,
+        6.0
+      ],
+      "yaw": 0.0
+    },
+    {
+      "$note": "inner cover block",
+      "kind": "box",
+      "pos": [
+        3.0,
+        1.0,
+        2.0
+      ],
+      "half": [
+        2.0,
+        1.0,
+        2.0
+      ],
+      "yaw": 30.0
+    },
+    {
+      "$note": "cover post \u2014 the sphere collider path",
+      "kind": "sphere",
+      "pos": [
+        -6.0,
+        1.0,
+        -5.0
+      ],
+      "half": [
+        1.2,
+        0.0,
+        0.0
+      ],
+      "yaw": 0.0
+    }
+  ],
+  "entities": [
+    {
+      "$note": "gunners hold the back, behind cover",
+      "type": "npc",
+      "def": "npc.gunner",
+      "pos": [
+        10.0,
+        0.0,
+        6.0
+      ],
+      "yaw": -90.0
+    },
+    {
+      "type": "npc",
+      "def": "npc.gunner",
+      "pos": [
+        10.0,
+        0.0,
+        -6.0
+      ],
+      "yaw": -90.0
+    },
+    {
+      "$note": "grunts patrol the approach and close first",
+      "type": "npc",
+      "def": "npc.grunt",
+      "pos": [
+        -4.0,
+        0.0,
+        4.0
+      ],
+      "yaw": -90.0
+    },
+    {
+      "type": "npc",
+      "def": "npc.grunt",
+      "pos": [
+        -4.0,
+        0.0,
+        -4.0
+      ],
+      "yaw": -90.0
+    },
+    {
+      "type": "npc",
+      "def": "npc.grunt",
+      "pos": [
+        2.0,
+        0.0,
+        -9.0
+      ],
+      "yaw": 180.0
+    }
+  ]
+}
