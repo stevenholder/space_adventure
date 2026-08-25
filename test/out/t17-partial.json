@@ -1,0 +1,14 @@
+[
+ {
+  "id": "C19a",
+  "name": "NPC notices a player and pursues",
+  "ok": true,
+  "detail": "moved 1.6 m from post, first motion within 0 ms"
+ },
+ {
+  "id": "C19b",
+  "name": "NPC leashes back to its post, stays on the surface",
+  "ok": true,
+  "detail": "returned to 1.48 m of post (limit 2.5), |pos|=157.2 m"
+ }
+]

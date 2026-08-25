@@ -1344,9 +1344,17 @@ States: `IDLE`, `PATROL`, `AGGRO`, `ATTACK`, `LEASH`, `DEAD`.
 | `AGGRO` | `ATTACK` | target within `attack_range` and in line of sight |
 | `ATTACK` | `AGGRO` | target outside `attack_range · 1.15` (hysteresis) or LOS lost |
 | `AGGRO`/`ATTACK` | `LEASH` | distance from its POST exceeds `leash_radius` |
+| `AGGRO`/`ATTACK` | `LEASH` | the target is LOST — no living candidate within `aggro_radius` with line of sight — for `lose_target` (2 s) |
 | `LEASH` | `IDLE` | back within `post_arrive` (1.5 m) of its post |
 | any | `DEAD` | health reaches 0 |
 | `DEAD` | `IDLE` | `npc_respawn` (20 s) elapsed, at full health, at its post |
+
+**Losing the target must send an NPC home.** Leash keyed only to
+distance-from-post leaves an enemy that chased you a short way and then lost
+you standing in the open forever: it is inside its leash radius, so it never
+disengages, and it has no target, so it never moves. Measured before this rule
+existed — an NPC sat 17.9 m from its post for 60 s. The `lose_target` grace
+period stops it snapping home the instant a target ducks behind cover.
 
 **The `ATTACK`→`AGGRO` threshold is `attack_range · 1.15`, not `attack_range`.**
 Equal thresholds make an enemy at exactly that distance flip state every tick,
@@ -1367,6 +1375,7 @@ is far more expensive than the two box tests it replaces.
 |---|---|---|
 | `idle_dwell` | 3.0 | s |
 | `retarget_interval` | 0.5 | s |
+| `lose_target` | 2.0 | s |
 | `post_arrive` | 1.5 | m |
 | `npc_respawn` | 20 | s |
 | `attack_range_hysteresis` | 1.15 | × |

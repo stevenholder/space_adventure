@@ -46,6 +46,16 @@ const (
 	// exactly that distance flip state every tick (GDD "The ATTACK->AGGRO
 	// threshold is attack_range · 1.15, not attack_range").
 	attackRangeHysteresis = 1.15
+
+	// loseTargetSecs is how long an engaged NPC tolerates having no valid
+	// target before going home (GDD "AI state machine").
+	//
+	// Leash keyed only to distance-from-post leaves an enemy that chased a
+	// short way and then lost you standing in the open forever: inside its
+	// leash radius so it never disengages, and with no target so it never
+	// moves. Measured at 17.9 m from post, motionless for 60 s. The grace
+	// period stops it snapping home the instant a target ducks behind cover.
+	loseTargetSecs = 2.0
 )
 
 // Candidate is one player the brain may target.
@@ -70,6 +80,9 @@ type Brain struct {
 	StateTicks   int
 	RetargetTick int
 	AttackTick   int
+	// LostTicks counts how long the brain has had no valid target while
+	// engaged. See the loseTarget rule below.
+	LostTicks int
 }
 
 func distBrain(a, b [3]float64) float64 {
@@ -165,12 +178,15 @@ func StepBrain(b *Brain, a Archetype, self [3]float64, cands []Candidate,
 			if d <= a.AttackRange && losFn(self, tgt.Pos) {
 				b.State = StateAttack
 			}
+			b.LostTicks = 0
 		} else {
 			b.TargetID = 0
+			b.LostTicks++
 		}
-		// AGGRO/ATTACK -> LEASH: distance from POST exceeds leash_radius.
-		if distBrain(self, b.Post) > a.LeashRadius {
+		// AGGRO/ATTACK -> LEASH: too far from POST, or the target is lost.
+		if distBrain(self, b.Post) > a.LeashRadius || lostTooLong(b, dt) {
 			b.State = StateLeash
+			b.LostTicks = 0
 		}
 
 	case StateAttack:
@@ -184,13 +200,16 @@ func StepBrain(b *Brain, a Archetype, self [3]float64, cands []Candidate,
 			if d > a.AttackRange*attackRangeHysteresis || !losOK {
 				b.State = StateAggro
 			}
+			b.LostTicks = 0
 		} else {
 			b.TargetID = 0
 			b.State = StateAggro
+			b.LostTicks++
 		}
 		// AGGRO/ATTACK -> LEASH
-		if distBrain(self, b.Post) > a.LeashRadius {
+		if distBrain(self, b.Post) > a.LeashRadius || lostTooLong(b, dt) {
 			b.State = StateLeash
+			b.LostTicks = 0
 		}
 
 	case StateLeash:
@@ -235,4 +254,13 @@ func retargetDue(b *Brain, dt float64) bool {
 
 func secondsIn(ticks int, dt float64) float64 {
 	return float64(ticks) * dt
+}
+
+// lostTooLong reports whether the brain has been without a valid target for
+// longer than the grace period.
+func lostTooLong(b *Brain, dt float64) bool {
+	if dt <= 0 {
+		return false
+	}
+	return float64(b.LostTicks)*dt >= loseTargetSecs
 }

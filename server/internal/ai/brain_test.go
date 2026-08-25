@@ -143,3 +143,38 @@ func TestRetargetNotEveryTick(t *testing.T) {
 		}
 	}
 }
+
+// TestLosingTheTargetSendsItHome: an engaged NPC that loses its target must go
+// home, even while still inside its leash radius.
+//
+// Leash keyed only to distance-from-post is not enough. An NPC that chased a
+// short way and then lost the player is inside its leash radius, so it never
+// disengages, and has no target, so it never moves — measured standing 17.9 m
+// from its post for 60 s before this rule existed.
+func TestLosingTheTargetSendsItHome(t *testing.T) {
+	b := &Brain{Post: [3]float64{0, 0, 0}}
+	a := Archetype{AggroRadius: 20, LeashRadius: 45, AttackRange: 2}
+	los := func(_, _ [3]float64) bool { return true }
+	self := [3]float64{10, 0, 0} // 10 m out: well inside leash
+
+	// Engage.
+	if got := StepBrain(b, a, self, []Candidate{{ID: 7, Pos: [3]float64{12, 0, 0}, Alive: true}}, los, 0.05); got != StateAggro {
+		t.Fatalf("state = %v, want AGGRO once a player is in range", got)
+	}
+
+	// Target vanishes. It must not sit there indefinitely.
+	var last State
+	for i := 0; i < int(loseTargetSecs/0.05)+2; i++ {
+		last = StepBrain(b, a, self, nil, los, 0.05)
+	}
+	if last != StateLeash {
+		t.Errorf("state = %v after losing the target for %.0f s, want LEASH", last, loseTargetSecs)
+	}
+
+	// And the grace period is real: one tick without a target is not enough.
+	b2 := &Brain{Post: [3]float64{0, 0, 0}}
+	StepBrain(b2, a, self, []Candidate{{ID: 7, Pos: [3]float64{12, 0, 0}, Alive: true}}, los, 0.05)
+	if got := StepBrain(b2, a, self, nil, los, 0.05); got == StateLeash {
+		t.Error("leashed after a single tick without a target; the grace period is not applied")
+	}
+}
