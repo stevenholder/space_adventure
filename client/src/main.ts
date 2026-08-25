@@ -24,6 +24,8 @@ import { emptyRegistry, itemDef, parseDefs, type Registry } from './net/defs.js'
 import { pickInteractable, type Interactable } from './input/interact.js'
 import { ShopPanel } from './hud/shop.js'
 import { FireController } from './net/fire.js'
+import { Vitals } from './hud/vitals.js'
+import { EVENT, FLAG } from './net/protocol.js'
 import type { Snapshot } from './net/protocol.js'
 import { MockServer, MOCK_SEED } from './mock/mock.js'
 import { World } from './scene/world.js'
@@ -163,7 +165,15 @@ window.addEventListener('resize', () => {
 // ------------------------------------------------------------ authority
 function processSnapshot(snap: Snapshot, nowMs: number): void {
   for (const e of snap.entities) {
-    if (e.id === myId) predictor.reconcile(e, snap.ackSeq, nowMs)
+    if (e.id === myId) {
+      predictor.reconcile(e, snap.ackSeq, nowMs)
+      // Health and death come from the authoritative row, not from events:
+      // events can be missed, a snapshot is the truth every tick. This is also
+      // what clears the death overlay on respawn without needing a "respawned"
+      // event to exist.
+      vitals.setHealth(e.health, 100)
+      vitals.setDead((e.flags & FLAG.dead) !== 0, null)
+    }
     else {
       world.feedRemote(e.id, e, snap.tick, nowMs)
       entityPos.set(e.id, { x: e.pos[0], y: e.pos[1], z: e.pos[2] })
@@ -267,7 +277,10 @@ function startLive(): void {
       world.setColliders(colliders)
     },
     onCmdResult: (payload) => onCmdResult(payload),
-    onEvent: (ev) => fire?.handleEvent(ev),
+    onEvent: (ev) => {
+      fire?.handleEvent(ev)
+      onVitalsEvent(ev)
+    },
     onSpawn: (sp) => onSpawn(sp.entityId, sp.name, sp.entityType),
     onDespawn: (id) => onDespawn(id),
     onReconnect: () => onResync(),
@@ -327,6 +340,8 @@ const shop = new ShopPanel(registry, {
   },
 })
 
+const vitals = new Vitals(document.body)
+
 const fire = new FireController(renderer.domElement, {
   scene: world.scene,
   camera: world.camera,
@@ -359,6 +374,43 @@ window.addEventListener('keydown', (e) => {
   if (e.code !== 'KeyE' || !lookingAt || !registry.ready) return
   shop.open(lookingAt.entityId)
 })
+
+// ------------------------------------------------------------ vitals feed
+/**
+ * Feed the health overlay from server events.
+ *
+ * Everything here is DISPLAY: the client never decides it died. A locally
+ * predicted death the server disagrees with is a player staring at a respawn
+ * screen while still alive (docs/GDD.md, "Player death and respawn").
+ */
+function onVitalsEvent(ev: { entityId: number; eventId: number; data: Uint8Array }): void {
+  if (ev.entityId !== myId) return
+  if (ev.eventId === EVENT.hit) {
+    // hit payload: u32 shooter | f32 point[3] | u16 damage | u16 health_after
+    if (ev.data.length < 20) return
+    const dv = new DataView(ev.data.buffer, ev.data.byteOffset, ev.data.length)
+    const shooter = dv.getUint32(0, true)
+    vitals.setHealth(dv.getUint16(18, true), 100)
+    const from = entityPos.get(shooter)
+    const rs = predictor.renderState(performance.now())
+    if (from && rs) {
+      const dir = vec.norm(vec.sub(from, rs.pos))
+      // vitals works in tuples; the sim works in {x,y,z}. Convert at the
+      // boundary rather than making either side carry both shapes.
+      const lk = controls.lookDir
+      vitals.takeDamage(
+        [dir.x, dir.y, dir.z],
+        [lk.x, lk.y, lk.z],
+        [scratchUp.x, scratchUp.y, scratchUp.z],
+      )
+    }
+  } else if (ev.eventId === EVENT.death) {
+    vitals.setDead(true, RESPAWN_DELAY_S)
+  }
+}
+
+/** GDD "Player death and respawn": respawn_delay. Display only. */
+const RESPAWN_DELAY_S = 5.0
 
 // ----------------------------------------------------------------- ticks
 /** One fixed 50 ms step: sample input, predict, hand to the authority. */
@@ -448,6 +500,7 @@ function frame(now: number): void {
 
   world.frameRemotes(now, frameDt, rs ? rs.pos : scratchPos)
   fire.update(now, frameDt, fireState)
+  vitals.update(frameDt)
   hudData.nearest = rs ? world.nearestDist(rs.pos) : null
   hudData.conn = connText()
   hud.update(hudData)

@@ -88,6 +88,13 @@ const deaths=events.filter(e=>e.ev===4&&e.id===myId).length
 console.log(`idle drift ${idleDrift.toFixed(3)} m | NPC movement after aggro: max ${Math.max(...moved).toFixed(1)} m`)
 console.log(`player health ${hpStart} -> ${hpEnd} | hit events ${hits} | deaths ${deaths}`)
 
+// Entity types the render loop must actually receive. A projectile or a loot
+// drop that the server simulates but never puts in a snapshot renders as
+// nothing, and the failure looks like "the visuals are broken".
+const sawProjectile=[...spawns.values()].some(v=>v.type===7)
+const sawLoot=[...spawns.values()].some(v=>v.type===6)
+console.log(`entity types seen: projectile=${sawProjectile} loot=${sawLoot}`)
+
 const checks=[
  ['camp NPCs exist', npcs.length>0],
  ['NPCs idle when unprovoked', idleDrift<0.5],
@@ -98,6 +105,7 @@ const checks=[
  // killed you. Damage is proven by the hit events, and death is a stronger
  // form of taking damage rather than an exception to it.
  ['player took damage', hits>0 && (hpEnd<hpStart || deaths>0)],
+ ['gunner projectiles reached the client', sawProjectile],
 ]
 let bad=0
 for(const [n,ok] of checks){ if(!ok){console.log(`FAIL ${n}`);bad++} }

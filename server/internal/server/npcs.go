@@ -217,8 +217,10 @@ func (s *Server) spawnProjectile(owner uint32, shot ai.Shot) {
 			LifeTicks: sim.LifeTicksForRange(60, shot.Speed),
 		},
 	}
+	// Only add to the world. syncWorldEnts folds it into the snapshot cache
+	// and announces the spawn — doing it here as well would announce nothing
+	// and hide the entity from the diff.
 	s.world.Add(e)
-	s.worldEnts = append(s.worldEnts, e)
 }
 
 // forwardOf extracts the forward (local -Z) axis from an orientation quat.
@@ -322,19 +324,45 @@ func (s *Server) nextWorldID() uint32 {
 	return s.worldID
 }
 
-// syncWorldEnts rebuilds the stable-order snapshot cache from the world.
+// syncWorldEnts rebuilds the stable-order snapshot cache and announces the
+// difference.
 //
-// worldEnts exists so encodeSnapshot can iterate deterministically; anything
-// added at runtime (loot, projectiles) must be folded in or it is invisible.
+// Snapshot rows carry no entity_type — the client learns what an entity IS from
+// its `spawn` frame (docs/PROTOCOL.md). Those were only sent at join for
+// entities that already existed, so a projectile or loot drop created at
+// runtime arrived as a row of an unknown kind and the client had no renderer to
+// pick: gunners landed hits while nothing was ever drawn. Announce additions
+// and removals as they happen.
 func (s *Server) syncWorldEnts() {
 	order := s.world.Order()
 	if len(order) == len(s.worldEnts) {
 		return
 	}
+	had := make(map[uint32]bool, len(s.worldEnts))
+	for _, e := range s.worldEnts {
+		had[e.ID] = true
+	}
 	ents := make([]*sim.Ent, 0, len(order))
+	live := make(map[uint32]bool, len(order))
 	for _, id := range order {
-		if e := s.world.Ents[id]; e != nil {
-			ents = append(ents, e)
+		e := s.world.Ents[id]
+		if e == nil {
+			continue
+		}
+		live[id] = true
+		ents = append(ents, e)
+		if !had[id] {
+			s.broadcast(protocol.EncodeSpawn(protocol.Spawn{
+				EntityID:   e.ID,
+				EntityType: uint16(e.Kind),
+				Data:       []byte(e.Def),
+			}))
+		}
+	}
+	for _, e := range s.worldEnts {
+		if !live[e.ID] {
+			s.broadcast(protocol.EncodeDespawn(protocol.Despawn{EntityID: e.ID}))
+			s.history.Forget(e.ID)
 		}
 	}
 	s.worldEnts = ents

@@ -321,6 +321,11 @@ func (s *Server) tick() {
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
 	}
+	// Announce anything created or destroyed this tick before encoding, so a
+	// client never receives a snapshot row for an entity it has not been told
+	// the type of.
+	s.syncWorldEnts()
+
 	body := s.encodeSnapshot(tick)
 	// Fan out under the lock: sendSnapshot is a non-blocking channel
 	// send, and the shared body must not be recycled by the next tick

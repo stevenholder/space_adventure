@@ -28,7 +28,15 @@ import * as THREE from 'three'
 import type { Terrain, Vec3 } from '../sim/index.js'
 import { RULES } from '../sim/index.js'
 import type { EntityState } from '../net/protocol.js'
-import { ENTITY_TYPE_NPC, ENTITY_TYPE_PLAYER, ENTITY_TYPE_TARGET, FLAG } from '../net/protocol.js'
+import {
+  ENTITY_TYPE_LOOT,
+  ENTITY_TYPE_NPC,
+  ENTITY_TYPE_PLAYER,
+  ENTITY_TYPE_PROJECTILE,
+  ENTITY_TYPE_TARGET,
+  FLAG,
+} from '../net/protocol.js'
+import { LootVisual, ProjectileVisual } from './projectile.js'
 import type { Collider } from '../net/phase2.js'
 import { COLLIDER_BOX } from '../net/phase2.js'
 import { InterpBuffer, type RemoteRender } from '../net/interp.js'
@@ -64,6 +72,10 @@ interface RemoteView {
   rig: CharRig | null
   target: TargetVisual | null
   weapon: WeaponHandle | null
+  /** Projectile/loot visuals own their own scene object, so they hang off the
+   *  view rather than the shared anchor. */
+  projectile: ProjectileVisual | null
+  loot: LootVisual | null
   tagEl: HTMLDivElement
   interp: InterpBuffer
   /** Reused interpolation output (renderInto writes here — no allocation). */
@@ -238,6 +250,8 @@ export class World {
         anchor,
         rig: null,
         target: null,
+        projectile: null,
+        loot: null,
         weapon: null,
         tagEl,
         interp: new InterpBuffer(),
@@ -269,6 +283,19 @@ export class World {
   /** Build the entity_type-appropriate placeholder and kick off the real
    *  asset load. */
   private spawnVisual(rv: RemoteView): void {
+    // Projectiles and loot are not characters: no rig, no nametag, no weapon.
+    // Handling them before the rig path keeps a bolt in flight from being
+    // given a body and a name to render.
+    if (rv.entityType === ENTITY_TYPE_PROJECTILE) {
+      rv.projectile = new ProjectileVisual(this.scene)
+      rv.tagEl.style.display = 'none'
+      return
+    }
+    if (rv.entityType === ENTITY_TYPE_LOOT) {
+      rv.loot = new LootVisual(this.scene)
+      rv.tagEl.style.display = 'none'
+      return
+    }
     if (rv.entityType === ENTITY_TYPE_TARGET) {
       const ph = buildTargetPlaceholder()
       const { mats, colors } = collectPlateMats(ph)
@@ -353,6 +380,10 @@ export class World {
   removeRemote(id: number): void {
     const rv = this.remotes.get(id)
     if (!rv) return
+    // Projectiles despawn several times a second in a firefight; leaking one
+    // scene object per shot is a crash in minutes, not a slow drift.
+    rv.projectile?.dispose()
+    rv.loot?.dispose()
     this.scene.remove(rv.anchor)
     if (rv.rig) disposeGroup(rv.rig.root)
     if (rv.target) disposeGroup(rv.target.root)
@@ -433,6 +464,16 @@ export class World {
         if (rv.weapon) rv.weapon.root.rotation.x = pitchRad
       }
       if (rv.target) this.updateTargetDead(rv)
+      // Projectiles and loot own their scene object, so they take the
+      // interpolated transform directly instead of riding the anchor.
+      if (rv.projectile) {
+        rv.projectile.setTransform(rv.pos, rv.quat)
+        continue // no nametag for a bolt in flight
+      }
+      if (rv.loot) {
+        rv.loot.setTransform(rv.pos, rv.quat)
+        continue
+      }
       this.placeTag(rv, lp)
     }
   }
