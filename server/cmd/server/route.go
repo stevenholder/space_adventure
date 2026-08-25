@@ -117,7 +117,13 @@ func solveRoute(f *terrain.Field, start, goal terrain.Vec) ([]terrain.Vec, bool)
 			if _, ok := prev[nk]; ok {
 				continue
 			}
-			if !f.Walkable(n) || !walkableBetween(f, d, n) {
+			// Check the node that will actually be RECORDED, not the stepped
+			// point. nodeKeyOf snaps to the nearest lattice cell, and the
+			// snapped node's own slope can differ from the point that led to
+			// it — which is how a path built entirely from "walkable" steps
+			// ended up containing a 52.3 degree sample.
+			nd := terrain.Normalize(nodeDir(nk))
+			if !routeWalkable(f, nd) || !walkableBetween(f, d, nd) {
 				continue
 			}
 			prev[nk] = key
@@ -197,11 +203,21 @@ func rotateAbout(v, axis terrain.Vec, ang float64) terrain.Vec {
 	}
 }
 
+// routeSlopeLimit is the slope ceiling the router plans against. It is
+// terrain.MaxSlope by default and tightened by `lap -slope-margin`.
+var routeSlopeLimit = terrain.MaxSlope
+
+func routeWalkable(f *terrain.Field, d terrain.Vec) bool {
+	return f.Slope(d) <= routeSlopeLimit
+}
+
 // walkableBetween samples the segment and rejects it if any sample sits on
 // ground steeper than the player can climb. Sampling matters: checking only
 // the endpoint steps straight over a thin ridge.
 func walkableBetween(f *terrain.Field, a, b terrain.Vec) bool {
-	const samples = 4
+	const samples = 6
+	prev := terrain.Normalize(a)
+	prevR := f.SampleRadius(prev)
 	for i := 1; i <= samples; i++ {
 		t := float64(i) / samples
 		d := terrain.Normalize(terrain.Vec{
@@ -209,9 +225,20 @@ func walkableBetween(f *terrain.Field, a, b terrain.Vec) bool {
 			a[1] + (b[1]-a[1])*t,
 			a[2] + (b[2]-a[2])*t,
 		})
-		if !f.Walkable(d) {
+		if !routeWalkable(f, d) {
 			return false
 		}
+		// The RISE between consecutive samples, not just each sample's own
+		// gradient. Two nodes can each sit on gentle ground with a step
+		// between them — a cliff edge reads as walkable from both the top and
+		// the bottom. The player's walker then stalls against it, which is
+		// exactly what happened at s=143 m on the first BFS lap.
+		r := f.SampleRadius(d)
+		run := angleBetween(prev, d) * terrain.PlanetRadius
+		if run > 1e-9 && math.Atan2(math.Abs(r-prevR), run) > routeSlopeLimit {
+			return false
+		}
+		prev, prevR = d, r
 	}
 	return true
 }
@@ -367,7 +394,8 @@ func floodWalkable(f *terrain.Field, start terrain.Vec) map[int]bool {
 			axis := terrain.Normalize(terrain.Cross(up, dir))
 			n := terrain.Normalize(rotateAbout(up, axis, cell))
 			nk := nodeKeyOf(n)
-			if seen[nk] || !f.Walkable(n) || !walkableBetween(f, d, n) {
+			nd := terrain.Normalize(nodeDir(nk))
+			if seen[nk] || !f.Walkable(nd) || !walkableBetween(f, d, nd) {
 				continue
 			}
 			seen[nk] = true
@@ -514,4 +542,161 @@ func runRimScan(args []string) error {
 	enc, _ := json.MarshalIndent(out, "", " ")
 	fmt.Println(string(enc))
 	return nil
+}
+
+// --- lap --------------------------------------------------------------------
+
+// runLap builds a closed circumnavigation route by BFS-routing a tour through
+// the six cube-face centres and back to the start.
+//
+// The original C10 designer searches a family of up-to-four great-circle
+// quarter-legs. Against the current terrain that family has NO walkable member
+// (13,920 candidates evaluated, 0 passing, best 54 degrees against a 50 limit),
+// which is a statement about the family rather than about the planet: a flood
+// fill shows 96.6% of the surface is walkably connected. A route made of
+// arbitrary walkable steps can go where a route made of great-circle legs
+// cannot, and BFS only ever crosses ground it has checked.
+func runLap(args []string) error {
+	fs := flag.NewFlagSet("lap", flag.ContinueOnError)
+	seed := fs.Uint64("seed", 1337, "world seed")
+	// The walker steers toward waypoints and drifts off the exact nodes the
+	// search checked, sampling slightly different ground — a route solved
+	// right up to max_slope measured 50.10 degrees when actually walked.
+	// Route with headroom so the walked path stays inside the limit.
+	margin := fs.Float64("slope-margin", 4, "degrees of headroom below max_slope")
+	out := fs.String("out", "", "write the lap JSON here (default stdout)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	reg, err := defs.Load()
+	if err != nil {
+		return err
+	}
+	f := defs.BuildTerrain(*seed, reg)
+	routeSlopeLimit = terrain.MaxSlope - *margin*math.Pi/180
+	defer func() { routeSlopeLimit = terrain.MaxSlope }()
+	start := terrain.Normalize(terrain.SpawnDir)
+
+	// A tour of the six face centres, ordered so consecutive stops are 90
+	// degrees apart — adjacent faces, never antipodal ones, so each leg is a
+	// quarter turn rather than a coin-flip over the pole.
+	tour := []terrain.Vec{
+		{1, 0, 0}, {0, 0, 1}, {0, -1, 0}, {-1, 0, 0}, {0, 0, -1}, start,
+	}
+
+	var full []terrain.Vec
+	cur := start
+	for i, stop := range tour {
+		// A face centre is an arbitrary point and may sit on ground steeper
+		// than a player can stand on. BFS only crosses nodes it has checked,
+		// but the leg ENDPOINTS come from this tour, so an unwalkable stop
+		// would be spliced into the path unchecked — which is exactly how a
+		// 52.3 degree sample appeared in a route made entirely of walkable
+		// steps.
+		target := snapToWalkable(f, terrain.Normalize(stop))
+		leg, ok := solveRoute(f, cur, target)
+		if !ok {
+			return fmt.Errorf("lap: no walkable route for leg %d", i)
+		}
+		if len(full) > 0 {
+			leg = leg[1:] // drop the duplicated join
+		}
+		full = append(full, leg...)
+		cur = target
+	}
+
+	faces := map[int]bool{}
+	maxSlope := 0.0
+	for _, p := range full {
+		fc, _, _ := terrain.FaceOf(p)
+		faces[fc] = true
+		if s := f.Slope(p) * 180 / math.Pi; s > maxSlope {
+			maxSlope = s
+		}
+	}
+	endpoint := angleBetween(full[len(full)-1], start) * terrain.PlanetRadius
+
+	// Emit in test/t10/sim-lap.ts's own waypoint schema so the existing walker
+	// consumes this route unchanged: {wps:[{seg,s,r,face,dir}], total,
+	// facesVisited, crossings}. Every BFS step becomes a waypoint rather than a
+	// decimated subset — the walker aims at the next point in a straight line,
+	// and over a long hop that chord can leave the walkable corridor the search
+	// worked to find.
+	type wp struct {
+		Seg  string     `json:"seg"`
+		S    float64    `json:"s"`
+		R    float64    `json:"r"`
+		Face int        `json:"face"`
+		Dir  [3]float64 `json:"dir"`
+	}
+	wps := make([]wp, 0, len(full))
+	var crossings []map[string]any
+	sAcc, prevFace := 0.0, -1
+	for i, p := range full {
+		if i > 0 {
+			sAcc += angleBetween(full[i-1], p) * terrain.PlanetRadius
+		}
+		fc, _, _ := terrain.FaceOf(p)
+		if prevFace >= 0 && fc != prevFace {
+			crossings = append(crossings, map[string]any{
+				"s": math.Round(sAcc*100) / 100, "from": prevFace, "to": fc,
+			})
+		}
+		prevFace = fc
+		wps = append(wps, wp{
+			Seg: "lap", S: math.Round(sAcc*1000) / 1000,
+			R: f.SampleRadius(p), Face: fc, Dir: [3]float64(p),
+		})
+	}
+	faceList := make([]int, 0, len(faces))
+	for i := 0; i < terrain.NumFaces; i++ {
+		if faces[i] {
+			faceList = append(faceList, i)
+		}
+	}
+	res := map[string]any{
+		"seed":          *seed,
+		"wps":           wps,
+		"total":         sAcc,
+		"facesVisited":  faceList,
+		"crossings":     crossings,
+		"steps":         len(full),
+		"length_m":      pathLength(full),
+		"faces_visited": len(faces),
+		"max_slope_deg": maxSlope,
+		"endpoint_m":    endpoint,
+	}
+	enc, _ := json.MarshalIndent(res, "", " ")
+	if *out == "" {
+		fmt.Println(string(enc))
+		return nil
+	}
+	return os.WriteFile(*out, append(enc, '\n'), 0o644)
+}
+
+// snapToWalkable returns the nearest walkable lattice node to d, spiralling
+// outward. Returns d unchanged when it is already walkable.
+func snapToWalkable(f *terrain.Field, d terrain.Vec) terrain.Vec {
+	if f.Walkable(d) {
+		return d
+	}
+	cell := (math.Pi / 2) / float64(terrain.FaceGrid-1)
+	seen := map[int]bool{nodeKeyOf(d): true}
+	queue := []terrain.Vec{d}
+	for len(queue) > 0 && len(seen) < 4000 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, n := range neighboursOf(cur, cell) {
+			k := nodeKeyOf(n)
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			if f.Walkable(n) {
+				return n
+			}
+			queue = append(queue, n)
+		}
+	}
+	return d // nothing walkable nearby; caller will fail to route and say so
 }

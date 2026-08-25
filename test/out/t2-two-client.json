@@ -1,7 +1,7 @@
 {
   "criterion": "C2 (ROADMAP #2): two clients see each other <=1 s of spawn, on terrain",
   "run": {
-    "ts": "2026-08-24T05:54:34.677Z",
+    "ts": "2026-08-25T02:09:19.141Z",
     "world_sha256_16": "74f45a52c2998dcf",
     "world_seed": 1337
   },
@@ -9,31 +9,31 @@
     "A": {
       "endpoint": "ws://127.0.0.1:3000/ws (nginx)",
       "name": "qa-t2-a",
-      "entity_id": 2,
-      "connect_start_ns": "182389669057874",
-      "open_ns": "182389672205967",
-      "hello_ns": "182389672366448",
+      "entity_id": 12,
+      "connect_start_ns": "255277217768055",
+      "open_ns": "255277220870481",
+      "hello_ns": "255277221003269",
       "terrain_sha256_16": "74f45a52c2998dcf"
     },
     "B": {
       "endpoint": "ws://127.0.0.1:18080/ws (direct)",
       "name": "qa-t2-b",
-      "entity_id": 3,
-      "connect_start_ns": "182390172110723",
-      "open_ns": "182390173234696",
-      "hello_ns": "182390173322173",
-      "connect_after_A_open_ms": 501.03,
+      "entity_id": 13,
+      "connect_start_ns": "255277721155427",
+      "open_ns": "255277722378799",
+      "hello_ns": "255277722482185",
+      "connect_after_A_open_ms": 501.51,
       "terrain_sha256_16": "74f45a52c2998dcf"
     }
   },
   "timing_ms": {
-    "a_handshake": 3.309,
-    "b_handshake": 1.211,
-    "b_burst_A_spawn_after_b_connect": 2.13,
-    "a_recv_b_spawn_after_b_connect": 2.2,
-    "b_recv_a_spawn_after_b_connect": 2.13,
-    "b_first_snapshot_with_a_after_b_connect": 37.9,
-    "a_first_snapshot_with_b_after_b_connect": 38.08
+    "a_handshake": 3.235,
+    "b_handshake": 1.327,
+    "b_burst_A_spawn_after_b_connect": 3.57,
+    "a_recv_b_spawn_after_b_connect": 3.18,
+    "b_recv_a_spawn_after_b_connect": 3.57,
+    "b_first_snapshot_with_a_after_b_connect": 43.1,
+    "a_first_snapshot_with_b_after_b_connect": 43.52
   },
   "on_surface": {
     "A": {
@@ -73,12 +73,12 @@
     {
       "id": "a: B burst contains A spawn OR A gets B spawn <=1 s",
       "pass": true,
-      "detail": "burst_contains_A=true (B recv 2.1 ms after B connect); A recv B spawn 2.2 ms after B connect (limit 1000)"
+      "detail": "burst_contains_A=true (B recv 3.6 ms after B connect); A recv B spawn 3.2 ms after B connect (limit 1000)"
     },
     {
       "id": "b: each client sees the other within 1 s",
       "pass": true,
-      "detail": "B sees A: spawn 2.1 ms, first snapshot row 37.9 ms (limit 1000); A sees B: spawn 2.2 ms, first snapshot row 38.1 ms (limit 1000)"
+      "detail": "B sees A: spawn 3.6 ms, first snapshot row 43.1 ms (limit 1000); A sees B: spawn 3.2 ms, first snapshot row 43.5 ms (limit 1000)"
     },
     {
       "id": "c: both spawn positions on terrain (|len - sampleRadius| <= 0.05 m)",

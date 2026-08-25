@@ -27,6 +27,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import {
+  RULES,
   TICK_DT,
   decodeTerrain,
   sampleRadius,
@@ -74,7 +75,12 @@ const ADVANCE_M = 1.0 // advance waypoint pointer when within this of a wp
 const STOP_M = 0.5 // stop moving within this of the last wp
 const STALL_TICKS = 40
 const STALL_MOVE = 0.02
-const MAX_TICKS = 6000
+// Derived from the route, not a constant. 6000 ticks was sized for the
+// original 1065 m lap; a longer route silently ran out of budget and reported
+// itself as "did not reach the endpoint", which looks identical to the walker
+// getting stuck. Allow 1.8x the straight-line walking time: steering toward
+// waypoints is never perfectly efficient.
+const MAX_TICKS = Math.max(6000, Math.ceil((TOTAL / (RULES.walkSpeed * TICK_DT)) * 1.8))
 
 const up0: Vec3 = { x: 0, y: 1, z: 0 }
 const spawnPos: Vec3 = vec.scale(up0, sampleRadius(terrain, up0))
@@ -328,8 +334,14 @@ const assertResults: AssertResult[] = [
   },
   {
     label: 'crossings',
-    assert: 'all 7 face crossings at design s (+/-8 m)',
-    ok: xOk && crossings.length === 7,
+    assert: 'every design face crossing observed at its design s (+/-8 m)',
+    // Count comes from the DESIGN, not a literal. The old locked loop crossed
+    // faces 7 times and that 7 was written in here; a different walkable route
+    // crosses a different number of times, and pinning the old route's shape
+    // failed a lap that matched its own design exactly, at every crossing, to
+    // 0.00 m. Face COVERAGE is what the criterion asks for and it is asserted
+    // separately.
+    ok: xOk && crossings.length === designX.length,
     detail: `observed=${JSON.stringify(crossings)}`,
   },
   {
