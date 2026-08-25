@@ -386,3 +386,132 @@ func clampInt(v, lo, hi int) int {
 	}
 	return v
 }
+
+// --- lap scan ---------------------------------------------------------------
+
+// runLapScan reports, for every azimuth out of spawn, the steepest ground a
+// full great-circle lap would cross and which cube faces it visits.
+//
+// C10's lap is a single great circle. Zone flattening changes the field, and a
+// flatten band's outer rim can be steeper than the ground it replaced, so a
+// lap that was walkable before a zone existed need not stay walkable. Rather
+// than re-running the original 13,920-candidate design scan, this answers the
+// narrower question actually being asked: which azimuths still work.
+func runLapScan(args []string) error {
+	fs := flag.NewFlagSet("lapscan", flag.ContinueOnError)
+	seed := fs.Uint64("seed", 1337, "world seed")
+	limit := fs.Float64("max-slope", 50, "walkability limit in degrees")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	reg, err := defs.Load()
+	if err != nil {
+		return err
+	}
+	f := defs.BuildTerrain(*seed, reg)
+
+	spawn := terrain.Normalize(terrain.SpawnDir)
+	type cand struct {
+		Az       float64 `json:"az"`
+		MaxSlope float64 `json:"max_slope_deg"`
+		Faces    int     `json:"faces"`
+	}
+	var best []cand
+	for azDeg := 0.0; azDeg < 360; azDeg += 0.5 {
+		up := spawn
+		ref := terrain.Vec{0, 0, 1}
+		if math.Abs(ref.Dot(up)) > 0.999 {
+			ref = terrain.Vec{1, 0, 0}
+		}
+		north := terrain.Normalize(ref.Sub(up.Scale(ref.Dot(up))))
+		east := terrain.Cross(up, north)
+		a := azDeg * math.Pi / 180
+		dir := terrain.Vec{
+			north[0]*math.Cos(a) + east[0]*math.Sin(a),
+			north[1]*math.Cos(a) + east[1]*math.Sin(a),
+			north[2]*math.Cos(a) + east[2]*math.Sin(a),
+		}
+		axis := terrain.Normalize(terrain.Cross(up, dir))
+
+		maxSlope, faces := 0.0, map[int]bool{}
+		const samples = 900 // ~1 m spacing over a 942 m lap
+		for i := 0; i < samples; i++ {
+			ang := 2 * math.Pi * float64(i) / samples
+			p := terrain.Normalize(rotateAbout(up, axis, ang))
+			if s := f.Slope(p) * 180 / math.Pi; s > maxSlope {
+				maxSlope = s
+			}
+			fc, _, _ := terrain.FaceOf(p)
+			faces[fc] = true
+		}
+		if maxSlope <= *limit {
+			best = append(best, cand{Az: azDeg, MaxSlope: maxSlope, Faces: len(faces)})
+		}
+	}
+	enc, _ := json.MarshalIndent(map[string]any{
+		"seed": *seed, "limit_deg": *limit,
+		"walkable_azimuths": len(best), "candidates": best,
+	}, "", " ")
+	fmt.Println(string(enc))
+	return nil
+}
+
+// runRimScan reports the steepest ground within a radius of each zone origin.
+//
+// A flatten band's rim slope is roughly (terrain delta) / falloff: level the
+// ground inside a radius and blend back over too short a distance and the
+// result is a cliff ringing the zone. That is invisible to the zone's own
+// tests and shows up far away, as a lap route that no longer has a walkable
+// candidate anywhere on the planet.
+func runRimScan(args []string) error {
+	fs := flag.NewFlagSet("rimscan", flag.ContinueOnError)
+	seed := fs.Uint64("seed", 1337, "world seed")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	reg, err := defs.Load()
+	if err != nil {
+		return err
+	}
+	f := defs.BuildTerrain(*seed, reg)
+
+	out := map[string]any{}
+	for id, z := range reg.Zones {
+		origin := terrain.Normalize(terrain.Vec(z.OriginDir))
+		reach := z.FlattenRadius + z.FlattenFalloff
+		if reach <= 0 {
+			continue
+		}
+		maxSlope, atR := 0.0, 0.0
+		for r := 0.0; r <= reach+30; r += 1.0 {
+			ang := r / terrain.PlanetRadius
+			for a := 0.0; a < 360; a += 5 {
+				up := origin
+				ref := terrain.Vec{0, 0, 1}
+				if math.Abs(ref.Dot(up)) > 0.999 {
+					ref = terrain.Vec{1, 0, 0}
+				}
+				north := terrain.Normalize(ref.Sub(up.Scale(ref.Dot(up))))
+				east := terrain.Cross(up, north)
+				ar := a * math.Pi / 180
+				dir := terrain.Vec{
+					north[0]*math.Cos(ar) + east[0]*math.Sin(ar),
+					north[1]*math.Cos(ar) + east[1]*math.Sin(ar),
+					north[2]*math.Cos(ar) + east[2]*math.Sin(ar),
+				}
+				axis := terrain.Normalize(terrain.Cross(up, dir))
+				p := terrain.Normalize(rotateAbout(up, axis, ang))
+				if s := f.Slope(p) * 180 / math.Pi; s > maxSlope {
+					maxSlope, atR = s, r
+				}
+			}
+		}
+		out[id] = map[string]any{
+			"flatten_radius": z.FlattenRadius, "flatten_falloff": z.FlattenFalloff,
+			"max_slope_deg": maxSlope, "at_radius_m": atR,
+		}
+	}
+	enc, _ := json.MarshalIndent(out, "", " ")
+	fmt.Println(string(enc))
+	return nil
+}

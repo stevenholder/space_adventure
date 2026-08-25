@@ -1,6 +1,6 @@
 {
- "run_id": "2026-08-24-05-54",
- "timestamp": "2026-08-24T05:54:33.098Z",
+ "run_id": "2026-08-24-23-54",
+ "timestamp": "2026-08-24T23:54:56.695Z",
  "verdict": "PASS",
  "harnessProblems": [],
  "thresholds": {
@@ -2813,6 +2813,193 @@
   },
   {
    "run_id": "2026-08-24-05-54",
+   "verdict": "PASS",
+   "overall": {
+    "ticks": 1993,
+    "maxDPos_m": 3.296374622653849e-13,
+    "maxDPos_tick": 922,
+    "maxDPos_pct_ofTickWalk": 1.465055387846155e-10,
+    "maxDVel_mps": 9.144491300436349e-14,
+    "maxDVel_tick": 953,
+    "maxDVel_pct_ofWalkSpeed": 2.032109177874744e-12,
+    "groundedMismatches": 0,
+    "failureCount": 0
+   },
+   "perLeg": [
+    {
+     "label": "level",
+     "tickRange": [
+      0,
+      89
+     ],
+     "ticks": 90,
+     "maxDPos_m": 5.701662731533487e-14,
+     "maxDPos_tick": 21,
+     "maxDVel_mps": 1.786950432383069e-15,
+     "maxDVel_tick": 25,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "aim",
+     "tickRange": [
+      90,
+      240
+     ],
+     "ticks": 151,
+     "maxDPos_m": 9.574217314573634e-14,
+     "maxDPos_tick": 213,
+     "maxDVel_mps": 9.239730654883691e-15,
+     "maxDVel_tick": 218,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "descend",
+     "tickRange": [
+      241,
+      508
+     ],
+     "ticks": 268,
+     "maxDPos_m": 1.8687817519505437e-13,
+     "maxDPos_tick": 391,
+     "maxDVel_mps": 3.935204265035581e-14,
+     "maxDVel_tick": 391,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "slide",
+     "tickRange": [
+      509,
+      628
+     ],
+     "ticks": 120,
+     "maxDPos_m": 1.8692305158553625e-13,
+     "maxDPos_tick": 572,
+     "maxDVel_mps": 4.856651554890951e-14,
+     "maxDVel_tick": 531,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "backoff",
+     "tickRange": [
+      629,
+      658
+     ],
+     "ticks": 30,
+     "maxDPos_m": 8.910160576636238e-14,
+     "maxDPos_tick": 636,
+     "maxDVel_mps": 2.659905307280872e-15,
+     "maxDVel_tick": 629,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "shoulder",
+     "tickRange": [
+      659,
+      787
+     ],
+     "ticks": 129,
+     "maxDPos_m": 1.0828494122086006e-13,
+     "maxDPos_tick": 777,
+     "maxDVel_mps": 7.381104677948019e-15,
+     "maxDVel_tick": 713,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "merge",
+     "tickRange": [
+      788,
+      944
+     ],
+     "ticks": 157,
+     "maxDPos_m": 3.296374622653849e-13,
+     "maxDPos_tick": 922,
+     "maxDVel_mps": 9.016678874737817e-14,
+     "maxDVel_tick": 940,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "seam",
+     "tickRange": [
+      945,
+      1147
+     ],
+     "ticks": 203,
+     "maxDPos_m": 1.8101416121193376e-13,
+     "maxDPos_tick": 1130,
+     "maxDVel_mps": 9.144491300436349e-14,
+     "maxDVel_tick": 953,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "return",
+     "tickRange": [
+      1148,
+      1896
+     ],
+     "ticks": 749,
+     "maxDPos_m": 2.6709224882228713e-13,
+     "maxDPos_tick": 1424,
+     "maxDVel_mps": 1.0986160316453369e-14,
+     "maxDVel_tick": 1352,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "jump",
+     "tickRange": [
+      1897,
+      1932
+     ],
+     "ticks": 36,
+     "maxDPos_m": 2.400383313501048e-13,
+     "maxDPos_tick": 1932,
+     "maxDVel_mps": 8.405495513285155e-15,
+     "maxDVel_tick": 1922,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "ledge",
+     "tickRange": [
+      1933,
+      1981
+     ],
+     "ticks": 49,
+     "maxDPos_m": 2.57228492368784e-13,
+     "maxDPos_tick": 1940,
+     "maxDVel_mps": 7.03919921647305e-15,
+     "maxDVel_tick": 1936,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "probe",
+     "tickRange": [
+      1982,
+      1987
+     ],
+     "ticks": 6,
+     "maxDPos_m": 1.9895196601282805e-13,
+     "maxDPos_tick": 1982,
+     "maxDVel_mps": 5.8410815908364745e-15,
+     "maxDVel_tick": 1982,
+     "groundedMismatches": 0
+    },
+    {
+     "label": "pause",
+     "tickRange": [
+      1988,
+      1992
+     ],
+     "ticks": 5,
+     "maxDPos_m": 2.3630220124908717e-13,
+     "maxDPos_tick": 1988,
+     "maxDVel_mps": 4.04584524955367e-15,
+     "maxDVel_tick": 1988,
+     "groundedMismatches": 0
+    }
+   ],
+   "failures": 0
+  },
+  {
+   "run_id": "2026-08-24-23-54",
    "verdict": "PASS",
    "overall": {
     "ticks": 1993,

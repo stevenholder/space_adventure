@@ -58,6 +58,12 @@ func run(args []string) error {
 	if len(args) > 0 && args[0] == "reach" {
 		return runReach(args[1:])
 	}
+	if len(args) > 0 && args[0] == "lapscan" {
+		return runLapScan(args[1:])
+	}
+	if len(args) > 0 && args[0] == "rimscan" {
+		return runRimScan(args[1:])
+	}
 	return runServer(args)
 }
 

@@ -83,16 +83,21 @@ const hpEnd=ents.get(myId).health
 const moved=npcs.map(([id],i)=>npcStart[i]?Math.hypot(...sub(ents.get(id).pos,npcStart[i])):0)
 const anyMoved=moved.some(m=>m>1.0)
 const hits=events.filter(e=>e.ev===3).length
+const deaths=events.filter(e=>e.ev===4&&e.id===myId).length
 
 console.log(`idle drift ${idleDrift.toFixed(3)} m | NPC movement after aggro: max ${Math.max(...moved).toFixed(1)} m`)
-console.log(`player health ${hpStart} -> ${hpEnd} | hit events ${hits}`)
+console.log(`player health ${hpStart} -> ${hpEnd} | hit events ${hits} | deaths ${deaths}`)
 
 const checks=[
  ['camp NPCs exist', npcs.length>0],
  ['NPCs idle when unprovoked', idleDrift<0.5],
  ['player reached the camp', arrived<=20],
  ['NPCs reacted (moved or attacked)', anyMoved||hits>0||hpEnd<hpStart],
- ['player took damage', hpEnd<hpStart],
+ // Health alone cannot prove this: dying inside the window respawns you at
+ // full health, so hpEnd can be HIGHER than hpStart on a run where the camp
+ // killed you. Damage is proven by the hit events, and death is a stronger
+ // form of taking damage rather than an exception to it.
+ ['player took damage', hits>0 && (hpEnd<hpStart || deaths>0)],
 ]
 let bad=0
 for(const [n,ok] of checks){ if(!ok){console.log(`FAIL ${n}`);bad++} }
