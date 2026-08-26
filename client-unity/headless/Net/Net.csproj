@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Builds the SAME sources Unity compiles via Assets/Net/Net.asmdef.
+       Nothing is copied or generated: this project globs them in place, so
+       there is one source of truth and two compilers. netstandard2.1 is what
+       Unity's compiler accepts unchanged. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>SpaceAdventure.Net</RootNamespace>
+    <AssemblyName>Net</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Assets/Net/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Sim/Sim.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -144,3 +144,28 @@ test-pg:
 	status=$$?; \
 	docker rm -f $(PG_TEST_CONTAINER) >/dev/null; \
 	exit $$status
+
+# ---- Unity client (Phase 3.5) ----------------------------------------------
+# C44: Sim and Net build and their checks run with NO Unity Editor. That is not
+# a convenience -- the conformance diff against the Go sim (C40) has to run in
+# CI, and CI has no Editor.
+UNITY_SLN = client-unity/headless/SpaceAdventure.Client.slnx
+
+.PHONY: unity-test unity-gate
+unity-test:
+	dotnet build $(UNITY_SLN) -v q --nologo
+	dotnet run --project client-unity/headless/SimDump --nologo -- --selftest
+
+# C47: no agent-authored scenes or prefabs. Unity's native storage is
+# GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
+# means opening the Editor. Exactly one boot scene is allowed; everything else
+# is built from C# at runtime.
+unity-gate:
+	@scenes=$$(find client-unity/Assets -name '*.unity' -not -path '*/Scenes/Boot.unity' 2>/dev/null); \
+	prefabs=$$(find client-unity/Assets -name '*.prefab' 2>/dev/null); \
+	if [ -n "$$scenes$$prefabs" ]; then \
+		echo "C47: scene/prefab debt (build these from code instead):" >&2; \
+		echo "$$scenes$$prefabs" >&2; \
+		exit 1; \
+	fi; \
+	echo "C47 clean: no agent-authored scenes or prefabs"

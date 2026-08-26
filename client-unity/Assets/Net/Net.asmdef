@@ -1,0 +1,14 @@
+{
+    "name": "Net",
+    "rootNamespace": "SpaceAdventure.Net",
+    "references": ["Sim"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

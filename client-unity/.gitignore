@@ -1,0 +1,21 @@
+# Unity generates these; they are never committed.
+Library/
+Temp/
+Logs/
+Obj/
+obj/
+bin/
+Build/
+Builds/
+UserSettings/
+MemoryCaptures/
+Recordings/
+
+# Unity writes its OWN csproj/sln next to the project. The hand-written ones
+# under headless/ are committed on purpose -- do not widen these patterns.
+/*.csproj
+/*.sln
+/*.user
+
+# .NET 10 writes the newer XML solution format.
+/*.slnx
