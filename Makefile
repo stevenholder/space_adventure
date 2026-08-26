@@ -156,6 +156,13 @@ unity-test:
 	dotnet build $(UNITY_SLN) -v q --nologo
 	dotnet run --project client-unity/headless/SimDump --nologo -- --selftest
 
+# C40: the C# sim must match the Go sim on the C5 route within 1e-10 m. This
+# is the Phase 3.5 gate -- if it cannot close, everything downstream is wasted
+# work against a client that silently disagrees with the server.
+.PHONY: unity-conformance
+unity-conformance:
+	node test/t20-csharp-conformance.mjs
+
 # C47: no agent-authored scenes or prefabs. Unity's native storage is
 # GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
 # means opening the Editor. Exactly one boot scene is allowed; everything else

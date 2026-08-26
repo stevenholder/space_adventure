@@ -43,17 +43,32 @@ namespace SpaceAdventure.Sim
             a.Z * b.X - a.X * b.Z,
             a.X * b.Y - a.Y * b.X);
 
+        /// <summary>
+        /// Sqrt(dot), NOT a hypot. Go's Vec.Len is math.Sqrt(a.Dot(a)) and C40
+        /// is measured against Go, so this matches Go rather than TypeScript's
+        /// Math.hypot. The two differ in the last ulp; C5 has held at 3.93e-13
+        /// across that difference, well under the 1e-10 bar, but there is no
+        /// reason to import the discrepancy when Go is the reference.
+        /// </summary>
         public double Length => Math.Sqrt(Dot(this, this));
 
         /// <summary>
-        /// Unit vector, or Zero for a zero-length input. Returning Zero rather
-        /// than NaN matches the TypeScript and Go sims: a NaN here does not
+        /// Degenerate-length threshold. Matches terrain.Normalize in Go and
+        /// vec.norm in TypeScript exactly. Not an arbitrary epsilon: a
+        /// different cutoff here changes which near-zero vectors collapse, and
+        /// that shows up as a divergent trajectory several hundred ticks later.
+        /// </summary>
+        public const double NormEps = 1e-12;
+
+        /// <summary>
+        /// Unit vector, or Zero for a degenerate input. Returning Zero rather
+        /// than NaN matches the Go and TypeScript sims: a NaN here does not
         /// stop, it propagates into a position that then gets persisted.
         /// </summary>
         public Vec3 Normalized()
         {
             double len = Length;
-            return len > 0 ? this * (1.0 / len) : Zero;
+            return len < NormEps ? Zero : this * (1.0 / len);
         }
 
         /// <summary>Component of this vector perpendicular to unit vector n.</summary>
@@ -82,6 +97,14 @@ namespace SpaceAdventure.Sim
         public Vec3 LookDir;
 
         public int ActionMask;
+
+        /// <summary>
+        /// The zone's static colliders for this tick (integrator steps 8-9).
+        /// NOT part of the 25-byte wire payload: it is threaded through Input
+        /// because it is state the step already has. Null or empty is a
+        /// documented no-op, and that no-op is load-bearing — see Collide.
+        /// </summary>
+        public Collider[] Colliders;
     }
 
     /// <summary>Simulated body state.</summary>
