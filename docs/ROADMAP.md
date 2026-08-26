@@ -1,10 +1,13 @@
 # Roadmap
 
-Status: **Phases 1–3 complete** (C1–C25 verified on the deployed kind stack;
-`docs/QA-STATUS.md`). Next is **Phase 3.5 — rebuild the client in Unity as a
-native desktop build**, inserted 2026-08-26 before Phase 4, because Phase 4/5
-is where client work explodes and the Phase 1–3 client is the cheapest version
-of that port that will ever exist. Browser delivery is dropped.
+Status: **Phases 1–3 complete**, with two Phase 2 criteria open — C16 has a
+clause no code implements and C14 does not exercise what it claims (verdicts
+and evidence in `docs/QA-STATUS.md`; both are Phase 3.5 wave 0 items).
+
+Next is **Phase 3.5 — rebuild the client in Unity as a native desktop build**,
+inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
+explodes and the Phase 1–3 client is the cheapest version of that port that
+will ever exist. Browser delivery is dropped.
 
 Phases 2–5 replaced the old M2/M3 ordering (ship first, combat later). Ships
 land last, after the game has NPCs, combat and a vehicle. Nothing spec'd for
@@ -379,6 +382,18 @@ is the single largest thing Three.js was never going to give us.
 
 ### Wave 0 — contracts, main thread, before any dispatch
 
+0. **Settle two Phase 2 criteria that the 2026-08-26 verdict run found open**
+   (`docs/QA-STATUS.md` "Phase 2"), because both are wire or spec decisions and
+   this is the phase that opens the wire:
+   - **C16 has an unimplemented clause.** Nothing carries a player's equipped
+     weapon — not the entity row, not `spawn`, not `shot_fired` — so no client
+     can render another player's gun, and the Unity client will not be able to
+     either. Add a weapon id to the wire, or amend the criterion. `t19` fails
+     by design until one of those happens.
+   - **C14 does not test what it claims.** It fires at a *static* target, so
+     the rewound position equals the live one and lag compensation is a no-op;
+     the criterion cannot tell a server with rewind from one without. Phase 3
+     supplies moving NPCs — re-point it at one.
 1. **Land the Phase 4 input mode byte first, and do not update the TS client.**
    `input` gains its mode byte in `docs/PROTOCOL.md`, the Go server, and the
    harness. The TS client is being retired, so it is not a third end. The

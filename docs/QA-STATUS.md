@@ -29,16 +29,97 @@ C7's p95 is the post-NodePort figure. The original 6.65/17.51 ms carried
 `kubectl port-forward`'s userspace-proxy jitter; replacing it with kind
 `extraPortMappings` also took C4's despawn from 1003 ms to 1.2 ms.
 
-## Phase 2 — C11–C18: verdicts were never recorded
+## Phase 2 — C11–C18 (verified 2026-08-26)
 
-`docs/tasks/phase2-wave3.md` briefed a Phase 2 regression section for this
-file and it was never written. The criteria themselves are defined in
-`docs/ROADMAP.md`, and Phase 2 was exercised end to end by `t14` (buy and
-shoot) and `t15` (persistence) — but no per-criterion verdict table exists.
+Recorded 2026-08-26. The Phase 2 brief that was supposed to write this section
+(`docs/tasks/phase2-wave3.md:79`) was never executed, so a third of the C43
+gate had no evidence behind it. Filling it found three defects — two in the
+criteria themselves, one in the cluster.
 
-**This is a hole in the C43 gate** and should be filled before Phase 3.5
-starts, by re-running the Phase 2 harnesses against the TS client while it is
-still alive and recording what they assert.
+**The stack was stale when this run started.** The running pods predated
+`1d2aadc` by 11.5 hours, so they were serving a server without that commit's
+`ai/brain.go` fix. Every number below was taken after a `make up` rebuild.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C11 | Progress survives a reconnect; a fresh token does not inherit it | same token → credits 750, `primary=weapon.pulse`, 2 items; fresh token → 1000, `{}`, 1 item | **PASS** (`t15`) |
+| C11b | Store suite passes on SQLite *and* Postgres; migration twice is a no-op | `TestMigrate_Postgres`, `TestOpenPostgres`, `TestPlayerRoundTripPostgres` all ran (verified not skipped) beside their SQLite twins; `Migrate` called twice succeeds | **PASS**, one caveat |
+| C12 | Unaffordable and forged purchases refused, inventory unchanged | `insufficient_credits` (status 3); forged opcode (status 1); malformed body (status 2); credits 750 → 749 on a 1-credit probe, so nothing was deducted | **PASS** (`t18`) |
+| C13 | Colliders agree Go↔TS; no penetration or tunnelling | 9 scenarios bit-exact, dPos = dVel = 0.00e+0 | **PASS** (`t13`) |
+| C14 | 20 shots at a target register; 20 aimed 1 m wide register zero | 20/20 and 0/20 at 40.7 m under 100 ms injected RTT | **PASS** (`t18`), criterion amended — see below |
+| C15 | Damage per the GDD table, death, respawn within 3 s ±100 ms | 25 damage/hit live (100 → 75); 5 death/respawn cycles observed live | **PARTIAL** |
+| C16 | Remote client sees weapon, pitch within 1°, ordered shot events | pitch worst error 0.35°; 8/8 `shot_fired`, ordered; **weapon: not on the wire** | **FAIL** (`t19`) |
+| C18 | Build gates clean; ≤ 54 B/entity; 60 fps; no DB call on the tick path | `go build/vet/test ./...` clean (160 tests, 7 packages), `tsc --noEmit` clean, `npm run build` clean; 54 B/entity exactly, worst case over 2122 snapshots | **PARTIAL** |
+
+C17 is absent from the table on purpose: `t14` completes list → buy → equip at
+2.04 m from the shopkeeper and Go's `TestHandleCmdOutOfRange` covers the
+refusal, but the look-cone and on-screen prompt clauses are client-side and
+were never tested. The prompt clause retires with the TS client.
+
+### C11b caveat — the dev Secret is committed
+
+The mechanism is right: the server takes `DATABASE_URL` only through a
+`secretKeyRef`, and no DSN is baked into an image or into the Deployment. But
+the Secret itself is in the repo (`deploy/manifests/30-postgres.yaml`) with a
+fixed localhost-only kind password, documented in place as dev-only with the
+note that a real deployment supplies it out-of-band. The criterion's letter
+says "no DSN in a committed manifest"; its intent is met and its letter is not.
+
+### C14 — two deviations, both forced by the world
+
+Neither is a product defect, and both were found by writing the test rather
+than by reading the criterion:
+
+- **"From 30 m" is unreachable.** The range is a walled lane: side walls run
+  its length and the targets stand 15–25 m in, so 30 m from a target is a
+  position *outside* the mouth. A straight-line walker presses against a side
+  wall and stops — the first run of `t18` read 19/20 at 40.7 m and looked like
+  a lag-compensation failure. Routes here are solved, not assumed, and the
+  router works over terrain rather than colliders. The measurement is taken at
+  the firing line a walker can actually reach, and the distance is reported.
+- **Shots must be spaced ~520 ms, not the 150 ms fire interval.**
+  `spread_per_shot` is 0.35° against `spread_decay` 3.0°/s, so firing at the
+  minimum interval holds the cone near 0.95° — 0.68 m at this range, wider
+  than the 0.45 m target. At base spread (0.6°, 0.43 m) every aimed round
+  lands. Firing at the minimum interval measures 18/20; the criterion's
+  "all register" quietly assumes aimed single shots.
+
+**And the criterion does not test what it claims.** Its own note says "rewind
+is what makes the first number 20 and not 12" — but the target is *static*, so
+the rewound position equals the live one and lag compensation is a no-op. C14
+as written cannot distinguish a server with rewind from one without.
+Phase 3 supplies moving NPCs; re-pointing C14 at one would make it a real
+lag-compensation test. Raised for Phase 3.5.
+
+### C16 — one clause has no implementation
+
+A second client **cannot** see another player's equipped weapon, because
+nothing carries it. The 54-byte entity row has no weapon field, a player's
+`spawn` payload is the name only, and `shot_fired` carries origin, direction
+and distance. Server-side, `client.EquippedWeapon` exists solely to notice a
+re-equip and reset the magazine (`server/internal/server/server.go:614`); it
+is never encoded. The TS client makes no attempt to render one.
+
+The other two clauses hold, and hold well: remote pitch is accurate to 0.35°
+in the worst case — which is the quantisation floor, since `pitch_q` is
+`asin(up·look)` over ±90° in 255 steps, i.e. 0.709° per step — and all 8 shots
+produced exactly one ordered `shot_fired` each.
+
+This needs a protocol decision, not a bug fix, and Phase 3.5 is the moment:
+the wire is already breaking for the input mode byte. Either add a weapon id
+(entity row or `spawn`) or amend C16. **Until then `t19` fails by design** —
+a criterion that is not met should not have a green test.
+
+### C15 and C18 — what is not measured
+
+- C15's 3.0 s ±100 ms respawn boundary is covered by Go's
+  `TestTargetRespawnExactBoundary`, not live. Live evidence is 5 death and
+  respawn cycles in `t18`, each inside a 3.3 s wait.
+- C18's "60 fps with 10 players, 1 NPC and 8 targets" is a browser measurement
+  that retires with the TS client; it should be restated against the Unity
+  build in Phase 3.5. The "no database call on the tick path" clause — tick
+  duration unchanged with 200 ms of injected Postgres latency — has never been
+  run.
 
 ## Phase 3 — C19–C25 (verified 2026-08-25)
 
@@ -66,7 +147,9 @@ headless client that makes the port safe.
 - **Per-criterion:** `t2`–`t4` (visibility, authority, despawn), `t5/` (Go↔TS
   conformance route + diff), `t6` (prediction), `t7` (sustain), `t9-terrain.py`,
   `t10/` (circumnavigation), `t12`/`t13` (codec + collider parity), `t14` (buy
-  and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA).
+  and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
+  `t18` (currency authority, hit registration under latency, snapshot budget),
+  `t19` (remote fidelity — fails on C16's unimplemented weapon clause).
 - **Captured world:** `test/out/world-seed1337.json`, sha256_16
   `c80269c44a757a8f` — terrain determinism across restarts is proven against it.
 - **C5 caveat:** the Go dump uses the f64 field, the TS dump the u16 wire field
