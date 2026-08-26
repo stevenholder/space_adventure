@@ -80,8 +80,49 @@ func TestInputRoundTrip(t *testing.T) {
 		LookDir:    [3]float32{0.1, -0.7, 0.7},
 		ActionMask: ActionSprint | ActionJump,
 		Seq:        0xFFFF,
+		Mode:       2,
 	}
 	roundTrip(t, MsgInput, EncodeInput(in), func(p []byte) (any, error) { return DecodeInput(p) }, in)
+}
+
+// A 24-byte input predates the mode byte and must still decode, as mode 0.
+// This is the whole reason the byte was appended rather than prepended: it
+// lets the server take the change without every client moving in lockstep.
+// Without it the retiring TypeScript client and all twelve .mjs harnesses
+// would have had to land in the same commit as the server.
+func TestInputWithoutModeByteDecodesAsModeZero(t *testing.T) {
+	// Seq deliberately has a NON-ZERO high byte. With Seq 7 the last byte of a
+	// 24-byte payload is 0, so a decoder that wrongly read the mode from the
+	// end of the buffer still produced mode 0 and this test passed while the
+	// bug it exists to catch was present.
+	const seq = 0x0107
+	full := EncodeInput(Input{MoveX: -0.25, MoveY: 1.0, LookDir: [3]float32{0.1, -0.7, 0.7},
+		ActionMask: ActionSprint, Seq: seq, Mode: 3})
+	payload := full[2:] // strip the u16 frame type
+	if len(payload) != 25 {
+		t.Fatalf("encoded input is %d bytes, want 25", len(payload))
+	}
+
+	legacy, err := DecodeInput(payload[:24])
+	if err != nil {
+		t.Fatalf("24-byte input: %v", err)
+	}
+	if legacy.Mode != 0 {
+		t.Errorf("mode = %d, want 0", legacy.Mode)
+	}
+	// Every other field must land at the offset it had before the byte
+	// existed. If the byte had been prepended these would all be one out.
+	if legacy.MoveX != -0.25 || legacy.MoveY != 1.0 || legacy.Seq != seq ||
+		legacy.ActionMask != ActionSprint || legacy.LookDir != [3]float32{0.1, -0.7, 0.7} {
+		t.Errorf("24-byte decode shifted a field: %+v", legacy)
+	}
+
+	if _, err := DecodeInput(payload[:23]); err == nil {
+		t.Error("23-byte input decoded; short payloads must still be rejected")
+	}
+	if _, err := DecodeInput(append(append([]byte{}, payload...), 0)); err == nil {
+		t.Error("26-byte input decoded; trailing bytes must still be rejected")
+	}
 }
 
 func TestSnapshotRoundTrip(t *testing.T) {

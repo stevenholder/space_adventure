@@ -167,7 +167,12 @@ sprinting, `0x04` dead, `0x08` firing; rest reserved. `pitch_q` is pitch in
 units of π/254 rad (visual only).
 
 `event_id` allocation: `0x0001` explosion (reserved), `0x0002` shot fired,
-`0x0003` hit, `0x0004` death, `0x0005` loot dropped.
+`0x0003` hit, `0x0004` death, `0x0005` loot dropped, `0x0006` `equipped`
+(Phase 3.5 — how a client learns what another player is holding; see C16).
+
+`input` gains a trailing `u8 mode` in Phase 3.5. Appended, not prepended, so
+every existing field keeps its offset; a 24-byte payload still reads as mode
+`0`, so the change needs no version flip and no lockstep client update.
 
 ---
 
@@ -385,15 +390,18 @@ is the single largest thing Three.js was never going to give us.
 0. **Settle two Phase 2 criteria that the 2026-08-26 verdict run found open**
    (`docs/QA-STATUS.md` "Phase 2"), because both are wire or spec decisions and
    this is the phase that opens the wire:
-   - **C16 has an unimplemented clause.** Nothing carries a player's equipped
-     weapon — not the entity row, not `spawn`, not `shot_fired` — so no client
-     can render another player's gun, and the Unity client will not be able to
-     either. Add a weapon id to the wire, or amend the criterion. `t19` fails
-     by design until one of those happens.
-   - **C14 does not test what it claims.** It fires at a *static* target, so
-     the rewound position equals the live one and lag compensation is a no-op;
-     the criterion cannot tell a server with rewind from one without. Phase 3
-     supplies moving NPCs — re-point it at one.
+   - **C16 — decided 2026-08-26: a new `equipped` event, `event_id 0x0006`.**
+     Nothing carried a player's equipped weapon, so no client could render
+     another player's gun. The fix reuses the existing event channel rather
+     than widening the entity row: a value that changes a few times a session
+     has no business costing bytes on every entity on every tick. Broadcast on
+     change, and replayed once per armed player at join so late joiners are
+     correct. `t19` stays red until it lands.
+   - **C14 — decided 2026-08-26: re-point it at a moving NPC.** It fires at a
+     *static* target, so the rewound position equals the live one and lag
+     compensation is a no-op; the criterion cannot tell a server with rewind
+     from one without. Phase 3's camp NPCs move. The harnesses are being
+     touched for the mode byte anyway, so this rides along with that work.
 1. **Land the Phase 4 input mode byte first, and do not update the TS client.**
    `input` gains its mode byte in `docs/PROTOCOL.md`, the Go server, and the
    harness. The TS client is being retired, so it is not a third end. The

@@ -145,14 +145,25 @@ type HelloAck struct {
 	EntityID  uint32
 }
 
-// Input is the C→S on-foot command state (latest wins):
-// f32 move_x | f32 move_y | f32 look_dir[3] | u16 action_mask | u16 seq.
+// Input is the C→S command state (latest wins):
+// f32 v[5] | u16 action_mask | u16 seq | u8 mode.
+//
+// The five floats are one vector whose meaning Mode selects, so the message
+// never changes shape between modes. Mode 0 is on foot, and MoveX/MoveY/
+// LookDir are its names for v[0..4].
+//
+// Mode is the LAST field and it is optional: appending rather than prepending
+// left every other field at the offset it has had since Phase 1, and a
+// 24-byte payload decodes as mode 0. That is what lets the mode byte land
+// without a version flip and without updating every client in lockstep — the
+// same shape as Hello, whose payload may end after the name.
 type Input struct {
 	MoveX      float32
 	MoveY      float32
 	LookDir    [3]float32
 	ActionMask uint16
 	Seq        uint16
+	Mode       uint8
 }
 
 // Entity is one snapshot row (PROTOCOL.md, 54 bytes):
@@ -285,7 +296,8 @@ func EncodeInput(in Input) []byte {
 		b = putF32(b, in.LookDir[i])
 	}
 	b = putU16(b, in.ActionMask)
-	return putU16(b, in.Seq)
+	b = putU16(b, in.Seq)
+	return append(b, in.Mode)
 }
 
 // AppendSnapshotHeader appends the snapshot header (tick, ackSeq, count) to
@@ -447,8 +459,12 @@ func DecodeHelloAck(p []byte) (HelloAck, error) {
 // DecodeInput parses an input payload.
 func DecodeInput(p []byte) (Input, error) {
 	var in Input
-	if err := need(p, 24, "input"); err != nil {
-		return in, err
+	// Exactly 24 (pre-mode-byte) or exactly 25. Not a minimum: `need` rejects
+	// trailing bytes on purpose, because a payload that is the wrong length is
+	// usually a field-alignment bug rather than a longer message, and the
+	// silent version of that is every field read one offset out.
+	if len(p) != 24 && len(p) != 25 {
+		return in, fmt.Errorf("%w: input needs 24 or 25 bytes, have %d", ErrBadPayload, len(p))
 	}
 	in.MoveX = f32(p[0:4])
 	in.MoveY = f32(p[4:8])
@@ -457,6 +473,10 @@ func DecodeInput(p []byte) (Input, error) {
 	}
 	in.ActionMask = binary.LittleEndian.Uint16(p[20:22])
 	in.Seq = binary.LittleEndian.Uint16(p[22:24])
+	// A 24-byte payload predates the mode byte and means mode 0.
+	if len(p) >= 25 {
+		in.Mode = p[24]
+	}
 	return in, nil
 }
 

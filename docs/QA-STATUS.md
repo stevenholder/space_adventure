@@ -20,7 +20,7 @@ are in git history if ever needed.
 | C5 | Go↔TS movement conformance, tick-aligned | ≤ 5% | maxDPos 3.93e-13 m, 0 grounded mismatches |
 | C6 | Prediction quality at 100 ms RTT | p95 < 0.25 m | p95 7.61e-06 m, 0 snap-backs |
 | C7 | Sustained tick + latency + client fps | 20 Hz, p95 < 50 ms, 60 fps ×10 | 20.0005–20.0007 Hz, 0 gaps/dupes; p95 3.60 ms; 59.96 fps |
-| C9 | Terrain walkable, varied, navigable | field audit | PASS (`c80269c44a757a8f`) |
+| C9 | Terrain walkable, varied, navigable | field audit | PASS |
 | C10 | Circumnavigation, closed loop, all 6 faces | ≥ 942 m, endpoint < 1 m, grounded | 1065.47 m; sim 0.0095 m, live 0.1501 m; 99.4% of ticks within 0.05 m |
 
 There is no C8 — the number was never issued.
@@ -105,10 +105,13 @@ in the worst case — which is the quantisation floor, since `pitch_q` is
 `asin(up·look)` over ±90° in 255 steps, i.e. 0.709° per step — and all 8 shots
 produced exactly one ordered `shot_fired` each.
 
-This needs a protocol decision, not a bug fix, and Phase 3.5 is the moment:
-the wire is already breaking for the input mode byte. Either add a weapon id
-(entity row or `spawn`) or amend C16. **Until then `t19` fails by design** —
-a criterion that is not met should not have a green test.
+**Decided 2026-08-26: a new `equipped` event, `event_id 0x0006`** — the
+player's entity id plus the item id as UTF-8, broadcast when the primary slot
+changes and replayed once per armed player when a client joins. It reuses the
+existing event channel rather than widening the 54-byte row, because a value
+that changes a few times a session should not cost bytes on every entity on
+every tick. **`t19` stays red until it lands** — a criterion that is not met
+should not have a green test.
 
 ### C15 and C18 — what is not measured
 
@@ -150,8 +153,12 @@ headless client that makes the port safe.
   and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
   `t18` (currency authority, hit registration under latency, snapshot budget),
   `t19` (remote fidelity — fails on C16's unimplemented weapon clause).
-- **Captured world:** `test/out/world-seed1337.json`, sha256_16
-  `c80269c44a757a8f` — terrain determinism across restarts is proven against it.
+- **Captured world:** `test/out/world-seed1337.json`, wire-field sha256_16
+  **`74f45a52c2998dcf`** (re-confirmed live on both WS paths, 2026-08-26).
+  Terrain determinism across restarts is proven against it. The M1 value was
+  `c80269c44a757a8f`; the field legitimately changed when the Phase 2/3 zones
+  landed, because siting a zone flattens the terrain under it. A mismatch here
+  means non-determinism only if no zone moved.
 - **C5 caveat:** the Go dump uses the f64 field, the TS dump the u16 wire field
   (~15 µm quantization, negligible under the 5% bar). The C# port inherits this.
 
