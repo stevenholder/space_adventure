@@ -12,7 +12,9 @@
 #              run the Go store tests against it, then always remove the
 #              container (even on test failure).
 #
-# Overrides: make up CLIENT_PORT=8081 SERVER_PORT=18081
+# CLIENT_PORT/SERVER_PORT change only which host port the readiness check
+# probes. The real mapping is fixed in deploy/kind.yaml at cluster-creation
+# time -- edit that file and recreate the cluster to actually move it.
 
 CLUSTER     ?= space-adventure
 NAMESPACE   ?= space-adventure

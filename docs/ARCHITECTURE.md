@@ -7,8 +7,8 @@ Status: v1 — reflects Phase 1 as built. Updated as each phase lands
 
 ```mermaid
 flowchart LR
-  subgraph Browser
-    C[Three.js client<br/>render + controls + HUD]
+  subgraph Desktop
+    C[Unity client<br/>render + controls + HUD]
   end
   subgraph localhost
     S[Go game server<br/>WS :8080 + authoritative sim @ 20 Hz]
@@ -21,8 +21,11 @@ flowchart LR
 
 - One authoritative Go server process per world instance (M1: single
   instance).
-- Browser clients connect over WebSocket; all world state is
-  server-authoritative.
+- Clients connect over WebSocket; all world state is server-authoritative.
+- **Client delivery is a packaged native desktop build** (Unity, C#) as of the
+  Phase 3.5 decision, 2026-08-26. Browser delivery is dropped. See "Client
+  delivery" below — the TS/Three.js client shipped Phases 1–3 and is retired at
+  the end of Phase 3.5.
 - `make up` runs the whole stack on a local **kind** cluster — server, nginx-
   backed client, and (from Phase 2) Postgres — so the deployed path is the
   development path. See "Deployment".
@@ -55,8 +58,9 @@ flowchart LR
   identically; the server neither knows nor cares, because M1 props have no
   collision. The moment props become collidable, placement has to move
   server-side.
-- **Movement and terrain sampling live in a pure module** — no DOM, no Three.js,
-  no browser globals — that the render loop calls into. This is not style: the
+- **Movement and terrain sampling live in a pure module** — no engine types, no
+  renderer, no platform globals (in Unity: an `asmdef` that references
+  `UnityEngine` nowhere) — that the render loop calls into. This is not style: the
   conformance test (ROADMAP criterion 5) runs the TypeScript sim headless
   under Node and diffs it against the Go sim, which is impossible if movement
   is entangled with the renderer. Same reason the module takes `dt` and input
@@ -301,21 +305,34 @@ criterion 1).
 - `make up` — creates the kind cluster (`deploy/kind.yaml`) if absent, builds
   `Dockerfile.server` / `Dockerfile.client` and loads both images into the
   cluster, applies `deploy/manifests/` (server Deployment + nginx-backed
-  client, each with readiness/liveness probes), then opens two host
-  port-forwards and fails until both endpoints answer:
-  - `:3000` → client — nginx serves the built client and proxies `/ws` to the
-    server, so the browser is same-origin (no CORS).
+  client, each with readiness/liveness probes), then waits and fails until
+  both host endpoints answer. The endpoints are **kind `extraPortMappings`
+  onto NodePort Services** (`deploy/kind.yaml` → `30000`/`30080`), a
+  kernel-level mapping — not `kubectl port-forward`:
+  - `:3000` → client — nginx serves the built TS client and proxies `/ws` to
+    the server. **Retired at the end of Phase 3.5:** a native client is
+    downloaded, not served, so it dials the server URL from its own config and
+    the same-origin/no-CORS assumption goes with it.
   - `:18080` → server — direct WS + `/healthz`.
-- `make down` — stops the port-forwards (verifying the ports are actually
-  free), deletes the cluster, removes logs. Leaves nothing running.
-- Overrides: `make up CLIENT_PORT=8081 SERVER_PORT=18081`.
+- `make down` — deletes the cluster, removes logs, and reaps any stray
+  port-forward left by an earlier revision. Leaves nothing running.
+- `make up` also `rollout restart`s both Deployments, because the images are
+  `:latest` and `kubectl apply` otherwise reports "unchanged" and keeps
+  serving the old build.
+- `CLIENT_PORT` / `SERVER_PORT` change **only which host port the readiness
+  check probes.** The real mapping is fixed in `deploy/kind.yaml` at
+  cluster-creation time, so moving it means editing that file and recreating
+  the cluster.
 
 **Why kind in M1.** The acceptance criteria are measured on the deployed
 stack: criterion 1 is `make up` from a clean clone, and the nginx `/ws` proxy
-is part of the wire path the browser actually takes. Known cost:
-`kubectl port-forward` is a userspace TCP proxy, so criterion 7's latency
-measurement carries its jitter — the harness pins the epoch and documents the
-residual uncertainty instead of pretending it is zero.
+is part of the wire path the client actually takes.
+
+This used to cost accuracy: `kubectl port-forward` is a userspace TCP proxy
+that added its own jitter to criterion 7's latency measurement, and died on a
+broken pipe. Replacing it with `extraPortMappings` + NodePort removed both —
+C4 despawn went from 1003 ms to 1.2 ms, and C7's p95 from 6.65/17.51 ms to
+3.60 ms. Nothing to supervise, nothing to restart, no added jitter.
 
 **Why not more.** One pod per process, one shard, no sharding, no delta
 snapshots, no 100+ load — the scale-out milestone is where Kubernetes earns
@@ -327,7 +344,8 @@ not a rewrite.
 
 | Decision | Choice | Why |
 |---|---|---|
-| 3D engine | Three.js + TypeScript | deepest ecosystem, browser-native, full control |
+| 3D engine (Phases 1–3) | Three.js + TypeScript | deepest ecosystem, browser-native, full control |
+| 3D engine (Phase 3.5 on) | Unity + C#, native desktop | humanoid animation, asset pipeline and zone authoring are the gaps Three.js was never going to close; browser dropped, which is what removed Godot's one advantage |
 | Server language | Go | one static binary; goroutines fit tick + IO |
 | Transport | WebSocket (binary) | simple, works everywhere; revisit UDP if M1 feels limited |
 | Authority | server-authoritative | MMO correctness, cheat resistance |

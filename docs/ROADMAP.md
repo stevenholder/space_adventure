@@ -1,9 +1,15 @@
 # Roadmap
 
-Status: **Phase 1 complete.** Phases 2–5 below replace the old M2/M3 ordering
-(ship first, combat later). Ships now land last, after the game has NPCs,
-combat and a vehicle. Nothing spec'd for the old M2 is wasted — the seat and
-attachment contract moves to Phase 4 unchanged.
+Status: **Phases 1–3 complete** (C1–C25 verified on the deployed kind stack;
+`docs/QA-STATUS.md`). Next is **Phase 3.5 — rebuild the client in Unity as a
+native desktop build**, inserted 2026-08-26 before Phase 4, because Phase 4/5
+is where client work explodes and the Phase 1–3 client is the cheapest version
+of that port that will ever exist. Browser delivery is dropped.
+
+Phases 2–5 replaced the old M2/M3 ordering (ship first, combat later). Ships
+land last, after the game has NPCs, combat and a vehicle. Nothing spec'd for
+the old M2 is wasted — the seat and attachment contract moves to Phase 4
+unchanged.
 
 ## The game we are building
 
@@ -17,8 +23,8 @@ scaling problem to solve when player count makes them hurt, not before
 ## Where we are
 
 **Phase 1 — on-foot multiplayer on a round world — DONE.** All 10 acceptance
-criteria verified on the deployed kind stack (`docs/QA-STATUS.md`,
-`docs/M1-FINAL-REPORT.md`). They stay as the regression gate for every phase
+criteria verified on the deployed kind stack (`docs/QA-STATUS.md`).
+They stay as the regression gate for every phase
 below: nothing lands that breaks C1–C10.
 
 What exists and is load-bearing:
@@ -342,6 +348,118 @@ players can clear it together and both see the same fight.
 
 ---
 
+# Phase 3.5 — rebuild the client in Unity (native desktop)
+
+**Decision, 2026-08-26: browser delivery is dropped.** The target is a packaged
+native desktop build. This phase changes the renderer, input and asset
+pipeline. It changes no gameplay.
+
+**Playable proof.** Exactly Phase 3's proof, in Unity, from a packaged build:
+launch the desktop client, join the deployed server, walk the planet, buy the
+rifle, shoot the range, fight the camp, die, respawn. C1–C25 re-verified
+against the new client. If it plays differently from the TS client, that is a
+bug, not a feature.
+
+**Why here and not later.** Phase 4 and 5 are where client work explodes —
+rover cockpit, seats, ship interior, space transition. The Phase 1–3 client is
+the cheapest version of this port that will ever exist. Building rover and ship
+UI in Three.js and then porting it means paying twice.
+
+**What does not change.** 8.5k lines of Go, 160 Go tests, the wire protocol,
+the sim rule tables, all 12 `.mjs` harnesses, and the kind deploy. Roughly 60%
+of the repo is untouched. Of the 6k-line TS client, ~2.5k (`net/`, `sim/`) is
+ported and ~3.5k (`scene/`, `hud/`, `input/`, most of `util/`) is deleted
+because engine features replace it.
+
+**Engine.** Unity, C#. Godot 4 was the better pick only while browser delivery
+was a requirement (far smaller web export, same C# port work); dropping browser
+removes its advantage and leaves Unity's animation tooling and asset ecosystem
+deciding — and humanoid locomotion blending for the Phase 3 melee/ranged NPCs
+is the single largest thing Three.js was never going to give us.
+
+### Wave 0 — contracts, main thread, before any dispatch
+
+1. **Land the Phase 4 input mode byte first, and do not update the TS client.**
+   `input` gains its mode byte in `docs/PROTOCOL.md`, the Go server, and the
+   harness. The TS client is being retired, so it is not a third end. The
+   harness becomes the reference implementation and the Unity client is the
+   first client to implement the new layout — built against a frozen protocol
+   that a running headless client already validates.
+2. **`docs/ARCHITECTURE.md` — client delivery.** Packaged desktop build; nginx
+   no longer serves a client bundle; `/ws` stays. Server URL becomes client
+   config, not same-origin, so the CORS-free assumption dies with it.
+3. **`client-unity/CONVENTIONS.md` — the rule that protects the workflow:**
+   - **Code-first. One near-empty scene.** All hierarchy built in C# at runtime.
+   - **No agent touches a `.unity`, `.prefab`, or `.meta`.** Unity's native unit
+     is GUID-keyed YAML: unreviewable diffs, unmergeable conflicts, and "verify"
+     means opening the Editor. That is a direct collision with one-file,
+     ~150-line dispatch. Anything needing scene authoring is a main-thread task.
+   - Assembly definitions split `Sim`, `Net`, `Game`. **`Sim` references
+     `UnityEngine` nowhere** and must compile and test headless.
+   - `.gitignore`: `Library/`, `Temp/`, `Logs/`, `Build/`, `*.csproj`, `*.sln`.
+4. **`Sim` carries its own math types**, mirroring `client/src/sim/types.ts` —
+   not `UnityEngine.Vector3`. Normalize and lerp implementations differ between
+   libraries and C5's bar is 1e-10 m.
+5. **C5 runs three-way during the transition** — Go / TS / C#. TS leaves the
+   diff only once C# matches Go.
+
+### Task list
+
+| # | Agent | Task | File | Verify |
+|---|---|---|---|---|
+| U1 | main | Unity project skeleton, three asmdefs, gitignore | `client-unity/` | `Sim` builds headless, references no UnityEngine |
+| U2 | sonnet | Port math types (vec3, quat, basis) | `Sim/Types.cs` | unit test vs TS golden values |
+| U3 | sonnet | Port cube-sphere terrain sampling | `Sim/Terrain.cs` | face/dir addressing golden values |
+| U4 | sonnet | Port deterministic RNG | `Sim/Rng.cs` | same sequence as `sim/rng.ts` |
+| U5 | sonnet | Port on-foot step rule table | `Sim/Step.cs` | trajectory diff vs TS |
+| U6 | sonnet | Port collider resolution | `Sim/Collide.cs` | parity vs t13 vectors |
+| U7 | main | Three-way conformance runner (Go/TS/C#) | `test/t18-csharp-conformance.mjs` | max dPos < 1e-10 m |
+| U8 | sonnet | Little-endian binary reader/writer | `Net/Wire.cs` | round-trip fuzz |
+| U9 | sonnet | v2 message codecs, all opcodes | `Net/Messages.cs` | byte-identical vs t12 vectors |
+| U10 | sonnet | WebSocket transport, hello/join, reconnect | `Net/Client.cs` | joins deployed server, decodes snapshot |
+| U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Prediction.cs` | same corrections as TS on one input trace |
+| U12 | sonnet | Terrain mesh from u16 radius grids | `Game/TerrainMesh.cs` | mesh matches sampled radii |
+| U13 | sonnet | Entity views, interpolation, nametags | `Game/Entities.cs` | two clients agree (C24, strengthened) |
+| U14 | sonnet | FPS controller + Input System, emits mode byte | `Game/Fps.cs` | walks, strafes correct handedness |
+| U15 | sonnet | HUD: vitals, hotbar, shop, interact prompt | `Game/UI/` | buy flow completes |
+| U16 | sonnet | Weapon, projectiles, hit feedback | `Game/Combat.cs` | shot_fired renders |
+| U17 | **main** | **Wire it into the frame loop** | `Game/Boot.cs` | end-to-end join → walk → shoot |
+| U18 | main | Retire `client/`, drop TS from C5, update Makefile + deploy | — | C43 green |
+
+U17 is a task because Phase 2 and Phase 3 both shipped fully-built subsystems
+that nothing referenced. That failure mode is not going to be fixed by hoping.
+
+### Acceptance criteria (C40–C47, numbered clear of Phases 4–5)
+
+- **C40 Sim conformance.** The C# sim matches Go on the C5 trajectory route
+  within 1e-10 m, running headless with no UnityEngine reference.
+- **C41 Codec parity.** C# encodes and decodes every v2 message byte-identically
+  to the Go and Node implementations, against the t12 vectors.
+- **C42 Prediction.** Replay reconciliation from `ack_seq`, never blending, and
+  the same corrections as the TS client on an identical input trace.
+- **C43 Regression.** C1–C25 re-run against the Unity client on the deployed
+  kind stack. All pass. This is the phase gate.
+- **C44 Headless CI.** `Sim` and `Net` build and test with no Unity Editor, in
+  CI, on every commit.
+- **C45 Cold start.** A packaged desktop build joins the deployed server from a
+  cold start with the server URL from config, not compiled in.
+- **C46 Frame budget.** 60 fps with the camp live (30 NPCs) on target hardware.
+- **C47 No scene debt.** The repo contains no agent-authored `.prefab` or
+  `.unity` beyond the single boot scene. Enforced by a grep gate in CI, because
+  a convention nobody checks is a convention that lasts two weeks.
+
+### The risk that actually matters
+
+C40. The 1.1e-10 m Go↔TS agreement is the spine of the prediction model, and
+this phase asks a third language to hit the same bar. It is mechanical work —
+916 lines, hand-written float math, no engine physics involved — but it is
+mechanical work with a numerical gate, and it should be finished and green
+before a single line of rendering code is written. U2–U7 land first for that
+reason. If C40 will not close, stop the phase there: everything downstream is
+wasted otherwise.
+
+---
+
 # Phase 4 — get in a rover and drive
 
 **Playable proof.** A rover is parked near spawn. Walk up to it, press E, your
@@ -359,8 +477,10 @@ also have to solve flight. Phase 5 then reuses it.
 
 - `docs/PROTOCOL.md`: activate `board` / `disembark` / `seat_result` and start
   filling `parent_id`/`seat` in the entity row already shipped in Phase 2. The
-  input mode byte gains mode `2` — ground vehicle (`v = [throttle, steer, 0, 0,
-  0]`).
+  input mode byte — **added in Phase 3.5**, server and harness only — gains
+  mode `2`, ground vehicle (`v = [throttle, steer, 0, 0, 0]`). The byte does
+  not exist in the shipped v2 `input` layout; Phase 3.5 introduces it so the
+  Unity client is built against it from the start.
 - `docs/GDD.md`: the existing "Seats and occupancy" applies as written; add a
   **ground drive model** rule table (accel, top speed, steer rate, grip, slope
   limit, terrain-following suspension) and the rover's seat table.
