@@ -10,7 +10,6 @@
 // C# instead of GUID-keyed YAML (C47).
 
 using System;
-using System.Collections.Generic;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 using UnityEngine;
@@ -81,22 +80,30 @@ namespace SpaceAdventure.Game
         private EntityViews _views;
         private SnapshotTimeline _timeline;
         private Hud _hud;
+        private CombatFx _fx;
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
         private GameObject _planet;
         private Material _material;
 
+        /// <summary>
+        /// weapon.pulse fire_interval, from the GDD weapon table. Hard-coded
+        /// until `defs` is parsed for the equipped weapon's own rules — the
+        /// server is the authority either way and simply drops anything early.
+        /// </summary>
+        private const float FireIntervalSeconds = 0.15f;
+
         private ushort _seq;
+        private float _nextFireAt;
         private float _tickAccumulator;
         private bool _worldBuilt;
-        private readonly List<EventMsg> _events = new List<EventMsg>();
 
         private void Start()
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
-            _material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            _material = new Material(RequireShader("Standard", "Universal Render Pipeline/Lit"));
 
             var camGo = new GameObject("Eye");
             var cam = camGo.AddComponent<Camera>();
@@ -116,12 +123,34 @@ namespace SpaceAdventure.Game
             _timeline = new SnapshotTimeline();
             _views = new EntityViews(transform, _material);
             _hud = new Hud();
+            _fx = new CombatFx(transform);
 
             _net = new NetClient();
             _net.Connect(ResolveServerUrl(), SystemInfo.deviceName ?? "player", ResolveToken());
 
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        /// <summary>
+        /// Finds the first shader that exists, and says something useful when
+        /// none do. Shader.Find returns null in a PLAYER for any shader no
+        /// asset references — every material here is built in C#, so the build
+        /// cannot see the dependency and strips them. Editor/BuildTools.cs
+        /// registers them as always-included; this turns a regression there
+        /// into a legible message instead of an ArgumentNullException raised
+        /// from inside Material's constructor.
+        /// </summary>
+        private static Shader RequireShader(params string[] names)
+        {
+            foreach (string name in names)
+            {
+                Shader s = Shader.Find(name);
+                if (s != null) return s;
+            }
+            throw new InvalidOperationException(
+                $"none of these shaders are in the build: {string.Join(", ", names)}. " +
+                "Run 'Space Adventure/Ensure Shaders' (Editor/BuildTools.cs) and rebuild.");
         }
 
         private void Update()
@@ -155,6 +184,7 @@ namespace SpaceAdventure.Game
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
             _fps.PlaceCamera(_predictor.State.Pos);
+            _fx.Tick();
         }
 
         private void SendTick(LocalInput li)
@@ -174,13 +204,21 @@ namespace SpaceAdventure.Game
                 (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z,
                 (ushort)li.ActionMask, _seq));
 
-            if (li.FirePressed)
+            // Cadence is enforced server-side and an early shot is DROPPED,
+            // not queued, so a client that fires every tick just loses most of
+            // them. Hold to the weapon's own interval; the server allows one
+            // tick of tolerance, which covers the rounding.
+            if (li.FirePressed && Time.time >= _nextFireAt)
             {
+                _nextFireAt = Time.time + FireIntervalSeconds;
                 // The shot names the input that was in effect when the trigger
                 // went down. The server rewinds by how far back that input
                 // executed, so sending anything else moves where the shot
                 // lands (PROTOCOL "fire"; GDD "Lag compensation").
                 _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));
+                _fx.OnLocalFire(
+                    TerrainMesh.ToUnity(_predictor.State.Pos) + TerrainMesh.ToUnity(_predictor.State.Pos).normalized * FpsController.EyeHeight,
+                    TerrainMesh.ToUnity(li.Look));
             }
         }
 
@@ -225,6 +263,7 @@ namespace SpaceAdventure.Game
                         };
                     }
                     _predictor.SetColliders(_colliders);
+                    Debug.Log($"colliders: {_colliders.Length}");
                     break;
                 }
                 case Msg.Spawn:
@@ -253,10 +292,13 @@ namespace SpaceAdventure.Game
                 case Msg.Event:
                 {
                     EventMsg ev = Decode.Event(frame.Reader);
-                    _events.Add(ev);
-                    if (ev.EventId == EventId.Equipped)
+                    switch (ev.EventId)
                     {
-                        _views.OnEquipped(ev.EntityId, WireReader.Utf8.GetString(ev.Data));
+                        case EventId.ShotFired: _fx.OnShotFired(ev); break;
+                        case EventId.Hit: _fx.OnHit(ev, _net.EntityId); break;
+                        case EventId.Equipped:
+                            _views.OnEquipped(ev.EntityId, WireReader.Utf8.GetString(ev.Data));
+                            break;
                     }
                     _hud.OnEvent(ev, _net.EntityId);
                     break;
@@ -281,6 +323,17 @@ namespace SpaceAdventure.Game
             _planet = TerrainMesh.Build(_terrain, _material, transform);
             _predictor.Seed(_terrain, _colliders);
             _worldBuilt = true;
+
+            // A packaged player has no HUD anyone is watching when it is run
+            // headless in CI (C45 is "joins the deployed server from a cold
+            // start"), so say so in the log. Once per world build, not per
+            // frame.
+            // No collider count here on purpose: `colliders` arrives AFTER
+            // `terrain` (PROTOCOL's join order), so any number printed at this
+            // point is zero and reads as a bug that is not one. The colliders
+            // log themselves when they land.
+            Debug.Log($"world ready: entity={_net.EntityId} seed={_net.WorldSeed} " +
+                      $"tickHz={_net.TickHz} spawn={_predictor.State.Pos.Length:F1} m from centre");
         }
 
         private void OnGUI() => _hud?.Draw(_net, _predictor, _fps);

@@ -175,6 +175,23 @@ unity-codec:
 unity-join:
 	dotnet run --project client-unity/headless/SimDump --nologo -- --join ws://127.0.0.1:$(SERVER_PORT)/ws
 
+UNITY ?= /mnt/c/Program Files/Unity/Hub/Editor/6000.5.10f1/Editor/Unity.exe
+UNITY_PROJ = C:\\dev\\space_adventure\\client-unity
+
+# C45: a packaged desktop build that joins the deployed server from a cold
+# start, with the URL from config rather than compiled in. The player is the
+# only thing that catches build-only failures -- shader stripping killed the
+# first one on its first frame, and the Editor could not have seen it.
+.PHONY: unity-build unity-scene
+unity-build:
+	"$(UNITY)" -batchmode -quit -nographics -projectPath "$(UNITY_PROJ)" 	  -executeMethod SpaceAdventure.EditorTools.BuildTools.BuildStandalone 	  -buildOutput "$(UNITY_PROJ)\\Build" -logFile "$(UNITY_PROJ)\\Logs\\build.log"
+	@grep -E '^build ' client-unity/Logs/build.log || { echo "see client-unity/Logs/build.log" >&2; exit 1; }
+
+# Regenerates the one permitted scene. It is empty by design -- Boot.cs builds
+# the hierarchy at runtime -- so this exists to register it in build settings.
+unity-scene:
+	"$(UNITY)" -batchmode -quit -nographics -projectPath "$(UNITY_PROJ)" 	  -executeMethod SpaceAdventure.EditorTools.BuildTools.GenerateBootScene 	  -logFile "$(UNITY_PROJ)\\Logs\\scene.log"
+
 # C47: no agent-authored scenes or prefabs. Unity's native storage is
 # GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
 # means opening the Editor. Exactly one boot scene is allowed; everything else
