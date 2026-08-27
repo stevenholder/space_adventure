@@ -3,13 +3,13 @@
   "id": "C19a",
   "name": "NPC notices a player inside its aggro radius and pursues",
   "ok": true,
-  "detail": "player closed to 8.5 m; NPC moved 4.8 m off its post"
+  "detail": "player closed to 8.9 m; NPC moved 4.6 m off its post"
  },
  {
   "id": "C20/21",
   "name": "camp NPCs damage a player who stands in range",
   "ok": true,
-  "detail": "9 hit events, health 100 -> 0 (died) at 8.5 m"
+  "detail": "16 hit events, health 100 -> 0 (died) at 8.9 m"
  },
  {
   "id": "C21b",
@@ -27,7 +27,7 @@
   "id": "C19b",
   "name": "NPC leashes back to its post and stays on the surface",
   "ok": true,
-  "detail": "returned to 1.03 m of post (limit 2.5), |pos|=157.2 m"
+  "detail": "returned to 1.63 m of post (limit 2.5), |pos|=157.2 m"
  },
  {
   "id": "C24",
@@ -39,7 +39,7 @@
   "id": "C25a",
   "name": "per-client snapshot bandwidth under 100 KB/s",
   "ok": true,
-  "detail": "13.9 KB/s over 5.0 s, 21 entities (interest culling NOT wired)"
+  "detail": "22.4 KB/s over 5.0 s, 29 entities (interest culling NOT wired)"
  },
  {
   "id": "C25b",
