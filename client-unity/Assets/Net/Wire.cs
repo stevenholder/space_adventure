@@ -133,7 +133,8 @@ namespace SpaceAdventure.Net
             }
         }
 
-        internal static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, false);
+        /// <summary>The wire's text encoding. Strict: invalid UTF-8 is data, not an exception.</summary>
+        public static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, false);
 
         internal static float BitsToFloat(uint bits) => new F32Bits { U = bits }.F;
     }

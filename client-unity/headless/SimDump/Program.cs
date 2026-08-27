@@ -19,6 +19,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using SpaceAdventure.Game;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 
@@ -185,8 +186,93 @@ internal static class Program
             Rng.Hash3(-7, 11, 0) == 0.8620048023294657 &&
             Rng.Hash3(65535, 65535, 65535) == 0.009098467649891973);
 
+        PredictionChecks();
+
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
+    }
+
+    // ---- U11 prediction ----------------------------------------------------
+
+    private static void PredictionChecks()
+    {
+        // u16 seq comparison must be wrap-safe. Plain `>` makes the client
+        // ignore every snapshot for the rest of the session the first time the
+        // counter passes 65535 -- roughly 55 minutes in at 20 Hz, which is
+        // exactly the kind of bug that never shows up in a five-minute test.
+        Check("seq 1 is newer than 0", Predictor.SeqNewer(1, 0));
+        Check("seq 0 is not newer than 1", !Predictor.SeqNewer(0, 1));
+        Check("seq is not newer than itself", !Predictor.SeqNewer(7, 7));
+        Check("seq 0 is newer than 65535 (wrap)", Predictor.SeqNewer(0, 65535));
+        Check("seq 65535 is not newer than 0 (wrap)", !Predictor.SeqNewer(65535, 0));
+
+        var terrain = TerrainField.FromWire(FlatCodes(65), 150, 150);
+        var p = new Predictor();
+        p.Seed(terrain, System.Array.Empty<SpaceAdventure.Sim.Collider>());
+        Vec3 spawn = p.State.Pos;
+
+        // Walk forward for five ticks; the body must actually move and every
+        // input must still be pending, because nothing has been acked.
+        var fwd = Step.Tangential(new Vec3(1, 0, 0), spawn.Normalized()).Normalized();
+        for (ushort seq = 1; seq <= 5; seq++)
+        {
+            p.Apply(seq, new Input { MoveX = 0, MoveY = 1, LookDir = fwd, ActionMask = 0 });
+        }
+        Check("prediction moves the body", (p.State.Pos - spawn).Length > 0.1);
+        Check("unacked inputs are all pending", p.PendingCount == 5, $"{p.PendingCount}");
+
+        // Reconciling at ack 3 drops 1-3 and replays 4-5 on the server state.
+        // Feeding back the state prediction itself produced must leave the
+        // body where it already was: replay is deterministic, so a correction
+        // of zero is the proof that client and server run the same rules.
+        var predicted = p.State;
+        Predictor twin = Replay(terrain, fwd);
+        twin.Reconcile(SpawnAfter(terrain, fwd, 3), VelAfter(terrain, fwd, 3),
+                       FacingAfter(terrain, fwd, 3), true, 3);
+        Check("reconcile keeps the two unacked inputs", twin.PendingCount == 2, $"{twin.PendingCount}");
+        Check("replaying the server's own answer moves nothing",
+              (twin.State.Pos - predicted.Pos).Length < 1e-9,
+              $"{(twin.State.Pos - predicted.Pos).Length:E2} m");
+
+        // A stale snapshot must be ignored outright, never blended in.
+        Check("a stale ack is rejected", !twin.Reconcile(spawn, Vec3.Zero, fwd, true, 2));
+    }
+
+    /// <summary>A fresh predictor that has applied the same five inputs.</summary>
+    private static Predictor Replay(TerrainField t, Vec3 fwd)
+    {
+        var p = new Predictor();
+        p.Seed(t, System.Array.Empty<SpaceAdventure.Sim.Collider>());
+        for (ushort seq = 1; seq <= 5; seq++)
+        {
+            p.Apply(seq, new Input { MoveX = 0, MoveY = 1, LookDir = fwd, ActionMask = 0 });
+        }
+        return p;
+    }
+
+    /// <summary>The state the SERVER would hold having applied n inputs.</summary>
+    private static State ServerAfter(TerrainField t, Vec3 fwd, int n)
+    {
+        var s = Step.SpawnState(t);
+        Vec3 look = s.Facing;
+        for (int i = 0; i < n; i++)
+        {
+            look = Step.Apply(ref s, new Input { MoveX = 0, MoveY = 1, LookDir = fwd, ActionMask = 0 },
+                              look, t, Rules.DT);
+        }
+        return s;
+    }
+
+    private static Vec3 SpawnAfter(TerrainField t, Vec3 fwd, int n) => ServerAfter(t, fwd, n).Pos;
+    private static Vec3 VelAfter(TerrainField t, Vec3 fwd, int n) => ServerAfter(t, fwd, n).Vel;
+    private static Vec3 FacingAfter(TerrainField t, Vec3 fwd, int n) => ServerAfter(t, fwd, n).Facing;
+
+    /// <summary>A perfectly spherical radius field, for tests about motion.</summary>
+    private static ushort[] FlatCodes(int faceGrid)
+    {
+        var codes = new ushort[6 * faceGrid * faceGrid];
+        for (int i = 0; i < codes.Length; i++) codes[i] = 0; // min == max == 150
+        return codes;
     }
 
     // ---- C41 codec parity --------------------------------------------------

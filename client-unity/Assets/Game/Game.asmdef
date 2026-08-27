@@ -1,7 +1,11 @@
 {
     "name": "Game",
     "rootNamespace": "SpaceAdventure.Game",
-    "references": ["Sim", "Net"],
+    "references": [
+        "Sim",
+        "Net",
+        "Unity.InputSystem"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
