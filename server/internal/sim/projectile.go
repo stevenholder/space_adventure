@@ -6,6 +6,7 @@
 package sim
 
 import (
+	"encoding/binary"
 	"math"
 
 	"space-adventure/server/internal/protocol"
@@ -87,14 +88,30 @@ func StepProjectile(e *Ent, dt float64, ctx StepCtx) {
 		}
 		if found {
 			victim := ctx.World.Ents[bestID]
+			before := victim.Health
 			victim.Health -= state.Damage
 			if victim.Health < 0 {
 				victim.Health = 0
 			}
 			if ctx.Events != nil {
+				// PROTOCOL.md gives `hit` a 20-byte body. This emitted the
+				// header alone, which reads as a truncated frame to anything
+				// that parses the documented layout. It went unnoticed because
+				// the branch needs a projectile to strike a damageable WORLD
+				// entity, and until camp NPCs became damageable the only one
+				// was a range dummy no gunner can reach.
+				point := prev.Add(dir.Scale(bestT))
+				data := make([]byte, 0, 20)
+				data = binary.LittleEndian.AppendUint32(data, state.Owner)
+				for i := 0; i < 3; i++ {
+					data = binary.LittleEndian.AppendUint32(data, math.Float32bits(float32(point[i])))
+				}
+				data = binary.LittleEndian.AppendUint16(data, uint16(before-victim.Health))
+				data = binary.LittleEndian.AppendUint16(data, uint16(victim.Health))
 				*ctx.Events = append(*ctx.Events, protocol.Event{
 					EntityID: bestID,
 					EventID:  protocol.EventHit,
+					Data:     data,
 				})
 			}
 			ctx.World.Remove(e.ID)

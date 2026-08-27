@@ -46,7 +46,7 @@ criteria themselves, one in the cluster.
 | C11b | Store suite passes on SQLite *and* Postgres; migration twice is a no-op | `TestMigrate_Postgres`, `TestOpenPostgres`, `TestPlayerRoundTripPostgres` all ran (verified not skipped) beside their SQLite twins; `Migrate` called twice succeeds | **PASS**, one caveat |
 | C12 | Unaffordable and forged purchases refused, inventory unchanged | `insufficient_credits` (status 3); forged opcode (status 1); malformed body (status 2); credits 750 → 749 on a 1-credit probe, so nothing was deducted | **PASS** (`t18`) |
 | C13 | Colliders agree Go↔TS; no penetration or tunnelling | 9 scenarios bit-exact, dPos = dVel = 0.00e+0 | **PASS** (`t13`) |
-| C14 | 20 shots at a target register; 20 aimed 1 m wide register zero | 20/20 and 0/20 at 40.7 m under 100 ms injected RTT | **PASS** (`t18`), criterion amended — see below |
+| C14 | 20 shots at a target register; 20 aimed 1 m wide register zero | 20/20 and 0/20 at 40.7 m under 100 ms injected RTT | **PASS** (`t18`) against a STATIC dummy; **FAIL** (`t21`) against a moving NPC — see below |
 | C15 | Damage per the GDD table, death, respawn within 3 s ±100 ms | 25 damage/hit live (100 → 75); 5 death/respawn cycles observed live | **PARTIAL** |
 | C16 | Remote client sees weapon, pitch within 1°, ordered shot events | pitch worst error 0.35°; 8/8 `shot_fired`, ordered; weapon seen by an observer and by a late joiner | **PASS** (`t19`, weapon clause closed 2026-08-27) |
 | C18 | Build gates clean; ≤ 54 B/entity; 60 fps; no DB call on the tick path | `go build/vet/test ./...` clean (160 tests, 7 packages), `tsc --noEmit` clean, `npm run build` clean; 54 B/entity exactly, worst case over 2122 snapshots | **PARTIAL** |
@@ -88,8 +88,63 @@ than by reading the criterion:
 is what makes the first number 20 and not 12" — but the target is *static*, so
 the rewound position equals the live one and lag compensation is a no-op. C14
 as written cannot distinguish a server with rewind from one without.
-Phase 3 supplies moving NPCs; re-pointing C14 at one would make it a real
-lag-compensation test. Raised for Phase 3.5.
+
+**C14's static volley is marginal, not stable.** `t18` reads 20/20 on some runs
+and 19/20 on others (observed both, 2026-08-27, before and after that day's
+changes). At 40.7 m the base spread cone is 0.43 m against a 0.45 m target, so
+"all 20 register" sits on the edge of the weapon's own dispersion. It is a
+measurement of spread, not of hit registration.
+
+### C14 re-pointed at a moving NPC — FAIL, 2026-08-27 (`t21`)
+
+`test/t21-lagcomp-moving.mjs` fires at a camp grunt chasing a second player, at
+300 ms injected RTT and ~31 m, and splits the shots by aim point. Measured:
+
+| volley | aim point | result |
+|---|---|---|
+| control | a grunt, live position | 3/3 — the shot can land from here |
+| **stale** | **where the shooter's own client sees the grunt** | **0/8** |
+| live | where the grunt actually is at that instant | 8/8 |
+
+All 16 shots were accepted and resolved by the server (`shot_fired` broadcast
+for each), and the two aim points were 0.44–0.60 m apart against a 0.35 m
+capsule, so neither volley can be explained by spread or by a dropped shot.
+
+**Rewind runs, and it is pointed at the wrong instant.** The server rewinds by
+its smoothed **RTT/2** (`server/internal/server/client.go` `rewindTicks`, GDD
+"Lag compensation", PROTOCOL "fire"). One RTT/2 back from the moment the shot
+*arrives* is the present, not the past the client fired at: the snapshot the
+client aimed from is one one-way delay old already, and the shot spends another
+one-way getting back. Reconstructing what the client saw needs the full RTT.
+The deployed TS client is further out still — `client/src/net/interp.ts` renders
+remotes another 100 ms behind local receive time — so a real player must lead a
+moving target by one-way + 100 ms to hit it, which is what lag compensation is
+supposed to remove.
+
+Fixing it is a contract decision, not a code tweak: the rewind figure lives in
+the GDD and PROTOCOL, and the client's render offset has to become a number
+both ends agree on (or a value the client sends). Left open for a Phase 3.5
+wave-0 decision, with `t21` red until it lands — the same posture C16 held.
+
+### Two defects `t21` uncovered on the way (both fixed 2026-08-27)
+
+1. **Camp NPCs were invulnerable to gunfire.** Every `EntityTypeNPC` resolves
+   to the single `npc` entity_def in `items.json`, which was authored for the
+   Phase 2 shopkeeper and still said `damageable: false`; `sim.ResolveShot`
+   skips a non-damageable entity outright. A player could empty the rifle into
+   the camp and never register a hit, a death or a drop. **This invalidates the
+   "clear the camp" reading of the Phase 3 proof and of C23** — `t16` only ever
+   checked that NPCs damage the *player*, and C23's evidence is a Go unit test
+   with its own fixtures, so nothing live had ever shot an NPC. Fixed by making
+   the def damageable; the shopkeeper stays immune through its archetype's
+   absent `max_health` (it spawns at 0 health and the dead-entity guard drops it
+   first). Pinned by `defs.TestHostileNPCsAreShootable`.
+2. **A `hit` event with no body.** `sim/projectile.go` emitted `EventHit` with
+   the 10-byte header alone, against PROTOCOL's 20-byte payload, so a client
+   decoding the documented layout read past the end of the frame (this harness
+   crashed on it). The branch needs a projectile to strike a damageable *world*
+   entity, which was unreachable until defect 1 was fixed. Pinned by
+   `sim.TestProjectileHitEventCarriesItsPayload`.
 
 ### C16 — the weapon clause, closed 2026-08-27
 
@@ -136,7 +191,7 @@ client rendering the wrong thing indefinitely:
 | C20/21 | Camp NPCs damage a player who stands in range | 9 hit events, health 100 → 0, at 8.5 m |
 | C21b | Gunner projectiles are entities the client receives | PASS |
 | C22 | Player dies and respawns at spawn with full health | 5.0 s (GDD `respawn_delay`), 0.00 m from spawn |
-| C23 | Loot: table roll, single grant | Go `TestLootDropReachesWorld`, `loot_test.go` |
+| C23 | Loot: table roll, single grant | Go `TestLootDropReachesWorld`, `loot_test.go` — never observed live, and until 2026-08-27 could not be: NPCs were unkillable (see C14 below) |
 | C24 | Two clients see the same NPC positions | worst disagreement 0.000 m across 5 NPCs |
 | C25a | Per-client snapshot bandwidth | 13.9 KB/s of 100 KB/s, 21 entities |
 | C25b | Server holds 20 Hz with the camp live | 20.00 Hz |
@@ -186,7 +241,8 @@ headless client that makes the port safe.
   `t10/` (circumnavigation), `t12`/`t13` (codec + collider parity), `t14` (buy
   and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
   `t18` (currency authority, hit registration under latency, snapshot budget),
-  `t19` (remote fidelity — weapon, pitch and shot ordering, all green).
+  `t19` (remote fidelity — weapon, pitch and shot ordering, all green),
+  `t21` (C14 against a moving NPC — red on the criterion, by design).
 - **Captured world:** `test/out/world-seed1337.json`, wire-field sha256_16
   **`74f45a52c2998dcf`** (re-confirmed live on both WS paths, 2026-08-26).
   Terrain determinism across restarts is proven against it. The M1 value was

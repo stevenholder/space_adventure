@@ -1,9 +1,15 @@
 # Roadmap
 
-Status: **Phases 1–3 complete**, with one Phase 2 criterion open — C14 does
-not exercise what it claims (verdicts and evidence in `docs/QA-STATUS.md`; it
-is a Phase 3.5 wave 0 item). C16's weapon clause closed 2026-08-27 with the
-`equipped` event.
+Status: **Phases 1–3 complete**, with one Phase 2 criterion open and now
+failing: C14, re-pointed at a moving NPC on 2026-08-27, is **red** — lag
+compensation rewinds by RTT/2, which lands on the target's present position
+rather than the frame the client fired at, so a player who shoots what their
+screen shows misses a moving body (0/8 against 8/8 when aiming at the live
+position; `test/t21-lagcomp-moving.mjs`). The rewind figure is written into the
+GDD and PROTOCOL, so correcting it is a wave-0 contract decision. Two defects
+found on the way — camp NPCs were invulnerable to gunfire, and a `hit` event
+shipped with no body — are fixed. C16's weapon clause closed 2026-08-27 with
+the `equipped` event. Verdicts and evidence: `docs/QA-STATUS.md`.
 
 Next is **Phase 3.5 — rebuild the client in Unity as a native desktop build**,
 inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
@@ -403,6 +409,15 @@ is the single largest thing Three.js was never going to give us.
      compensation is a no-op; the criterion cannot tell a server with rewind
      from one without. Phase 3's camp NPCs move. The harnesses are being
      touched for the mode byte anyway, so this rides along with that work.
+
+     **Done 2026-08-27 (`test/t21-lagcomp-moving.mjs`), and it fails.** The
+     re-pointed criterion is red: rewind is RTT/2, which reconstructs the
+     present rather than what the client saw, and the TS client's 100 ms
+     interpolation buffer widens the gap further. **Still open, and it is a
+     contract decision** — the figure is pinned in GDD "Lag compensation" and
+     PROTOCOL "fire", and the client's render offset has to become a number
+     both ends agree on before the Unity client (U13/U14) implements either.
+     Decide it here, in wave 0, rather than discovering it in U16.
 1. **Land the Phase 4 input mode byte first, and do not update the TS client.**
    `input` gains its mode byte in `docs/PROTOCOL.md`, the Go server, and the
    harness. The TS client is being retired, so it is not a third end. The
