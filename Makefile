@@ -163,6 +163,13 @@ unity-test:
 unity-conformance:
 	node test/t20-csharp-conformance.mjs
 
+# C41: the C# codec must agree with the Go one BYTE FOR BYTE, both
+# directions. A codec's own round-trip test agrees with its own bug, so this
+# is the only check that can see a framing or offset slip.
+.PHONY: unity-codec
+unity-codec:
+	node test/t22-csharp-codec.mjs
+
 # C47: no agent-authored scenes or prefabs. Unity's native storage is
 # GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
 # means opening the Editor. Exactly one boot scene is allowed; everything else

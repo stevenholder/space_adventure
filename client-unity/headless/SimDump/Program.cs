@@ -18,6 +18,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 
 internal static class Program
@@ -35,9 +36,13 @@ internal static class Program
         int dumpAt = Array.IndexOf(args, "--dump");
         if (dumpAt >= 0) return Dump(Arg(args, "--dump"), Arg(args, "--world"));
         if (Array.IndexOf(args, "--selftest") >= 0) return SelfTest();
+        if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
+        if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
 
         Console.Error.WriteLine("usage: SimDump --selftest");
         Console.Error.WriteLine("       SimDump --dump <script.jsonl> --world <world.json>");
+        Console.Error.WriteLine("       SimDump --codec-decode <go.hex>   decode Go's S->C frames");
+        Console.Error.WriteLine("       SimDump --codec-encode <out.hex>  write C->S frames for Go");
         return 2;
     }
 
@@ -180,4 +185,83 @@ internal static class Program
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
     }
+
+    // ---- C41 codec parity --------------------------------------------------
+    //
+    // Same shape as test/t12-codec-parity.mjs did for TypeScript: Go writes
+    // `name hex` lines and this decodes them, then this writes `name hex`
+    // lines and Go parses them. Each side implements PROTOCOL.md
+    // independently, so only a cross-check can catch a framing or offset slip
+    // -- a codec's own round-trip test agrees with its own bug.
+
+    private static Dictionary<string, byte[]> ReadHexLines(string path)
+    {
+        var frames = new Dictionary<string, byte[]>();
+        foreach (string line in File.ReadAllLines(path))
+        {
+            string t = line.Trim();
+            if (t.Length == 0) continue;
+            string[] f = t.Split(' ');
+            if (f.Length != 2) throw new InvalidDataException($"bad line: {t}");
+            var bytes = new byte[f[1].Length / 2];
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                bytes[i] = Convert.ToByte(f[1].Substring(i * 2, 2), 16);
+            }
+            frames[f[0]] = bytes;
+        }
+        return frames;
+    }
+
+    private static string Hex(byte[] b)
+    {
+        var sb = new StringBuilder(b.Length * 2);
+        foreach (byte x in b) sb.Append(x.ToString("x2", CultureInfo.InvariantCulture));
+        return sb.ToString();
+    }
+
+    private static string G(float v) => v.ToString("R", CultureInfo.InvariantCulture);
+
+    /// <summary>Decodes Go's S->C frames and prints one line per message.</summary>
+    private static int CodecDecode(string path)
+    {
+        var frames = ReadHexLines(path);
+
+        // The frame type is checked against the name on every message. A
+        // decoder that ignores it will happily read a payload at the wrong
+        // offset and report plausible numbers.
+        void Expect(string name, ushort want, out WireReader r)
+        {
+            ushort got = SpaceAdventure.Net.Wire.ReadFrameType(frames[name], out r);
+            if (got != want) throw new InvalidDataException($"{name}: frame type 0x{got:x4}, want 0x{want:x4}");
+        }
+
+        Expect("cmd_result", Msg.CmdResult, out var r1);
+        var cr = Decode.CmdResult(r1);
+        Console.WriteLine($"cmd_result seq={cr.Seq} opcode={cr.Opcode} status={cr.StatusCode} data={cr.Body}");
+
+        Expect("defs", Msg.Defs, out var r2);
+        Console.WriteLine($"defs data={Decode.Defs(r2)}");
+
+        Expect("colliders", Msg.Colliders, out var r3);
+        foreach (var c in Decode.Colliders(r3))
+        {
+            Console.WriteLine($"collider kind={c.Kind} center={G(c.CenterX)},{G(c.CenterY)},{G(c.CenterZ)}" +
+                              $" half={G(c.HalfX)},{G(c.HalfY)},{G(c.HalfZ)}" +
+                              $" quat={G(c.QuatX)},{G(c.QuatY)},{G(c.QuatZ)},{G(c.QuatW)}");
+        }
+        return 0;
+    }
+
+    /// <summary>Writes C->S frames for Go to parse.</summary>
+    private static int CodecEncode(string path)
+    {
+        var sb = new StringBuilder();
+        sb.Append("cmd ").Append(Hex(Encode.Cmd(4097, Op.ShopBuy,
+            "{\"npc\":7,\"item\":\"weapon.pulse\",\"qty\":1}"))).Append('\n');
+        sb.Append("fire ").Append(Hex(Encode.Fire(513, 0, 0, 1))).Append('\n');
+        File.WriteAllText(path, sb.ToString());
+        return 0;
+    }
+
 }
