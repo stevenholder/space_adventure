@@ -166,13 +166,15 @@ unity-conformance:
 # C47: no agent-authored scenes or prefabs. Unity's native storage is
 # GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
 # means opening the Editor. Exactly one boot scene is allowed; everything else
-# is built from C# at runtime.
+# is built from C# at runtime. Scoped to Assets/ on purpose: Unity generates
+# ProjectSettings/*.asset itself and those MUST be committed.
 unity-gate:
 	@scenes=$$(find client-unity/Assets -name '*.unity' -not -path '*/Scenes/Boot.unity' 2>/dev/null); \
 	prefabs=$$(find client-unity/Assets -name '*.prefab' 2>/dev/null); \
-	if [ -n "$$scenes$$prefabs" ]; then \
+	assets=$$(find client-unity/Assets -name '*.asset' 2>/dev/null); \
+	if [ -n "$$scenes$$prefabs$$assets" ]; then \
 		echo "C47: scene/prefab debt (build these from code instead):" >&2; \
-		echo "$$scenes$$prefabs" >&2; \
+		echo "$$scenes$$prefabs$$assets" >&2; \
 		exit 1; \
 	fi; \
 	echo "C47 clean: no agent-authored scenes or prefabs"

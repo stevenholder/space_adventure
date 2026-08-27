@@ -9,9 +9,42 @@ These rules exist to keep the thing that has been working — one file, ~150
 lines, one verify command — from being destroyed by an engine whose native
 unit of work is a binary-ish scene file.
 
+## 0. Why this repo lives on the Windows filesystem
+
+`C:\dev\space_adventure`, reachable from WSL at `/mnt/c/dev/space_adventure`.
+
+Not a preference. **Unity refuses to open a project on a WSL path.** It fatals
+inside `EnsureSuitableFileSystem` during `Application::InitializeProject`, and
+its crash handler exits 0, so from a shell it looks like a successful run that
+did nothing. `\\wsl.localhost\...` is rejected, not merely slow.
+
+The feared cost of relocating did not materialise. Measured on this repo:
+
+| | ext4 | `/mnt/c` |
+|---|---|---|
+| `dotnet build --no-incremental` | 4.42 s | 3.98 s |
+| `go test ./internal/sim` | 1.53 s | 1.74 s |
+| `git status` | ~0.0 s | 2.05 s |
+
+Compilation is unaffected; only git's metadata scan pays. Two consequences to
+know about:
+
+- **`core.fileMode` is false.** Unity is a Windows process and writes files
+  as `755` through drvfs, which would otherwise show as a mode change on every
+  file it touches.
+- **The filesystem is case-insensitive.** There are no case-only filename
+  collisions in the tree today, and adding one would silently lose a file.
+
 ## 1. Code-first. No agent authors a scene.
 
-**No agent may create or edit a `.unity`, `.prefab` or `.asset`.**
+**No agent may create or edit a `.unity` or `.prefab`, or a `.asset` under
+`Assets/`.**
+
+The `Assets/` scope is the point. `ProjectSettings/*.asset` are Unity's own
+project settings: it writes them on first open and they **must** be committed
+or the project has no graphics, physics or input configuration. A `.asset`
+under `Assets/` is a different animal — a ScriptableObject someone authored in
+the Editor — and that is the thing this rule exists to prevent.
 
 `.meta` files are the exception that proves the rule: Unity generates one for
 every file and folder, and they **must** be committed or the GUIDs that link
@@ -29,8 +62,9 @@ material and camera is created from C# at runtime. A task that seems to need
 scene authoring is a main-thread task, and usually it is a sign the work
 should be code instead.
 
-`make unity-gate` enforces the scene and prefab half of this (`C47`): exactly
-one `.unity` is allowed, `Assets/Scenes/Boot.unity`, and no `.prefab` at all.
+`make unity-gate` enforces this (`C47`) over `Assets/` only: exactly one
+`.unity` is allowed, `Assets/Scenes/Boot.unity`, and no `.prefab` or `.asset`
+at all.
 A convention nobody checks lasts about two weeks.
 
 ## 2. Three assemblies, and `Sim` may not see the engine
