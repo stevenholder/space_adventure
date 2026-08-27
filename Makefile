@@ -170,6 +170,11 @@ unity-conformance:
 unity-codec:
 	node test/t22-csharp-codec.mjs
 
+# U10: the transport's only real test is a real server. Needs `make up`.
+.PHONY: unity-join
+unity-join:
+	dotnet run --project client-unity/headless/SimDump --nologo -- --join ws://127.0.0.1:$(SERVER_PORT)/ws
+
 # C47: no agent-authored scenes or prefabs. Unity's native storage is
 # GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
 # means opening the Editor. Exactly one boot scene is allowed; everything else

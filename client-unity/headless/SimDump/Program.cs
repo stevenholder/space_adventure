@@ -18,6 +18,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 
@@ -38,11 +39,13 @@ internal static class Program
         if (Array.IndexOf(args, "--selftest") >= 0) return SelfTest();
         if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
+        if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
 
         Console.Error.WriteLine("usage: SimDump --selftest");
         Console.Error.WriteLine("       SimDump --dump <script.jsonl> --world <world.json>");
         Console.Error.WriteLine("       SimDump --codec-decode <go.hex>   decode Go's S->C frames");
         Console.Error.WriteLine("       SimDump --codec-encode <out.hex>  write C->S frames for Go");
+        Console.Error.WriteLine("       SimDump --join <ws-url>           join a live server, report what arrives");
         return 2;
     }
 
@@ -262,6 +265,82 @@ internal static class Program
         sb.Append("fire ").Append(Hex(Encode.Fire(513, 0, 0, 1))).Append('\n');
         File.WriteAllText(path, sb.ToString());
         return 0;
+    }
+
+
+    // ---- U10: join a live server -------------------------------------------
+    //
+    // The transport's only real test is a real server. This joins, waits for
+    // the handshake and the first snapshots, and reports what it decoded --
+    // headless, so it runs in CI and from a terminal without the Editor.
+
+    private static int Join(string url)
+    {
+        using var net = new NetClient();
+        net.Connect(url, "headless", $"headless-{Guid.NewGuid():N}");
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        int snapshots = 0, spawns = 0, entities = 0;
+        bool terrain = false, defs = false, colliders = false;
+
+        while (DateTime.UtcNow < deadline && (snapshots < 40 || net.RttMs < 0))
+        {
+            while (net.Poll(out var frame))
+            {
+                switch (frame.Type)
+                {
+                    case Msg.HelloAck:
+                        Console.WriteLine($"joined: entity={net.EntityId} tickHz={net.TickHz} seed={net.WorldSeed}");
+                        break;
+                    case Msg.Terrain:
+                    {
+                        var t = Decode.Terrain(frame.Reader);
+                        Console.WriteLine($"terrain: face_grid={t.FaceGrid} radii={t.Radii.Length}" +
+                                          $" range=[{t.RadiusMin:F1}, {t.RadiusMax:F1}]");
+                        terrain = true;
+                        break;
+                    }
+                    case Msg.Defs:
+                        defs = Decode.Defs(frame.Reader).Length > 0;
+                        break;
+                    case Msg.Colliders:
+                    {
+                        var list = Decode.Colliders(frame.Reader);
+                        Console.WriteLine($"colliders: {list.Length}");
+                        colliders = true;
+                        break;
+                    }
+                    case Msg.Spawn:
+                        Decode.Spawn(frame.Reader);
+                        spawns++;
+                        break;
+                    case Msg.Snapshot:
+                    {
+                        var snap = Decode.Snapshot(frame.Reader);
+                        entities = snap.Entities.Length;
+                        snapshots++;
+                        break;
+                    }
+                    case Msg.Event:
+                        Decode.Event(frame.Reader);
+                        break;
+                }
+            }
+            Thread.Sleep(10);
+        }
+
+        Console.WriteLine($"snapshots={snapshots} spawns={spawns} entities={entities} rtt={net.RttMs}ms");
+        Check("joined and got an entity id", net.EntityId != 0);
+        Check("terrain arrived", terrain);
+        Check("defs arrived", defs);
+        Check("colliders arrived", colliders);
+        Check("spawns arrived", spawns > 0);
+        Check("snapshots arrived", snapshots >= 40, $"{snapshots}");
+        Check("own body is in the snapshot", entities > 0);
+        Check("ping measured an RTT", net.RttMs >= 0, $"{net.RttMs} ms");
+
+        Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
+        return _failed == 0 ? 0 : 1;
     }
 
 }
