@@ -92,6 +92,7 @@ const (
 	EventHit         uint16 = 0x0003
 	EventDeath       uint16 = 0x0004
 	EventLootDropped uint16 = 0x0005
+	EventEquipped    uint16 = 0x0006 // Phase 3.5 (C16): data = item id, UTF-8
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

@@ -1,8 +1,9 @@
 # Roadmap
 
-Status: **Phases 1–3 complete**, with two Phase 2 criteria open — C16 has a
-clause no code implements and C14 does not exercise what it claims (verdicts
-and evidence in `docs/QA-STATUS.md`; both are Phase 3.5 wave 0 items).
+Status: **Phases 1–3 complete**, with one Phase 2 criterion open — C14 does
+not exercise what it claims (verdicts and evidence in `docs/QA-STATUS.md`; it
+is a Phase 3.5 wave 0 item). C16's weapon clause closed 2026-08-27 with the
+`equipped` event.
 
 Next is **Phase 3.5 — rebuild the client in Unity as a native desktop build**,
 inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
@@ -396,7 +397,7 @@ is the single largest thing Three.js was never going to give us.
      than widening the entity row: a value that changes a few times a session
      has no business costing bytes on every entity on every tick. Broadcast on
      change, and replayed once per armed player at join so late joiners are
-     correct. `t19` stays red until it lands.
+     correct. **Landed 2026-08-27; `t19` is green on all three clauses.**
    - **C14 — decided 2026-08-26: re-point it at a moving NPC.** It fires at a
      *static* target, so the rewound position equals the live one and lag
      compensation is a no-op; the criterion cannot tell a server with rewind

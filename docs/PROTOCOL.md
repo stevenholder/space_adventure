@@ -353,6 +353,7 @@ arrives. Not command state, not idempotent, not replayed.
 | shot fired `0x0002` | shooter | `f32 origin[3]` \| `f32 dir[3]` \| `f32 dist` |
 | hit `0x0003` | victim | `u32 shooter` \| `f32 point[3]` \| `u16 damage` \| `u16 health_after` |
 | death `0x0004` | victim | `u32 killer` (0 = none) |
+| equipped `0x0006` | the player | item id, UTF-8 (empty = nothing equipped) |
 
 ### `colliders` — static world geometry (Phase 2)
 

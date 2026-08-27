@@ -498,6 +498,10 @@ func (s *Server) join(c *client, h protocol.Hello) {
 		}
 	}
 	s.mu.Unlock()
+
+	// After publishing, so every client that must hear the joiner's weapon
+	// is already in s.clients.
+	s.syncEquipped(c)
 }
 
 // leave removes c's entity from the world and tells the remaining clients.
@@ -532,7 +536,9 @@ func (s *Server) leave(c *client) {
 // identity.go's Mutate doc comment calls for.
 func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	var result protocol.CmdResult
+	var before, after string
 	c.ident.Mutate(func(p *store.Player) {
+		before = p.Equipped[slotPrimary]
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
 			Player:  p,
 			Reg:     s.reg,
@@ -541,8 +547,76 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			Look:    c.lookDir(),
 			FindNPC: s.findNPC,
 		})
+		after = p.Equipped[slotPrimary]
 	})
+	// The primary slot is on no entity row, so a change reaches the other
+	// clients only as an `equipped` event (PROTOCOL.md event_id 0x0006).
+	// Broadcast outside Mutate: the cmd path takes the identity lock and then
+	// s.mu (handleCmd -> findNPC), so taking them the other way round here
+	// would invert the order.
+	if after != before {
+		f := equippedFrame(c.entity.ID, after)
+		s.mu.Lock()
+		s.broadcast(f)
+		s.mu.Unlock()
+	}
 	return result
+}
+
+// slotPrimary is the equipment slot the `equipped` event reports. Only the
+// slot that is visible in another player's hands goes on the wire.
+const slotPrimary = "primary"
+
+// equippedFrame renders the `equipped` event for a player's primary slot:
+// entity_id is the player, data is the item id as UTF-8, empty for "nothing
+// equipped" (PROTOCOL.md event_id 0x0006).
+func equippedFrame(entityID uint32, item string) []byte {
+	return protocol.EncodeEvent(protocol.Event{
+		EntityID: entityID,
+		EventID:  protocol.EventEquipped,
+		Data:     []byte(item),
+	})
+}
+
+// syncEquipped brings a joining client and the clients already in the world
+// into agreement about who is holding what: one `equipped` event per armed
+// player replayed to the joiner, and the joiner's own weapon announced to
+// everyone else (a reconnecting player arrives already armed, off their
+// stored row).
+//
+// The lock dance is deliberate. Reading an identity takes its mutex, and the
+// cmd path already takes that mutex before s.mu, so s.mu is released before
+// any Snapshot call and retaken to send.
+func (s *Server) syncEquipped(c *client) {
+	s.mu.Lock()
+	peers := make([]*client, 0, len(s.clients))
+	for _, oc := range s.clients {
+		if oc != c {
+			peers = append(peers, oc)
+		}
+	}
+	s.mu.Unlock()
+
+	frames := make([][]byte, 0, len(peers))
+	for _, oc := range peers {
+		if item := oc.ident.Snapshot().Equipped[slotPrimary]; item != "" {
+			frames = append(frames, equippedFrame(oc.entity.ID, item))
+		}
+	}
+	self := c.ident.Snapshot().Equipped[slotPrimary]
+
+	for _, f := range frames {
+		c.send(msg{data: f})
+	}
+	if self == "" {
+		return
+	}
+	f := equippedFrame(c.entity.ID, self)
+	s.mu.Lock()
+	for _, oc := range peers {
+		oc.send(msg{data: f})
+	}
+	s.mu.Unlock()
 }
 
 // findNPC looks up a shop NPC's archetype and world position by entity id,
@@ -587,7 +661,7 @@ func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
 // follows a tick later from sim.StepTarget's own health check, reused
 // rather than duplicated here).
 func (s *Server) fire(c *client, f protocol.Fire) {
-	primary := c.ident.Snapshot().Equipped["primary"]
+	primary := c.ident.Snapshot().Equipped[slotPrimary]
 	wp, ok := s.weaponFor(primary)
 	if !ok {
 		return // nothing equipped, or an unknown item: drop the shot

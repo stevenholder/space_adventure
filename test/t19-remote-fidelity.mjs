@@ -2,16 +2,15 @@
 /**
  * C16 — remote fidelity: what a SECOND client sees of a shooter.
  *
- * The criterion has three clauses. Two are implemented and checked here; the
- * third is not implemented at all, and this script says so rather than going
- * green on two out of three:
+ * The criterion has three clauses, all three checked here:
  *
- *   1. "sees the shooter's equipped weapon"  -- NOT ON THE WIRE. The 54-byte
- *      entity row has no weapon field, a player's `spawn` payload is just the
- *      name, and `shot_fired` carries origin/dir/dist and no item id. Server
- *      side, `client.EquippedWeapon` exists only to notice a re-equip and
- *      reset the magazine (server.go:614) -- it is never encoded. So no client
- *      can render another player's weapon, and the TS client does not try.
+ *   1. "sees the shooter's equipped weapon"  -- checked, via the `equipped`
+ *      event (event_id 0x0006, Phase 3.5). The 54-byte entity row has no
+ *      weapon field on purpose: a value that changes a few times a session
+ *      has no business costing bytes on every entity on every tick. So the
+ *      slot is broadcast when it changes, and replayed once per armed player
+ *      when a client joins -- both paths are checked, because a late joiner
+ *      that never hears the change would render an unarmed shooter forever.
  *   2. "aim pitch within 1 deg"              -- checked, via pitch_q.
  *   3. "one shot_fired per shot, ordered"    -- checked.
  *
@@ -56,7 +55,7 @@ function fire(seq, dir) {
 }
 
 async function session(name) {
-  const s = { myId: 0, ents: new Map(), spawns: new Map(), results: [], events: [], defs: null, seq: 1 }
+  const s = { myId: 0, ents: new Map(), spawns: new Map(), results: [], events: [], equipped: new Map(), defs: null, seq: 1 }
   const ws = new WebSocket('ws://127.0.0.1:18080/ws'); ws.binaryType = 'arraybuffer'
   const token = `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   ws.addEventListener('open', () => ws.send(hello(name, token)))
@@ -75,7 +74,12 @@ async function session(name) {
         }) }
     }
     else if (t === 0x000f) s.results.push({ seq: pv.getUint16(0,true), op: pv.getUint16(2,true), status: pv.getUint8(4), body: JSON.parse(dec.decode(p.subarray(9)) || '{}') })
-    else if (t === 0x0007) s.events.push({ id: pv.getUint32(0,true), ev: pv.getUint16(4,true), at: Date.now() })
+    else if (t === 0x0007) {
+      const id = pv.getUint32(0,true), ev = pv.getUint16(4,true)
+      s.events.push({ id, ev, at: Date.now() })
+      // Equipment lives in a map, not the event log: clause 3 clears the log.
+      if (ev === 0x0006) s.equipped.set(id, dec.decode(p.subarray(10)))
+    }
   })
   s.ws = ws
   s.wait = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = fn(); if (v) return v; await sleep(25) } return null }
@@ -145,11 +149,18 @@ const ordered = shots.every((e, i) => i === 0 || e.at >= shots[i-1].at)
 check('shot_fired events arrive in order', ordered)
 
 // --- clause 1: equipped weapon --------------------------------------------
-// Not a check that can pass: there is no field for it anywhere on the wire.
+// The observer was already connected when the shooter equipped above, so it
+// must have received the broadcast; a client joining now must be told the
+// same thing without the shooter touching the slot again.
 console.log('')
-check('observer can see the shooter\'s equipped weapon', false,
-      'NOT IMPLEMENTED — no weapon id in the entity row, in `spawn`, or in `shot_fired`. ' +
-      'Needs a protocol decision, not a code fix.')
+check('observer sees the shooter\'s equipped weapon',
+      observer.equipped.get(shooter.myId) === 'weapon.pulse',
+      `saw ${JSON.stringify(observer.equipped.get(shooter.myId) ?? null)}`)
+
+const latecomer = await session('latecomer')
+const replayed = await latecomer.wait(() => latecomer.equipped.get(shooter.myId), 4000)
+check('a client joining later is told what the shooter is holding',
+      replayed === 'weapon.pulse', `saw ${JSON.stringify(replayed ?? null)}`)
 
 const bad = checks.filter(([, ok]) => !ok).length
 console.log(`\nOVERALL: ${bad ? `FAIL (${bad}/${checks.length})` : `PASS (${checks.length} checks)`}`)

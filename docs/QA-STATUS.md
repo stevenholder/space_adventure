@@ -48,7 +48,7 @@ criteria themselves, one in the cluster.
 | C13 | Colliders agree Go↔TS; no penetration or tunnelling | 9 scenarios bit-exact, dPos = dVel = 0.00e+0 | **PASS** (`t13`) |
 | C14 | 20 shots at a target register; 20 aimed 1 m wide register zero | 20/20 and 0/20 at 40.7 m under 100 ms injected RTT | **PASS** (`t18`), criterion amended — see below |
 | C15 | Damage per the GDD table, death, respawn within 3 s ±100 ms | 25 damage/hit live (100 → 75); 5 death/respawn cycles observed live | **PARTIAL** |
-| C16 | Remote client sees weapon, pitch within 1°, ordered shot events | pitch worst error 0.35°; 8/8 `shot_fired`, ordered; **weapon: not on the wire** | **FAIL** (`t19`) |
+| C16 | Remote client sees weapon, pitch within 1°, ordered shot events | pitch worst error 0.35°; 8/8 `shot_fired`, ordered; weapon seen by an observer and by a late joiner | **PASS** (`t19`, weapon clause closed 2026-08-27) |
 | C18 | Build gates clean; ≤ 54 B/entity; 60 fps; no DB call on the tick path | `go build/vet/test ./...` clean (160 tests, 7 packages), `tsc --noEmit` clean, `npm run build` clean; 54 B/entity exactly, worst case over 2122 snapshots | **PARTIAL** |
 
 C17 is absent from the table on purpose: `t14` completes list → buy → equip at
@@ -91,27 +91,30 @@ as written cannot distinguish a server with rewind from one without.
 Phase 3 supplies moving NPCs; re-pointing C14 at one would make it a real
 lag-compensation test. Raised for Phase 3.5.
 
-### C16 — one clause has no implementation
+### C16 — the weapon clause, closed 2026-08-27
 
-A second client **cannot** see another player's equipped weapon, because
-nothing carries it. The 54-byte entity row has no weapon field, a player's
-`spawn` payload is the name only, and `shot_fired` carries origin, direction
-and distance. Server-side, `client.EquippedWeapon` exists solely to notice a
-re-equip and reset the magazine (`server/internal/server/server.go:614`); it
-is never encoded. The TS client makes no attempt to render one.
+Remote pitch is accurate to 0.35° in the worst case — the quantisation floor,
+since `pitch_q` is `asin(up·look)` over ±90° in 255 steps, i.e. 0.709° per
+step — and all 8 shots produced exactly one ordered `shot_fired` each. Those
+two clauses always held.
 
-The other two clauses hold, and hold well: remote pitch is accurate to 0.35°
-in the worst case — which is the quantisation floor, since `pitch_q` is
-`asin(up·look)` over ±90° in 255 steps, i.e. 0.709° per step — and all 8 shots
-produced exactly one ordered `shot_fired` each.
+The third did not: nothing on the wire carried a player's equipped weapon.
+The fix is the **`equipped` event, `event_id 0x0006`** decided 2026-08-26 —
+the player's entity id plus the item id as UTF-8 — reusing the event channel
+rather than widening the 54-byte row, because a value that changes a few times
+a session should not cost bytes on every entity on every tick.
 
-**Decided 2026-08-26: a new `equipped` event, `event_id 0x0006`** — the
-player's entity id plus the item id as UTF-8, broadcast when the primary slot
-changes and replayed once per armed player when a client joins. It reuses the
-existing event channel rather than widening the 54-byte row, because a value
-that changes a few times a session should not cost bytes on every entity on
-every tick. **`t19` stays red until it lands** — a criterion that is not met
-should not have a green test.
+Two paths, both required and both checked, because either one alone leaves a
+client rendering the wrong thing indefinitely:
+
+- **On change.** `doCmd` compares the primary slot before and after the
+  command and broadcasts when it differs — outside the identity lock, since
+  the cmd path takes that lock before `s.mu` and the reverse order would
+  invert it.
+- **On join.** `syncEquipped` replays one event per already-armed player to
+  the joiner, and announces the joiner's own weapon to everyone else — a
+  reconnecting player arrives armed off their stored row, having changed
+  nothing.
 
 ### C15 and C18 — what is not measured
 
@@ -183,7 +186,7 @@ headless client that makes the port safe.
   `t10/` (circumnavigation), `t12`/`t13` (codec + collider parity), `t14` (buy
   and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
   `t18` (currency authority, hit registration under latency, snapshot budget),
-  `t19` (remote fidelity — fails on C16's unimplemented weapon clause).
+  `t19` (remote fidelity — weapon, pitch and shot ordering, all green).
 - **Captured world:** `test/out/world-seed1337.json`, wire-field sha256_16
   **`74f45a52c2998dcf`** (re-confirmed live on both WS paths, 2026-08-26).
   Terrain determinism across restarts is proven against it. The M1 value was
