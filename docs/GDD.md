@@ -1160,13 +1160,43 @@ damage number, and doing that once, against real enemies, beats doing it twice.
 | `max_health` (target) | 100 | hp | |
 | `target_respawn` | 3.0 | s | full health, same position |
 | `rewind_max` | 0.5 | s | hard clamp on lag-compensation rewind |
+| `interp_delay` | 0.1 | s | how far behind the simulation clock a client renders remote entities |
 
 **Lag compensation.** The server keeps `rewind_max` of position history per
-entity at tick granularity. A shot is resolved against target positions rewound
-by the server's own smoothed RTT/2 for that connection, clamped to
-`[0, rewind_max]`. The shooter's eye position comes from that same history —
-never from the client. Without rewind, a hit at 100 ms and 7.5 m/s misses by
-0.4 m, which is most of a body.
+entity at tick granularity, and resolves a shot against the world **as the
+shooter's screen was showing it**:
+
+```
+rewind_ticks = staleness + L + interp_delay      clamped to [0, rewind_max]
+
+  L         = the server's own smoothed RTT/2 for that connection
+  staleness = how far back the tick that ran fire.seq is from now
+              (zero for the ordinary shot; positive when the client
+              pulled the trigger against an older input)
+```
+
+Walk one shot along a single timeline and the three terms are forced. The
+client fires at `t` while displaying remotes at `t − interp_delay`. The shot
+arrives at `t + L`. The instant to reconstruct is therefore `interp_delay + L`
+behind arrival, plus whatever extra the client's own input lag added.
+
+The shooter's eye position comes from that same history — never from the
+client. Without rewind, a hit at 100 ms and 7.5 m/s misses by 0.4 m, which is
+most of a body.
+
+**`interp_delay` is a contract, and it binds the client.** A client MUST render
+remote entities at `serverClock − interp_delay`, against a clock synchronised
+to the server's — **not** at a fixed offset behind whenever a packet happened to
+arrive locally. The two differ by a whole one-way trip, and the server rewinds
+by the first, so a client that renders by the second misses everything that
+moves. This is a rule about what a client draws, so no amount of server testing
+catches a breach of it; the Unity client owes it explicitly (ROADMAP U13).
+
+Both halves were measured wrong at once, 2026-08-27: the server rewound `L`
+alone, and the retired TS client rendered on local receive time. A player
+shooting what their screen showed hit 0 of 8 moving targets, while aiming at
+the target's live position — which no real client can know — hit 8 of 8
+(`docs/QA-STATUS.md`, C14).
 
 ### Interaction
 

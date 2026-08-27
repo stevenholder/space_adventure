@@ -68,6 +68,13 @@ type client struct {
 	input  atomic.Pointer[protocol.Input] // latest command state (latest wins)
 	ackSeq atomic.Uint32                  // seq of the input last applied
 
+	// cmdTicks records which input seq executed on which tick, for the last
+	// rewind_max of ticks. A `fire` names the seq that was in effect when the
+	// trigger was pulled (PROTOCOL.md "fire"), and this turns that name into
+	// the server tick the shot was aimed on — the instant lag compensation
+	// has to reconstruct. Written and read under the tick loop's own lock.
+	cmdTicks [sim.HistoryTicks]cmdTick
+
 	rttMu      sync.Mutex
 	rttEWMA    time.Duration
 	pingSentAt time.Time
@@ -75,6 +82,43 @@ type client struct {
 	out  chan msg
 	done chan struct{}
 	once sync.Once
+}
+
+// cmdTick is one slot of the seq-to-tick ring: the input seq that executed
+// on `tick`. Slot zero of a fresh ring reads as tick 0, which no live tick
+// ever is (s.tickNo pre-increments), so an unwritten slot never matches.
+type cmdTick struct {
+	tick uint32
+	seq  uint16
+}
+
+// recordCmdTick notes that this tick executed the currently-held input.
+// Called from step(), i.e. once per client per tick, under the tick lock.
+func (c *client) recordCmdTick(tick uint32) {
+	seq := uint16(c.ackSeq.Load())
+	c.cmdTicks[int(tick)%sim.HistoryTicks] = cmdTick{tick: tick, seq: seq}
+}
+
+// commandTick returns the EARLIEST tick within rewind_max that executed
+// `seq`, and whether it was found.
+//
+// Earliest, not latest: a client sending inputs slower than the tick rate
+// has one seq re-applied over several ticks, and the shot was aimed on the
+// first of them — the frame that first showed the client the world it
+// decided to shoot at. Taking the latest would quietly shorten the rewind
+// by however long the client's input gap happened to be.
+func (c *client) commandTick(seq uint16) (uint32, bool) {
+	var best uint32
+	found := false
+	for _, s := range c.cmdTicks {
+		if s.tick == 0 || s.seq != seq {
+			continue
+		}
+		if !found || s.tick < best {
+			best, found = s.tick, true
+		}
+	}
+	return best, found
 }
 
 // step advances this client's entity by one tick with its latest input,
@@ -173,7 +217,47 @@ func (c *client) onPong(string) error {
 // rewindTicks is this connection's smoothed RTT/2, expressed in ticks and
 // clamped to [0, sim.HistoryTicks] (docs/PROTOCOL.md "fire": "Rewind is
 // bounded by the server's measurement, not the client's claim").
-func (c *client) rewindTicks() int {
+// rewindTicks is how far back from `now` a shot naming input `seq` must be
+// resolved, so it hits what the shooter's screen was showing.
+//
+// Walk one shot along a single timeline. The client fires at t, displaying
+// remote entities at t - interp_delay, because every client renders that far
+// behind the simulation clock (GDD "Lag compensation"). The shot reaches the
+// server one one-way trip later, at t + L, which is `now`. So the instant to
+// reconstruct is interp_delay + L behind `now`:
+//
+//	rewind_ticks = staleness(seq) + L + interp_ticks
+//
+// `staleness` is normally zero — a client sends the input and the shot
+// together, so the named seq is the one just executed. It is non-zero when
+// the client pulled the trigger against an OLDER input than the server has
+// since run, and then it is exactly the extra distance into the past that
+// the shooter's screen was showing. That is what `seq` buys over RTT alone
+// (PROTOCOL.md "fire": seq, "with the server's own RTT measurement, tells
+// the server how far to rewind" — both terms, not either one).
+//
+// The rule this replaces was L alone, with neither the render offset nor
+// the staleness. It landed on the target's PRESENT position rather than the
+// past the client fired at: 0/8 hits on a moving NPC where aiming at the
+// live position scored 8/8 (docs/QA-STATUS.md, C14).
+//
+// A client cannot buy rewind by naming an old seq. commandTick only matches
+// ticks the SERVER chose to run that seq on, and the total is clamped to
+// rewind_max — so the most a lie achieves is the clamp, which is the bound
+// PROTOCOL.md promises ("bounded by the server's measurement, not the
+// client's claim").
+func (c *client) rewindTicks(now uint32, seq uint16) int {
+	staleness := 0
+	if at, ok := c.commandTick(seq); ok && at <= now {
+		staleness = int(now - at)
+	}
+	return clampRewind(staleness + c.oneWayTicks() + sim.InterpTicks)
+}
+
+// oneWayTicks is L: half the smoothed round trip, in whole ticks. Half,
+// because what is being undone is the single trip the shot made from the
+// client to here.
+func (c *client) oneWayTicks() int {
 	c.rttMu.Lock()
 	rtt := c.rttEWMA
 	c.rttMu.Unlock()
@@ -181,15 +265,18 @@ func (c *client) rewindTicks() int {
 	if sec < 0 {
 		sec = 0
 	}
-	if sec > sim.RewindMaxSeconds {
-		sec = sim.RewindMaxSeconds
-	}
-	ticks := int(math.Round(sec * sim.TickHz))
+	return int(math.Round(sec * sim.TickHz))
+}
+
+// clampRewind holds a rewind inside [0, rewind_max]. rewind_max is the
+// history ring's length, so a value past it names a tick the ring has
+// already overwritten.
+func clampRewind(ticks int) int {
 	if ticks < 0 {
-		ticks = 0
+		return 0
 	}
 	if ticks > sim.HistoryTicks {
-		ticks = sim.HistoryTicks
+		return sim.HistoryTicks
 	}
 	return ticks
 }

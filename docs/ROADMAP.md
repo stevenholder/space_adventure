@@ -1,15 +1,17 @@
 # Roadmap
 
-Status: **Phases 1–3 complete**, with one Phase 2 criterion open and now
-failing: C14, re-pointed at a moving NPC on 2026-08-27, is **red** — lag
-compensation rewinds by RTT/2, which lands on the target's present position
-rather than the frame the client fired at, so a player who shoots what their
-screen shows misses a moving body (0/8 against 8/8 when aiming at the live
-position; `test/t21-lagcomp-moving.mjs`). The rewind figure is written into the
-GDD and PROTOCOL, so correcting it is a wave-0 contract decision. Two defects
-found on the way — camp NPCs were invulnerable to gunfire, and a `hit` event
-shipped with no body — are fixed. C16's weapon clause closed 2026-08-27 with
-the `equipped` event. Verdicts and evidence: `docs/QA-STATUS.md`.
+Status: **Phases 1–3 complete**, and both open Phase 2 criteria closed
+2026-08-27. C16's weapon clause landed as the `equipped` event. C14, re-pointed
+at a moving NPC, first went red — lag compensation rewound by RTT/2, which
+lands on the target's present position rather than the frame the client fired
+at, so a player shooting what their screen showed missed a moving body — and is
+now fixed by adopting the reference design the PROTOCOL already described:
+`rewind = staleness + RTT/2 + interp_delay`, with `fire.seq` finally used.
+Three defects surfaced on the way, all fixed: camp NPCs were invulnerable to
+gunfire, a `hit` event shipped with no body, and the TS client rendered remotes
+against local receive time. **One half of the C14 fix is not landed and cannot
+be here: `interp_delay` is now a client-binding contract, and the Unity client
+owes it at U13** (see that row). Verdicts and evidence: `docs/QA-STATUS.md`.
 
 Next is **Phase 3.5 — rebuild the client in Unity as a native desktop build**,
 inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
@@ -410,14 +412,20 @@ is the single largest thing Three.js was never going to give us.
      from one without. Phase 3's camp NPCs move. The harnesses are being
      touched for the mode byte anyway, so this rides along with that work.
 
-     **Done 2026-08-27 (`test/t21-lagcomp-moving.mjs`), and it fails.** The
-     re-pointed criterion is red: rewind is RTT/2, which reconstructs the
-     present rather than what the client saw, and the TS client's 100 ms
-     interpolation buffer widens the gap further. **Still open, and it is a
-     contract decision** — the figure is pinned in GDD "Lag compensation" and
-     PROTOCOL "fire", and the client's render offset has to become a number
-     both ends agree on before the Unity client (U13/U14) implements either.
-     Decide it here, in wave 0, rather than discovering it in U16.
+     **Done and fixed 2026-08-27 (`test/t21-lagcomp-moving.mjs`).** The
+     re-pointed criterion went red — rewind was RTT/2, which reconstructs the
+     present rather than what the client saw — and is now
+     `staleness + RTT/2 + interp_delay`, the reference design, using the
+     `fire.seq` the PROTOCOL always specified and the code never read. The
+     stale-aim volley went 0/8 to 8/8, and the live-aim volley — the position
+     no real client can know — went 8/8 to 2/8. The `hit` event's own point
+     puts the resolved capsule 0.33 m from the axis the client aimed at,
+     inside the 0.35 m hitbox.
+     **`interp_delay` (0.1 s) is now a contract that binds the client**, and
+     the second half of the fix belongs to U13: remotes must be rendered at
+     `serverClock − interp_delay` against a synchronised clock, never at a
+     fixed offset behind local packet arrival. Nothing server-side can catch
+     a breach of that.
 1. **Land the Phase 4 input mode byte first, and do not update the TS client.**
    `input` gains its mode byte in `docs/PROTOCOL.md`, the Go server, and the
    harness. The TS client is being retired, so it is not a third end. The
@@ -436,6 +444,15 @@ is the single largest thing Three.js was never going to give us.
    - Assembly definitions split `Sim`, `Net`, `Game`. **`Sim` references
      `UnityEngine` nowhere** and must compile and test headless.
    - `.gitignore`: `Library/`, `Temp/`, `Logs/`, `Build/`, `*.csproj`, `*.sln`.
+3b. **The client's render clock is server-synced.** Remote entities are drawn
+   at `serverClock − interp_delay` (0.1 s, GDD "Lag compensation"), against a
+   clock estimated from the server's own, **never** at a fixed offset behind
+   whenever a packet arrived locally. The server rewinds shots by that exact
+   offset, so the two conventions differ by a whole one-way trip and a client
+   on the wrong one misses every moving target. The TS client had it wrong and
+   C14 caught it only at the wire level; no server-side test can catch it, so
+   U13 carries the obligation and `t21` is its check.
+
 4. **`Sim` carries its own math types**, mirroring `client/src/sim/types.ts` —
    not `UnityEngine.Vector3`. Normalize and lerp implementations differ between
    libraries and C5's bar is 1e-10 m.
@@ -458,7 +475,7 @@ is the single largest thing Three.js was never going to give us.
 | U10 | sonnet | WebSocket transport, hello/join, reconnect | `Net/Client.cs` | joins deployed server, decodes snapshot |
 | U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Prediction.cs` | same corrections as TS on one input trace |
 | U12 | sonnet | Terrain mesh from u16 radius grids | `Game/TerrainMesh.cs` | mesh matches sampled radii |
-| U13 | sonnet | Entity views, interpolation, nametags | `Game/Entities.cs` | two clients agree (C24, strengthened) |
+| U13 | sonnet | Entity views, interpolation, nametags | `Game/Entities.cs` | two clients agree (C24, strengthened); `t21` stale volley stays green |
 | U14 | sonnet | FPS controller + Input System, emits mode byte | `Game/Fps.cs` | walks, strafes correct handedness |
 | U15 | sonnet | HUD: vitals, hotbar, shop, interact prompt | `Game/UI/` | buy flow completes |
 | U16 | sonnet | Weapon, projectiles, hit feedback | `Game/Combat.cs` | shot_fired renders |

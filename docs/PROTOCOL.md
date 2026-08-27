@@ -336,8 +336,17 @@ arrives. Not command state, not idempotent, not replayed.
   position for that shooter at the rewound tick. A client that could name its
   own muzzle position could shoot from anywhere on the planet.
 - **Rewind is bounded by the server's measurement, not the client's claim.**
-  The server rewinds candidate targets by its own smoothed RTT/2 for that
-  connection, clamped to `[0, 500] ms`. A client cannot ask for more.
+  The server rewinds candidate targets by `staleness + RTT/2 + interp_delay`,
+  clamped to `[0, 500] ms` (GDD "Lag compensation" has the derivation). Every
+  term is server-observed: the RTT is its own measurement, and `staleness`
+  comes from the tick the server itself chose to run that `seq` on. Naming an
+  ancient `seq` buys nothing but the clamp. A client cannot ask for more.
+- **The client owes `interp_delay` back.** The rewind above assumes the shooter
+  was rendering remote entities at `serverClock − interp_delay`, on a clock
+  synchronised to the server's. A client that instead renders a fixed offset
+  behind local packet arrival sits a whole one-way trip further into the past
+  than the server rewinds to, and will miss every moving target. See GDD "Lag
+  compensation".
 - Cadence is enforced server-side from the weapon's rule table with one tick of
   tolerance; an early shot is dropped, not queued. Ammunition is likewise
   checked and decremented server-side.

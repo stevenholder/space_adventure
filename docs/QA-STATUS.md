@@ -46,7 +46,7 @@ criteria themselves, one in the cluster.
 | C11b | Store suite passes on SQLite *and* Postgres; migration twice is a no-op | `TestMigrate_Postgres`, `TestOpenPostgres`, `TestPlayerRoundTripPostgres` all ran (verified not skipped) beside their SQLite twins; `Migrate` called twice succeeds | **PASS**, one caveat |
 | C12 | Unaffordable and forged purchases refused, inventory unchanged | `insufficient_credits` (status 3); forged opcode (status 1); malformed body (status 2); credits 750 → 749 on a 1-credit probe, so nothing was deducted | **PASS** (`t18`) |
 | C13 | Colliders agree Go↔TS; no penetration or tunnelling | 9 scenarios bit-exact, dPos = dVel = 0.00e+0 | **PASS** (`t13`) |
-| C14 | 20 shots at a target register; 20 aimed 1 m wide register zero | 20/20 and 0/20 at 40.7 m under 100 ms injected RTT | **PASS** (`t18`) against a STATIC dummy; **FAIL** (`t21`) against a moving NPC — see below |
+| C14 | 20 shots at a target register; 20 aimed 1 m wide register zero | 20/20 and 0/20 at 40.7 m under 100 ms injected RTT; against a MOVING NPC at 300 ms RTT, 8/8 where the client sees it and 2/8 at its live position | **PASS** (`t18` static, `t21` moving) — re-pointed and the defect it found is fixed, see below |
 | C15 | Damage per the GDD table, death, respawn within 3 s ±100 ms | 25 damage/hit live (100 → 75); 5 death/respawn cycles observed live | **PARTIAL** |
 | C16 | Remote client sees weapon, pitch within 1°, ordered shot events | pitch worst error 0.35°; 8/8 `shot_fired`, ordered; weapon seen by an observer and by a late joiner | **PASS** (`t19`, weapon clause closed 2026-08-27) |
 | C18 | Build gates clean; ≤ 54 B/entity; 60 fps; no DB call on the tick path | `go build/vet/test ./...` clean (160 tests, 7 packages), `tsc --noEmit` clean, `npm run build` clean; 54 B/entity exactly, worst case over 2122 snapshots | **PARTIAL** |
@@ -95,36 +95,77 @@ changes). At 40.7 m the base spread cone is 0.43 m against a 0.45 m target, so
 "all 20 register" sits on the edge of the weapon's own dispersion. It is a
 measurement of spread, not of hit registration.
 
-### C14 re-pointed at a moving NPC — FAIL, 2026-08-27 (`t21`)
+### C14 re-pointed at a moving NPC — the defect, and the fix (2026-08-27)
 
 `test/t21-lagcomp-moving.mjs` fires at a camp grunt chasing a second player, at
 300 ms injected RTT and ~31 m, and splits the shots by aim point. Measured:
 
-| volley | aim point | result |
-|---|---|---|
-| control | a grunt, live position | 3/3 — the shot can land from here |
-| **stale** | **where the shooter's own client sees the grunt** | **0/8** |
-| live | where the grunt actually is at that instant | 8/8 |
+| volley | aim point | before the fix | after |
+|---|---|---|---|
+| control | a grunt, live position | 3/3 — the shot can land from here | 2/3 |
+| **stale** | **where the shooter's own client sees the grunt** | **0/8** | **8/8** |
+| live | where the grunt actually is at that instant | 8/8 | 2/8 |
 
-All 16 shots were accepted and resolved by the server (`shot_fired` broadcast
-for each), and the two aim points were 0.44–0.60 m apart against a 0.35 m
-capsule, so neither volley can be explained by spread or by a dropped shot.
+Every shot in both runs was accepted and resolved by the server (`shot_fired`
+broadcast for each), so no volley is explained by a dropped shot.
 
-**Rewind runs, and it is pointed at the wrong instant.** The server rewinds by
-its smoothed **RTT/2** (`server/internal/server/client.go` `rewindTicks`, GDD
-"Lag compensation", PROTOCOL "fire"). One RTT/2 back from the moment the shot
+**Rewind ran, and it was pointed at the wrong instant.** The server rewound by
+its smoothed **RTT/2** and nothing else. One RTT/2 back from the moment a shot
 *arrives* is the present, not the past the client fired at: the snapshot the
-client aimed from is one one-way delay old already, and the shot spends another
-one-way getting back. Reconstructing what the client saw needs the full RTT.
-The deployed TS client is further out still — `client/src/net/interp.ts` renders
-remotes another 100 ms behind local receive time — so a real player must lead a
-moving target by one-way + 100 ms to hit it, which is what lag compensation is
-supposed to remove.
+client aimed from was already one one-way old, and the shot spent another
+one-way getting back. The deployed TS client was further out still —
+`client/src/net/interp.ts` renders remotes another 100 ms behind *local receive
+time* — so a real player had to lead a moving target by one-way + 100 ms to hit
+it, which is exactly what lag compensation exists to remove.
 
-Fixing it is a contract decision, not a code tweak: the rewind figure lives in
-the GDD and PROTOCOL, and the client's render offset has to become a number
-both ends agree on (or a value the client sends). Left open for a Phase 3.5
-wave-0 decision, with `t21` red until it lands — the same posture C16 held.
+**Fixed by adopting the reference design** (Valve's
+`command_time − packet_latency − view_interpolation`), which is also what this
+repo's own PROTOCOL already described and the implementation had quietly
+dropped — `fire.seq` was parsed and never used. Now:
+
+```
+rewind_ticks = staleness + RTT/2 + interp_delay    clamped to [0, rewind_max]
+```
+
+- `staleness` — how far back the tick that ran `fire.seq` sits from now. Zero
+  for an ordinary shot, positive when the client fired against an older input.
+  The server records which tick ran which seq, so this is its own observation,
+  not a client claim; naming an ancient seq buys nothing but the clamp.
+- `interp_delay` — **0.1 s, now a contract** (GDD "Lag compensation"). It binds
+  the client: remotes must be rendered at `serverClock − interp_delay` on a
+  synchronised clock, **not** at a fixed offset behind local packet arrival.
+  The two differ by a whole one-way trip. No server test can catch a breach, so
+  **the Unity client owes this explicitly at U13** — it is the half of the fix
+  that cannot land until there are entity views to render.
+
+**The measurement is direct, not inferred.** A `hit` event carries the point
+where the ray met the capsule, so `t21` reads back the position the server
+actually resolved against: **0.33 m from the axis the client was aiming at**
+(inside the 0.35 m hitbox radius) and 0.38 m from the live axis (outside it).
+That is the fix stated in one number.
+
+Three things had to be right before the run said anything at all, and each was
+wrong first:
+
+- **Gate on the offset ACROSS the ray, not the raw 3D distance.** Offset along
+  the ray slides the aim point up a line that still meets the capsule. The
+  first run against the fixed server read 8/8 on *both* volleys and proved
+  nothing, because it was selecting shots whose separation was mostly radial.
+- **Separate the aim points by more than a body.** A 4.0 m/s grunt covers
+  0.2 m per 100 ms of RTT against a capsule 0.7 m across, so 100 ms is
+  unmeasurable by construction and 200 ms was still inconclusive — the
+  resolved hit points landed *between* the two aim points and both volleys
+  scored alike. 300 ms gives ~1.2 m.
+- **Aim the way the contract says a client renders.** The harness first aimed
+  at the newest snapshot it held, which is about half a tick behind
+  `serverClock − interp_delay` — enough to leave the shot resolving between
+  the aim points. It now extrapolates that half tick forward, which is the
+  same arithmetic U13 owes in Unity, and is why `t21` is that task's check.
+
+The remaining 2/8 on the live volley and 2/3 on the control are weapon
+dispersion: `spread_base` 0.6° is 0.26 m at 25 m against a 0.35 m capsule, so
+a shot aimed just outside the body sometimes lands inside it anyway. `t18`
+makes the same trade at longer range and reads 19/20 for it.
 
 ### Two defects `t21` uncovered on the way (both fixed 2026-08-27)
 

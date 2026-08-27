@@ -304,6 +304,7 @@ func (s *Server) tick() {
 	s.list = s.list[:0]
 	for _, c := range s.clients {
 		c.step(s.terrain, s.colliders)
+		c.recordCmdTick(tick)
 		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		s.list = append(s.list, c)
 	}
@@ -693,7 +694,7 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 		return // empty magazine: dropped
 	}
 
-	rewindTicks := c.rewindTicks()
+	rewindTicks := c.rewindTicks(tick, f.Seq)
 	rewindTick := tick - uint32(rewindTicks)
 	// Early-out before spending a round: ResolveShot also needs this sample,
 	// but a shot it cannot resolve should not cost the player ammunition.

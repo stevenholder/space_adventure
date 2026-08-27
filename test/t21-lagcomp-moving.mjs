@@ -25,14 +25,18 @@
  * volley fires first, because a zero in both volleys says nothing about rewind
  * if a shot from that spot could never land.
  *
- * Measured 2026-08-27 at 300 ms RTT, 31 m: control 3/3, stale 0/8, live 8/8.
+ * Before the fix, at 300 ms RTT and 31 m: control 3/3, stale 0/8, live 8/8 —
+ * the server was resolving at the target's present position.
  *
  * Deviations from the criterion's letter, and why:
  *
- *   - 300 ms RTT, not 100. Rewind is RTT/2 (GDD "Lag compensation"), so 100 ms
- *     rewinds 50 ms: a 4.0 m/s grunt moves 0.2 m, INSIDE its own 0.35 m
- *     hitbox. At 100 ms the two aim points are the same point and the
- *     criterion is untestable by construction. 150 ms each way moves it 0.6 m.
+ *   - 300 ms RTT, not 100. The two aim points have to be separated by more
+ *     than a whole body or both of them hit the same capsule and the run
+ *     proves nothing. A 4.0 m/s grunt covers 0.2 m per 100 ms of RTT against
+ *     a capsule 0.7 m across, so 100 ms RTT is unmeasurable by construction
+ *     and 200 ms was still inconclusive in practice: the resolved hit points
+ *     landed BETWEEN the aim points and both volleys scored alike. 300 ms
+ *     gives ~1.2 m, comfortably more than the body.
  *   - 8 shots per volley, not 20. The pulse does 25 and a grunt has 60, so
  *     every third hit is a corpse and a 20 s respawn. `t18` keeps the 20-shot
  *     volume run against the dummies; this measures the property they cannot.
@@ -59,11 +63,13 @@ const dist = (a, b) => Math.hypot(...sub(a, b))
 // --- world constants this script reasons about (server/data) ---------------
 const HITBOX_RADIUS = 0.35   // items.json entity_defs, npc capsule radius
 const ONE_WAY_MS = 150       // injected per direction; 300 ms RTT
+const INTERP_DELAY_MS = 100  // GDD "Lag compensation" interp_delay; the client owes this
 const SHOTS = 8              // per volley
 const SHOT_SPACING_MS = 520  // spread_per_shot 0.35 deg vs spread_decay 3.0/s
 const AGGRO_RADIUS = 22      // npcs.json npc.grunt; the shooter must stay out
 const KITE_STANDOFF = 15     // bait to the grunt it baits: inside that radius
-const SHOOT_RANGE = 30       // shooter to the shuttle: outside aggro, inside spread
+const SHOOT_RANGE = 24       // shooter to the shuttle: outside aggro, inside spread
+const MAX_SHOT_RANGE = 27    // past this, spread_base alone is wider than the hitbox
 
 function frame(type, body) { const o = u8(2 + body.length); new DataView(o.buffer).setUint16(0, type, true); o.set(body, 2); return o }
 function hello(name, token) {
@@ -107,22 +113,33 @@ async function session(name, port) {
     else if (t === 0x0006) s.ents.delete(pv.getUint32(0, true))
     else if (t === 0x0004) {
       s.snaps++
+      const tick = pv.getUint32(0, true)
       const n = pv.getUint16(6, true)
       for (let i = 0; i < n; i++) { const o = 8 + i * 54
         s.ents.set(pv.getUint32(o, true), {
           pos: [pv.getFloat32(o+4,true), pv.getFloat32(o+8,true), pv.getFloat32(o+12,true)],
+          vel: [pv.getFloat32(o+32,true), pv.getFloat32(o+36,true), pv.getFloat32(o+40,true)],
           health: pv.getUint16(o+50,true), flags: pv.getUint8(o+52),
         }) }
+      // The server tick this snapshot describes, and when it turned up here:
+      // together they are the whole of a client's knowledge of the server
+      // clock, and rendering the contract's way needs both.
+      s.newest = { tick, at: Date.now() }
     }
     else if (t === 0x000f) s.results.push({ seq: pv.getUint16(0,true), op: pv.getUint16(2,true), status: pv.getUint8(4), body: JSON.parse(dec.decode(p.subarray(9)) || '{}') })
     else if (t === 0x0007) {
       // A `hit` carries the shooter in its first data word; without it a shot
       // from this harness is indistinguishable from a grunt hitting the bait.
       const e = { id: pv.getUint32(0,true), ev: pv.getUint16(4,true), at: Date.now() }
-      // Read the shooter out of the body only if the body is actually there:
-      // a short `hit` is a server bug (one shipped), and a harness that dies
-      // on it reports nothing at all about the run it was measuring.
-      if (e.ev === 3 && pv.getUint32(6, true) >= 4) e.shooter = pv.getUint32(10, true)
+      // Read the body only if it is actually there: a short `hit` is a server
+      // bug (one shipped), and a harness that dies on it reports nothing at
+      // all about the run it was measuring.
+      if (e.ev === 3 && pv.getUint32(6, true) >= 20) {
+        e.shooter = pv.getUint32(10, true)
+        // The hit point is on the capsule the server actually resolved
+        // against, which is the only direct read of WHERE it rewound to.
+        e.point = [pv.getFloat32(14,true), pv.getFloat32(18,true), pv.getFloat32(22,true)]
+      }
       s.events.push(e)
     }
   })
@@ -188,6 +205,31 @@ async function armed(s) {
   if (eq?.status !== 0) throw new Error(`equip refused: ${JSON.stringify(eq)}`)
 }
 
+/**
+ * displayed returns where a CONFORMING client would be drawing entity `id`
+ * right now: at `serverClock - interp_delay` (GDD "Lag compensation").
+ *
+ * The newest snapshot in hand describes server tick T and arrived one one-way
+ * trip after it was made, so the server's clock now reads
+ * `T + L + (time since it arrived)`. Subtract interp_delay and the render
+ * point is `elapsed + L - interp_delay` PAST that snapshot — a small forward
+ * extrapolation, which is what a real client does when its buffer runs dry
+ * (client/src/net/interp.ts caps it at 150 ms).
+ *
+ * Aiming at the raw newest snapshot instead — the obvious thing, and what
+ * this harness did first — sits about half a tick further back, which was
+ * enough to leave the shot resolving between the two aim points and make the
+ * whole measurement inconclusive.
+ */
+function displayed(s, id) {
+  const e = s.ents.get(id)
+  if (!e || !s.newest) return null
+  const elapsedMs = Date.now() - s.newest.at
+  const leadMs = elapsedMs + ONE_WAY_MS - INTERP_DELAY_MS
+  const dt = Math.max(0, leadMs) / 1000
+  return e.pos.map((x, i) => x + e.vel[i] * dt)
+}
+
 // aimAt returns the unit direction from s's eye to a body's centre of mass.
 function aimAt(s, targetPos) {
   const up = norm(s.me())
@@ -216,6 +258,7 @@ async function walkRoute(s, route, stopAt) {
   } finally { s.walking = false }
 }
 
+const resolved = []
 const checks = []
 const check = (name, ok, detail = '') => { checks.push([name, ok]); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`) }
 
@@ -301,13 +344,29 @@ gruntTable('3 s later')
  */
 function usable() {
   let best = null
+  const eye = add(shooter.me(), mul(norm(shooter.me()), 1.7))
   for (const id of gruntIds) {
-    const stale = shooter.ents.get(id), live = bait.ents.get(id)
-    if (!stale || !live || stale.health === 0 || live.health === 0) continue
-    if (dist(shooter.me(), live.pos) < AGGRO_RADIUS) continue // would re-target onto us
-    const off = dist(stale.pos, live.pos)
-    if (off <= HITBOX_RADIUS) continue
-    if (!best || off > best.off) best = { id, off, stale: stale.pos.slice(), live: live.pos.slice() }
+    const live = bait.ents.get(id), seen = shooter.ents.get(id)
+    if (!seen || !live || seen.health === 0 || live.health === 0) continue
+    const shown = displayed(shooter, id)
+    if (!shown) continue
+    const stale = { pos: shown }
+    const range = dist(shooter.me(), live.pos)
+    // Too close and the grunt re-targets onto the shooter, turning its motion
+    // radial. Too far and spread_base alone exceeds the hitbox: the cone is an
+    // angle, 0.6 deg is 0.35 m at 33 m, and past that the weapon's own
+    // dispersion decides the shot rather than the aim. t18 makes the same
+    // trade the other way and reads 19/20 for it.
+    if (range < AGGRO_RADIUS || range > MAX_SHOT_RANGE) continue
+    // Only the offset ACROSS the ray moves a shot off the capsule; offset
+    // along it slides the aim point up and down a line that still intersects.
+    const ray = norm(sub(stale.pos, eye))
+    const d = sub(live.pos, stale.pos)
+    const lateral = Math.hypot(...sub(d, mul(ray, dot(d, ray))))
+    if (lateral <= HITBOX_RADIUS) continue
+    if (!best || lateral > best.off) {
+      best = { id, off: lateral, stale: stale.pos.slice(), live: live.pos.slice() }
+    }
   }
   return best
 }
@@ -324,10 +383,25 @@ async function shoot(aim, victimId) {
   shooter.send(fire(shooter.seq++, shooter.look))
   await sleep(SHOT_SPACING_MS)
   const seen = bait.events.slice(mark)
+  const hit = seen.find(e => e.ev === 3 && e.id === victimId && e.shooter === shooter.myId)
   return {
     fired: seen.some(e => e.ev === 2 && e.id === shooter.myId),
-    hit: seen.some(e => e.ev === 3 && e.id === victimId && e.shooter === shooter.myId),
+    hit: !!hit,
+    point: hit?.point,
   }
+}
+
+// resolvedAt reports how far the server's hit point sits from each candidate
+// body axis. It is the one direct read of where the rewind landed: much
+// nearer the stale axis means the shooter's own frame was reconstructed,
+// nearer live means the present was, and halfway means the rewind is short.
+function resolvedAt(point, stale, live) {
+  const axis = (p, base) => {
+    const up = norm(base)
+    const d = sub(p, base)
+    return Math.hypot(...sub(d, mul(up, dot(d, up)))) // distance from the capsule's axis
+  }
+  return { toStale: axis(point, stale), toLive: axis(point, live) }
 }
 
 /** volley fires n shots at `mode` and returns [hits, offsets]. */
@@ -341,8 +415,14 @@ async function volley(mode, n) {
     offsets.push(t.off)
     if (r.hit) hits++
     if (r.fired) fired++
+    let where = ''
+    if (r.point) {
+      const a = resolvedAt(r.point, t.stale, t.live)
+      resolved.push(a)
+      where = `  [resolved ${a.toStale.toFixed(2)} m from the stale axis, ${a.toLive.toFixed(2)} m from live]`
+    }
     console.log(`  ${mode} shot ${String(i + 1).padStart(2)}: offset ${t.off.toFixed(2)} m, range ${dist(shooter.me(), t.live).toFixed(1)} m` +
-                ` -> ${r.fired ? (r.hit ? 'HIT' : 'miss') : 'NOT FIRED'}  (shooter hp ${shooter.ents.get(shooter.myId)?.health})`)
+                ` -> ${r.fired ? (r.hit ? 'HIT' : 'miss') : 'NOT FIRED'}${where}`)
   }
   console.log(`  ${mode}: ${hits} hits, ${fired}/${offsets.length} shots accepted by the server`)
   return [hits, offsets]
@@ -380,13 +460,13 @@ clearInterval(shooter.heartbeat); clearInterval(bait.heartbeat)
 
 const offsets = [...staleOffsets, ...liveOffsets]
 const meanOffset = offsets.reduce((a, b) => a + b, 0) / (offsets.length || 1)
-console.log(`\nstale-to-live offset: mean ${meanOffset.toFixed(2)} m, min ${Math.min(...offsets).toFixed(2)} m over ${offsets.length} shots (hitbox radius ${HITBOX_RADIUS} m)`)
+console.log(`\nstale-to-live offset ACROSS the ray: mean ${meanOffset.toFixed(2)} m, min ${Math.min(...offsets).toFixed(2)} m over ${offsets.length} shots (hitbox radius ${HITBOX_RADIUS} m)`)
 
 // Run validity first. A red criterion is only worth reading if the run could
 // have gone green: something had to be hittable from here, and the two aim
 // points had to name different capsules.
 check('control: a shot from this position lands at all', controlHits > 0, `${controlHits}/3`)
-check('the two aim points were further apart than the hitbox on every shot',
+check('the two aim points were further apart ACROSS the ray than the hitbox',
       offsets.length > 0 && Math.min(...offsets) > HITBOX_RADIUS,
       `min ${offsets.length ? Math.min(...offsets).toFixed(2) : 'n/a'} m`)
 
@@ -394,16 +474,30 @@ check('the two aim points were further apart than the hitbox on every shot',
 check(`C14: ${SHOTS} shots aimed where the client SEES the target register`,
       staleHits === SHOTS && staleOffsets.length === SHOTS, `${staleHits}/${SHOTS}`)
 
+if (resolved.length) {
+  const mean = (f) => resolved.reduce((a, r) => a + f(r), 0) / resolved.length
+  console.log(`\nwhere the server resolved, over ${resolved.length} landed shots:` +
+              ` ${mean(r => r.toStale).toFixed(2)} m from the stale axis,` +
+              ` ${mean(r => r.toLive).toFixed(2)} m from the live axis` +
+              ` (hitbox radius ${HITBOX_RADIUS} m)`)
+}
 console.log(`\ndiagnosis: aiming at the target's PRESENT position instead scored ${liveHits}/${liveOffsets.length}.`)
-if (liveHits > staleHits) {
+if (staleHits > liveHits) {
   console.log(
-    '  Rewind is running, and it is pointed at the wrong instant. The server rewinds RTT/2\n' +
-    '  (server/internal/server/client.go rewindTicks, GDD "Lag compensation", PROTOCOL "fire"),\n' +
-    '  which lands on where the target is NOW, not on the frame the client fired at. A client\n' +
-    '  must therefore lead by the whole network delay to hit a moving body — the opposite of\n' +
-    '  what lag compensation is for. Reconstructing what the client saw needs the full RTT plus\n' +
-    '  the client\'s render offset (client/src/net/interp.ts renders remotes a further 100 ms\n' +
-    '  back, which this harness does not, so a real client is off by even more).')
+    '  Rewind is pointed correctly: what the client saw lands, and the position no client\n' +
+    '  can know does not.')
+} else if (liveHits > staleHits) {
+  console.log(
+    '  Rewind is pointed at the wrong instant — the server is resolving nearer to the\n' +
+    '  target\'s present than to the frame the client fired at. Check that rewindTicks\n' +
+    '  (server/internal/server/client.go) still carries all three terms: staleness, RTT/2\n' +
+    '  and interp_delay (GDD "Lag compensation").')
+} else {
+  console.log(
+    '  Both aim points scored the same, so this run says nothing about rewind. The two\n' +
+    '  were far enough apart across the ray, so suspect the weapon: at these ranges\n' +
+    '  spread_base is a large fraction of the hitbox and dispersion, not aim, is\n' +
+    '  deciding the shots.')
 }
 
 proxy.kill()
