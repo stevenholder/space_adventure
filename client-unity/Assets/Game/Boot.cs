@@ -252,9 +252,7 @@ namespace SpaceAdventure.Game
                 // executed, so sending anything else moves where the shot
                 // lands (PROTOCOL "fire"; GDD "Lag compensation").
                 _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));
-                _fx.OnLocalFire(
-                    TerrainMesh.ToUnity(_predictor.State.Pos) + TerrainMesh.ToUnity(_predictor.State.Pos).normalized * FpsController.EyeHeight,
-                    TerrainMesh.ToUnity(li.Look));
+                _fx.OnLocalFire(_viewModel.Muzzle);
             }
         }
 
@@ -330,7 +328,14 @@ namespace SpaceAdventure.Game
                     EventMsg ev = Decode.Event(frame.Reader);
                     switch (ev.EventId)
                     {
-                        case EventId.ShotFired: _fx.OnShotFired(ev); break;
+                        case EventId.ShotFired:
+                            // Our own shots are drawn from the barrel; everyone
+                            // else's from the origin the server reported, which
+                            // is where their body actually is.
+                            _fx.OnShotFired(ev, ev.EntityId == _net.EntityId
+                                ? _viewModel.Muzzle.position
+                                : (Vector3?)null);
+                            break;
                         case EventId.Hit: _fx.OnHit(ev, _net.EntityId); break;
                         case EventId.Equipped:
                         {

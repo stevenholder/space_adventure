@@ -44,6 +44,7 @@ namespace SpaceAdventure.Game
 
         private readonly Transform _rig;      // arms + weapon, parented to the camera
         private readonly GameObject _weapon;
+        private readonly Transform _muzzle;   // barrel tip: where shots LOOK like they leave
         private readonly Transform _body;     // the real body, in the world
 
         private Vector2 _sway;
@@ -69,6 +70,26 @@ namespace SpaceAdventure.Game
             Part(_weapon.transform, "sight", new Vector3(0.02f, 0.045f, 0.05f), new Vector3(0, 0.06f, 0.10f),
                  new Color(0.10f, 0.11f, 0.13f), material, layer);
 
+            // An empty at the barrel tip. The server resolves a shot from the
+            // player's EYE, which is the correct thing for hit registration
+            // and the wrong place to draw from: a tracer and a flash starting
+            // at the eye appear in the dead centre of the screen, in front of
+            // the gun. This is where they visually start instead.
+            // Parented to the RIG, not to the weapon. The weapon body carries a
+            // non-uniform scale (0.07, 0.08, 0.42) that every child inherits,
+            // which would both misplace this and stretch anything attached to
+            // it into an ellipsoid. The rig is unscaled, so these are metres.
+            //
+            // Barrel tip, worked out in rig space: the weapon body sits at
+            // z 0.05 and the barrel at 0.36 x 0.42 = 0.151 beyond that, with
+            // half its 0.34 x 0.42 = 0.143 length again on top — 0.27. This
+            // sits just past it.
+            var muzzle = new GameObject("muzzle");
+            muzzle.transform.SetParent(_rig, false);
+            muzzle.transform.localPosition = new Vector3(0f, 0.002f, 0.29f);
+            muzzle.gameObject.layer = layer;
+            _muzzle = muzzle.transform;
+
             var glove = new Color(0.30f, 0.31f, 0.34f);
             // Forward hand on the barrel, rear hand on the grip.
             Part(_rig, "hand-forward", new Vector3(0.075f, 0.075f, 0.10f), new Vector3(-0.005f, -0.055f, 0.26f),
@@ -93,6 +114,12 @@ namespace SpaceAdventure.Game
             Part(_body, "shoulder-left", new Vector3(0.15f, 0.15f, 0.15f), new Vector3(-0.26f, 1.36f, 0), suit * 0.9f, material, 0);
             Part(_body, "shoulder-right", new Vector3(0.15f, 0.15f, 0.15f), new Vector3(0.26f, 1.36f, 0), suit * 0.9f, material, 0);
         }
+
+        /// <summary>
+        /// The barrel tip, in world space. Shots are DRAWN from here; they are
+        /// still RESOLVED from the eye position the server rewound to.
+        /// </summary>
+        public Transform Muzzle => _muzzle;
 
         /// <summary>Shows or hides the weapon; the hands stay either way.</summary>
         public bool WeaponVisible

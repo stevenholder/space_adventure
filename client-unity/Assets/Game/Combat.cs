@@ -41,8 +41,8 @@ namespace SpaceAdventure.Game
         private readonly Transform _parent;
         private readonly Material _lineMaterial;
 
-        private GameObject _muzzle;
-        private float _muzzleDiesAt;
+        private GameObject _flash;
+        private float _flashDiesAt;
 
         public CombatFx(Transform parent)
         {
@@ -56,8 +56,16 @@ namespace SpaceAdventure.Game
         /// <summary>
         /// Draws the ray the SERVER resolved. Payload per PROTOCOL.md:
         /// f32 origin[3] | f32 dir[3] | f32 dist.
+        ///
+        /// `drawFrom` moves only where the line STARTS. The server resolves a
+        /// shot from the shooter's eye, which is right for hit registration
+        /// and wrong to draw: a line from your own eye is a dot in the middle
+        /// of the screen, in front of the gun that supposedly fired it. For
+        /// your own shots the line starts at the barrel instead and ends
+        /// exactly where the server said it ended — the endpoint is what the
+        /// hit markers agree with, so it is never moved.
         /// </summary>
-        public void OnShotFired(EventMsg ev)
+        public void OnShotFired(EventMsg ev, Vector3? drawFrom = null)
         {
             if (ev.Data.Length < 28) return;
             var r = new WireReader(ev.Data);
@@ -66,6 +74,9 @@ namespace SpaceAdventure.Game
             float dist = r.ReadF32();
             if (dir.sqrMagnitude < 1e-8f) return;
 
+            Vector3 end = origin + dir.normalized * dist;
+            Vector3 start = drawFrom ?? origin;
+
             var go = new GameObject($"tracer-{ev.EntityId}");
             go.transform.SetParent(_parent, false);
             var line = go.AddComponent<LineRenderer>();
@@ -73,8 +84,8 @@ namespace SpaceAdventure.Game
             line.widthMultiplier = 0.03f;
             line.positionCount = 2;
             line.useWorldSpace = true;
-            line.SetPosition(0, origin);
-            line.SetPosition(1, origin + dir.normalized * dist);
+            line.SetPosition(0, start);
+            line.SetPosition(1, end);
             line.startColor = new Color(1f, 0.85f, 0.35f, 0.95f);
             line.endColor = new Color(1f, 0.55f, 0.10f, 0.15f);
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -113,23 +124,34 @@ namespace SpaceAdventure.Game
             Add(go, ImpactSeconds, scaleOut: true);
         }
 
-        /// <summary>A brief flash at the muzzle. Local, cosmetic, no authority.</summary>
-        public void OnLocalFire(Vector3 eye, Vector3 look)
+        /// <summary>
+        /// A brief flash at the barrel. Local, cosmetic, no authority.
+        ///
+        /// It is PARENTED to the muzzle rather than positioned each shot, so
+        /// it inherits the rig's sway and bob and stays welded to the barrel
+        /// instead of drifting off it during a turn. That also puts it on the
+        /// viewmodel layer, where it draws over the gun rather than being
+        /// swallowed by the overlay camera's depth clear.
+        /// </summary>
+        public void OnLocalFire(Transform muzzle)
         {
-            if (_muzzle == null)
+            if (muzzle == null) return;
+            if (_flash == null)
             {
-                _muzzle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                Object.Destroy(_muzzle.GetComponent<UnityEngine.Collider>());
-                _muzzle.name = "muzzle-flash";
-                _muzzle.transform.SetParent(_parent, false);
-                _muzzle.transform.localScale = Vector3.one * 0.10f;
-                var mr = _muzzle.GetComponent<MeshRenderer>();
-                mr.sharedMaterial = new Material(_lineMaterial) { color = new Color(1f, 0.9f, 0.5f, 0.9f) };
+                _flash = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                Object.Destroy(_flash.GetComponent<UnityEngine.Collider>());
+                _flash.name = "muzzle-flash";
+                _flash.transform.localScale = Vector3.one * 0.055f; // metres: the muzzle empty is unscaled
+                var mr = _flash.GetComponent<MeshRenderer>();
+                mr.sharedMaterial = new Material(_lineMaterial) { color = new Color(1f, 0.92f, 0.55f, 0.95f) };
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
             }
-            _muzzle.transform.position = eye + look.normalized * 0.45f;
-            _muzzle.SetActive(true);
-            _muzzleDiesAt = Time.time + FlashSeconds;
+            _flash.transform.SetParent(muzzle, false);
+            _flash.transform.localPosition = Vector3.zero;
+            _flash.layer = muzzle.gameObject.layer;
+            _flash.SetActive(true);
+            _flashDiesAt = Time.time + FlashSeconds;
         }
 
         private void Add(GameObject go, float seconds, bool scaleOut)
@@ -138,7 +160,7 @@ namespace SpaceAdventure.Game
         /// <summary>Ages every effect. Call once per frame.</summary>
         public void Tick()
         {
-            if (_muzzle != null && _muzzle.activeSelf && Time.time >= _muzzleDiesAt) _muzzle.SetActive(false);
+            if (_flash != null && _flash.activeSelf && Time.time >= _flashDiesAt) _flash.SetActive(false);
 
             for (int i = _live.Count - 1; i >= 0; i--)
             {
