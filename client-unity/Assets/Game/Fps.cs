@@ -64,6 +64,9 @@ namespace SpaceAdventure.Game
 
         public bool MouseLookEnabled { get; set; } = true;
 
+        /// <summary>Pointer movement this frame, for the viewmodel's sway.</summary>
+        public Vector2 LookDelta { get; private set; }
+
         public FpsController(Camera camera)
         {
             _camera = camera;
@@ -81,6 +84,7 @@ namespace SpaceAdventure.Game
 
             var kb = Keyboard.current;
             var mouse = Mouse.current;
+            LookDelta = Vector2.zero;
 
             Vector3 up = TerrainMesh.ToUnity(simUp).normalized;
 
@@ -102,6 +106,7 @@ namespace SpaceAdventure.Game
             if (MouseLookEnabled && mouse != null)
             {
                 Vector2 delta = mouse.delta.ReadValue();
+                LookDelta = delta;
                 // Yaw is applied as a DELTA to the heading we own. Applying an
                 // accumulated angle to a facing read back from the sim is the
                 // feedback loop described on _heading.

@@ -81,6 +81,7 @@ namespace SpaceAdventure.Game
         private SnapshotTimeline _timeline;
         private Hud _hud;
         private CombatFx _fx;
+        private ViewModel _viewModel;
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -111,10 +112,29 @@ namespace SpaceAdventure.Game
             _material = new Material(RequireShader("Standard", "Universal Render Pipeline/Lit"));
             _terrainMaterial = new Material(RequireShader("SpaceAdventure/TerrainVertexColor", "Standard"));
 
+            int vmLayer = LayerMask.NameToLayer("ViewModel");
+            if (vmLayer < 0) vmLayer = 8; // unnamed until the Editor runs EnsureLayers
+
             var camGo = new GameObject("Eye");
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = 2000f;
+            cam.fieldOfView = 60f; // ~90 degrees horizontal at 16:9, the FPS norm
+            cam.cullingMask = ~(1 << vmLayer); // the world, minus the rig
+
+            // The overlay pass. It clears depth and draws only the rig, so a
+            // weapon held 0.4 m from the eye cannot intersect a wall the body
+            // is pressed against. Its own narrower FOV is what keeps the
+            // weapon from looking warped at the edge of a wide view.
+            var vmCamGo = new GameObject("ViewModelCamera");
+            vmCamGo.transform.SetParent(camGo.transform, false);
+            var vmCam = vmCamGo.AddComponent<Camera>();
+            vmCam.clearFlags = CameraClearFlags.Depth;
+            vmCam.cullingMask = 1 << vmLayer;
+            vmCam.nearClipPlane = 0.01f;
+            vmCam.farClipPlane = 10f;
+            vmCam.fieldOfView = 48f;
+            vmCam.depth = cam.depth + 1;
 
             var sun = new GameObject("Sun").AddComponent<Light>();
             sun.type = LightType.Directional;
@@ -128,6 +148,8 @@ namespace SpaceAdventure.Game
             _predictor = new Predictor();
             _timeline = new SnapshotTimeline();
             _views = new EntityViews(transform, _material);
+            _viewModel = new ViewModel(cam, _material, vmLayer, transform);
+            _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
             _fx = new CombatFx(transform);
 
@@ -190,6 +212,14 @@ namespace SpaceAdventure.Game
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
             _fps.PlaceCamera(_predictor.State.Pos);
+
+            // The body stands where the simulation puts it, and the rig sways
+            // against the real speed rather than the input.
+            State now = _predictor.State;
+            _viewModel.Place(TerrainMesh.ToUnity(now.Pos),
+                             TerrainMesh.ToUnity(now.Pos.Normalized()),
+                             TerrainMesh.ToUnity(now.Facing));
+            _viewModel.Tick(_fps.LookDelta, (float)now.Vel.Length, Time.deltaTime);
             _fx.Tick();
         }
 
@@ -303,8 +333,15 @@ namespace SpaceAdventure.Game
                         case EventId.ShotFired: _fx.OnShotFired(ev); break;
                         case EventId.Hit: _fx.OnHit(ev, _net.EntityId); break;
                         case EventId.Equipped:
-                            _views.OnEquipped(ev.EntityId, WireReader.Utf8.GetString(ev.Data));
+                        {
+                            string item = WireReader.Utf8.GetString(ev.Data);
+                            _views.OnEquipped(ev.EntityId, item);
+                            // Our own weapon comes down the same channel, and
+                            // is replayed at join, so a reconnect holding a
+                            // rifle shows one (PROTOCOL event_id 0x0006).
+                            if (ev.EntityId == _net.EntityId) _viewModel.WeaponVisible = item.Length > 0;
                             break;
+                        }
                     }
                     _hud.OnEvent(ev, _net.EntityId);
                     break;

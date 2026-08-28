@@ -63,6 +63,45 @@ namespace SpaceAdventure.EditorTools
             "Skybox/Cubemap",                        // the generated starfield
         };
 
+        /// <summary>
+        /// The layer the first-person rig renders on. A second camera draws
+        /// only this layer, on top, so the weapon never clips into a wall the
+        /// player is standing against — the standard fix, and the reason the
+        /// rig needs a layer of its own at all.
+        /// </summary>
+        public const string ViewModelLayer = "ViewModel";
+
+        /// <summary>Layer index used when the name is not registered yet.</summary>
+        public const int ViewModelLayerIndex = 8; // first user layer
+
+        /// <summary>
+        /// Names layer 8 "ViewModel" if it is unnamed. Runs on every domain
+        /// reload, so a fresh clone needs no manual setup step — the
+        /// alternative is a layer that exists only as a magic number and shows
+        /// up blank in the Inspector.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        [MenuItem("Space Adventure/Ensure Layers")]
+        public static void EnsureLayers()
+        {
+            var tagManager = new SerializedObject(
+                AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+            SerializedProperty layers = tagManager.FindProperty("layers");
+            if (layers == null || layers.arraySize <= ViewModelLayerIndex) return;
+
+            SerializedProperty slot = layers.GetArrayElementAtIndex(ViewModelLayerIndex);
+            if (slot.stringValue == ViewModelLayer) return;
+            if (!string.IsNullOrEmpty(slot.stringValue))
+            {
+                Debug.LogWarning($"layer {ViewModelLayerIndex} is '{slot.stringValue}', not '{ViewModelLayer}' — " +
+                                 "the first-person rig will fall back to the index");
+                return;
+            }
+            slot.stringValue = ViewModelLayer;
+            tagManager.ApplyModifiedProperties();
+            Debug.Log($"layer {ViewModelLayerIndex} named '{ViewModelLayer}'");
+        }
+
         [MenuItem("Space Adventure/Ensure Shaders")]
         public static void EnsureShaders()
         {
@@ -100,6 +139,7 @@ namespace SpaceAdventure.EditorTools
         public static void BuildStandalone()
         {
             EnsureShaders();
+            EnsureLayers();
             if (!File.Exists(ScenePath)) GenerateBootScene();
 
             // Honour -buildOutput from the command line so CI and a local run
