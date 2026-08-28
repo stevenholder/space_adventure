@@ -84,6 +84,10 @@ namespace SpaceAdventure.Game
         private CombatFx _fx;
         private ViewModel _viewModel;
         private MapView _map;
+        private Interaction _interact;
+        private Camera _camera;
+        private int _credits = -1;
+        private bool _cursorFreed;
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -102,6 +106,15 @@ namespace SpaceAdventure.Game
         private const float FireIntervalSeconds = 0.15f;
 
         private ushort _seq;
+
+        /// <summary>
+        /// cmd sequence, counted apart from the input seq. `cmd` correlates a
+        /// request with its result; `input.seq` is what the shot rewind is
+        /// computed from. Sharing one counter would make a shop purchase move
+        /// where the next bullet lands.
+        /// </summary>
+        private ushort _cmdSeq;
+
         private float _nextFireAt;
         private float _tickAccumulator;
         private bool _worldBuilt;
@@ -158,6 +171,7 @@ namespace SpaceAdventure.Game
             // The sky is installed once the world seed arrives with hello_ack,
             // so every client raises the same stars over the same planet.
 
+            _camera = cam;
             _fps = new FpsController(cam);
             _predictor = new Predictor();
             _timeline = new SnapshotTimeline();
@@ -166,6 +180,7 @@ namespace SpaceAdventure.Game
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
             _map = new MapView();
+            _interact = new Interaction(_views);
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -207,15 +222,31 @@ namespace SpaceAdventure.Game
             // Escape releases the mouse so the Editor stays usable.
             if (keys?.escapeKey.wasPressedThisFrame == true)
             {
-                Cursor.lockState = Cursor.lockState == CursorLockMode.Locked
-                    ? CursorLockMode.None : CursorLockMode.Locked;
-                Cursor.visible = Cursor.lockState != CursorLockMode.Locked;
+                // Esc is a deliberate release, so it latches: without the
+                // latch the next frame's UI check would grab the pointer
+                // straight back and the key would look broken.
+                _cursorFreed = !_cursorFreed;
+                Cursor.lockState = _cursorFreed ? CursorLockMode.None : CursorLockMode.Locked;
+                Cursor.visible = _cursorFreed;
             }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
-            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked && !_map.Open;
+            // The map and the shop both want the pointer. Movement keeps
+            // working under either.
+            bool wantsCursor = _map.Open || _interact.ShopOpen;
+            if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            else if (!wantsCursor && !_cursorFreed && Cursor.lockState != CursorLockMode.Locked)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked;
 
             var state = _predictor.State;
             LocalInput li = _fps.Sample(state.Pos.Normalized(), state.Facing);
@@ -228,6 +259,25 @@ namespace SpaceAdventure.Game
             {
                 _tickAccumulator -= (float)Rules.DT;
                 SendTick(li);
+            }
+
+            // Look-at targeting, then E. The shop swallows E so closing it
+            // does not immediately reopen it on the same key press.
+            Vector3 eye = TerrainMesh.ToUnity(state.Pos);
+            eye += eye.normalized * FpsController.EyeHeight;
+            _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
+            if (li.InteractPressed && !_map.Open)
+            {
+                if (_interact.ShopOpen) _interact.CloseShop();
+                else
+                {
+                    byte[] cmd = _interact.OpenShop(NextCmdSeq());
+                    if (cmd != null)
+                    {
+                        _net.Send(cmd);
+                        _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+                    }
+                }
             }
 
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
@@ -243,6 +293,8 @@ namespace SpaceAdventure.Game
             _viewModel.Tick(_fps.LookDelta, (float)now.Vel.Length, Time.deltaTime);
             _fx.Tick();
         }
+
+        private ushort NextCmdSeq() => ++_cmdSeq;
 
         private void SendTick(LocalInput li)
         {
@@ -373,8 +425,13 @@ namespace SpaceAdventure.Game
                     break;
                 }
                 case Msg.CmdResult:
-                    _hud.OnCmdResult(Decode.CmdResult(frame.Reader));
+                {
+                    CmdResult r = Decode.CmdResult(frame.Reader);
+                    _hud.OnCmdResult(r);
+                    byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
+                    if (followUp != null) _net.Send(followUp);
                     break;
+                }
             }
         }
 
@@ -416,8 +473,15 @@ namespace SpaceAdventure.Game
 
         private void OnGUI()
         {
+            if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
             _hud?.Draw(_net, _predictor, _fps);
             if (_map == null || !_worldBuilt) return;
+
+            if (!_map.Open)
+            {
+                byte[] cmd = _interact.Draw(NextCmdSeq, _credits);
+                if (cmd != null) _net.Send(cmd);
+            }
 
             State s = _predictor.State;
             _map.Draw(_terrain,

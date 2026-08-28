@@ -32,6 +32,22 @@ namespace SpaceAdventure.Game
         public ushort Health;
         public bool Dead;
         public string EquippedItem = "";
+
+        /// <summary>
+        /// The most health this entity has ever been seen with.
+        ///
+        /// Entities spawn and respawn at full, so the high-water mark IS the
+        /// maximum — no need to parse `defs` for a per-archetype table, and no
+        /// second source of truth to drift from the server's. An entity whose
+        /// max genuinely rises later simply gets a new mark.
+        /// </summary>
+        public ushort MaxHealth;
+
+        /// <summary>Fraction remaining, or 1 when nothing has been seen yet.</summary>
+        public float HealthFraction => MaxHealth == 0 ? 1f : Mathf.Clamp01((float)Health / MaxHealth);
+
+        /// <summary>Health bars are for the wounded; a full bar is noise.</summary>
+        public bool ShowHealthBar => !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
     }
 
     /// <summary>
@@ -125,6 +141,7 @@ namespace SpaceAdventure.Game
                 }
 
                 view.Health = kv.Value.Health;
+                if (kv.Value.Health > view.MaxHealth) view.MaxHealth = kv.Value.Health;
                 view.Dead = kv.Value.Dead;
                 view.Root.transform.position = TerrainMesh.ToUnity(kv.Value.Pos);
 

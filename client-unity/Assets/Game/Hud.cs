@@ -62,6 +62,16 @@ namespace SpaceAdventure.Game
             }
         }
 
+        private void EnsureStyles()
+        {
+            if (_style != null) return;
+            _style = new GUIStyle(GUI.skin.label) { fontSize = 13, richText = false };
+            _style.normal.textColor = Color.white;
+            _panel = new Texture2D(1, 1);
+            _panel.SetPixel(0, 0, new Color(0, 0, 0, 0.55f));
+            _panel.Apply();
+        }
+
         public void OnCmdResult(CmdResult r)
             => Log($"cmd {r.Opcode} -> {(r.Ok ? "ok" : $"status {r.StatusCode}")} {r.Body}");
 
@@ -71,16 +81,50 @@ namespace SpaceAdventure.Game
             if (_log.Count > MaxLog) _log.RemoveAt(0);
         }
 
+        /// <summary>
+        /// Health bars above the wounded.
+        ///
+        /// Drawn in screen space from the entity's own world position rather
+        /// than as world-space quads: a billboard has to be re-oriented every
+        /// frame and still shears when you look up, and on a sphere "up" is a
+        /// different direction for every body on screen.
+        /// </summary>
+        public void DrawHealthBars(Camera cam, EntityViews views)
+        {
+            if (cam == null || views == null) return;
+            EnsureStyles();
+
+            foreach (EntityView v in views.All)
+            {
+                if (!v.ShowHealthBar || v.Root == null) continue;
+
+                // Above the crown: bodies are 1.8 m and the bar clears the head.
+                Vector3 world = v.Root.transform.position;
+                Vector3 above = world + world.normalized * 2.05f;
+                Vector3 screen = cam.WorldToScreenPoint(above);
+                if (screen.z <= 0f) continue; // behind the camera
+
+                // Shrink with distance, but never to nothing: a 2-pixel bar on
+                // a distant grunt says less than no bar at all.
+                float width = Mathf.Clamp(900f / screen.z, 26f, 90f);
+                const float height = 5f;
+                float x = screen.x - width * 0.5f;
+                float y = Screen.height - screen.y; // GUI space is y-down
+
+                float frac = v.HealthFraction;
+                GUI.color = new Color(0f, 0f, 0f, 0.65f);
+                GUI.DrawTexture(new Rect(x - 1, y - 1, width + 2, height + 2), Texture2D.whiteTexture);
+                // Green at full, red at empty, through amber.
+                GUI.color = Color.Lerp(new Color(0.85f, 0.15f, 0.12f),
+                                       new Color(0.30f, 0.85f, 0.30f), frac);
+                GUI.DrawTexture(new Rect(x, y, width * frac, height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+            }
+        }
+
         public void Draw(NetClient net, Predictor predictor, FpsController fps)
         {
-            if (_style == null)
-            {
-                _style = new GUIStyle(GUI.skin.label) { fontSize = 13, richText = false };
-                _style.normal.textColor = Color.white;
-                _panel = new Texture2D(1, 1);
-                _panel.SetPixel(0, 0, new Color(0, 0, 0, 0.55f));
-                _panel.Apply();
-            }
+            EnsureStyles();
 
             GUI.DrawTexture(new Rect(8, 8, 330, 120), _panel);
             GUILayout.BeginArea(new Rect(16, 12, 320, 116));
