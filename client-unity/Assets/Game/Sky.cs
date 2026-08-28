@@ -20,11 +20,24 @@ namespace SpaceAdventure.Game
 {
     public static class Sky
     {
-        /// <summary>Texels per cube face. 256 is ~1.2 MB total and plenty for points of light.</summary>
-        private const int FaceSize = 256;
+        /// <summary>
+        /// Texels per cube face. 512 is ~6 MB for the set.
+        ///
+        /// 256 was too coarse: with bilinear filtering a one-texel star is
+        /// smeared across a wide arc of sky and loses most of its brightness,
+        /// so the field read as an empty black band with a few specks.
+        /// </summary>
+        private const int FaceSize = 512;
 
         /// <summary>Stars over the whole sphere, not per face.</summary>
-        private const int StarCount = 5000;
+        private const int StarCount = 14000;
+
+        /// <summary>
+        /// Faint points concentrated near one great circle — a galactic band.
+        /// A uniform scatter of points reads as noise; the band is what makes
+        /// a sky look like a place with a structure you can orient by.
+        /// </summary>
+        private const int DustCount = 90000;
 
         /// <summary>Builds the skybox and installs it in the render settings.</summary>
         public static void Install(uint worldSeed, Shader cubemapShader)
@@ -47,24 +60,45 @@ namespace SpaceAdventure.Game
             // The same generator the sim uses, so "seed 1337" means one sky.
             var rand = Sim.Rng.Mulberry32(worldSeed);
 
+            // The galactic plane: a random axis from the seed, with the band
+            // lying perpendicular to it.
+            double az = rand() * 2.0 - 1.0;
+            double at = rand() * 2.0 * System.Math.PI;
+            double ar = System.Math.Sqrt(System.Math.Max(0.0, 1.0 - az * az));
+            var axis = new Vector3(
+                (float)(ar * System.Math.Cos(at)), (float)(ar * System.Math.Sin(at)), (float)az);
+
+            for (int i = 0; i < DustCount; i++)
+            {
+                Vector3 dust = RandomDirection(rand);
+                // Keep only what falls near the plane, with a soft edge, so
+                // the band fades out instead of ending at a line.
+                float offPlane = Mathf.Abs(Vector3.Dot(dust, axis));
+                if (offPlane > 0.28f) continue;
+                float falloff = 1f - offPlane / 0.28f;
+                if (rand() > falloff * falloff) continue;
+
+                if (!TryFaceTexel(dust, out int df, out int dx, out int dy)) continue;
+                float g = 0.035f * falloff;
+                Plot(faces[df], dx, dy, new Color(g * 0.85f, g * 0.88f, g * 1.0f, 1f));
+            }
+
             for (int i = 0; i < StarCount; i++)
             {
-                // A uniform direction on the sphere, NOT a uniform pixel: the
-                // latter clumps toward the cube's corners, where a face's
-                // texels subtend the least solid angle.
-                double z = rand() * 2.0 - 1.0;
-                double theta = rand() * 2.0 * System.Math.PI;
-                double r = System.Math.Sqrt(System.Math.Max(0.0, 1.0 - z * z));
-                var dir = new Vector3(
-                    (float)(r * System.Math.Cos(theta)),
-                    (float)(r * System.Math.Sin(theta)),
-                    (float)z);
+                Vector3 dir = RandomDirection(rand);
+
+                // Stars near the galactic plane are denser, as they are in a
+                // real sky: half of them are rejected unless they fall in the
+                // band.
+                if (Mathf.Abs(Vector3.Dot(dir, axis)) > 0.35f && rand() > 0.55) continue;
 
                 if (!TryFaceTexel(dir, out int face, out int px, out int py)) continue;
 
-                // Most stars are dim. A handful are bright enough to name.
+                // Most stars are modest. A handful are bright enough to name.
+                // The floor is well above black: anything dimmer survives
+                // neither the bilinear filter nor the skybox's own exposure.
                 double roll = rand();
-                float brightness = roll > 0.995 ? 1.0f : roll > 0.96 ? 0.65f : 0.20f + (float)rand() * 0.25f;
+                float brightness = roll > 0.993 ? 1.0f : roll > 0.95 ? 0.78f : 0.34f + (float)rand() * 0.30f;
 
                 // Cool white through to faint amber, which is roughly what a
                 // sky of mixed stellar classes looks like.
@@ -79,7 +113,7 @@ namespace SpaceAdventure.Game
 
                 // Give the brightest ones a one-texel bloom so they survive
                 // being resampled onto the skybox.
-                if (brightness >= 0.65f)
+                if (brightness >= 0.78f)
                 {
                     var halo = colour * 0.35f;
                     Plot(faces[face], px + 1, py, halo);
@@ -94,6 +128,13 @@ namespace SpaceAdventure.Game
 
             var material = new Material(cubemapShader);
             material.SetTexture("_Tex", cube);
+            // Skybox/Cubemap defaults _Tint to GREY, which silently halves
+            // everything drawn above, and _Exposure to 1. Both have to be set
+            // or the field arrives at roughly a third of the brightness it
+            // was authored at, which is most of why the sky read as an empty
+            // black band.
+            material.SetColor("_Tint", Color.white);
+            material.SetFloat("_Exposure", 1.35f);
             RenderSettings.skybox = material;
 
             // Ambient comes from the sky now. Low, and slightly blue, so the
@@ -101,6 +142,22 @@ namespace SpaceAdventure.Game
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.10f, 0.11f, 0.15f);
             RenderSettings.fog = false;
+        }
+
+        /// <summary>
+        /// A uniform direction on the sphere. NOT a uniform pixel: that clumps
+        /// toward the cube's corners, where a face's texels subtend the least
+        /// solid angle, and the sky ends up denser in eight places.
+        /// </summary>
+        private static Vector3 RandomDirection(System.Func<double> rand)
+        {
+            double z = rand() * 2.0 - 1.0;
+            double theta = rand() * 2.0 * System.Math.PI;
+            double r = System.Math.Sqrt(System.Math.Max(0.0, 1.0 - z * z));
+            return new Vector3(
+                (float)(r * System.Math.Cos(theta)),
+                (float)(r * System.Math.Sin(theta)),
+                (float)z);
         }
 
         /// <summary>
