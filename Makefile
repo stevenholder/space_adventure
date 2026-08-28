@@ -175,22 +175,34 @@ unity-codec:
 unity-join:
 	dotnet run --project client-unity/headless/SimDump --nologo -- --join ws://127.0.0.1:$(SERVER_PORT)/ws
 
-UNITY ?= /mnt/c/Program Files/Unity/Hub/Editor/6000.5.10f1/Editor/Unity.exe
-UNITY_PROJ = C:\\dev\\space_adventure\\client-unity
+# The Unity CLI wrapper. It resolves the editor from the project's own
+# ProjectVersion.txt and the project path with wslpath, so neither the editor
+# version nor the repo location is written down twice -- and it fails on a
+# compiler error, which `Unity -quit` does not: batchmode can exit 0 having
+# printed "Aborting batchmode due to failure: Scripts have compiler errors".
+UNITY_CLI = ./client-unity/unity
+
+# Typecheck every assembly, including the Unity-only ones the headless
+# solution cannot see.
+.PHONY: unity-compile unity-build unity-scene unity-run
+unity-compile:
+	$(UNITY_CLI) compile
 
 # C45: a packaged desktop build that joins the deployed server from a cold
 # start, with the URL from config rather than compiled in. The player is the
 # only thing that catches build-only failures -- shader stripping killed the
 # first one on its first frame, and the Editor could not have seen it.
-.PHONY: unity-build unity-scene
 unity-build:
-	"$(UNITY)" -batchmode -quit -nographics -projectPath "$(UNITY_PROJ)" 	  -executeMethod SpaceAdventure.EditorTools.BuildTools.BuildStandalone 	  -buildOutput "$(UNITY_PROJ)\\Build" -logFile "$(UNITY_PROJ)\\Logs\\build.log"
-	@grep -E '^build ' client-unity/Logs/build.log || { echo "see client-unity/Logs/build.log" >&2; exit 1; }
+	$(UNITY_CLI) build
+
+# Runs that player headless against the live stack. Needs `make up`.
+unity-run:
+	$(UNITY_CLI) run 20
 
 # Regenerates the one permitted scene. It is empty by design -- Boot.cs builds
 # the hierarchy at runtime -- so this exists to register it in build settings.
 unity-scene:
-	"$(UNITY)" -batchmode -quit -nographics -projectPath "$(UNITY_PROJ)" 	  -executeMethod SpaceAdventure.EditorTools.BuildTools.GenerateBootScene 	  -logFile "$(UNITY_PROJ)\\Logs\\scene.log"
+	$(UNITY_CLI) scene
 
 # C47: no agent-authored scenes or prefabs. Unity's native storage is
 # GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"

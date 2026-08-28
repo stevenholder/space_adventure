@@ -48,6 +48,33 @@ make up     # kind cluster + server/client images + manifests + port-forwards
 make down   # tear down the cluster, forwards, and logs
 ```
 
+### The Unity client
+
+`client-unity/unity` is the command line for the client. It resolves the
+editor from the project's own `ProjectVersion.txt` and the project path with
+`wslpath`, so neither the editor version nor the repo location is written down
+twice — and unlike `Unity -quit`, it fails on a compiler error instead of
+exiting 0 with "Aborting batchmode".
+
+```sh
+./client-unity/unity compile   # typecheck every assembly (close the Editor first)
+./client-unity/unity build     # package a standalone player
+./client-unity/unity run 20    # run that player headless against the live server
+./client-unity/unity open      # launch the Editor
+./client-unity/unity where     # which editor, which project
+```
+
+The same commands are `make unity-compile`, `unity-build`, `unity-run`,
+`unity-scene`. `make unity-test` and `unity-codec` need no Editor at all: the
+`Sim`, `Net` and `GameCore` assemblies build headless from
+`client-unity/headless/`, which is what keeps C40 (sim conformance) and C41
+(codec parity) runnable in CI.
+
+To play in the Editor, press Play — `Boot.cs` builds the whole hierarchy at
+runtime from a `RuntimeInitializeOnLoadMethod`, so no scene setup is needed.
+It connects to `ws://127.0.0.1:18080/ws` unless `SA_SERVER_URL` or
+`-serverUrl` says otherwise, so bring the server up with `make up` first.
+
 ## Agent-first development
 
 Agents live in `.omp/agents/*.md` and are auto-discovered by the harness. The

@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# Unity from the command line, without hardcoding anything.
+#
+#   ./client-unity/unity compile          typecheck every assembly
+#   ./client-unity/unity scene            regenerate Assets/Scenes/Boot.unity
+#   ./client-unity/unity build [outDir]   package a standalone player
+#   ./client-unity/unity run [seconds]    run the packaged player headless
+#   ./client-unity/unity method <Full.Name>   run any -executeMethod
+#   ./client-unity/unity open             launch the Editor on this project
+#   ./client-unity/unity where            print the editor and project paths
+#
+# Three things this exists to get right, all of which bit us first:
+#
+#   1. THE EDITOR VERSION IS NOT WRITTEN DOWN TWICE. It comes from
+#      ProjectSettings/ProjectVersion.txt, which Unity itself maintains. A
+#      version pinned in a Makefile is a version that silently points at a
+#      missing editor the day someone upgrades.
+#
+#   2. THE PROJECT PATH IS DERIVED. Unity.exe is a Windows binary and needs a
+#      Windows path, but hardcoding one breaks the moment the repo moves --
+#      which has already happened once here. `wslpath -w` converts it.
+#
+#   3. BATCHMODE LIES ABOUT ITS EXIT CODE. `-quit` can return 0 having printed
+#      "Aborting batchmode due to failure: Scripts have compiler errors". A
+#      wrapper that trusts $? reports a green build over broken code, so the
+#      log is parsed and that decides the exit status.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+proj_win="$(wslpath -w "$here")"
+logs="$here/Logs"
+mkdir -p "$logs"
+
+version="$(sed -n 's/^m_EditorVersion: *//p' "$here/ProjectSettings/ProjectVersion.txt" | tr -d '\r')"
+if [[ -z "$version" ]]; then
+  echo "unity: cannot read m_EditorVersion from ProjectSettings/ProjectVersion.txt" >&2
+  exit 1
+fi
+
+# UNITY_EDITOR overrides the search for a non-standard install.
+editor="${UNITY_EDITOR:-/mnt/c/Program Files/Unity/Hub/Editor/$version/Editor/Unity.exe}"
+if [[ ! -x "$editor" && ! -f "$editor" ]]; then
+  echo "unity: editor $version not found at:" >&2
+  echo "  $editor" >&2
+  echo "installed:" >&2
+  ls "/mnt/c/Program Files/Unity/Hub/Editor" 2>/dev/null | sed 's/^/  /' >&2 || echo "  (none)" >&2
+  echo "set UNITY_EDITOR to override." >&2
+  exit 1
+fi
+
+# Every failure Unity reports in the log rather than in its exit status.
+fatal_re='error CS[0-9]|Aborting batchmode|executeMethod .* could not be found|BuildFailedException|Multiple Unity instances cannot open the same project'
+
+# run_editor <logname> <args...>
+run_editor() {
+  local name="$1"; shift
+  local log="$logs/$name.log"
+  rm -f "$log" 2>/dev/null || true
+
+  # Unity writes MOST of its diagnostics to -logFile, but an early abort --
+  # a second instance on the same project, a bad licence -- goes to the
+  # console instead and never reaches the log. Both are captured, and both
+  # are searched.
+  local console
+  console="$(mktemp)"
+
+  set +e
+  "$editor" -batchmode -quit -nographics \
+    -projectPath "$proj_win" \
+    -logFile "$(wslpath -w "$log")" "$@" >"$console" 2>&1
+  local status=$?
+  set -e
+
+  if grep -q "Multiple Unity instances cannot open the same project" "$console" "$log" 2>/dev/null; then
+    rm -f "$console"
+    echo "unity: the Editor already has this project open." >&2
+    echo "  Close it, or use the Editor's own Play button instead of the CLI." >&2
+    return 1
+  fi
+
+  # The log is the authority, not $status — see note 3 at the top.
+  if grep -qhE "$fatal_re" "$console" "$log" 2>/dev/null; then
+    echo "unity: $name failed" >&2
+    grep -hE "$fatal_re" "$console" "$log" 2>/dev/null | sort -u | head -20 >&2
+    rm -f "$console"
+    return 1
+  fi
+  if [[ $status -ne 0 ]]; then
+    echo "unity: $name exited $status" >&2
+    { cat "$console"; [[ -f "$log" ]] && tail -15 "$log"; } >&2
+    rm -f "$console"
+    return "$status"
+  fi
+  rm -f "$console"
+  return 0
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  compile)
+    # No -executeMethod: opening the project is enough to compile everything,
+    # and the log check turns a compiler error into a non-zero exit.
+    run_editor compile
+    echo "unity: $version compiled $proj_win cleanly"
+    ;;
+
+  scene)
+    run_editor scene -executeMethod SpaceAdventure.EditorTools.BuildTools.GenerateBootScene
+    grep -E "boot scene written" "$logs/scene.log" || true
+    ;;
+
+  build)
+    out_win="$proj_win\\Build"
+    [[ $# -gt 0 ]] && out_win="$(wslpath -w "$1")"
+    run_editor build \
+      -executeMethod SpaceAdventure.EditorTools.BuildTools.BuildStandalone \
+      -buildOutput "$out_win"
+    grep -E "^build |always-included" "$logs/build.log" || true
+    ;;
+
+  run)
+    seconds="${1:-20}"
+    exe="$here/Build/SpaceAdventure.exe"
+    [[ -x "$exe" ]] || { echo "unity: no player at $exe — run './unity build' first" >&2; exit 1; }
+    log="$here/Build/run.log"
+    # A previous headless player keeps its log file locked, and the run then
+    # silently reads stale output. Clear the field first.
+    taskkill.exe /F /IM SpaceAdventure.exe >/dev/null 2>&1 || true
+    rm -f "$log" 2>/dev/null || true
+    echo "unity: running the player for ${seconds}s against ${SA_SERVER_URL:-ws://127.0.0.1:18080/ws}"
+    timeout "$seconds" "$exe" -batchmode -nographics \
+      -logFile "$(wslpath -w "$log")" \
+      -serverUrl "${SA_SERVER_URL:-ws://127.0.0.1:18080/ws}" >/dev/null 2>&1 || true
+    taskkill.exe /F /IM SpaceAdventure.exe >/dev/null 2>&1 || true
+    if grep -qiE "exception|error CS" "$log" 2>/dev/null; then
+      echo "unity: the player logged an error" >&2
+      grep -iE -A6 "exception|error CS" "$log" | head -20 >&2
+      exit 1
+    fi
+    grep -E "world ready|colliders:" "$log" 2>/dev/null || {
+      echo "unity: the player never reported joining — is the server up?" >&2
+      exit 1
+    }
+    ;;
+
+  method)
+    [[ $# -ge 1 ]] || { echo "usage: unity method <Namespace.Class.Method>" >&2; exit 2; }
+    run_editor "method" -executeMethod "$1"
+    ;;
+
+  open)
+    # No -batchmode and no -quit: this is the interactive Editor.
+    "$editor" -projectPath "$proj_win" &
+    echo "unity: launching $version"
+    ;;
+
+  where)
+    echo "editor:  $editor"
+    echo "version: $version"
+    echo "project: $proj_win"
+    ;;
+
+  help|--help|-h)
+    sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    echo "unity: unknown command '$cmd' (try: help)" >&2
+    exit 2
+    ;;
+esac
