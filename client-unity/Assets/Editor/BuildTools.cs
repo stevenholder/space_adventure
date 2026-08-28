@@ -60,6 +60,7 @@ namespace SpaceAdventure.EditorTools
             "Standard",                              // entities, tinted per instance
             "Sprites/Default",                       // tracers and impact markers
             "SpaceAdventure/TerrainVertexColor",     // the planet's vertex colours
+            "Skybox/Cubemap",                        // the generated starfield
         };
 
         [MenuItem("Space Adventure/Ensure Shaders")]

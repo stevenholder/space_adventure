@@ -121,8 +121,8 @@ namespace SpaceAdventure.Game
             sun.intensity = 0.9f;
             sun.transform.rotation = Quaternion.Euler(35f, -140f, 0f);
 
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.30f, 0.32f, 0.38f);
+            // The sky is installed once the world seed arrives with hello_ack,
+            // so every client raises the same stars over the same planet.
 
             _fps = new FpsController(cam);
             _predictor = new Predictor();
@@ -323,6 +323,17 @@ namespace SpaceAdventure.Game
 
         private void BuildWorld()
         {
+            // The sky is scenery. If generating it fails on some device, say
+            // so and carry on with the default one rather than losing the
+            // planet, the body and the connection along with it.
+            try
+            {
+                Sky.Install(_net.WorldSeed, RequireShader("Skybox/Cubemap"));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"skybox unavailable, using the default: {e.Message}");
+            }
             if (_planet != null) Destroy(_planet);
             _planet = TerrainMesh.Build(_terrain, _terrainMaterial, transform);
             _predictor.Seed(_terrain, _colliders);
