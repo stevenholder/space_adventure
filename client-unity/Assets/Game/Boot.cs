@@ -85,7 +85,8 @@ namespace SpaceAdventure.Game
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
         private GameObject _planet;
-        private Material _material;
+        private Material _material;        // entities: Standard, tinted per type
+        private Material _terrainMaterial; // planet: reads the mesh's vertex colours
 
         /// <summary>
         /// weapon.pulse fire_interval, from the GDD weapon table. Hard-coded
@@ -103,7 +104,12 @@ namespace SpaceAdventure.Game
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
+            // Two materials, because they want different things. Entities are
+            // tinted per instance through the material's colour, which
+            // Standard does well. The terrain carries its tint in the MESH,
+            // which Standard ignores outright — hence the custom shader.
             _material = new Material(RequireShader("Standard", "Universal Render Pipeline/Lit"));
+            _terrainMaterial = new Material(RequireShader("SpaceAdventure/TerrainVertexColor", "Standard"));
 
             var camGo = new GameObject("Eye");
             var cam = camGo.AddComponent<Camera>();
@@ -112,7 +118,7 @@ namespace SpaceAdventure.Game
 
             var sun = new GameObject("Sun").AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1.1f;
+            sun.intensity = 0.9f;
             sun.transform.rotation = Quaternion.Euler(35f, -140f, 0f);
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
@@ -320,7 +326,7 @@ namespace SpaceAdventure.Game
         private void BuildWorld()
         {
             if (_planet != null) Destroy(_planet);
-            _planet = TerrainMesh.Build(_terrain, _material, transform);
+            _planet = TerrainMesh.Build(_terrain, _terrainMaterial, transform);
             _predictor.Seed(_terrain, _colliders);
             _worldBuilt = true;
 

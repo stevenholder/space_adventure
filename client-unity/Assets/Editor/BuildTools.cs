@@ -55,7 +55,12 @@ namespace SpaceAdventure.EditorTools
         /// frame with "Value cannot be null. Parameter name: shader" — it did,
         /// before this existed. Registering them here is what keeps them in.
         /// </summary>
-        private static readonly string[] RequiredShaders = { "Standard", "Sprites/Default" };
+        private static readonly string[] RequiredShaders =
+        {
+            "Standard",                              // entities, tinted per instance
+            "Sprites/Default",                       // tracers and impact markers
+            "SpaceAdventure/TerrainVertexColor",     // the planet's vertex colours
+        };
 
         [MenuItem("Space Adventure/Ensure Shaders")]
         public static void EnsureShaders()
