@@ -79,6 +79,7 @@ namespace SpaceAdventure.Game
         private Predictor _predictor;
         private FpsController _fps;
         private EntityViews _views;
+        private AssetRegistry _assets;
         private SnapshotTimeline _timeline;
         private Hud _hud;
         private CombatFx _fx;
@@ -175,7 +176,8 @@ namespace SpaceAdventure.Game
             _fps = new FpsController(cam);
             _predictor = new Predictor();
             _timeline = new SnapshotTimeline();
-            _views = new EntityViews(transform, _material);
+            _assets = new AssetRegistry(_material);
+            _views = new EntityViews(transform, _material, _assets);
             _viewModel = new ViewModel(cam, _material, vmLayer, transform);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
@@ -408,10 +410,16 @@ namespace SpaceAdventure.Game
                     break;
                 }
                 case Msg.Defs:
-                    // Item names, kinds and equipment slots. The shop needs
-                    // the slot to know what can be equipped at all.
-                    _character.Defs = Decode.Defs(frame.Reader);
+                {
+                    // Item names, kinds and equipment slots -- the shop needs
+                    // the slot to know what can be equipped at all -- and the
+                    // `asset` id behind every entity, which is what tells
+                    // EntityViews which model in art/manifest.json to load.
+                    Defs defs = Decode.Defs(frame.Reader);
+                    _character.Defs = defs;
+                    _views.Defs = defs;
                     break;
+                }
                 case Msg.Spawn:
                     _views.OnSpawn(Decode.Spawn(frame.Reader));
                     break;

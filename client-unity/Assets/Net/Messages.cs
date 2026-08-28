@@ -409,11 +409,11 @@ namespace SpaceAdventure.Net
             return c;
         }
 
-        public static string Defs(WireReader r)
+        public static Defs Defs(WireReader r)
         {
             string json = r.ReadLengthPrefixedUtf8("defs data");
             r.ExpectEnd("defs");
-            return json;
+            return SpaceAdventure.Net.Defs.Parse(json);
         }
 
         public static Collider[] Colliders(WireReader r)

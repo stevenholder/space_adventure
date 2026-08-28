@@ -417,8 +417,19 @@ internal static class Program
                         break;
                     }
                     case Msg.Defs:
-                        defs = Decode.Defs(frame.Reader).Length > 0;
+                    {
+                        // Not just "bytes arrived": the blob has to PARSE, and
+                        // the tables the client renders from have to be in it.
+                        // The old check was `.Length > 0`, which a truncated or
+                        // reshaped payload would still have passed.
+                        Defs d = Decode.Defs(frame.Reader);
+                        int items = d.Items?.Count ?? 0;
+                        int npcs = d.Npcs?.Count ?? 0;
+                        Console.WriteLine($"defs: items={items} entities={d.Entities?.Count ?? 0}" +
+                                          $" npcs={npcs}");
+                        defs = items > 0 && npcs > 0;
                         break;
+                    }
                     case Msg.Colliders:
                     {
                         var list = Decode.Colliders(frame.Reader);

@@ -184,7 +184,7 @@ UNITY_CLI = ./client-unity/unity
 
 # Typecheck every assembly, including the Unity-only ones the headless
 # solution cannot see.
-.PHONY: unity-compile unity-typecheck unity-build unity-scene unity-run
+.PHONY: unity-compile unity-typecheck unity-build unity-scene unity-run art-sync
 unity-compile:
 	$(UNITY_CLI) compile
 
@@ -194,11 +194,50 @@ unity-compile:
 unity-typecheck:
 	$(UNITY_CLI) typecheck
 
+# art/ is the single source of truth for models. Unity can only ship files it
+# finds under Assets/, so the .glb files and the manifest are COPIED into
+# StreamingAssets -- which Unity packages verbatim, with no importer, no .meta
+# semantics that matter, and nothing for C47 to catch.
+#
+# The copy is gitignored on purpose. Committing it would put two of every
+# binary in the repo, free to drift, and the one under Assets/ would be the
+# one nobody edits and everybody ships.
+# art/ is the single source of truth for models. Unity can only ship files it
+# finds under Assets/, so the .glb files and the manifest are COPIED into
+# StreamingAssets -- which Unity packages verbatim, with no importer, no .meta
+# semantics that matter, and nothing for C47 to catch.
+#
+# The copy is gitignored on purpose. Committing it would put two of every
+# binary in the repo, free to drift, and the one under Assets/ would be the
+# one nobody edits and everybody ships.
+#
+# Driven by manifest.json, NOT by `find art -name '*.glb'`. The manifest is
+# already the definition of what the game ships -- the client resolves models
+# by looking ids up in it -- so a file the manifest does not name is by
+# definition not a game asset. A find picks up art/vendor/, which holds the
+# raw downloaded CC0 packs: 153 unprocessed models that would go into the
+# build for nothing.
+STREAMING := client-unity/Assets/StreamingAssets/art
+
+.PHONY: art-sync
+art-sync:
+	@rm -rf $(STREAMING)
+	@mkdir -p $(STREAMING)
+	@cd art && python3 -c "import json,os,shutil,sys; \
+	    d=json.load(open('manifest.json')); out=os.path.join('..','$(STREAMING)'); \
+	    files=[a['file'] for a in d['assets']]; \
+	    missing=[f for f in files if not os.path.exists(f)]; \
+	    [os.makedirs(os.path.join(out,os.path.dirname(f)),exist_ok=True) for f in files if os.path.exists(f)]; \
+	    [shutil.copy2(f,os.path.join(out,f)) for f in files if os.path.exists(f)]; \
+	    shutil.copy2('manifest.json',os.path.join(out,'manifest.json')); \
+	    print('art-sync: %d models -> $(STREAMING)'%(len(files)-len(missing))); \
+	    sys.stderr.write('art-sync: MISSING %s\n'%missing) if missing else None"
+
 # C45: a packaged desktop build that joins the deployed server from a cold
 # start, with the URL from config rather than compiled in. The player is the
 # only thing that catches build-only failures -- shader stripping killed the
 # first one on its first frame, and the Editor could not have seen it.
-unity-build:
+unity-build: art-sync
 	$(UNITY_CLI) build
 
 # Runs that player headless against the live stack. Needs `make up`.

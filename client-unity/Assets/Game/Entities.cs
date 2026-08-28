@@ -61,11 +61,20 @@ namespace SpaceAdventure.Game
         private readonly Dictionary<uint, ushort> _pendingTypes = new Dictionary<uint, ushort>();
         private readonly Transform _parent;
         private readonly Material _material;
+        private readonly AssetRegistry _assets;
 
-        public EntityViews(Transform parent, Material material)
+        /// <summary>
+        /// The server's tables, which carry the `asset` id for every entity.
+        /// Set when the `defs` message lands — entities can spawn before that,
+        /// and those simply keep their box model.
+        /// </summary>
+        public Defs Defs { get; set; } = Defs.Empty;
+
+        public EntityViews(Transform parent, Material material, AssetRegistry assets)
         {
             _parent = parent;
             _material = material;
+            _assets = assets;
         }
 
         public IEnumerable<EntityView> All => _views.Values;
@@ -171,7 +180,18 @@ namespace SpaceAdventure.Game
             // between the feet and their proportions come from the hitbox the
             // server resolves against, so nothing here needs an offset and
             // what you shoot at is what the server tests.
-            BoxMesh.Attach(root.transform, "model", MeshFor(type, label), _material, 0);
+            //
+            // This is now the FALLBACK, not the art. It goes up immediately and
+            // stays up until the real model finishes loading, which is what
+            // keeps a slow or missing .glb from ever being an error: worst
+            // case, an entity is boxes — the same rule art/README.md set for
+            // the retired client.
+            GameObject box = BoxMesh.Attach(root.transform, "model", MeshFor(type, label), _material, 0);
+
+            _assets.Attach(AssetFor(type, label), root.transform, _ =>
+            {
+                if (box != null) Object.Destroy(box);
+            });
 
             return new EntityView { Id = id, Type = type, Label = label ?? "", Root = root };
         }
@@ -195,6 +215,33 @@ namespace SpaceAdventure.Game
             },
             _ => Models.Loot(),
         };
+
+        /// <summary>
+        /// The art/manifest.json model id for an entity, from the SERVER's own
+        /// tables. `asset` has been on the wire since Phase 2 — items.json and
+        /// npcs.json both carry it — so there is no client-side table here to
+        /// drift out of step with the server's.
+        ///
+        /// NPCs go through the archetype rather than the entity def because one
+        /// entity def serves every NPC on the wire: `npc` alone cannot tell a
+        /// quartermaster from a camp gunner, and the entity def's asset is the
+        /// shopkeeper's. It falls back to that def only when the archetype is
+        /// unknown.
+        ///
+        /// An empty id means "no model for this yet" — Loot and Projectile have
+        /// no entity def at all — and AssetRegistry.Attach ignores it, leaving
+        /// the box model up.
+        /// </summary>
+        private string AssetFor(ushort type, string def) => type switch
+        {
+            EntityType.Player => Defs.EntityAsset("player"),
+            EntityType.Target => Defs.EntityAsset("target"),
+            EntityType.Npc => Fallback(Defs.NpcAsset(def), Defs.EntityAsset("npc")),
+            _ => "",
+        };
+
+        private static string Fallback(string first, string second) =>
+            string.IsNullOrEmpty(first) ? second : first;
     }
 
     /// <summary>An entity's pose at the render instant.</summary>

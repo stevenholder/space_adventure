@@ -25,57 +25,6 @@ namespace SpaceAdventure.Game
     [Serializable] public class WalletResult { public int credits; public ItemStack[] inventory; }
     [Serializable] public class AmmoResult { public int magazine; public int reserve; }
 
-    /// <summary>
-    /// The little the shop needs to know about an item, pulled out of `defs`.
-    ///
-    /// `defs.items` is a JSON MAP keyed by item id, which JsonUtility cannot
-    /// represent at all — it has no dictionary support. Rather than carry a
-    /// general JSON parser for two fields, this scans the blob for one item's
-    /// object and reads them out. It is a narrow reader over a shape the
-    /// server owns, and it fails CLOSED: an item it cannot find is treated as
-    /// not equippable, which costs a manual equip rather than firing a command
-    /// the server will refuse.
-    /// </summary>
-    public static class ItemDefs
-    {
-        public static string NameOf(string defsJson, string id)
-            => Field(defsJson, id, "name") ?? id;
-
-        /// <summary>True when the item declares an equipment slot.</summary>
-        public static bool IsEquippable(string defsJson, string id)
-            => !string.IsNullOrEmpty(Field(defsJson, id, "slot"));
-
-        public static string SlotOf(string defsJson, string id)
-            => Field(defsJson, id, "slot");
-
-        private static string Field(string json, string id, string field)
-        {
-            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(id)) return null;
-
-            int at = json.IndexOf($"\"{id}\":{{", StringComparison.Ordinal);
-            if (at < 0) return null;
-            int open = json.IndexOf('{', at);
-
-            // Walk to the matching brace so a field from the NEXT item cannot
-            // be read as this one's.
-            int depth = 0, end = -1;
-            for (int i = open; i < json.Length; i++)
-            {
-                if (json[i] == '{') depth++;
-                else if (json[i] == '}' && --depth == 0) { end = i; break; }
-            }
-            if (end < 0) return null;
-
-            string body = json.Substring(open, end - open + 1);
-            string key = $"\"{field}\":\"";
-            int f = body.IndexOf(key, StringComparison.Ordinal);
-            if (f < 0) return null;
-            f += key.Length;
-            int close = body.IndexOf('"', f);
-            return close < 0 ? null : body.Substring(f, close - f);
-        }
-    }
-
     /// <summary>Look-at targeting, the E prompt, and the shop panel.</summary>
     public sealed class Interaction
     {
@@ -195,7 +144,7 @@ namespace SpaceAdventure.Game
                 case Op.ShopBuy:
                 {
                     _character.OnWallet(r.Body);
-                    _status = $"bought {ItemDefs.NameOf(_character.Defs, _lastBought)}";
+                    _status = $"bought {_character.Defs.ItemName(_lastBought)}";
 
                     // Equip only what CAN be equipped. Auto-equipping whatever
                     // was just bought sent ammunition to the primary slot and
@@ -204,7 +153,7 @@ namespace SpaceAdventure.Game
                     //
                     // Equipping at all is worth doing: buying a rifle that
                     // leaves your hands empty reads as a shop that failed.
-                    string slot = ItemDefs.SlotOf(_character.Defs, _lastBought);
+                    string slot = _character.Defs.SlotOf(_lastBought);
                     if (string.IsNullOrEmpty(slot)) return null;
                     // Through Character, so the accepted result updates what
                     // the client believes it is holding.
@@ -280,7 +229,7 @@ namespace SpaceAdventure.Game
                 StockEntry e = _stock[i];
                 var row = new Rect(rect.x + 16, y, panelW - 32, 22);
                 GUI.enabled = credits < 0 || credits >= e.price;
-                if (GUI.Button(row, $"{ItemDefs.NameOf(_character.Defs, e.item)}   —   {e.price} cr"))
+                if (GUI.Button(row, $"{_character.Defs.ItemName(e.item)}   —   {e.price} cr"))
                 {
                     _lastBought = e.item;
                     _status = "buying...";
@@ -304,7 +253,7 @@ namespace SpaceAdventure.Game
                 foreach (ItemStack it in inventory)
                 {
                     GUI.Label(new Rect(rect.x + 26, y, panelW - 42, 18),
-                        $"{ItemDefs.NameOf(_character.Defs, it.item)}  x{it.qty}", _style);
+                        $"{_character.Defs.ItemName(it.item)}  x{it.qty}", _style);
                     y += 20;
                 }
             }

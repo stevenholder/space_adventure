@@ -33,7 +33,7 @@ namespace SpaceAdventure.Game
         public string Primary { get; set; } = "";
 
         /// <summary>The `defs` blob, for names and slots.</summary>
-        public string Defs { get; set; } = "";
+        public Defs Defs { get; set; } = Defs.Empty;
 
         public ushort Health { get; set; }
 
@@ -146,11 +146,11 @@ namespace SpaceAdventure.Game
             for (int i = 0; i < UsedSlots; i++)
             {
                 ItemStack it = Inventory[i];
-                string slot = ItemDefs.SlotOf(Defs, it.item);
+                string slot = Defs.SlotOf(it.item);
                 bool held = !string.IsNullOrEmpty(slot) && it.item == Primary;
 
                 GUI.Label(new Rect(rect.x + 26, y, w - 150, 20),
-                    $"{ItemDefs.NameOf(Defs, it.item)}   x{it.qty}", held ? _heading : _style);
+                    $"{Defs.ItemName(it.item)}   x{it.qty}", held ? _heading : _style);
 
                 // Only equippable things get a button, and the one already in
                 // your hands gets a label instead — a button that re-equips
@@ -198,7 +198,7 @@ namespace SpaceAdventure.Game
             y += 24;
             GUI.Label(new Rect(rect.x + 16, y, 120, 20), "primary", _dim);
             GUI.Label(new Rect(rect.x + 130, y, w, 20),
-                string.IsNullOrEmpty(Primary) ? "— empty —" : ItemDefs.NameOf(Defs, Primary), _style);
+                string.IsNullOrEmpty(Primary) ? "— empty —" : Defs.ItemName(Primary), _style);
 
             GUI.Label(new Rect(rect.x + 16, rect.yMax - 32, w - 32, 20), "C closes · B for bags", _dim);
             return null;

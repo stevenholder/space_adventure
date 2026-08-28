@@ -22,4 +22,11 @@
     <ProjectReference Include="../Sim/Sim.csproj" />
   </ItemGroup>
 
+  <!-- Unity gets Newtonsoft from com.unity.nuget.newtonsoft-json; this build
+       gets the same library from NuGet, so Assets/Net/Defs.cs compiles
+       unchanged under both compilers. 13.0.x is what that package wraps. -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
 </Project>

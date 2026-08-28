@@ -19,3 +19,9 @@ Recordings/
 
 # .NET 10 writes the newer XML solution format.
 /*.slnx
+
+# Synced from art/ by `make art-sync` -- the .glb files and the manifest live
+# in art/ and are copied in at build time. Committing the copy would give the
+# repo two of every binary, free to drift.
+Assets/StreamingAssets/
+Assets/StreamingAssets.meta

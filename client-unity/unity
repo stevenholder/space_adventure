@@ -123,9 +123,16 @@ case "$cmd" in
     csc="$(ls /usr/lib/dotnet/sdk/*/Roslyn/bincore/csc.dll 2>/dev/null | head -1)"
     [[ -n "$csc" ]] || { echo "unity: no Roslyn compiler found in the dotnet SDK" >&2; exit 1; }
 
-    # Sim, Net and the Input System come from Library/ScriptAssemblies, which
-    # the Editor writes. A project that has never been opened has none, and
-    # there is nothing to typecheck against.
+    # Sim, Net, the Input System and every package assembly come from
+    # Library/ScriptAssemblies, which the Editor writes. A project that has
+    # never been opened has none, and there is nothing to typecheck against.
+    #
+    # Referenced by RULE, not by name: everything there except Game.dll (whose
+    # sources are what we are compiling -- referencing it would duplicate every
+    # type) and the Editor/test-only assemblies (which are not in a player and
+    # would let an Editor-only API typecheck clean and then fail the build).
+    # A hardcoded list means every package added after this costs an
+    # unrelated edit here, which is how glTFast first came up.
     asm="$here/Library/ScriptAssemblies"
     [[ -d "$asm" ]] || { echo "unity: open the project in the Editor once first ($asm is missing)" >&2; exit 1; }
 
@@ -135,9 +142,16 @@ case "$cmd" in
       echo "-out:\"$(mktemp -u).dll\""
       for f in "$managed"/*.dll; do echo "-r:\"$f\""; done
       for f in "$netref"/*.dll; do echo "-r:\"$f\""; done
-      for f in "$asm"/Unity.InputSystem.dll "$asm"/Sim.dll "$asm"/Net.dll; do
-        [[ -f "$f" ]] && echo "-r:\"$f\""
+      for f in "$asm"/*.dll; do
+        case "$(basename "$f")" in
+          Game.dll|*Editor*|*Test*|Assembly-CSharp*) continue ;;
+        esac
+        echo "-r:\"$f\""
       done
+      # Precompiled package DLLs are not compiled by Unity and so never land in
+      # ScriptAssemblies. Newtonsoft is one, and Assets/Net/Defs.cs needs it.
+      while IFS= read -r f; do echo "-r:\"$f\""; done < <(
+        find "$here/Library/PackageCache" -name 'Newtonsoft.Json.dll' 2>/dev/null | head -1)
       for f in "$here"/Assets/Game/*.cs "$here"/Assets/Game/Core/*.cs; do echo "\"$f\""; done
     } > "$rsp"
 
