@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Unity from the command line, without hardcoding anything.
 #
-#   ./client-unity/unity compile          typecheck every assembly
+#   ./client-unity/unity compile          full compile (needs the Editor closed)
+#   ./client-unity/unity typecheck        typecheck Assets/Game with the Editor open
 #   ./client-unity/unity scene            regenerate Assets/Scenes/Boot.unity
 #   ./client-unity/unity build [outDir]   package a standalone player
 #   ./client-unity/unity run [seconds]    run the packaged player headless
@@ -104,6 +105,51 @@ case "$cmd" in
     # and the log check turns a compiler error into a non-zero exit.
     run_editor compile
     echo "unity: $version compiled $proj_win cleanly"
+    ;;
+
+  typecheck)
+    # Typechecks the Unity-only assembly WITHOUT the Editor, by pointing
+    # Roslyn at the editor's own reference assemblies.
+    #
+    # `compile` cannot run while the Editor has the project open, which is
+    # exactly when you are iterating on gameplay code and most want to know
+    # whether it builds. This does not replace `compile` -- it sees no asmdef
+    # boundaries and no Editor-only assemblies -- but it catches the ordinary
+    # mistake in seconds and never fights the Editor for the project lock.
+    managed="$(dirname "$editor")/Data/Managed/UnityEngine"
+    [[ -d "$managed" ]] || { echo "unity: no managed assemblies at $managed" >&2; exit 1; }
+    netref="$(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/*/ref/net* 2>/dev/null | head -1)"
+    [[ -n "$netref" ]] || { echo "unity: no .NET reference pack found" >&2; exit 1; }
+    csc="$(ls /usr/lib/dotnet/sdk/*/Roslyn/bincore/csc.dll 2>/dev/null | head -1)"
+    [[ -n "$csc" ]] || { echo "unity: no Roslyn compiler found in the dotnet SDK" >&2; exit 1; }
+
+    # Sim, Net and the Input System come from Library/ScriptAssemblies, which
+    # the Editor writes. A project that has never been opened has none, and
+    # there is nothing to typecheck against.
+    asm="$here/Library/ScriptAssemblies"
+    [[ -d "$asm" ]] || { echo "unity: open the project in the Editor once first ($asm is missing)" >&2; exit 1; }
+
+    rsp="$(mktemp)"
+    {
+      echo "-target:library"; echo "-nologo"; echo "-nostdlib"; echo "-langversion:9.0"
+      echo "-out:\"$(mktemp -u).dll\""
+      for f in "$managed"/*.dll; do echo "-r:\"$f\""; done
+      for f in "$netref"/*.dll; do echo "-r:\"$f\""; done
+      for f in "$asm"/Unity.InputSystem.dll "$asm"/Sim.dll "$asm"/Net.dll; do
+        [[ -f "$f" ]] && echo "-r:\"$f\""
+      done
+      for f in "$here"/Assets/Game/*.cs "$here"/Assets/Game/Core/*.cs; do echo "\"$f\""; done
+    } > "$rsp"
+
+    set +e
+    out="$(dotnet exec "$csc" "@$rsp" 2>&1)"
+    set -e
+    rm -f "$rsp"
+    if grep -qE "error CS" <<<"$out"; then
+      grep -E "error CS" <<<"$out" | head -20 >&2
+      exit 1
+    fi
+    echo "unity: Assets/Game typechecks against $version"
     ;;
 
   scene)

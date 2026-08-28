@@ -184,9 +184,15 @@ UNITY_CLI = ./client-unity/unity
 
 # Typecheck every assembly, including the Unity-only ones the headless
 # solution cannot see.
-.PHONY: unity-compile unity-build unity-scene unity-run
+.PHONY: unity-compile unity-typecheck unity-build unity-scene unity-run
 unity-compile:
 	$(UNITY_CLI) compile
+
+# Typechecks Assets/Game against the editor's own reference assemblies, with
+# no Editor process involved -- so it works while the project is open, which
+# is exactly when you are iterating on gameplay code.
+unity-typecheck:
+	$(UNITY_CLI) typecheck
 
 # C45: a packaged desktop build that joins the deployed server from a cold
 # start, with the URL from config rather than compiled in. The player is the

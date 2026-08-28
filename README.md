@@ -57,7 +57,8 @@ twice — and unlike `Unity -quit`, it fails on a compiler error instead of
 exiting 0 with "Aborting batchmode".
 
 ```sh
-./client-unity/unity compile   # typecheck every assembly (close the Editor first)
+./client-unity/unity compile   # full compile (close the Editor first)
+./client-unity/unity typecheck # typecheck Assets/Game with the Editor still open
 ./client-unity/unity build     # package a standalone player
 ./client-unity/unity run 20    # run that player headless against the live server
 ./client-unity/unity open      # launch the Editor
