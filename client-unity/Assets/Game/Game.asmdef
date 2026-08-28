@@ -4,6 +4,7 @@
     "references": [
         "Sim",
         "Net",
+        "glTFast",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],
