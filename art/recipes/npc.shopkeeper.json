@@ -1,0 +1,16 @@
+{
+  "$comment": "The second astronaut, so the quartermaster does not read as another player.",
+  "id": "npc.shopkeeper",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/astronautB.glb",
+  "out": "chars/shopkeeper.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "rename": { "armLeft": "arm.l", "armRight": "arm.r", "body": "torso", "legLeft": "leg.l", "legRight": "leg.r" },
+  "mounts": { "eye": [0, 1.7, 0] },
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

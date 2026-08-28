@@ -1,0 +1,16 @@
+{
+  "$comment": "Kenney's astronaut already ships the segmented node layout this project's contract wants (armLeft/armRight/body/head/legLeft/legRight); only the names differ. The backpack extends further +Z than the head does, which is how we know the model faces -Z -- so no yaw. eye is added at 1.7 m because GDD eye_height is 1.7 and the server fires ranged shots from that height (server/internal/server/cmd.go); it is NOT derived from where this particular head happens to sit.",
+  "id": "char.player",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/astronautA.glb",
+  "out": "chars/player.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "rename": { "armLeft": "arm.l", "armRight": "arm.r", "body": "torso", "legLeft": "leg.l", "legRight": "leg.r" },
+  "mounts": { "eye": [0, 1.7, 0] },
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "prop.rock.b",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/rock.glb",
+  "out": "props/rock_b.glb",
+  "height": 1.0,
+  "ground": true,
+  "budget": 1000,
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

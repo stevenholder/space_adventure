@@ -1,0 +1,33 @@
+{
+  "$comment": "The alien, tinted purple, so it is told apart from the grunt at a distance -- they fight differently and you need to know which is which before it reaches you.",
+  "id": "npc.gunner",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/alien.glb",
+  "out": "chars/gunner.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "rename": {
+    "armLeft": "arm.l",
+    "armRight": "arm.r",
+    "body": "torso",
+    "legLeft": "leg.l",
+    "legRight": "leg.r"
+  },
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ]
+  },
+  "tint": [
+    0.78,
+    0.45,
+    1.0
+  ],
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

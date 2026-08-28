@@ -1,2 +1,8 @@
 node_modules/
 __pycache__/
+
+# Downloaded CC0 packs, unpacked here by hand and referenced by an import
+# recipe. They are re-downloadable from the `source_url` recorded in
+# manifest.json; the fixed-up output under chars/, props/ etc. is what the
+# game ships and what git tracks.
+vendor/

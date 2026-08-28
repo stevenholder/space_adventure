@@ -1,0 +1,33 @@
+{
+  "$comment": "The alien, tinted red. Melee archetype, closes to 2 m.",
+  "id": "npc.grunt",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/alien.glb",
+  "out": "chars/grunt.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "rename": {
+    "armLeft": "arm.l",
+    "armRight": "arm.r",
+    "body": "torso",
+    "legLeft": "leg.l",
+    "legRight": "leg.r"
+  },
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ]
+  },
+  "tint": [
+    1.0,
+    0.42,
+    0.34
+  ],
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}
