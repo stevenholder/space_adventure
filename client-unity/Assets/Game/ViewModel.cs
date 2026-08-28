@@ -13,11 +13,15 @@
 // layer, casting a normal shadow — so looking down shows your chest and legs
 // where they actually are, and other players see exactly the same model.
 //
-// It is the SAME model other players see, head included. The camera sits
-// inside that head, and the near clip plane removes it: rendering a
-// deliberately headless body would have made the local player a different
-// model from the remote one, which is two things to keep in step forever in
-// exchange for solving a problem the near plane already solves.
+// It is the same model other players see, minus the head — one flag on one
+// model, so the two cannot drift apart.
+//
+// The head has to go. The near plane does not remove it: the eye is at 1.70
+// and the visor sits 0.095 m in front of that, past the 0.05 m near plane,
+// where a 0.20 m box covers the whole screen width and everything from 9
+// degrees below centre to 30 above. It rendered as a black band across the
+// top half of the view. First-person games hide the local head for exactly
+// this reason.
 //
 // The models are box meshes built in Models.cs. There is no asset pipeline
 // here yet (`art/` holds glTF this client cannot load), so the art is source
@@ -89,7 +93,7 @@ namespace SpaceAdventure.Game
             var body = new GameObject("LocalBody");
             body.transform.SetParent(worldParent, false);
             _body = body.transform;
-            BoxMesh.Attach(_body, "model", Models.Player(), material, 0);
+            BoxMesh.Attach(_body, "model", Models.PlayerLocal(), material, 0);
         }
 
         /// <summary>

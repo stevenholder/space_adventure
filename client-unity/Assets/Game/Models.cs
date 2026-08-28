@@ -33,10 +33,10 @@ namespace SpaceAdventure.Game
         // ---- humanoids ---------------------------------------------------
 
         /// <summary>The player body and every NPC, tinted per role.</summary>
-        public static Mesh Humanoid(string key, Color suit, Color trim, Color skin, bool helmet)
-            => Get(key, () => HumanoidBoxes(suit, trim, skin, helmet));
+        public static Mesh Humanoid(string key, Color suit, Color trim, Color skin, bool helmet, bool head = true)
+            => Get(key, () => HumanoidBoxes(suit, trim, skin, helmet, head));
 
-        private static List<Box> HumanoidBoxes(Color suit, Color trim, Color skin, bool helmet)
+        private static List<Box> HumanoidBoxes(Color suit, Color trim, Color skin, bool helmet, bool head)
         {
             var dark = suit * 0.75f;
             var boots = trim * 0.6f;
@@ -64,10 +64,28 @@ namespace SpaceAdventure.Game
                 new Box(new Vector3(-0.30f, 0.90f, 0.06f), new Vector3(0.12f, 0.16f, 0.13f), skin),
                 new Box(new Vector3( 0.30f, 0.90f, 0.06f), new Vector3(0.12f, 0.16f, 0.13f), skin),
 
-                // Neck and head, crown at 1.80.
-                new Box(new Vector3(0f, 1.56f, 0f), new Vector3(0.13f, 0.10f, 0.13f), skin),
-                new Box(new Vector3(0f, 1.71f, 0f), new Vector3(0.22f, 0.24f, 0.23f), skin),
             };
+
+            // The local player's own body is built without a head, because the
+            // camera is inside it.
+            //
+            // The near plane does NOT save you here, which is what the first
+            // version of this got wrong. The eye sits at 1.70; the visor box
+            // sits 0.095 m in front of it, past the 0.05 m near plane, and at
+            // that distance a 0.20 m wide box subtends the entire screen
+            // width and everything from 9 degrees below the centre to 30
+            // above. It rendered as a black band over the top half of the
+            // view — which is exactly what it is: the back of your own visor.
+            //
+            // Hiding the head for the local body only is what first-person
+            // games do. It is one flag on one model rather than a second
+            // model, so the body other players see cannot drift from the one
+            // you stand in.
+            if (!head) return b;
+
+            // Neck and head, crown at 1.80.
+            b.Add(new Box(new Vector3(0f, 1.56f, 0f), new Vector3(0.13f, 0.10f, 0.13f), skin));
+            b.Add(new Box(new Vector3(0f, 1.71f, 0f), new Vector3(0.22f, 0.24f, 0.23f), skin));
 
             if (helmet)
             {
@@ -89,6 +107,11 @@ namespace SpaceAdventure.Game
         public static Mesh Player() => Humanoid("player",
             new Color(0.30f, 0.52f, 0.80f), new Color(0.20f, 0.34f, 0.55f),
             new Color(0.78f, 0.62f, 0.50f), helmet: true);
+
+        /// <summary>The same body, minus the head the camera lives inside.</summary>
+        public static Mesh PlayerLocal() => Humanoid("player-local",
+            new Color(0.30f, 0.52f, 0.80f), new Color(0.20f, 0.34f, 0.55f),
+            new Color(0.78f, 0.62f, 0.50f), helmet: true, head: false);
 
         public static Mesh Shopkeeper() => Humanoid("shopkeeper",
             new Color(0.55f, 0.48f, 0.35f), new Color(0.38f, 0.32f, 0.22f),
