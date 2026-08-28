@@ -23,6 +23,7 @@ namespace SpaceAdventure.Game
     [Serializable] internal class ShopStock { public StockEntry[] stock; }
     [Serializable] public class ItemStack { public string item; public int qty; }
     [Serializable] public class WalletResult { public int credits; public ItemStack[] inventory; }
+    [Serializable] public class AmmoResult { public int magazine; public int reserve; }
 
     /// <summary>
     /// The little the shop needs to know about an item, pulled out of `defs`.
@@ -232,6 +233,7 @@ namespace SpaceAdventure.Game
         /// </summary>
         private static string Explain(string body) => body switch
         {
+            var b when b.Contains("no_ammo") => "no ammunition left to load",
             var b when b.Contains("no_space") => "inventory full — 20 slots, and a rifle takes one each",
             var b when b.Contains("insufficient_credits") => "not enough credits",
             var b when b.Contains("wrong_slot") => "that does not go in this slot",

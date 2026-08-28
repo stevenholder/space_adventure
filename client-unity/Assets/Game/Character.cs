@@ -47,6 +47,33 @@ namespace SpaceAdventure.Game
         public void ToggleSheet() { SheetOpen = !SheetOpen; if (SheetOpen) BagsOpen = false; }
         public void CloseAll() { BagsOpen = false; SheetOpen = false; }
 
+        /// <summary>Rounds in the magazine, and carried ammunition.</summary>
+        public int Magazine { get; private set; } = -1;
+        public int Reserve { get; private set; } = -1;
+
+        /// <summary>Sends a reload. The server moves carried ammo into the magazine.</summary>
+        public static byte[] ReloadCmd(ushort seq) => Encode.Cmd(seq, Op.Reload, "{}");
+
+        /// <summary>Takes the magazine and reserve out of a reload result.</summary>
+        public void OnReload(string body)
+        {
+            var a = JsonUtility.FromJson<AmmoResult>(body);
+            if (a == null) return;
+            Magazine = a.magazine;
+            Reserve = a.reserve;
+        }
+
+        /// <summary>
+        /// One round left the magazine. Driven by our own `shot_fired`, not by
+        /// the trigger: the server drops shots for cadence, an empty magazine
+        /// or no weapon, and counting trigger pulls would drift below the real
+        /// count every time it did.
+        /// </summary>
+        public void OnShotFired()
+        {
+            if (Magazine > 0) Magazine--;
+        }
+
         /// <summary>Asks the server for credits and inventory.</summary>
         public static byte[] RefreshCmd(ushort seq) => Encode.Cmd(seq, Op.Inventory, "{}");
 

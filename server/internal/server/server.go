@@ -551,6 +551,7 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			Up:      terrain.Normalize(c.entity.State.Pos),
 			Look:    c.lookDir(),
 			FindNPC: s.findNPC,
+			Ent:     c.entity,
 		})
 		after = p.Equipped[slotPrimary]
 	})

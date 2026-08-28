@@ -142,6 +142,50 @@ func Equip(p *store.Player, slot, item string, reg *defs.Registry) error {
 	return nil
 }
 
+// CountItem reports how many of item p is carrying, across its stacks.
+func CountItem(p *store.Player, item string) int {
+	n := 0
+	for _, s := range p.Inventory {
+		if s.Item == item {
+			n += s.Qty
+		}
+	}
+	return n
+}
+
+// TakeItem removes qty of item from p's inventory, emptying stacks as it
+// goes and dropping any that reach zero. It is atomic: if p is not carrying
+// enough, nothing is removed and the refusal names the shortage.
+//
+// Used by reload, which converts carried ammunition into rounds in the
+// magazine — the one place inventory shrinks without a shop involved.
+func TakeItem(p *store.Player, item string, qty int) error {
+	if qty < 1 || qty > maxQty {
+		return refuse(ReasonBadQty)
+	}
+	if CountItem(p, item) < qty {
+		return refuse(ReasonNotOwned)
+	}
+
+	out := make([]store.Stack, 0, len(p.Inventory))
+	left := qty
+	for _, s := range p.Inventory {
+		if left > 0 && s.Item == item {
+			take := s.Qty
+			if take > left {
+				take = left
+			}
+			s.Qty -= take
+			left -= take
+		}
+		if s.Qty > 0 {
+			out = append(out, s)
+		}
+	}
+	p.Inventory = out
+	return nil
+}
+
 // AddItem grants qty of item to p's inventory unconditionally (no credits,
 // no NPC/stock check) — e.g. start_items on a new player row. It still
 // enforces InvSlots/StackMax atomically: on failure p is unchanged.

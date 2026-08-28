@@ -122,7 +122,7 @@ namespace SpaceAdventure.Game
             }
         }
 
-        public void Draw(NetClient net, Predictor predictor, FpsController fps)
+        public void Draw(NetClient net, Predictor predictor, Character character)
         {
             EnsureStyles();
 
@@ -130,12 +130,15 @@ namespace SpaceAdventure.Game
             GUILayout.BeginArea(new Rect(16, 12, 320, 132));
             string rtt = net.RttMs >= 0 ? $"{net.RttMs} ms" : "—";
             GUILayout.Label($"link: {net.State}   rtt: {rtt}   reconnects: {net.Reconnects}", _style);
-            GUILayout.Label($"entity: {net.EntityId}   health: {Health}", _style);
+            string ammo = character.Magazine < 0
+                ? "ammo: — (R to load)"
+                : $"ammo: {character.Magazine} / {character.Reserve}";
+            GUILayout.Label($"entity: {net.EntityId}   health: {Health}   {ammo}", _style);
             GUILayout.Label($"pending inputs: {predictor.PendingCount}   " +
                             $"last correction: {predictor.LastCorrection:F3} m", _style);
             if (!string.IsNullOrEmpty(net.LastError)) GUILayout.Label($"last error: {net.LastError}", _style);
             GUILayout.Label("WASD move · shift sprint · space jump · LMB fire", _style);
-            GUILayout.Label("E talk/shop · B bags · C character · M map · esc cursor", _style);
+            GUILayout.Label("R reload · E talk/shop · B bags · C character · M map · esc", _style);
             GUILayout.EndArea();
 
             if (_log.Count > 0)

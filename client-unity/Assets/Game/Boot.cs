@@ -231,6 +231,7 @@ namespace SpaceAdventure.Game
                 Cursor.visible = _cursorFreed;
             }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
+            if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
             if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleBags);
             if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleSheet);
 
@@ -440,6 +441,9 @@ namespace SpaceAdventure.Game
                     EventMsg ev = Decode.Event(frame.Reader);
                     switch (ev.EventId)
                     {
+                        case EventId.ShotFired when ev.EntityId == _net.EntityId:
+                            _character.OnShotFired();
+                            goto case EventId.ShotFired;
                         case EventId.ShotFired:
                             // Our own shots are drawn from the barrel; everyone
                             // else's from the origin the server reported, which
@@ -469,6 +473,7 @@ namespace SpaceAdventure.Game
                     _hud.OnCmdResult(r);
                     if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy)) _character.OnWallet(r.Body);
                     if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipAccepted();
+                    if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
                     break;
@@ -515,7 +520,7 @@ namespace SpaceAdventure.Game
         private void OnGUI()
         {
             if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
-            _hud?.Draw(_net, _predictor, _fps);
+            _hud?.Draw(_net, _predictor, _character);
             if (_map == null || !_worldBuilt) return;
 
             if (!_map.Open)

@@ -33,10 +33,11 @@ namespace SpaceAdventure.Game
         // ---- humanoids ---------------------------------------------------
 
         /// <summary>The player body and every NPC, tinted per role.</summary>
-        public static Mesh Humanoid(string key, Color suit, Color trim, Color skin, bool helmet, bool head = true)
-            => Get(key, () => HumanoidBoxes(suit, trim, skin, helmet, head));
+        public static Mesh Humanoid(string key, Color suit, Color trim, Color skin,
+                                    bool helmet, bool head = true, bool upper = true)
+            => Get(key, () => HumanoidBoxes(suit, trim, skin, helmet, head, upper));
 
-        private static List<Box> HumanoidBoxes(Color suit, Color trim, Color skin, bool helmet, bool head)
+        private static List<Box> HumanoidBoxes(Color suit, Color trim, Color skin, bool helmet, bool head, bool upper)
         {
             var dark = suit * 0.75f;
             var boots = trim * 0.6f;
@@ -48,23 +49,36 @@ namespace SpaceAdventure.Game
                 new Box(new Vector3(-0.115f, 0.045f, 0.03f), new Vector3(0.19f, 0.09f, 0.27f), boots),
                 new Box(new Vector3( 0.115f, 0.045f, 0.03f), new Vector3(0.19f, 0.09f, 0.27f), boots),
 
-                // Hips and torso. The chest is wider than the waist, which is
+                // Hips. The chest above is wider than the waist, which is
                 // most of what makes a box stack read as a person.
                 new Box(new Vector3(0f, 0.90f, 0f), new Vector3(0.40f, 0.20f, 0.25f), trim),
-                new Box(new Vector3(0f, 1.16f, 0f), new Vector3(0.44f, 0.34f, 0.26f), suit),
-                new Box(new Vector3(0f, 1.40f, 0f), new Vector3(0.52f, 0.20f, 0.28f), suit),
-
-                // Shoulder caps set the 0.70 m width the hitbox implies.
-                new Box(new Vector3(-0.30f, 1.44f, 0f), new Vector3(0.16f, 0.16f, 0.24f), trim),
-                new Box(new Vector3( 0.30f, 1.44f, 0f), new Vector3(0.16f, 0.16f, 0.24f), trim),
-
-                // Arms, hanging slightly forward so the silhouette is not a slab.
-                new Box(new Vector3(-0.30f, 1.16f, 0.02f), new Vector3(0.13f, 0.40f, 0.15f), dark),
-                new Box(new Vector3( 0.30f, 1.16f, 0.02f), new Vector3(0.13f, 0.40f, 0.15f), dark),
-                new Box(new Vector3(-0.30f, 0.90f, 0.06f), new Vector3(0.12f, 0.16f, 0.13f), skin),
-                new Box(new Vector3( 0.30f, 0.90f, 0.06f), new Vector3(0.12f, 0.16f, 0.13f), skin),
 
             };
+
+            // The local body stops at the waist. Everything above it is
+            // rendered shadows-only instead.
+            //
+            // The head had to go because the camera is inside it; the CHEST
+            // had to go for the same reason one step down. The eye sits at
+            // 1.70 directly above the body's own axis, so looking down puts a
+            // 0.52 m torso about 0.25 m from the lens, where at 60 degrees it
+            // fills the lower half of the screen as a flat slab. A real eye is
+            // forward of the spine; this one is not, and moving it forward
+            // would put what you see out of step with where the server
+            // resolves your shots from.
+            //
+            // Legs and boots are what you actually want to see looking down,
+            // and they are far enough away to read as legs.
+            if (!upper) return b;
+
+            b.Add(new Box(new Vector3(0f, 1.16f, 0f), new Vector3(0.44f, 0.34f, 0.26f), suit));
+            b.Add(new Box(new Vector3(0f, 1.40f, 0f), new Vector3(0.52f, 0.20f, 0.28f), suit));
+            b.Add(new Box(new Vector3(-0.30f, 1.44f, 0f), new Vector3(0.16f, 0.16f, 0.24f), trim));
+            b.Add(new Box(new Vector3( 0.30f, 1.44f, 0f), new Vector3(0.16f, 0.16f, 0.24f), trim));
+            b.Add(new Box(new Vector3(-0.30f, 1.16f, 0.02f), new Vector3(0.13f, 0.40f, 0.15f), dark));
+            b.Add(new Box(new Vector3( 0.30f, 1.16f, 0.02f), new Vector3(0.13f, 0.40f, 0.15f), dark));
+            b.Add(new Box(new Vector3(-0.30f, 0.90f, 0.06f), new Vector3(0.12f, 0.16f, 0.13f), skin));
+            b.Add(new Box(new Vector3( 0.30f, 0.90f, 0.06f), new Vector3(0.12f, 0.16f, 0.13f), skin));
 
             // The local player's own body is built without a head, because the
             // camera is inside it.
@@ -108,25 +122,34 @@ namespace SpaceAdventure.Game
             new Color(0.30f, 0.52f, 0.80f), new Color(0.20f, 0.34f, 0.55f),
             new Color(0.78f, 0.62f, 0.50f), helmet: true);
 
-        /// <summary>The same body, minus the head the camera lives inside.</summary>
+        /// <summary>Legs and hips only: what is left once the camera is inside the rest.</summary>
         public static Mesh PlayerLocal() => Humanoid("player-local",
             new Color(0.30f, 0.52f, 0.80f), new Color(0.20f, 0.34f, 0.55f),
-            new Color(0.78f, 0.62f, 0.50f), helmet: true, head: false);
+            new Color(0.78f, 0.62f, 0.50f), helmet: true, head: false, upper: false);
 
         /// <summary>
-        /// Just the head, for the local body to cast a shadow with.
+        /// Everything above the waist, for the local body to cast a shadow
+        /// with.
         ///
-        /// Hiding the head stops the visor filling the screen, and it also
-        /// removed the head from your SHADOW — a headless silhouette on the
-        /// ground in front of you. This mesh is rendered shadows-only, so the
-        /// shadow is whole and the geometry is still not in your face.
+        /// Hiding the head and torso keeps them out of the lens, and it also
+        /// takes them out of your SHADOW — a pair of legs walking around on
+        /// their own. This mesh is rendered shadows-only, so the silhouette is
+        /// whole and the geometry is still not in your face.
         /// </summary>
-        public static Mesh PlayerHead() => Get("player-head", () =>
+        public static Mesh PlayerHead() => Get("player-upper", () =>
         {
+            var suit = new Color(0.30f, 0.52f, 0.80f);
             var trim = new Color(0.20f, 0.34f, 0.55f);
             var skin = new Color(0.78f, 0.62f, 0.50f);
+            var dark = suit * 0.75f;
             return new List<Box>
             {
+                new Box(new Vector3(0f, 1.16f, 0f), new Vector3(0.44f, 0.34f, 0.26f), suit),
+                new Box(new Vector3(0f, 1.40f, 0f), new Vector3(0.52f, 0.20f, 0.28f), suit),
+                new Box(new Vector3(-0.30f, 1.44f, 0f), new Vector3(0.16f, 0.16f, 0.24f), trim),
+                new Box(new Vector3( 0.30f, 1.44f, 0f), new Vector3(0.16f, 0.16f, 0.24f), trim),
+                new Box(new Vector3(-0.30f, 1.16f, 0.02f), new Vector3(0.13f, 0.40f, 0.15f), dark),
+                new Box(new Vector3( 0.30f, 1.16f, 0.02f), new Vector3(0.13f, 0.40f, 0.15f), dark),
                 new Box(new Vector3(0f, 1.56f, 0f), new Vector3(0.13f, 0.10f, 0.13f), skin),
                 new Box(new Vector3(0f, 1.71f, 0f), new Vector3(0.22f, 0.24f, 0.23f), skin),
                 new Box(new Vector3(0f, 1.76f, 0f), new Vector3(0.25f, 0.16f, 0.26f), trim),
