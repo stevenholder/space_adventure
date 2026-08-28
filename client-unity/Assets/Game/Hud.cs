@@ -126,21 +126,22 @@ namespace SpaceAdventure.Game
         {
             EnsureStyles();
 
-            GUI.DrawTexture(new Rect(8, 8, 330, 120), _panel);
-            GUILayout.BeginArea(new Rect(16, 12, 320, 116));
+            GUI.DrawTexture(new Rect(8, 8, 330, 136), _panel);
+            GUILayout.BeginArea(new Rect(16, 12, 320, 132));
             string rtt = net.RttMs >= 0 ? $"{net.RttMs} ms" : "—";
             GUILayout.Label($"link: {net.State}   rtt: {rtt}   reconnects: {net.Reconnects}", _style);
             GUILayout.Label($"entity: {net.EntityId}   health: {Health}", _style);
             GUILayout.Label($"pending inputs: {predictor.PendingCount}   " +
                             $"last correction: {predictor.LastCorrection:F3} m", _style);
             if (!string.IsNullOrEmpty(net.LastError)) GUILayout.Label($"last error: {net.LastError}", _style);
-            GUILayout.Label("WASD move · shift sprint · space jump · LMB fire · M map · esc cursor", _style);
+            GUILayout.Label("WASD move · shift sprint · space jump · LMB fire", _style);
+            GUILayout.Label("E talk/shop · M map · esc cursor", _style);
             GUILayout.EndArea();
 
             if (_log.Count > 0)
             {
-                GUI.DrawTexture(new Rect(8, 136, 330, 18 * _log.Count + 8), _panel);
-                GUILayout.BeginArea(new Rect(16, 140, 320, 18 * _log.Count + 4));
+                GUI.DrawTexture(new Rect(8, 152, 330, 18 * _log.Count + 8), _panel);
+                GUILayout.BeginArea(new Rect(16, 156, 320, 18 * _log.Count + 4));
                 foreach (string line in _log) GUILayout.Label(line, _style);
                 GUILayout.EndArea();
             }
