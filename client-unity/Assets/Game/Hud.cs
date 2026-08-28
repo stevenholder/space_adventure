@@ -90,7 +90,7 @@ namespace SpaceAdventure.Game
             GUILayout.Label($"pending inputs: {predictor.PendingCount}   " +
                             $"last correction: {predictor.LastCorrection:F3} m", _style);
             if (!string.IsNullOrEmpty(net.LastError)) GUILayout.Label($"last error: {net.LastError}", _style);
-            GUILayout.Label("WASD move · shift sprint · space jump · LMB fire · esc cursor", _style);
+            GUILayout.Label("WASD move · shift sprint · space jump · LMB fire · M map · esc cursor", _style);
             GUILayout.EndArea();
 
             if (_log.Count > 0)

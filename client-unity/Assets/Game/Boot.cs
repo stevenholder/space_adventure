@@ -10,6 +10,7 @@
 // C# instead of GUID-keyed YAML (C47).
 
 using System;
+using System.Collections.Generic;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 using UnityEngine;
@@ -82,6 +83,7 @@ namespace SpaceAdventure.Game
         private Hud _hud;
         private CombatFx _fx;
         private ViewModel _viewModel;
+        private MapView _map;
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -163,6 +165,7 @@ namespace SpaceAdventure.Game
             _viewModel = new ViewModel(cam, _material, vmLayer, transform);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
+            _map = new MapView();
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -199,14 +202,20 @@ namespace SpaceAdventure.Game
 
             if (!_worldBuilt) return;
 
+            var keys = UnityEngine.InputSystem.Keyboard.current;
+
             // Escape releases the mouse so the Editor stays usable.
-            if (UnityEngine.InputSystem.Keyboard.current?.escapeKey.wasPressedThisFrame == true)
+            if (keys?.escapeKey.wasPressedThisFrame == true)
             {
                 Cursor.lockState = Cursor.lockState == CursorLockMode.Locked
                     ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = Cursor.lockState != CursorLockMode.Locked;
             }
-            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked;
+            if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
+
+            // The map takes the mouse. Movement keeps working underneath, so
+            // you can read a bearing off it and walk without closing it.
+            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked && !_map.Open;
 
             var state = _predictor.State;
             LocalInput li = _fps.Sample(state.Pos.Normalized(), state.Facing);
@@ -405,7 +414,33 @@ namespace SpaceAdventure.Game
                       $"tickHz={_net.TickHz} spawn={_predictor.State.Pos.Length:F1} m from centre");
         }
 
-        private void OnGUI() => _hud?.Draw(_net, _predictor, _fps);
+        private void OnGUI()
+        {
+            _hud?.Draw(_net, _predictor, _fps);
+            if (_map == null || !_worldBuilt) return;
+
+            State s = _predictor.State;
+            _map.Draw(_terrain,
+                      TerrainMesh.ToUnity(s.Pos),
+                      TerrainMesh.ToUnity(s.Facing),
+                      MapMarkers());
+        }
+
+        /// <summary>
+        /// Everything on the map: the live entities, plus the spawn point.
+        ///
+        /// Spawn earns a fixed marker because the map is heading-UP, so it has
+        /// no compass rose to orient by. One landmark that never moves is what
+        /// turns "things near me" into "where am I".
+        /// </summary>
+        private IEnumerable<MapMarker> MapMarkers()
+        {
+            foreach (MapMarker m in _views.Markers()) yield return m;
+
+            Vector3 spawn = TerrainMesh.ToUnity(
+                Step.SpawnDir.Normalized() * _terrain.SampleRadius(Step.SpawnDir.Normalized()));
+            yield return new MapMarker(spawn, EntityType.Ship, "Spawn");
+        }
 
         private void OnDestroy()
         {

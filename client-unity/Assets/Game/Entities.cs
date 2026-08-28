@@ -54,6 +54,32 @@ namespace SpaceAdventure.Game
 
         public IEnumerable<EntityView> All => _views.Values;
 
+        /// <summary>
+        /// Everything currently drawn, for the map. Positions come from the
+        /// view transforms rather than from the snapshot, so the map shows
+        /// what is on screen rather than a second opinion about it.
+        /// </summary>
+        public IEnumerable<MapMarker> Markers()
+        {
+            foreach (EntityView v in _views.Values)
+            {
+                if (v.Root == null || !v.Root.activeSelf) continue;
+                yield return new MapMarker(v.Root.transform.position, v.Type, MapLabel(v));
+            }
+        }
+
+        /// <summary>
+        /// What to write beside a marker. Only things worth walking to get a
+        /// name: labelling thirty identical grunts turns the map into a wall
+        /// of text and hides the one thing you opened it to find.
+        /// </summary>
+        private static string MapLabel(EntityView v) => v.Type switch
+        {
+            EntityType.Player => v.Label,
+            EntityType.Npc => v.Label == "npc.quartermaster" ? "Quartermaster" : "",
+            _ => "",
+        };
+
         public bool TryGet(uint id, out EntityView view) => _views.TryGetValue(id, out view);
 
         /// <summary>Records what a `spawn` said, for the row that follows it.</summary>
