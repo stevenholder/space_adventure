@@ -14,7 +14,8 @@
 // where they actually are, and other players see exactly the same model.
 //
 // It is the same model other players see, minus the head — one flag on one
-// model, so the two cannot drift apart.
+// model, so the two cannot drift apart. The head is still there as a
+// shadows-only renderer, so the silhouette on the ground is whole.
 //
 // The head has to go. The near plane does not remove it: the eye is at 1.70
 // and the visor sits 0.095 m in front of that, past the 0.05 m near plane,
@@ -94,6 +95,13 @@ namespace SpaceAdventure.Game
             body.transform.SetParent(worldParent, false);
             _body = body.transform;
             BoxMesh.Attach(_body, "model", Models.PlayerLocal(), material, 0);
+
+            // The head casts but does not draw. Without it the shadow on the
+            // ground in front of you is headless, which is more distracting
+            // than the visor ever was.
+            GameObject head = BoxMesh.Attach(_body, "head-shadow", Models.PlayerHead(), material, 0);
+            head.GetComponent<MeshRenderer>().shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
         }
 
         /// <summary>

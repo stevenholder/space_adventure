@@ -17,6 +17,7 @@
 
 using System.Collections.Generic;
 using SpaceAdventure.Net;
+using SpaceAdventure.Sim;
 using UnityEngine;
 
 namespace SpaceAdventure.Game
@@ -69,8 +70,14 @@ namespace SpaceAdventure.Game
         {
             if (ev.Data.Length < 28) return;
             var r = new WireReader(ev.Data);
-            var origin = new Vector3(r.ReadF32(), r.ReadF32(), r.ReadF32());
-            var dir = new Vector3(r.ReadF32(), r.ReadF32(), r.ReadF32());
+            // Event payloads are in SIM space. Everything the client draws is
+            // in Unity space, and the two differ by a negated Z — so a
+            // position or direction used raw here is mirrored, and a tracer
+            // built from it flies off at an angle that has nothing to do with
+            // where the barrel points. Entity rows have always gone through
+            // this conversion; these did not.
+            Vector3 origin = TerrainMesh.ToUnity(new Vec3(r.ReadF32(), r.ReadF32(), r.ReadF32()));
+            Vector3 dir = TerrainMesh.ToUnity(new Vec3(r.ReadF32(), r.ReadF32(), r.ReadF32()));
             float dist = r.ReadF32();
             if (dir.sqrMagnitude < 1e-8f) return;
 
@@ -103,7 +110,7 @@ namespace SpaceAdventure.Game
             if (ev.Data.Length < 20) return;
             var r = new WireReader(ev.Data);
             uint shooter = r.ReadU32();
-            var point = new Vector3(r.ReadF32(), r.ReadF32(), r.ReadF32());
+            Vector3 point = TerrainMesh.ToUnity(new Vec3(r.ReadF32(), r.ReadF32(), r.ReadF32()));
 
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             Object.Destroy(go.GetComponent<UnityEngine.Collider>());

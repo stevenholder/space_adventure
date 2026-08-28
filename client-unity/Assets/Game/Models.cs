@@ -113,6 +113,26 @@ namespace SpaceAdventure.Game
             new Color(0.30f, 0.52f, 0.80f), new Color(0.20f, 0.34f, 0.55f),
             new Color(0.78f, 0.62f, 0.50f), helmet: true, head: false);
 
+        /// <summary>
+        /// Just the head, for the local body to cast a shadow with.
+        ///
+        /// Hiding the head stops the visor filling the screen, and it also
+        /// removed the head from your SHADOW — a headless silhouette on the
+        /// ground in front of you. This mesh is rendered shadows-only, so the
+        /// shadow is whole and the geometry is still not in your face.
+        /// </summary>
+        public static Mesh PlayerHead() => Get("player-head", () =>
+        {
+            var trim = new Color(0.20f, 0.34f, 0.55f);
+            var skin = new Color(0.78f, 0.62f, 0.50f);
+            return new List<Box>
+            {
+                new Box(new Vector3(0f, 1.56f, 0f), new Vector3(0.13f, 0.10f, 0.13f), skin),
+                new Box(new Vector3(0f, 1.71f, 0f), new Vector3(0.22f, 0.24f, 0.23f), skin),
+                new Box(new Vector3(0f, 1.76f, 0f), new Vector3(0.25f, 0.16f, 0.26f), trim),
+            };
+        });
+
         public static Mesh Shopkeeper() => Humanoid("shopkeeper",
             new Color(0.55f, 0.48f, 0.35f), new Color(0.38f, 0.32f, 0.22f),
             new Color(0.80f, 0.65f, 0.52f), helmet: false);
