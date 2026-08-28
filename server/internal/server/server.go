@@ -617,6 +617,14 @@ func (s *Server) syncEquipped(c *client) {
 		return
 	}
 	f := equippedFrame(c.entity.ID, self)
+
+	// To the joiner as well as to the peers. A player whose stored row
+	// already holds a weapon is told about everyone else's and nothing about
+	// their own, so they reconnect with empty hands and no way to find out —
+	// re-equipping the same item changes nothing, so it broadcasts nothing
+	// either. Every client learns about every armed player, including itself.
+	c.send(msg{data: f})
+
 	s.mu.Lock()
 	for _, oc := range peers {
 		oc.send(msg{data: f})

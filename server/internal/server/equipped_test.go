@@ -79,3 +79,45 @@ func TestEquippedEventBroadcastAndReplay(t *testing.T) {
 		t.Fatalf("late joiner saw equipped %q, want weapon.pulse", got)
 	}
 }
+
+// TestEquippedReplayReachesTheOwner covers the half of the join replay that
+// was missing: a player is told what THEY are holding.
+//
+// Everyone else was told, and the owner was not, so a client reconnecting on
+// a stored row that already held a weapon came back empty-handed with no way
+// to recover — re-equipping the same item is not a change, so it broadcasts
+// nothing either. Rendering a weapon is driven off this event, so the gun
+// simply never appeared.
+func TestEquippedReplayReachesTheOwner(t *testing.T) {
+	srv, url := newTestServer(t)
+
+	a, aID := joinClient(t, url, "armed")
+	srv.mu.Lock()
+	ac := srv.clients[aID]
+	srv.mu.Unlock()
+	ac.ident.Mutate(func(p *store.Player) {
+		if err := sim.AddItem(p, "weapon.pulse", 1, srv.reg); err != nil {
+			t.Fatalf("AddItem: %v", err)
+		}
+		p.Equipped[slotPrimary] = "weapon.pulse"
+	})
+
+	// Nothing has changed the slot since the join, so the only way this
+	// client can learn is the replay.
+	b, bID := joinClient(t, url, "rejoined")
+	srv.mu.Lock()
+	bc := srv.clients[bID]
+	srv.mu.Unlock()
+	bc.ident.Mutate(func(p *store.Player) {
+		if err := sim.AddItem(p, "weapon.pulse", 1, srv.reg); err != nil {
+			t.Fatalf("AddItem: %v", err)
+		}
+		p.Equipped[slotPrimary] = "weapon.pulse"
+	})
+	srv.syncEquipped(bc)
+
+	if got := b.nextEquipped(t, bID); got != "weapon.pulse" {
+		t.Fatalf("owner saw its own equipped as %q, want weapon.pulse", got)
+	}
+	_ = a
+}

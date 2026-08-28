@@ -205,8 +205,9 @@ namespace SpaceAdventure.Game
                     // leaves your hands empty reads as a shop that failed.
                     string slot = ItemDefs.SlotOf(_character.Defs, _lastBought);
                     if (string.IsNullOrEmpty(slot)) return null;
-                    return Encode.Cmd(nextSeq(), Op.Equip,
-                        $"{{\"slot\":\"{slot}\",\"item\":\"{_lastBought}\"}}");
+                    // Through Character, so the accepted result updates what
+                    // the client believes it is holding.
+                    return _character.EquipCmd(nextSeq(), slot, _lastBought);
                 }
 
                 case Op.Inventory:

@@ -283,6 +283,11 @@ namespace SpaceAdventure.Game
                 }
             }
 
+            // The rig follows the character sheet, which is the one place
+            // that knows what is equipped — whether it learned from the
+            // broadcast event or from an accepted equip.
+            _viewModel.WeaponVisible = !string.IsNullOrEmpty(_character.Primary);
+
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
             _fps.PlaceCamera(_predictor.State.Pos);
@@ -451,11 +456,7 @@ namespace SpaceAdventure.Game
                             // Our own weapon comes down the same channel, and
                             // is replayed at join, so a reconnect holding a
                             // rifle shows one (PROTOCOL event_id 0x0006).
-                            if (ev.EntityId == _net.EntityId)
-                            {
-                                _viewModel.WeaponVisible = item.Length > 0;
-                                _character.Primary = item;
-                            }
+                            if (ev.EntityId == _net.EntityId) _character.Primary = item;
                             break;
                         }
                     }
@@ -467,6 +468,7 @@ namespace SpaceAdventure.Game
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
                     if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy)) _character.OnWallet(r.Body);
+                    if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipAccepted();
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
                     break;

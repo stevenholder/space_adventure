@@ -50,6 +50,31 @@ namespace SpaceAdventure.Game
         /// <summary>Asks the server for credits and inventory.</summary>
         public static byte[] RefreshCmd(ushort seq) => Encode.Cmd(seq, Op.Inventory, "{}");
 
+        /// <summary>The item an equip was last requested for, pending its result.</summary>
+        private string _pendingEquip;
+
+        /// <summary>Builds an equip cmd and remembers what it asked for.</summary>
+        public byte[] EquipCmd(ushort seq, string slot, string item)
+        {
+            _pendingEquip = item;
+            return Encode.Cmd(seq, Op.Equip, $"{{\"slot\":\"{slot}\",\"item\":\"{item}\"}}");
+        }
+
+        /// <summary>
+        /// Applies an accepted equip.
+        ///
+        /// The `equipped` event cannot carry this on its own: the server
+        /// broadcasts on CHANGE, so equipping what you already have equipped
+        /// is correctly silent — and that is exactly the case where a client
+        /// that never learned the state has no other way to find out. An
+        /// accepted result is the server agreeing, so it counts.
+        /// </summary>
+        public void OnEquipAccepted()
+        {
+            if (!string.IsNullOrEmpty(_pendingEquip)) Primary = _pendingEquip;
+            _pendingEquip = null;
+        }
+
         /// <summary>
         /// Takes credits and inventory out of any reply that carries them —
         /// `inventory` and `shop_buy` both do.
@@ -112,8 +137,7 @@ namespace SpaceAdventure.Game
                     }
                     else if (GUI.Button(btn, $"equip {slot}"))
                     {
-                        send = Encode.Cmd(nextSeq(),
-                            Op.Equip, $"{{\"slot\":\"{slot}\",\"item\":\"{it.item}\"}}");
+                        send = EquipCmd(nextSeq(), slot, it.item);
                     }
                 }
                 y += 24;
