@@ -84,9 +84,9 @@ namespace SpaceAdventure.Game
         private CombatFx _fx;
         private ViewModel _viewModel;
         private MapView _map;
+        private Character _character;
         private Interaction _interact;
         private Camera _camera;
-        private int _credits = -1;
         private bool _cursorFreed;
 
         private TerrainField _terrain;
@@ -180,7 +180,8 @@ namespace SpaceAdventure.Game
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
             _map = new MapView();
-            _interact = new Interaction(_views);
+            _character = new Character();
+            _interact = new Interaction(_views, _character);
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -230,12 +231,14 @@ namespace SpaceAdventure.Game
                 Cursor.visible = _cursorFreed;
             }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
+            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleBags);
+            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleSheet);
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
             // The map and the shop both want the pointer. Movement keeps
             // working under either.
-            bool wantsCursor = _map.Open || _interact.ShopOpen;
+            bool wantsCursor = _map.Open || _interact.ShopOpen || _character.AnyOpen;
             if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.None;
@@ -266,7 +269,7 @@ namespace SpaceAdventure.Game
             Vector3 eye = TerrainMesh.ToUnity(state.Pos);
             eye += eye.normalized * FpsController.EyeHeight;
             _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
-            if (li.InteractPressed && !_map.Open)
+            if (li.InteractPressed && !_map.Open && !_character.AnyOpen)
             {
                 if (_interact.ShopOpen) _interact.CloseShop();
                 else
@@ -295,6 +298,18 @@ namespace SpaceAdventure.Game
         }
 
         private ushort NextCmdSeq() => ++_cmdSeq;
+
+        /// <summary>
+        /// Toggles a panel and, if it just opened, asks the server for fresh
+        /// credits and inventory. Panels show server truth rather than
+        /// whatever was last seen — a bag that still lists a rifle you sold on
+        /// another client is worse than a bag that takes a round trip.
+        /// </summary>
+        private void OpenPanel(System.Action toggle)
+        {
+            toggle();
+            if (_character.AnyOpen) _net.Send(Character.RefreshCmd(NextCmdSeq()));
+        }
 
         private void SendTick(LocalInput li)
         {
@@ -389,7 +404,7 @@ namespace SpaceAdventure.Game
                 case Msg.Defs:
                     // Item names, kinds and equipment slots. The shop needs
                     // the slot to know what can be equipped at all.
-                    _interact.Defs = Decode.Defs(frame.Reader);
+                    _character.Defs = Decode.Defs(frame.Reader);
                     break;
                 case Msg.Spawn:
                     _views.OnSpawn(Decode.Spawn(frame.Reader));
@@ -411,6 +426,7 @@ namespace SpaceAdventure.Game
                             row.Grounded,
                             snap.AckSeq);
                         _hud.Health = row.Health;
+                        _character.Health = row.Health;
                     }
                     break;
                 }
@@ -435,7 +451,11 @@ namespace SpaceAdventure.Game
                             // Our own weapon comes down the same channel, and
                             // is replayed at join, so a reconnect holding a
                             // rifle shows one (PROTOCOL event_id 0x0006).
-                            if (ev.EntityId == _net.EntityId) _viewModel.WeaponVisible = item.Length > 0;
+                            if (ev.EntityId == _net.EntityId)
+                            {
+                                _viewModel.WeaponVisible = item.Length > 0;
+                                _character.Primary = item;
+                            }
                             break;
                         }
                     }
@@ -446,6 +466,7 @@ namespace SpaceAdventure.Game
                 {
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
+                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy)) _character.OnWallet(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
                     break;
@@ -497,7 +518,9 @@ namespace SpaceAdventure.Game
 
             if (!_map.Open)
             {
-                byte[] cmd = _interact.Draw(NextCmdSeq, _credits);
+                byte[] cmd = _character.AnyOpen
+                    ? _character.Draw(NextCmdSeq)
+                    : _interact.Draw(NextCmdSeq);
                 if (cmd != null) _net.Send(cmd);
             }
 

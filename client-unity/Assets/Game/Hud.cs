@@ -135,7 +135,7 @@ namespace SpaceAdventure.Game
                             $"last correction: {predictor.LastCorrection:F3} m", _style);
             if (!string.IsNullOrEmpty(net.LastError)) GUILayout.Label($"last error: {net.LastError}", _style);
             GUILayout.Label("WASD move · shift sprint · space jump · LMB fire", _style);
-            GUILayout.Label("E talk/shop · M map · esc cursor", _style);
+            GUILayout.Label("E talk/shop · B bags · C character · M map · esc cursor", _style);
             GUILayout.EndArea();
 
             if (_log.Count > 0)

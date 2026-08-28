@@ -21,8 +21,8 @@ namespace SpaceAdventure.Game
 {
     [Serializable] internal class StockEntry { public string item; public int price; }
     [Serializable] internal class ShopStock { public StockEntry[] stock; }
-    [Serializable] internal class ItemStack { public string item; public int qty; }
-    [Serializable] internal class WalletResult { public int credits; public ItemStack[] inventory; }
+    [Serializable] public class ItemStack { public string item; public int qty; }
+    [Serializable] public class WalletResult { public int credits; public ItemStack[] inventory; }
 
     /// <summary>
     /// The little the shop needs to know about an item, pulled out of `defs`.
@@ -35,7 +35,7 @@ namespace SpaceAdventure.Game
     /// not equippable, which costs a manual equip rather than firing a command
     /// the server will refuse.
     /// </summary>
-    internal static class ItemDefs
+    public static class ItemDefs
     {
         public static string NameOf(string defsJson, string id)
             => Field(defsJson, id, "name") ?? id;
@@ -86,25 +86,22 @@ namespace SpaceAdventure.Game
 
         private const float EyeHeight = 1.7f;
 
-        /// <summary>items.json inv_slots. Shown so a full pack is visible before it refuses.</summary>
-        private const int InventorySlots = 20;
-
         private readonly EntityViews _views;
 
         private GUIStyle _style, _heading;
         private Texture2D _panel;
 
+        private readonly Character _character;
+
         private uint _shopNpc;
         private StockEntry[] _stock;
         private string _status = "";
-        private int _credits = -1;
-        private ItemStack[] _inventory;
-        private string _defs = "";
 
-        public Interaction(EntityViews views) => _views = views;
-
-        /// <summary>The `defs` blob, for item names and slots.</summary>
-        public string Defs { set => _defs = value ?? ""; }
+        public Interaction(EntityViews views, Character character)
+        {
+            _views = views;
+            _character = character;
+        }
 
         /// <summary>The entity the player is looking at, or 0.</summary>
         public uint Target { get; private set; }
@@ -196,8 +193,8 @@ namespace SpaceAdventure.Game
 
                 case Op.ShopBuy:
                 {
-                    Wallet(r.Body);
-                    _status = $"bought {ItemDefs.NameOf(_defs, _lastBought)}";
+                    _character.OnWallet(r.Body);
+                    _status = $"bought {ItemDefs.NameOf(_character.Defs, _lastBought)}";
 
                     // Equip only what CAN be equipped. Auto-equipping whatever
                     // was just bought sent ammunition to the primary slot and
@@ -206,14 +203,14 @@ namespace SpaceAdventure.Game
                     //
                     // Equipping at all is worth doing: buying a rifle that
                     // leaves your hands empty reads as a shop that failed.
-                    string slot = ItemDefs.SlotOf(_defs, _lastBought);
+                    string slot = ItemDefs.SlotOf(_character.Defs, _lastBought);
                     if (string.IsNullOrEmpty(slot)) return null;
                     return Encode.Cmd(nextSeq(), Op.Equip,
                         $"{{\"slot\":\"{slot}\",\"item\":\"{_lastBought}\"}}");
                 }
 
                 case Op.Inventory:
-                    Wallet(r.Body);
+                    _character.OnWallet(r.Body);
                     return null;
 
                 case Op.Equip:
@@ -223,14 +220,6 @@ namespace SpaceAdventure.Game
                 default:
                     return null;
             }
-        }
-
-        private void Wallet(string body)
-        {
-            var w = JsonUtility.FromJson<WalletResult>(body);
-            if (w == null) return;
-            _credits = w.credits;
-            if (w.inventory != null) _inventory = w.inventory;
         }
 
         private string _lastBought = "";
@@ -252,10 +241,10 @@ namespace SpaceAdventure.Game
         };
 
         /// <summary>Draws the prompt and, when open, the shop. Returns a cmd to send, or null.</summary>
-        public byte[] Draw(Func<ushort> nextSeq, int credits)
+        public byte[] Draw(Func<ushort> nextSeq)
         {
             EnsureStyles();
-            if (credits >= 0) _credits = credits;
+            int credits = _character.Credits;
 
             if (!ShopOpen)
             {
@@ -269,7 +258,8 @@ namespace SpaceAdventure.Game
             }
 
             byte[] send = null;
-            int carried = _inventory?.Length ?? 0;
+            ItemStack[] inventory = _character.Inventory;
+            int carried = _character.UsedSlots;
             float panelW = 400;
             float panelH = 84 + _stock.Length * 26 + 26 + carried * 20 + 46;
             var rect = new Rect((Screen.width - panelW) * 0.5f, (Screen.height - panelH) * 0.5f, panelW, panelH);
@@ -279,15 +269,15 @@ namespace SpaceAdventure.Game
             GUI.Label(new Rect(rect.x + 16, y, panelW, 22), "QUARTERMASTER VEX", _heading);
             y += 24;
             GUI.Label(new Rect(rect.x + 16, y, panelW, 20),
-                _credits >= 0 ? $"credits: {_credits}" : "credits: —", _style);
+                credits >= 0 ? $"credits: {credits}" : "credits: —", _style);
             y += 26;
 
             for (int i = 0; i < _stock.Length; i++)
             {
                 StockEntry e = _stock[i];
                 var row = new Rect(rect.x + 16, y, panelW - 32, 22);
-                GUI.enabled = _credits < 0 || _credits >= e.price;
-                if (GUI.Button(row, $"{ItemDefs.NameOf(_defs, e.item)}   —   {e.price} cr"))
+                GUI.enabled = credits < 0 || credits >= e.price;
+                if (GUI.Button(row, $"{ItemDefs.NameOf(_character.Defs, e.item)}   —   {e.price} cr"))
                 {
                     _lastBought = e.item;
                     _status = "buying...";
@@ -304,14 +294,14 @@ namespace SpaceAdventure.Game
             // costs a whole slot because it does not stack.
             y += 6;
             GUI.Label(new Rect(rect.x + 16, y, panelW - 32, 20),
-                $"carrying  ({carried}/{InventorySlots} slots)", _style);
+                $"carrying  ({carried}/{Character.InventorySlots} slots)   ·   B for bags", _style);
             y += 20;
-            if (_inventory != null)
+            if (inventory != null)
             {
-                foreach (ItemStack it in _inventory)
+                foreach (ItemStack it in inventory)
                 {
                     GUI.Label(new Rect(rect.x + 26, y, panelW - 42, 18),
-                        $"{ItemDefs.NameOf(_defs, it.item)}  x{it.qty}", _style);
+                        $"{ItemDefs.NameOf(_character.Defs, it.item)}  x{it.qty}", _style);
                     y += 20;
                 }
             }
