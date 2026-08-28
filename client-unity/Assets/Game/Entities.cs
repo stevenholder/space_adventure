@@ -124,38 +124,33 @@ namespace SpaceAdventure.Game
             var root = new GameObject($"entity-{id}");
             root.transform.SetParent(_parent, false);
 
-            // Primitive capsules and cubes stand in for art. They are sized
-            // from the hitbox the server actually resolves against, so what
-            // you shoot at is what the server tests — a placeholder that is
-            // the wrong SIZE teaches the wrong aim.
-            var body = GameObject.CreatePrimitive(type == EntityType.Loot ? PrimitiveType.Cube : PrimitiveType.Capsule);
-            Object.Destroy(body.GetComponent<UnityEngine.Collider>()); // collision is the sim's job, not PhysX's
-            body.transform.SetParent(root.transform, false);
-
-            float height = type == EntityType.Loot ? 0.4f : 1.8f;
-            float radius = type == EntityType.Loot ? 0.4f : 0.7f;
-            body.transform.localScale = type == EntityType.Loot
-                ? new Vector3(height, height, height)
-                : new Vector3(radius, height * 0.5f, radius);
-            // A capsule's origin is its middle; entity positions are at the feet.
-            body.transform.localPosition = type == EntityType.Loot
-                ? new Vector3(0, height * 0.5f, 0)
-                : new Vector3(0, height * 0.5f, 0);
-
-            var mr = body.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = new Material(_material) { color = ColorFor(type) };
+            // Box models, built once per archetype and shared. Their origin is
+            // between the feet and their proportions come from the hitbox the
+            // server resolves against, so nothing here needs an offset and
+            // what you shoot at is what the server tests.
+            BoxMesh.Attach(root.transform, "model", MeshFor(type, label), _material, 0);
 
             return new EntityView { Id = id, Type = type, Label = label ?? "", Root = root };
         }
 
-        private static Color ColorFor(ushort type) => type switch
+        /// <summary>
+        /// The model for an entity. `def` is the archetype id from `spawn`,
+        /// which is what tells a shopkeeper from a grunt — both are
+        /// EntityTypeNPC on the wire.
+        /// </summary>
+        private static Mesh MeshFor(ushort type, string def) => type switch
         {
-            EntityType.Player => new Color(0.35f, 0.65f, 0.95f),
-            EntityType.Npc => new Color(0.90f, 0.35f, 0.30f),
-            EntityType.Target => new Color(0.95f, 0.80f, 0.25f),
-            EntityType.Loot => new Color(0.55f, 0.95f, 0.45f),
-            EntityType.Projectile => new Color(1.00f, 0.60f, 0.10f),
-            _ => Color.gray,
+            EntityType.Player => Models.Player(),
+            EntityType.Target => Models.Target(),
+            EntityType.Loot => Models.Loot(),
+            EntityType.Projectile => Models.Projectile(),
+            EntityType.Npc => def switch
+            {
+                "npc.grunt" => Models.Grunt(),
+                "npc.gunner" => Models.Gunner(),
+                _ => Models.Shopkeeper(),
+            },
+            _ => Models.Loot(),
         };
     }
 

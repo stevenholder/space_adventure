@@ -11,14 +11,18 @@
 //
 // THE BODY is the opposite: a real object at the player's feet, on the normal
 // layer, casting a normal shadow — so looking down shows your chest and legs
-// where they actually are, and other players see the same body in the same
-// place. It stops at the collarbone. Modelling a head you are standing inside
-// buys nothing but a view of the inside of a skull.
+// where they actually are, and other players see exactly the same model.
 //
-// Everything is primitives. There is no asset pipeline in this client yet
-// (`art/` holds glTF the Unity side cannot load), so this is a stand-in that
-// is honest about being one — correctly SIZED, so the aim and the feel are
-// right when real meshes replace it.
+// It is the SAME model other players see, head included. The camera sits
+// inside that head, and the near clip plane removes it: rendering a
+// deliberately headless body would have made the local player a different
+// model from the remote one, which is two things to keep in step forever in
+// exchange for solving a problem the near plane already solves.
+//
+// The models are box meshes built in Models.cs. There is no asset pipeline
+// here yet (`art/` holds glTF this client cannot load), so the art is source
+// code — and it is sized from the server's own hitbox, so aim and feel
+// survive real meshes replacing it.
 
 using UnityEngine;
 
@@ -59,60 +63,33 @@ namespace SpaceAdventure.Game
             rig.transform.localEulerAngles = RestEuler;
             _rig = rig.transform;
 
-            _weapon = Part(_rig, "weapon-body", new Vector3(0.07f, 0.08f, 0.42f), new Vector3(0, 0, 0.05f),
-                           new Color(0.20f, 0.22f, 0.26f), material, layer);
-            Part(_weapon.transform, "barrel", new Vector3(0.032f, 0.032f, 0.34f), new Vector3(0, 0.012f, 0.36f),
-                 new Color(0.14f, 0.15f, 0.18f), material, layer);
-            Part(_weapon.transform, "magazine", new Vector3(0.05f, 0.16f, 0.09f), new Vector3(0, -0.11f, -0.02f),
-                 new Color(0.16f, 0.17f, 0.20f), material, layer);
-            Part(_weapon.transform, "stock", new Vector3(0.05f, 0.09f, 0.20f), new Vector3(0, -0.02f, -0.28f),
-                 new Color(0.18f, 0.16f, 0.14f), material, layer);
-            Part(_weapon.transform, "sight", new Vector3(0.02f, 0.045f, 0.05f), new Vector3(0, 0.06f, 0.10f),
-                 new Color(0.10f, 0.11f, 0.13f), material, layer);
+            _weapon = BoxMesh.Attach(_rig, "rifle", Models.Rifle(), material, layer);
 
-            // An empty at the barrel tip. The server resolves a shot from the
-            // player's EYE, which is the correct thing for hit registration
-            // and the wrong place to draw from: a tracer and a flash starting
-            // at the eye appear in the dead centre of the screen, in front of
-            // the gun. This is where they visually start instead.
-            // Parented to the RIG, not to the weapon. The weapon body carries a
-            // non-uniform scale (0.07, 0.08, 0.42) that every child inherits,
-            // which would both misplace this and stretch anything attached to
-            // it into an ellipsoid. The rig is unscaled, so these are metres.
-            //
-            // Barrel tip, worked out in rig space: the weapon body sits at
-            // z 0.05 and the barrel at 0.36 x 0.42 = 0.151 beyond that, with
-            // half its 0.34 x 0.42 = 0.143 length again on top — 0.27. This
-            // sits just past it.
+            // Hands are placed ON the rifle, in the rifle's own space, so they
+            // stay put if its proportions change: forward hand on the
+            // handguard, rear hand at the grip.
+            var forward = BoxMesh.Attach(_weapon.transform, "hand-forward", Models.Hand(), material, layer);
+            forward.transform.localPosition = new Vector3(-0.005f, -0.055f, 0.30f);
+            forward.transform.localEulerAngles = new Vector3(10f, 0f, 0f);
+
+            var rear = BoxMesh.Attach(_weapon.transform, "hand-rear", Models.Hand(), material, layer);
+            rear.transform.localPosition = new Vector3(0.005f, -0.075f, -0.075f);
+            rear.transform.localEulerAngles = new Vector3(24f, 0f, 0f);
+
+            // Parented to the RIG, not to the weapon, so its offsets stay in
+            // metres — see the note on RestPosition. The rifle model puts its
+            // muzzle brake at z 0.53 in rig space.
             var muzzle = new GameObject("muzzle");
             muzzle.transform.SetParent(_rig, false);
-            muzzle.transform.localPosition = new Vector3(0f, 0.002f, 0.29f);
+            muzzle.transform.localPosition = new Vector3(0f, 0.012f, 0.57f);
             muzzle.gameObject.layer = layer;
             _muzzle = muzzle.transform;
-
-            var glove = new Color(0.30f, 0.31f, 0.34f);
-            // Forward hand on the barrel, rear hand on the grip.
-            Part(_rig, "hand-forward", new Vector3(0.075f, 0.075f, 0.10f), new Vector3(-0.005f, -0.055f, 0.26f),
-                 glove, material, layer);
-            Part(_rig, "forearm-forward", new Vector3(0.06f, 0.06f, 0.26f), new Vector3(-0.07f, -0.15f, 0.10f),
-                 glove, material, layer, new Vector3(-28f, 16f, 0f));
-            Part(_rig, "hand-rear", new Vector3(0.07f, 0.075f, 0.09f), new Vector3(0.01f, -0.075f, -0.05f),
-                 glove, material, layer);
-            Part(_rig, "forearm-rear", new Vector3(0.06f, 0.06f, 0.24f), new Vector3(0.08f, -0.17f, -0.16f),
-                 glove, material, layer, new Vector3(-34f, -14f, 0f));
 
             // ---- body: a real object in the world, seen when you look down ----
             var body = new GameObject("LocalBody");
             body.transform.SetParent(worldParent, false);
             _body = body.transform;
-
-            var suit = new Color(0.35f, 0.65f, 0.95f); // the same blue remote players wear
-            Part(_body, "torso", new Vector3(0.42f, 0.62f, 0.26f), new Vector3(0, 1.12f, 0), suit, material, 0);
-            Part(_body, "hips", new Vector3(0.36f, 0.22f, 0.24f), new Vector3(0, 0.78f, 0), suit * 0.85f, material, 0);
-            Part(_body, "leg-left", new Vector3(0.16f, 0.72f, 0.18f), new Vector3(-0.11f, 0.36f, 0), suit * 0.7f, material, 0);
-            Part(_body, "leg-right", new Vector3(0.16f, 0.72f, 0.18f), new Vector3(0.11f, 0.36f, 0), suit * 0.7f, material, 0);
-            Part(_body, "shoulder-left", new Vector3(0.15f, 0.15f, 0.15f), new Vector3(-0.26f, 1.36f, 0), suit * 0.9f, material, 0);
-            Part(_body, "shoulder-right", new Vector3(0.15f, 0.15f, 0.15f), new Vector3(0.26f, 1.36f, 0), suit * 0.9f, material, 0);
+            BoxMesh.Attach(_body, "model", Models.Player(), material, 0);
         }
 
         /// <summary>

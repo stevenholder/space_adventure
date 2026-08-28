@@ -86,8 +86,11 @@ namespace SpaceAdventure.Game
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
         private GameObject _planet;
-        private Material _material;        // entities: Standard, tinted per type
-        private Material _terrainMaterial; // planet: reads the mesh's vertex colours
+        // One material for everything with geometry. Terrain, bodies, props
+        // and the viewmodel all carry their colour in the vertex stream, so
+        // they all want the same shader — and Standard, which ignores vertex
+        // colour, would render every one of them white.
+        private Material _material;
 
         /// <summary>
         /// weapon.pulse fire_interval, from the GDD weapon table. Hard-coded
@@ -105,12 +108,7 @@ namespace SpaceAdventure.Game
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
-            // Two materials, because they want different things. Entities are
-            // tinted per instance through the material's colour, which
-            // Standard does well. The terrain carries its tint in the MESH,
-            // which Standard ignores outright — hence the custom shader.
-            _material = new Material(RequireShader("Standard", "Universal Render Pipeline/Lit"));
-            _terrainMaterial = new Material(RequireShader("SpaceAdventure/TerrainVertexColor", "Standard"));
+            _material = new Material(RequireShader("SpaceAdventure/TerrainVertexColor", "Standard"));
 
             int vmLayer = LayerMask.NameToLayer("ViewModel");
             if (vmLayer < 0) vmLayer = 8; // unnamed until the Editor runs EnsureLayers
@@ -140,6 +138,20 @@ namespace SpaceAdventure.Game
             sun.type = LightType.Directional;
             sun.intensity = 0.9f;
             sun.transform.rotation = Quaternion.Euler(35f, -140f, 0f);
+            sun.cullingMask = ~(1 << vmLayer); // the rig has its own light
+
+            // A light that follows the eye and reaches ONLY the rig. Ambient
+            // is 0.10 now that the sky is space, so a weapon lit by the sun
+            // alone is a black cutout whenever you face away from it — and
+            // which way you happen to be facing is not a good reason to lose
+            // sight of your own hands.
+            var rigLight = new GameObject("RigLight").AddComponent<Light>();
+            rigLight.transform.SetParent(camGo.transform, false);
+            rigLight.type = LightType.Directional;
+            rigLight.intensity = 1.05f;
+            rigLight.cullingMask = 1 << vmLayer;
+            rigLight.shadows = LightShadows.None;
+            rigLight.transform.localRotation = Quaternion.Euler(28f, -32f, 0f);
 
             // The sky is installed once the world seed arrives with hello_ack,
             // so every client raises the same stars over the same planet.
@@ -377,7 +389,7 @@ namespace SpaceAdventure.Game
                 Debug.LogWarning($"skybox unavailable, using the default: {e.Message}");
             }
             if (_planet != null) Destroy(_planet);
-            _planet = TerrainMesh.Build(_terrain, _terrainMaterial, transform);
+            _planet = TerrainMesh.Build(_terrain, _material, transform);
             _predictor.Seed(_terrain, _colliders);
             _worldBuilt = true;
 
