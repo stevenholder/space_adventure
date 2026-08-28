@@ -186,10 +186,40 @@ internal static class Program
             Rng.Hash3(-7, 11, 0) == 0.8620048023294657 &&
             Rng.Hash3(65535, 65535, 65535) == 0.009098467649891973);
 
+        FrameConventionChecks();
         PredictionChecks();
 
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
+    }
+
+    // ---- frame conventions -------------------------------------------------
+    //
+    // The Unity client converts sim space to engine space by negating Z, and
+    // that conversion is only correct while these two facts hold. Both live in
+    // Sim, both are invisible from the Unity side, and getting either wrong
+    // shows up as inverted strafe or bodies facing backwards -- neither of
+    // which any conformance diff can see, because the server agrees with the
+    // sim by construction.
+
+    private static void FrameConventionChecks()
+    {
+        var up = new Vec3(0, 1, 0);
+        var facing = new Vec3(0, 0, -1); // sim forward is -Z: the sim is right-handed
+
+        // Movement right is facing x up. Step.cs says the opposite order
+        // inverted A and D for the whole of M1 in both sims at once.
+        Vec3 right = Vec3.Cross(facing, up);
+        Check("sim right is +X for -Z facing",
+            Math.Abs(right.X - 1) < 1e-12 && Math.Abs(right.Y) < 1e-12 && Math.Abs(right.Z) < 1e-12,
+            right.ToString());
+
+        // The orientation quaternion's Z axis is the facing. FacingOf in the
+        // Unity client rebuilds a body's direction from exactly this.
+        var state = new State { Pos = up * 150.0, Vel = Vec3.Zero, Facing = facing, Grounded = true };
+        Vec3 back = Quat.Rotate(Step.OrientationQuat(state), new Vec3(0, 0, 1));
+        Check("the orientation quat's Z axis is the facing",
+            (back - facing).Length < 1e-12, $"{back} vs {facing}");
     }
 
     // ---- U11 prediction ----------------------------------------------------

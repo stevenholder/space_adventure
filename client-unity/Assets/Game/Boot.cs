@@ -315,13 +315,11 @@ namespace SpaceAdventure.Game
             }
         }
 
-        private static Vec3 FacingFrom(EntityRow row)
-        {
-            var q = new Quaternion(row.QuatX, row.QuatY, row.QuatZ, row.QuatW);
-            if (q.x == 0 && q.y == 0 && q.z == 0 && q.w == 0) return new Vec3(0, 0, 1);
-            Vector3 f = q * Vector3.forward;
-            return TerrainMesh.ToSim(f);
-        }
+        /// <summary>
+        /// The local body's facing, in sim space, for reconciliation. Shares
+        /// EntityViews' decoder so the two cannot drift apart.
+        /// </summary>
+        private static Vec3 FacingFrom(EntityRow row) => SnapshotTimeline.FacingOf(row);
 
         private void BuildWorld()
         {

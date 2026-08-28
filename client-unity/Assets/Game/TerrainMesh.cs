@@ -122,22 +122,27 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
-        /// Sim coordinates ARE Unity coordinates, component for component. No
-        /// axis is flipped.
+        /// Sim space to Unity space: negate Z. Its own inverse, so the same
+        /// mapping converts back.
         ///
-        /// It is tempting to negate Z for Unity's left-handedness, and it is a
-        /// trap: mirroring one axis flips the sign of every cross product, so
-        /// the body's "right" becomes its left and strafe inverts. Every
-        /// position, normal and collider in this client comes from the same
-        /// sim, so leaving the axes alone keeps the whole world
-        /// self-consistent and keeps these numbers bit-comparable with Go.
-        /// The world's chirality is unobservable without an outside reference;
-        /// inverted strafe is not.
+        /// The sim is RIGHT-handed with forward = −Z; Unity is left-handed
+        /// with forward = +Z. Check it on the movement frame, which is where
+        /// it is observable. The sim takes `right = facing × up` (Step.cs says
+        /// so, and says the opposite order inverted A and D for all of M1).
+        /// With up = +Y and sim-forward = (0,0,−1) that gives (1,0,0). Negating
+        /// Z maps sim-forward to Unity's +Z and leaves right at +X — which is
+        /// exactly Unity's own right for that facing, `up × forward`.
+        ///
+        /// An earlier version of this comment argued for the identity mapping
+        /// on the grounds that a mirrored world is self-consistent and
+        /// unobservable. The first half is true and the second is not: the sim
+        /// builds `right` from a handed cross product, so the mirror surfaces
+        /// immediately as A and D swapped. It did.
         /// </summary>
-        public static Vector3 ToUnity(Vec3 v) => new Vector3((float)v.X, (float)v.Y, (float)v.Z);
+        public static Vector3 ToUnity(Vec3 v) => new Vector3((float)v.X, (float)v.Y, (float)-v.Z);
 
-        /// <summary>The inverse of <see cref="ToUnity"/>.</summary>
-        public static Vec3 ToSim(Vector3 v) => new Vec3(v.x, v.y, v.z);
+        /// <summary>Unity space to sim space — the same negation.</summary>
+        public static Vec3 ToSim(Vector3 v) => new Vec3(v.x, v.y, -v.z);
 
         /// <summary>True when the first triangle's normal points at the planet's centre.</summary>
         private static bool FacesInward(Vector3[] verts, int[] tris)

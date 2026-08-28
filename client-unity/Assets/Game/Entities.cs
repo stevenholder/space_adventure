@@ -277,16 +277,20 @@ namespace SpaceAdventure.Game
         private static Vec3 Lerp(Vec3 a, Vec3 b, float k) => a + (b - a) * k;
 
         /// <summary>
-        /// The row's quaternion turned back into a facing direction. The
-        /// server sends orientation, and the views only need where the body
-        /// points along the surface.
+        /// The row's quaternion turned back into a facing direction, in SIM
+        /// space — the caller converts.
+        ///
+        /// The rotation is applied with Sim.Quat, not UnityEngine.Quaternion.
+        /// The wire quaternion describes a right-handed basis whose Z axis is
+        /// the facing (Step.OrientationQuat), and feeding those components to
+        /// a left-handed Quaternion mixes the two conventions in a way that
+        /// happens to look plausible and points bodies the wrong way.
         /// </summary>
-        private static Vec3 FacingOf(EntityRow e)
+        internal static Vec3 FacingOf(EntityRow e)
         {
-            var q = new Quaternion(e.QuatX, e.QuatY, e.QuatZ, e.QuatW);
-            if (q.x == 0 && q.y == 0 && q.z == 0 && q.w == 0) return new Vec3(0, 0, 1);
-            Vector3 f = q * Vector3.forward;
-            return new Vec3(f.x, f.y, f.z);
+            if (e.QuatX == 0 && e.QuatY == 0 && e.QuatZ == 0 && e.QuatW == 0) return new Vec3(0, 0, 1);
+            var q = new Quat(e.QuatX, e.QuatY, e.QuatZ, e.QuatW);
+            return Quat.Rotate(q, new Vec3(0, 0, 1));
         }
     }
 }
