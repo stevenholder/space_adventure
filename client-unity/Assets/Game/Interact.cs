@@ -21,7 +21,59 @@ namespace SpaceAdventure.Game
 {
     [Serializable] internal class StockEntry { public string item; public int price; }
     [Serializable] internal class ShopStock { public StockEntry[] stock; }
-    [Serializable] internal class WalletResult { public int credits; }
+    [Serializable] internal class ItemStack { public string item; public int qty; }
+    [Serializable] internal class WalletResult { public int credits; public ItemStack[] inventory; }
+
+    /// <summary>
+    /// The little the shop needs to know about an item, pulled out of `defs`.
+    ///
+    /// `defs.items` is a JSON MAP keyed by item id, which JsonUtility cannot
+    /// represent at all — it has no dictionary support. Rather than carry a
+    /// general JSON parser for two fields, this scans the blob for one item's
+    /// object and reads them out. It is a narrow reader over a shape the
+    /// server owns, and it fails CLOSED: an item it cannot find is treated as
+    /// not equippable, which costs a manual equip rather than firing a command
+    /// the server will refuse.
+    /// </summary>
+    internal static class ItemDefs
+    {
+        public static string NameOf(string defsJson, string id)
+            => Field(defsJson, id, "name") ?? id;
+
+        /// <summary>True when the item declares an equipment slot.</summary>
+        public static bool IsEquippable(string defsJson, string id)
+            => !string.IsNullOrEmpty(Field(defsJson, id, "slot"));
+
+        public static string SlotOf(string defsJson, string id)
+            => Field(defsJson, id, "slot");
+
+        private static string Field(string json, string id, string field)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(id)) return null;
+
+            int at = json.IndexOf($"\"{id}\":{{", StringComparison.Ordinal);
+            if (at < 0) return null;
+            int open = json.IndexOf('{', at);
+
+            // Walk to the matching brace so a field from the NEXT item cannot
+            // be read as this one's.
+            int depth = 0, end = -1;
+            for (int i = open; i < json.Length; i++)
+            {
+                if (json[i] == '{') depth++;
+                else if (json[i] == '}' && --depth == 0) { end = i; break; }
+            }
+            if (end < 0) return null;
+
+            string body = json.Substring(open, end - open + 1);
+            string key = $"\"{field}\":\"";
+            int f = body.IndexOf(key, StringComparison.Ordinal);
+            if (f < 0) return null;
+            f += key.Length;
+            int close = body.IndexOf('"', f);
+            return close < 0 ? null : body.Substring(f, close - f);
+        }
+    }
 
     /// <summary>Look-at targeting, the E prompt, and the shop panel.</summary>
     public sealed class Interaction
@@ -34,6 +86,9 @@ namespace SpaceAdventure.Game
 
         private const float EyeHeight = 1.7f;
 
+        /// <summary>items.json inv_slots. Shown so a full pack is visible before it refuses.</summary>
+        private const int InventorySlots = 20;
+
         private readonly EntityViews _views;
 
         private GUIStyle _style, _heading;
@@ -43,8 +98,13 @@ namespace SpaceAdventure.Game
         private StockEntry[] _stock;
         private string _status = "";
         private int _credits = -1;
+        private ItemStack[] _inventory;
+        private string _defs = "";
 
         public Interaction(EntityViews views) => _views = views;
+
+        /// <summary>The `defs` blob, for item names and slots.</summary>
+        public string Defs { set => _defs = value ?? ""; }
 
         /// <summary>The entity the player is looking at, or 0.</summary>
         public uint Target { get; private set; }
@@ -123,7 +183,7 @@ namespace SpaceAdventure.Game
         {
             if (!r.Ok)
             {
-                _status = $"refused: {r.Body}";
+                _status = Explain(r.Body);
                 return null;
             }
 
@@ -136,22 +196,25 @@ namespace SpaceAdventure.Game
 
                 case Op.ShopBuy:
                 {
-                    var w = JsonUtility.FromJson<WalletResult>(r.Body);
-                    if (w != null) _credits = w.credits;
-                    _status = "bought";
-                    // Equipping is a second command; a purchase does not put
-                    // the thing in your hands, and a shop that leaves you
-                    // holding nothing reads as a shop that failed.
+                    Wallet(r.Body);
+                    _status = $"bought {ItemDefs.NameOf(_defs, _lastBought)}";
+
+                    // Equip only what CAN be equipped. Auto-equipping whatever
+                    // was just bought sent ammunition to the primary slot and
+                    // the server answered wrong_slot, so a perfectly good
+                    // purchase reported an error.
+                    //
+                    // Equipping at all is worth doing: buying a rifle that
+                    // leaves your hands empty reads as a shop that failed.
+                    string slot = ItemDefs.SlotOf(_defs, _lastBought);
+                    if (string.IsNullOrEmpty(slot)) return null;
                     return Encode.Cmd(nextSeq(), Op.Equip,
-                        "{\"slot\":\"primary\",\"item\":\"" + _lastBought + "\"}");
+                        $"{{\"slot\":\"{slot}\",\"item\":\"{_lastBought}\"}}");
                 }
 
                 case Op.Inventory:
-                {
-                    var w = JsonUtility.FromJson<WalletResult>(r.Body);
-                    if (w != null) _credits = w.credits;
+                    Wallet(r.Body);
                     return null;
-                }
 
                 case Op.Equip:
                     _status = "equipped";
@@ -162,7 +225,31 @@ namespace SpaceAdventure.Game
             }
         }
 
+        private void Wallet(string body)
+        {
+            var w = JsonUtility.FromJson<WalletResult>(body);
+            if (w == null) return;
+            _credits = w.credits;
+            if (w.inventory != null) _inventory = w.inventory;
+        }
+
         private string _lastBought = "";
+
+        /// <summary>
+        /// The server's refusal reasons, in words a player can act on.
+        /// "no_space" in particular is not obvious: weapon.pulse has
+        /// stack_max 1, so every rifle bought takes a fresh slot out of 20.
+        /// </summary>
+        private static string Explain(string body) => body switch
+        {
+            var b when b.Contains("no_space") => "inventory full — 20 slots, and a rifle takes one each",
+            var b when b.Contains("insufficient_credits") => "not enough credits",
+            var b when b.Contains("wrong_slot") => "that does not go in this slot",
+            var b when b.Contains("out_of_range") => "too far away",
+            var b when b.Contains("not_owned") => "you do not have one",
+            var b when b.Contains("unknown_item") => "no such item",
+            _ => body,
+        };
 
         /// <summary>Draws the prompt and, when open, the shop. Returns a cmd to send, or null.</summary>
         public byte[] Draw(Func<ushort> nextSeq, int credits)
@@ -182,21 +269,25 @@ namespace SpaceAdventure.Game
             }
 
             byte[] send = null;
-            float panelW = 340, panelH = 62 + _stock.Length * 26 + 44;
+            int carried = _inventory?.Length ?? 0;
+            float panelW = 400;
+            float panelH = 84 + _stock.Length * 26 + 26 + carried * 20 + 46;
             var rect = new Rect((Screen.width - panelW) * 0.5f, (Screen.height - panelH) * 0.5f, panelW, panelH);
             GUI.DrawTexture(rect, _panel);
 
-            GUI.Label(new Rect(rect.x + 16, rect.y + 10, panelW, 22), "QUARTERMASTER VEX", _heading);
-            GUI.Label(new Rect(rect.x + 16, rect.y + 32, panelW, 20),
+            float y = rect.y + 10;
+            GUI.Label(new Rect(rect.x + 16, y, panelW, 22), "QUARTERMASTER VEX", _heading);
+            y += 24;
+            GUI.Label(new Rect(rect.x + 16, y, panelW, 20),
                 _credits >= 0 ? $"credits: {_credits}" : "credits: —", _style);
+            y += 26;
 
             for (int i = 0; i < _stock.Length; i++)
             {
                 StockEntry e = _stock[i];
-                var row = new Rect(rect.x + 16, rect.y + 60 + i * 26, panelW - 32, 22);
-                bool afford = _credits < 0 || _credits >= e.price;
-                GUI.enabled = afford;
-                if (GUI.Button(row, $"{e.item}   —   {e.price} cr"))
+                var row = new Rect(rect.x + 16, y, panelW - 32, 22);
+                GUI.enabled = _credits < 0 || _credits >= e.price;
+                if (GUI.Button(row, $"{ItemDefs.NameOf(_defs, e.item)}   —   {e.price} cr"))
                 {
                     _lastBought = e.item;
                     _status = "buying...";
@@ -204,9 +295,28 @@ namespace SpaceAdventure.Game
                         $"{{\"npc\":{_shopNpc},\"item\":\"{e.item}\",\"qty\":1}}");
                 }
                 GUI.enabled = true;
+                y += 26;
             }
 
-            GUI.Label(new Rect(rect.x + 16, rect.yMax - 40, panelW - 32, 20), _status, _style);
+            // What you are carrying, and how full the pack is. Without this a
+            // refusal for "no space" is a mystery: nothing on screen ever said
+            // how many of the twenty slots were gone, or that a second rifle
+            // costs a whole slot because it does not stack.
+            y += 6;
+            GUI.Label(new Rect(rect.x + 16, y, panelW - 32, 20),
+                $"carrying  ({carried}/{InventorySlots} slots)", _style);
+            y += 20;
+            if (_inventory != null)
+            {
+                foreach (ItemStack it in _inventory)
+                {
+                    GUI.Label(new Rect(rect.x + 26, y, panelW - 42, 18),
+                        $"{ItemDefs.NameOf(_defs, it.item)}  x{it.qty}", _style);
+                    y += 20;
+                }
+            }
+
+            GUI.Label(new Rect(rect.x + 16, rect.yMax - 42, panelW - 32, 20), _status, _style);
             if (GUI.Button(new Rect(rect.xMax - 90, rect.yMax - 32, 74, 24), "close")) CloseShop();
             return send;
         }

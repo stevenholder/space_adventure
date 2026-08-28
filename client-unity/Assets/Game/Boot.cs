@@ -386,6 +386,11 @@ namespace SpaceAdventure.Game
                     Debug.Log($"colliders: {_colliders.Length}");
                     break;
                 }
+                case Msg.Defs:
+                    // Item names, kinds and equipment slots. The shop needs
+                    // the slot to know what can be equipped at all.
+                    _interact.Defs = Decode.Defs(frame.Reader);
+                    break;
                 case Msg.Spawn:
                     _views.OnSpawn(Decode.Spawn(frame.Reader));
                     break;
