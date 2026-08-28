@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
 )
 
@@ -97,5 +98,46 @@ func TestRewindDropsStalenessForAnUnknownSeq(t *testing.T) {
 	c.rttEWMA = 10 * time.Second // absurd RTT must not escape the ring
 	if got := c.rewindTicks(now, 9999); got != sim.HistoryTicks {
 		t.Errorf("rewindTicks with a 10 s RTT = %d, want the %d-tick clamp", got, sim.HistoryTicks)
+	}
+}
+
+// TestShopNPCIsAliveInTheRealWorld checks the placement path that actually
+// runs.
+//
+// sim.SpawnZoneNPCs has covered this rule since the bug was found, and it
+// proved nothing: newWorld has its own copy of the placement loop, and that
+// copy is what the server uses. Fixing the tested one changed the shipped
+// behaviour not at all — the quartermaster still spawned flagged dead, 3.6 m
+// from the spawn point, hidden on every client. So this asserts against a
+// real server's world rather than against the helper.
+func TestShopNPCIsAliveInTheRealWorld(t *testing.T) {
+	srv, _ := newTestServer(t)
+
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+
+	var shops, combatants int
+	for _, e := range srv.worldEnts {
+		if uint16(e.Kind) != protocol.EntityTypeNPC {
+			continue
+		}
+		arch := srv.reg.NPCs[e.Def]
+		if arch.MaxHealth > 0 {
+			combatants++
+			continue
+		}
+		shops++
+		if e.Flags&protocol.FlagDead != 0 {
+			t.Errorf("%s (%d) is flagged dead, so every client hides it", e.Def, e.ID)
+		}
+		if _, carries := e.Data.(*sim.NPCState); carries {
+			t.Errorf("%s (%d) carries combat state; the respawn step will kill it on a timer", e.Def, e.ID)
+		}
+	}
+	if shops == 0 {
+		t.Fatal("no shop NPC in the world — this test would pass vacuously")
+	}
+	if combatants == 0 {
+		t.Fatal("no combat NPCs in the world — the check cannot tell the two apart")
 	}
 }

@@ -156,11 +156,15 @@ func New(t *terrain.Field, seed uint64) *Server {
 				// sim.NPCState carries the post and respawn timer the sim
 				// owns; the AI runner's own state lives separately in
 				// Server.npcAI, split by which package owns the rule.
-				data = &sim.NPCState{
-					Archetype: p.Def,
-					Post:      p.Pos,
-					PostQuat:  p.Quat,
-					MaxHealth: reg.NPCs[p.Def].MaxHealth,
+				//
+				// Whether a placement gets that state at all is one rule, and
+				// it lives in sim.CombatStateFor — this loop is a second
+				// implementation of sim.SpawnZoneNPCs, and when they disagreed
+				// it was this one that ran (see CombatStateFor). Checking for
+				// nil rather than assigning straight through is required: a
+				// typed nil in an interface is not a nil interface.
+				if st := sim.CombatStateFor(p.Def, reg.NPCs[p.Def], p.Pos, p.Quat); st != nil {
+					data = st
 				}
 			}
 			ent := &sim.Ent{
