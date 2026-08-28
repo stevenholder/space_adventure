@@ -313,11 +313,24 @@ namespace SpaceAdventure.Game
                 (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z,
                 (ushort)li.ActionMask, _seq));
 
+            // Nothing happens without a weapon. The server drops a `fire`
+            // from an unarmed player outright, so sending one is a wasted
+            // round trip — and showing the muzzle flash anyway is a lie: the
+            // effect claims a shot the server never resolved. The armed state
+            // is the server's own, from the `equipped` event, so this cannot
+            // drift into refusing to let an armed player shoot.
+            //
+            // An empty magazine is the same bug one level down and is not
+            // covered: the client does not track ammunition yet, so the flash
+            // still fires on a dry weapon. `reload` is a routed stub
+            // server-side, so there is nothing to track against until that
+            // lands.
+            //
             // Cadence is enforced server-side and an early shot is DROPPED,
             // not queued, so a client that fires every tick just loses most of
             // them. Hold to the weapon's own interval; the server allows one
             // tick of tolerance, which covers the rounding.
-            if (li.FirePressed && Time.time >= _nextFireAt)
+            if (li.FirePressed && _viewModel.WeaponVisible && Time.time >= _nextFireAt)
             {
                 _nextFireAt = Time.time + FireIntervalSeconds;
                 // The shot names the input that was in effect when the trigger
