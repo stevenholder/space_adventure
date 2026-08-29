@@ -128,10 +128,19 @@ namespace SpaceAdventure.Game
             // SkinnedMeshRenderer is all or nothing, and the whole body would
             // have had to go shadows-only.
             //
-            // Which parts: `head` because the camera is inside it, `torso`
-            // because at 0.3 m it fills the lower half of the screen, and the
-            // arms because they hang off the shoulders into view. The legs are
-            // what you actually want to see.
+            // Which parts: `head`, and ONLY `head`.
+            //
+            // The box model hid everything above the waist, and that was right
+            // for the box model: its torso was a flat slab directly above the
+            // body axis, 0.25 m from a lens that sits at 1.70, filling the
+            // lower half of the screen. The real model is not that shape. Its
+            // torso tops out around 1.2 m -- half a metre BELOW the eye -- so
+            // looking down it reads as a chest, which is what looking down is
+            // supposed to show.
+            //
+            // Hiding it instead left the legs walking around on their own,
+            // because `torso` carries the hips as well as the chest. The head
+            // is the only part the camera is actually inside.
             // The renderer is NOT on the node that carries the name. glTFast
             // makes a GameObject per glTF node and then a CHILD of it per mesh
             // PRIMITIVE, and these models are multi-primitive -- the astronaut
@@ -144,7 +153,7 @@ namespace SpaceAdventure.Game
             {
                 foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
                 {
-                    if (!UpperBody.Contains(t.gameObject.name)) continue;
+                    if (!CameraIsInside.Contains(t.gameObject.name)) continue;
                     foreach (Renderer r in t.GetComponentsInChildren<Renderer>(true))
                         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
                 }
@@ -155,11 +164,12 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
-        /// The nodes hidden on the LOCAL body only. Names are the contract from
-        /// art/README.md, which every character model is imported to satisfy.
+        /// The nodes drawn shadows-only on the LOCAL body. Names are the
+        /// contract from art/README.md, which every character model is
+        /// imported to satisfy.
         /// </summary>
-        private static readonly System.Collections.Generic.HashSet<string> UpperBody =
-            new System.Collections.Generic.HashSet<string> { "head", "torso", "arm.l", "arm.r" };
+        private static readonly System.Collections.Generic.HashSet<string> CameraIsInside =
+            new System.Collections.Generic.HashSet<string> { "head" };
 
         /// <summary>Drives the local body's legs. Null until the model lands.</summary>
         private CharacterAnim _bodyAnim;
