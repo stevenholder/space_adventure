@@ -9,7 +9,8 @@
       "source": "recipes/char.player.json",
       "description": "Player character. Kenney astronautA, rescaled to 1.8 m and renamed to the node contract (eye/head/torso/arm.l/arm.r/leg.l/leg.r). Segmented, unrigged -- the client rotates the limbs. Faces -Z (the backpack sits further +Z than the head). eye is at 1.7 m because GDD eye_height is 1.7, not because of where this head sits. NOTE: 1.10 m across with the arms out, against a server capsule 0.70 m wide -- the height matches the capsule, the arm span does not.",
       "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "author": "Kenney",
+      "rig": "animated"
     },
     {
       "id": "prop.rock.a",
@@ -67,7 +68,8 @@
       "source": "recipes/npc.shopkeeper.json",
       "description": "Quartermaster NPC. Kenney astronautB, so it does not read as another player. Same node contract as char.player, so nametag and animation code work unchanged.",
       "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "author": "Kenney",
+      "rig": "animated"
     },
     {
       "id": "prop.target",
@@ -101,7 +103,8 @@
       "source": "recipes/npc.grunt.json",
       "description": "Phase 3 camp grunt (melee). server/data/npcs.json has referenced this asset id since Phase 3 with nothing behind it -- the client fell back to a red-tinted box stack. Same node contract as char.player so nametags and animation code work unchanged; tinted red to read as hostile at a distance.",
       "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "author": "Kenney",
+      "rig": "animated"
     },
     {
       "id": "npc.gunner",
@@ -111,7 +114,8 @@
       "source": "recipes/npc.gunner.json",
       "description": "Phase 3 camp gunner (ranged). As npc.grunt, tinted purple so the two archetypes are told apart at a glance -- which matters, because they behave differently: the gunner shoots from 26 m and the grunt closes to 2 m.",
       "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "author": "Kenney",
+      "rig": "animated"
     },
     {
       "id": "prop.loot.crate",

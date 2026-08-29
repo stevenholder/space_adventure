@@ -33,6 +33,19 @@ namespace SpaceAdventure.Game
         public bool Dead;
         public string EquippedItem = "";
 
+        /// <summary>Set once the model loads, null for anything without clips.</summary>
+        public CharacterAnim Anim;
+
+        /// <summary>
+        /// Where this body was drawn last frame, and how fast it is therefore
+        /// moving. Speed comes from the drawn positions rather than from the
+        /// wire because the drawn positions are what the animation has to
+        /// agree with -- see CharacterAnim.
+        /// </summary>
+        public Vector3 LastDrawn;
+        public bool HasLastDrawn;
+        public float Speed;
+
         /// <summary>
         /// The most health this entity has ever been seen with.
         ///
@@ -164,7 +177,26 @@ namespace SpaceAdventure.Game
                     view.Root.transform.rotation = Quaternion.LookRotation(
                         Vector3.ProjectOnPlane(fwd, up).normalized, up);
                 }
-                view.Root.SetActive(!kv.Value.Dead);
+                // Speed as DRAWN, smoothed. A snapshot arrives every few
+                // frames and the pose between them is interpolated, so the
+                // raw per-frame delta is spiky enough to flicker a body
+                // between idle and walk while it moves steadily.
+                Vector3 drawn = view.Root.transform.position;
+                if (view.HasLastDrawn && Time.deltaTime > 1e-5f)
+                {
+                    float instant = Vector3.Distance(drawn, view.LastDrawn) / Time.deltaTime;
+                    view.Speed = Mathf.Lerp(view.Speed, instant, 0.25f);
+                }
+                view.LastDrawn = drawn;
+                view.HasLastDrawn = true;
+                view.Anim?.Drive(view.Speed, view.Dead);
+
+                // A body with a death clip stays visible to play it out.
+                // Anything WITHOUT one still vanishes the moment it dies, as
+                // it always has: a target dummy has no death animation and
+                // respawns after three seconds, and leaving it standing there
+                // dead would just look like the hit did not register.
+                view.Root.SetActive(!kv.Value.Dead || view.Anim != null);
             }
         }
 
@@ -188,12 +220,15 @@ namespace SpaceAdventure.Game
             // the retired client.
             GameObject box = BoxMesh.Attach(root.transform, "model", MeshFor(type, label), _material, 0);
 
-            _assets.Attach(AssetFor(type, label), root.transform, _ =>
+            var view = new EntityView { Id = id, Type = type, Label = label ?? "", Root = root };
+
+            _assets.Attach(AssetFor(type, label), root.transform, model =>
             {
                 if (box != null) Object.Destroy(box);
+                view.Anim = CharacterAnim.For(model);
             });
 
-            return new EntityView { Id = id, Type = type, Label = label ?? "", Root = root };
+            return view;
         }
 
         /// <summary>

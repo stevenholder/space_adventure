@@ -274,6 +274,95 @@ function addMounts(doc, mounts) {
   return n;
 }
 
+/**
+ * Copy animation clips off a DIFFERENT model and re-point them at this one.
+ *
+ * The good-looking CC0 characters and the animated CC0 characters are not the
+ * same characters. Kenney's Space Kit astronaut is the right look for this
+ * game and ships no animation at all; Kenney's Blocky Characters ship 27 clips
+ * -- idle, walk, sprint, die, holding-both-shoot -- on six boxes that would be
+ * a downgrade to look at. Retargeting takes the clips from one and leaves the
+ * geometry of the other.
+ *
+ * That works here because both packs use the same rig convention, which was
+ * checked before relying on it: limb nodes sit AT THE JOINT and their mesh
+ * hangs off the node origin (a leg's vertices run from y=-1 to y=0 below its
+ * hip node). Rotating such a node swings the limb from the shoulder or the
+ * hip. A pack that instead baked limb positions into vertices and left every
+ * node at the origin would spin its arms around the character's feet, and no
+ * amount of renaming would fix it.
+ *
+ * ROTATION CHANNELS ONLY, and that is the other thing that makes this safe.
+ * The source clips also carry a translation track on `root` -- the vertical
+ * bob of a walk -- authored in units where the character is 2.2 tall. This
+ * model is 0.79 before it is fitted to 1.8. A translation is in metres and
+ * does not scale with the model, so importing that track would bob the
+ * astronaut by most of its own height. A rotation is scale-free and means the
+ * same thing on any rig, so rotations come across and nothing else does. The
+ * cost is a walk with no bob, which is a small loss next to one that pogos.
+ */
+async function retargetAnimations(doc, spec) {
+  if (!spec) return { clips: 0, channels: 0, dropped: 0 };
+
+  const src = await io.read(path.resolve(artDir, spec.src));
+  const buffer = doc.getRoot().listBuffers()[0];
+
+  // Destination nodes by name, so a mapped target that does not exist is
+  // caught here rather than becoming a channel that animates nothing.
+  const byName = new Map();
+  for (const node of doc.getRoot().listNodes()) byName.set(node.getName(), node);
+
+  const keep = spec.keep ? new Set(spec.keep) : null;
+  let clips = 0, channels = 0, dropped = 0;
+
+  for (const anim of src.getRoot().listAnimations()) {
+    const name = anim.getName();
+    if (keep && !keep.has(name)) continue;
+
+    const out = doc.createAnimation(name);
+    let kept = 0;
+
+    for (const channel of anim.listChannels()) {
+      if (channel.getTargetPath() !== "rotation") { dropped++; continue; }
+
+      const from = channel.getTargetNode()?.getName();
+      const to = from != null ? spec.map?.[from] : undefined;
+      const node = to != null ? byName.get(to) : undefined;
+      if (!node) { dropped++; continue; }
+
+      const s = channel.getSampler();
+      const input = doc
+        .createAccessor()
+        .setType("SCALAR")
+        .setArray(new Float32Array(s.getInput().getArray()))
+        .setBuffer(buffer);
+      const output = doc
+        .createAccessor()
+        .setType("VEC4")
+        .setArray(new Float32Array(s.getOutput().getArray()))
+        .setBuffer(buffer);
+
+      const sampler = doc
+        .createAnimationSampler()
+        .setInterpolation(s.getInterpolation())
+        .setInput(input)
+        .setOutput(output);
+
+      out.addSampler(sampler);
+      out.addChannel(
+        doc.createAnimationChannel().setTargetNode(node).setTargetPath("rotation").setSampler(sampler),
+      );
+      kept++;
+    }
+
+    if (kept === 0) { out.dispose(); continue; }
+    clips++;
+    channels += kept;
+  }
+
+  return { clips, channels, dropped };
+}
+
 /** Apply the node-name contract: `grip`, `muzzle`, `hand.r`, `seat.pilot`. */
 function renameNodes(doc, map) {
   if (!map) return 0;
@@ -350,6 +439,9 @@ export async function importPack(recipe) {
   const { scale } = fit(doc, recipe);
   const renamed = renameNodes(doc, recipe.rename);
   const mounted = addMounts(doc, recipe.mounts);
+  // After the renames: the map in a recipe is written in terms of this
+  // project's node names, not the source pack's.
+  const anim = await retargetAnimations(doc, recipe.animations);
 
   // Weld before simplify: meshoptimizer needs shared vertices to collapse
   // edges, and a flat-shaded export has none.
@@ -367,7 +459,7 @@ export async function importPack(recipe) {
   mkdirSync(path.dirname(out), { recursive: true });
   await io.write(out, doc);
 
-  return { id: recipe.id, out: recipe.out, tris, scale, baked, renamed, mounted };
+  return { id: recipe.id, out: recipe.out, tris, scale, baked, renamed, mounted, anim };
 }
 
 /**
@@ -519,5 +611,6 @@ const result = await importPack(recipe);
 updateManifest(result, recipe);
 console.log(
   `${result.id}: ${result.out}  ${result.tris} tris  scale x${result.scale.toFixed(3)}` +
-  `  baked ${result.baked} prims  renamed ${result.renamed}  mounts ${result.mounted}`,
+  `  baked ${result.baked} prims  renamed ${result.renamed}  mounts ${result.mounted}` +
+  (result.anim.clips ? `  clips ${result.anim.clips} (${result.anim.channels} tracks)` : ""),
 );

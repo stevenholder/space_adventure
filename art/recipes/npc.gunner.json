@@ -29,5 +29,24 @@
   ],
   "license": "CC0",
   "author": "Kenney",
-  "source_url": "https://kenney.nl/assets/space-kit"
+  "source_url": "https://kenney.nl/assets/space-kit",
+  "animations": {
+    "$comment": "Clips come off Kenney's Blocky Characters, whose rig uses the same joint-pivot convention as the Space Kit astronaut -- checked before relying on it. Mapped in terms of THIS project's node names, since the renames above have already run. Only rotations survive the retarget; see import_pack.mjs.",
+    "src": "vendor/kenney-blocky-characters/Models/GLB format/character-a.glb",
+    "map": {
+      "leg-left": "leg.l",
+      "leg-right": "leg.r",
+      "arm-left": "arm.l",
+      "arm-right": "arm.r",
+      "head": "head",
+      "torso": "torso"
+    },
+    "keep": [
+      "idle",
+      "walk",
+      "sprint",
+      "die"
+    ]
+  },
+  "rig": "animated"
 }

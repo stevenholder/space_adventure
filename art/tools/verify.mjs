@@ -52,6 +52,15 @@ const BUDGETS = [
 // in a generator is a silent runtime break. `eyeHeadSiblings` additionally
 // asserts eye is not under head — hiding head for a local body must not hide
 // the camera.
+// Clip contracts. An asset whose manifest row says `rig: "animated"` must
+// carry these, and every track in them must land on a node that exists --
+// retargeting animation from another model is a rename away from producing
+// clips that animate nothing, and a body that slides instead of walking looks
+// exactly like a body that was never animated.
+const CLIP_CONTRACTS = {
+  animated: ["idle", "walk", "sprint", "die"],
+};
+
 const NODE_CONTRACTS = {
   "char.player": {
     nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
@@ -139,6 +148,29 @@ for (const asset of selected) {
 
   const tris = countTriangles(gltf.scene);
   const problems = [];
+
+  // Clips, for anything declaring a rig. GLTFLoader hands animations back as
+  // THREE.AnimationClip, and a track name is "<node>.<property>" -- so a
+  // track whose node is missing from the scene is one that will silently do
+  // nothing at runtime.
+  const rig = asset.rig ?? null;
+  if (rig && CLIP_CONTRACTS[rig]) {
+    const clips = new Map((gltf.animations ?? []).map((c) => [c.name, c]));
+    for (const want of CLIP_CONTRACTS[rig]) {
+      const clip = clips.get(want);
+      if (!clip) {
+        problems.push(`missing clip "${want}"`);
+        continue;
+      }
+      if (clip.tracks.length === 0) problems.push(`clip "${want}" has no tracks`);
+      for (const track of clip.tracks) {
+        const node = track.name.split(".")[0];
+        if (findByName(gltf.scene, node).length === 0)
+          problems.push(`clip "${want}" targets missing node "${node}"`);
+      }
+    }
+  }
+
 
   if (tris !== asset.tris)
     problems.push(`manifest tris ${asset.tris} != counted ${tris}`);

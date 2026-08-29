@@ -116,7 +116,53 @@ namespace SpaceAdventure.Game
             GameObject head = BoxMesh.Attach(_body, "head-shadow", Models.PlayerHead(), material, 0);
             head.GetComponent<MeshRenderer>().shadowCastingMode =
                 UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+
+            // The real body, over the boxes: your own legs, animated, when you
+            // look down.
+            //
+            // The model is segmented rather than skinned -- separate nodes per
+            // limb -- which is what makes this possible at all. Everything from
+            // the waist up is switched to shadows-only instead of hidden, so
+            // the silhouette on the ground stays whole while nothing is in the
+            // lens. A skinned body could not be split this way: one
+            // SkinnedMeshRenderer is all or nothing, and the whole body would
+            // have had to go shadows-only.
+            //
+            // Which parts: `head` because the camera is inside it, `torso`
+            // because at 0.3 m it fills the lower half of the screen, and the
+            // arms because they hang off the shoulders into view. The legs are
+            // what you actually want to see.
+            assets.Attach("char.player", _body, model =>
+            {
+                foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
+                {
+                    if (!UpperBody.Contains(t.gameObject.name)) continue;
+                    var r = t.GetComponent<Renderer>();
+                    if (r != null)
+                        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+                }
+                _bodyAnim = CharacterAnim.For(model);
+                foreach (Renderer r in _body.GetComponentsInChildren<Renderer>())
+                    if (r.gameObject.name is "model" or "head-shadow") r.enabled = false;
+            });
         }
+
+        /// <summary>
+        /// The nodes hidden on the LOCAL body only. Names are the contract from
+        /// art/README.md, which every character model is imported to satisfy.
+        /// </summary>
+        private static readonly System.Collections.Generic.HashSet<string> UpperBody =
+            new System.Collections.Generic.HashSet<string> { "head", "torso", "arm.l", "arm.r" };
+
+        /// <summary>Drives the local body's legs. Null until the model lands.</summary>
+        private CharacterAnim _bodyAnim;
+
+        /// <summary>
+        /// Your own gait, from your own predicted speed -- not from drawn
+        /// positions like a remote, because the local body is predicted rather
+        /// than interpolated and its transform is authoritative here.
+        /// </summary>
+        private void DriveBody(float speed) => _bodyAnim?.Drive(speed, false);
 
         /// <summary>
         /// The barrel tip, in world space. Shots are DRAWN from here; they are
@@ -149,6 +195,10 @@ namespace SpaceAdventure.Game
 
             _rig.localPosition = RestPosition + new Vector3(bobX, bobY, 0f);
             _rig.localEulerAngles = RestEuler + new Vector3(_sway.y, _sway.x, 0f);
+
+            // Same speed the weapon bob already runs on, so your legs and your
+            // gun cannot disagree about whether you are moving.
+            DriveBody(speed);
         }
 
         /// <summary>
