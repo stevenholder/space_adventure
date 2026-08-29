@@ -132,17 +132,24 @@ namespace SpaceAdventure.Game
             // because at 0.3 m it fills the lower half of the screen, and the
             // arms because they hang off the shoulders into view. The legs are
             // what you actually want to see.
+            // The renderer is NOT on the node that carries the name. glTFast
+            // makes a GameObject per glTF node and then a CHILD of it per mesh
+            // PRIMITIVE, and these models are multi-primitive -- the astronaut
+            // bakes 18 primitives across 6 meshes. So `torso` is an empty
+            // transform with the geometry hanging underneath it, and asking
+            // the named node for its own Renderer finds nothing, silently
+            // leaves the head lit, and puts your own face against the lens.
+            // The whole subtree has to be walked.
             assets.Attach("char.player", _body, model =>
             {
                 foreach (Transform t in model.GetComponentsInChildren<Transform>(true))
                 {
                     if (!UpperBody.Contains(t.gameObject.name)) continue;
-                    var r = t.GetComponent<Renderer>();
-                    if (r != null)
+                    foreach (Renderer r in t.GetComponentsInChildren<Renderer>(true))
                         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
                 }
                 _bodyAnim = CharacterAnim.For(model);
-                foreach (Renderer r in _body.GetComponentsInChildren<Renderer>())
+                foreach (Renderer r in _body.GetComponentsInChildren<Renderer>(true))
                     if (r.gameObject.name is "model" or "head-shadow") r.enabled = false;
             });
         }

@@ -207,8 +207,26 @@ namespace SpaceAdventure.Game
                 if (from > 1e-6f && to > 1e-6f)
                 {
                     float k = to / from;
-                    go.transform.localScale = new Vector3(k, k, k);
-                    loaded.center *= k;
+
+                    // A fitted model is a REPLACEMENT for its fallback, so the
+                    // two should already be about the same size and k should
+                    // land near 1. A wild ratio means the bounds were measured
+                    // wrong, and applying it would drop a building-sized prop
+                    // in front of the camera with nothing in the log to say
+                    // why. Refuse it and keep the model at its authored size,
+                    // which is at worst slightly misplaced instead of
+                    // filling the screen.
+                    if (k < 0.2f || k > 5f)
+                    {
+                        Debug.LogWarning(
+                            $"asset {assetId}: fit ratio {k:F2} is out of range " +
+                            $"(model {from:F2} m vs fallback {to:F2} m); leaving it unscaled");
+                    }
+                    else
+                    {
+                        go.transform.localScale = new Vector3(k, k, k);
+                        loaded.center *= k;
+                    }
                 }
                 go.transform.localPosition += target.center - loaded.center;
 
