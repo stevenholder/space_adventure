@@ -83,7 +83,7 @@
       "tris": 24,
       "license": "CC0",
       "source": "tools/gen_struct.py",
-      "description": "Phase 2 range wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Visual only \u2014 the authoritative shape is the `colliders` message."
+      "description": "Phase 2 range wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Visual only — the authoritative shape is the `colliders` message."
     },
     {
       "id": "struct.post",
@@ -110,6 +110,16 @@
       "license": "CC0",
       "source": "recipes/npc.gunner.json",
       "description": "Phase 3 camp gunner (ranged). As npc.grunt, tinted purple so the two archetypes are told apart at a glance -- which matters, because they behave differently: the gunner shoots from 26 m and the grunt closes to 2 m.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.loot.crate",
+      "file": "props/loot_crate.glb",
+      "tris": 56,
+      "license": "CC0",
+      "source": "recipes/prop.loot.crate.json",
+      "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
       "source_url": "https://kenney.nl/assets/space-kit",
       "author": "Kenney"
     }

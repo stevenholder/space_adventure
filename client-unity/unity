@@ -142,11 +142,25 @@ case "$cmd" in
       echo "-out:\"$(mktemp -u).dll\""
       for f in "$managed"/*.dll; do echo "-r:\"$f\""; done
       for f in "$netref"/*.dll; do echo "-r:\"$f\""; done
+      # Sim, Net and GameCore are ALSO built by headless/*.csproj from the
+      # same sources. When the Editor has the project open it will not have
+      # recompiled since your last edit, so its copy in ScriptAssemblies can
+      # be older than the one `make unity-test` just produced -- and then this
+      # reports a missing type that in fact compiles fine. Prefer whichever of
+      # the two is newer.
+      newest() {
+        local best="$1"; shift
+        for cand in "$@"; do
+          [[ -f "$cand" && "$cand" -nt "$best" ]] && best="$cand"
+        done
+        printf '%s' "$best"
+      }
       for f in "$asm"/*.dll; do
-        case "$(basename "$f")" in
+        name="$(basename "$f")"
+        case "$name" in
           Game.dll|*Editor*|*Test*|Assembly-CSharp*) continue ;;
         esac
-        echo "-r:\"$f\""
+        echo "-r:\"$(newest "$f" "$here"/headless/*/bin/*/netstandard2.1/"$name")\""
       done
       # Precompiled package DLLs are not compiled by Unity and so never land in
       # ScriptAssemblies. Newtonsoft is one, and Assets/Net/Defs.cs needs it.

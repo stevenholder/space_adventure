@@ -167,6 +167,102 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
+        /// Drops a loaded model into the space its fallback box mesh already
+        /// occupies, and onto its layer.
+        ///
+        /// This exists because the rig around a model is tuned to the model.
+        /// The first-person rifle is the case that forced it: the box rifle
+        /// points +Z with its origin at the grip, and the hands, the muzzle
+        /// marker and the rest pose are all measured against that. The
+        /// imported one points -Z with a centred origin, because that is what
+        /// art/README.md asks every weapon for. Hardcoding the offset between
+        /// those two frames would be a number nobody could check, and it would
+        /// be wrong again the next time the model changed.
+        ///
+        /// So the model is fitted to the BOUNDS of the box it replaces: same
+        /// volume, same centre, so everything measured against the old one
+        /// still lands. `yaw` is the one thing that cannot be recovered from a
+        /// bounding box -- a box does not know which end is the barrel.
+        ///
+        /// Scale is uniform, from the longest axis, so a model with slightly
+        /// different proportions is not stretched to match.
+        /// </summary>
+        public void AttachFitted(string assetId, Transform parent, Mesh fallback,
+                                 float yaw, int layer, Action<GameObject> onAttached)
+        {
+            Attach(assetId, parent, go =>
+            {
+                SetLayer(go, layer);
+                go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+
+                if (!LocalBounds(go, parent, out Bounds loaded) || loaded.size.sqrMagnitude < 1e-12f)
+                {
+                    onAttached?.Invoke(go);
+                    return;
+                }
+
+                Bounds target = fallback.bounds;
+                float from = Mathf.Max(loaded.size.x, Mathf.Max(loaded.size.y, loaded.size.z));
+                float to = Mathf.Max(target.size.x, Mathf.Max(target.size.y, target.size.z));
+                if (from > 1e-6f && to > 1e-6f)
+                {
+                    float k = to / from;
+                    go.transform.localScale = new Vector3(k, k, k);
+                    loaded.center *= k;
+                }
+                go.transform.localPosition += target.center - loaded.center;
+
+                onAttached?.Invoke(go);
+            });
+        }
+
+        /// <summary>Bounds of everything under <paramref name="go"/>, in
+        /// <paramref name="space"/>'s local frame.</summary>
+        private static bool LocalBounds(GameObject go, Transform space, out Bounds bounds)
+        {
+            bounds = default;
+            var filters = go.GetComponentsInChildren<MeshFilter>();
+            var skinned = go.GetComponentsInChildren<SkinnedMeshRenderer>();
+            bool any = false;
+
+            foreach (MeshFilter f in filters)
+            {
+                if (f.sharedMesh == null) continue;
+                any = Encapsulate(f.sharedMesh.bounds, f.transform, space, ref bounds, any);
+            }
+            foreach (SkinnedMeshRenderer r in skinned)
+            {
+                if (r.sharedMesh == null) continue;
+                any = Encapsulate(r.sharedMesh.bounds, r.transform, space, ref bounds, any);
+            }
+            return any;
+        }
+
+        private static bool Encapsulate(Bounds local, Transform from, Transform space,
+                                        ref Bounds acc, bool any)
+        {
+            Vector3 c = local.center, e = local.extents;
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = new Vector3(
+                    c.x + ((i & 1) == 0 ? -e.x : e.x),
+                    c.y + ((i & 2) == 0 ? -e.y : e.y),
+                    c.z + ((i & 4) == 0 ? -e.z : e.z));
+                Vector3 p = space.InverseTransformPoint(from.TransformPoint(corner));
+                if (!any) { acc = new Bounds(p, Vector3.zero); any = true; }
+                else acc.Encapsulate(p);
+            }
+            return any;
+        }
+
+        private static void SetLayer(GameObject go, int layer)
+        {
+            go.layer = layer;
+            foreach (Transform t in go.GetComponentsInChildren<Transform>(true))
+                t.gameObject.layer = layer;
+        }
+
+        /// <summary>
         /// Hands back the loaded model's first Mesh, for callers that draw
         /// geometry themselves rather than mounting a GameObject -- the rock
         /// scatter instances one mesh four hundred times and wants no

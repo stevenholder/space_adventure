@@ -237,6 +237,16 @@ namespace SpaceAdventure.Game
             EntityType.Player => Defs.EntityAsset("player"),
             EntityType.Target => Defs.EntityAsset("target"),
             EntityType.Npc => Fallback(Defs.NpcAsset(def), Defs.EntityAsset("npc")),
+
+            // Loot is the one id named here rather than by the server, and it
+            // is not an exception being smuggled in. The server has an
+            // entity_def for everything it has something to SAY about --
+            // hitbox, max health, damageable -- and loot has none of those: it
+            // is not shot at and it has no hitbox, so items.json gives it no
+            // def and therefore no asset field to read. What a dropped crate
+            // looks like is a client-side question about client-side art.
+            EntityType.Loot => "prop.loot.crate",
+
             _ => "",
         };
 

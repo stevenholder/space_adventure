@@ -182,7 +182,7 @@ namespace SpaceAdventure.Game
             _views = new EntityViews(transform, _material, _assets);
             _structures = new Structures(transform, _material, _assets);
             _rocks = new Rocks(_material, _assets);
-            _viewModel = new ViewModel(cam, _material, vmLayer, transform);
+            _viewModel = new ViewModel(cam, _material, vmLayer, transform, _assets);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
             _map = new MapView();

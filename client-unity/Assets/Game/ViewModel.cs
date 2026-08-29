@@ -24,10 +24,15 @@
 // top half of the view. First-person games hide the local head for exactly
 // this reason.
 //
-// The models are box meshes built in Models.cs. There is no asset pipeline
-// here yet (`art/` holds glTF this client cannot load), so the art is source
-// code — and it is sized from the server's own hitbox, so aim and feel
-// survive real meshes replacing it.
+// The models START as the box meshes in Models.cs and are replaced by the real
+// ones from art/ as they load. The boxes are not dead code: they are what is on
+// screen for the first frames, and they are what the real models are FITTED TO
+// -- the rest pose, the hand placement and the muzzle marker are all measured
+// against the box rifle's frame (+Z forward, origin at the grip), while the
+// imported rifle points -Z about a centred origin because that is the contract
+// art/README.md sets for every weapon. AssetRegistry.AttachFitted reconciles
+// the two by bounding box rather than by a hardcoded offset, so this rig keeps
+// working when the model changes again.
 
 using UnityEngine;
 
@@ -59,7 +64,8 @@ namespace SpaceAdventure.Game
         private Vector2 _sway;
         private float _bobPhase;
 
-        public ViewModel(Camera eye, Material material, int layer, Transform worldParent)
+        public ViewModel(Camera eye, Material material, int layer, Transform worldParent,
+                        AssetRegistry assets)
         {
             // ---- viewmodel: arms and weapon, on the overlay layer ----
             var rig = new GameObject("ViewModel");
@@ -69,6 +75,14 @@ namespace SpaceAdventure.Game
             _rig = rig.transform;
 
             _weapon = BoxMesh.Attach(_rig, "rifle", Models.Rifle(), material, layer);
+
+            // yaw 180: the box rifle points +Z and every offset in this file is
+            // measured in that frame; weapon.pulse points -Z. A bounding box
+            // cannot tell which end is the barrel, so that half is stated here
+            // and the rest is derived.
+            assets.AttachFitted("weapon.pulse", _weapon.transform, Models.Rifle(),
+                                180f, layer,
+                                _ => _weapon.GetComponent<MeshRenderer>().enabled = false);
 
             // Hands are placed ON the rifle, in the rifle's own space, so they
             // stay put if its proportions change: forward hand on the
