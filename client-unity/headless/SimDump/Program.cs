@@ -41,6 +41,8 @@ internal static class Program
         if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
         if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
+        if (Array.IndexOf(args, "--authority") >= 0)
+            return Authority(Arg(args, "--authority"), Arg(args, "--evidence"));
         int colAt = Array.IndexOf(args, "--collide");
         if (colAt >= 0 && colAt + 2 < args.Length) return Collide(args[colAt + 1], args[colAt + 2]);
 
@@ -50,6 +52,7 @@ internal static class Program
         Console.Error.WriteLine("       SimDump --codec-encode <out.hex>  write C->S frames for Go");
         Console.Error.WriteLine("       SimDump --join <ws-url>           join a live server, report what arrives");
         Console.Error.WriteLine("       SimDump --collide <in.json> <out.json>  run the collider scenarios");
+        Console.Error.WriteLine("       SimDump --authority <ws-url> --evidence <out.json>  C3 server authority");
         return 2;
     }
 
@@ -413,6 +416,187 @@ internal static class Program
             }
         }
         return codes;
+    }
+
+    // ---- C3 server authority -------------------------------------------------
+    //
+    // The server is authoritative: a state forced client-side is dragged back
+    // to the server's within one tick.
+    //
+    // Method, unchanged from the TypeScript harness this replaces: join, walk
+    // for 1.5 s so the body is somewhere non-trivial, then shove the PREDICTED
+    // position 4 m sideways along the surface and watch what the next snapshot
+    // does to it. The prediction is client-side, so forcing it grants nothing
+    // and the assertion is exactly that -- the next reconcile puts it back.
+    //
+    // The unit under test is the predictor that ships. That used to be
+    // client/src/net/predictor.ts and is now Game/Core/Prediction.cs, which is
+    // why this harness moved rather than being deleted with the browser
+    // client.
+
+    private const double CorruptDist = 4.0;      // m, the ?corrupt override's offset
+    private const double SnapEps = 1e-3;         // m, C3 snap tolerance
+    private const int WalkMs = 1500;
+    private const int OneTickNetMs = 100;        // one 50 ms tick + network
+    private const int WatchdogMs = 8000;
+
+    private static int Authority(string url, string evidencePath)
+    {
+        using var net = new NetClient();
+        net.Connect(url, "t3", $"t3-{Guid.NewGuid():N}");
+
+        var predictor = new Predictor();
+        TerrainField terrain = null;
+        Vec3 look = default;
+        ushort seq = 0;
+
+        var start = DateTime.UtcNow;
+        double Elapsed() => (DateTime.UtcNow - start).TotalMilliseconds;
+
+        bool forced = false, corrected = false;
+        double preDist = 0, snapDist = 0, correctedAtMs = 0, forcedAtMs = 0;
+        uint forcedTick = 0, correctedTick = 0;
+        Vec3 forcedDir = default;
+        var nextInputAt = 0.0;
+
+        while (Elapsed() < WatchdogMs && !corrected)
+        {
+            while (net.Poll(out var frame))
+            {
+                switch (frame.Type)
+                {
+                    case Msg.Terrain:
+                    {
+                        var t = Decode.Terrain(frame.Reader);
+                        terrain = TerrainField.FromWire(t.Radii, t.RadiusMin, t.RadiusMax);
+                        predictor.Seed(terrain, Array.Empty<SpaceAdventure.Sim.Collider>());
+                        look = predictor.State.Facing;
+                        Console.WriteLine($"terrain + predictor seed: spawn pos={V(predictor.State.Pos)}");
+                        break;
+                    }
+                    case Msg.Colliders:
+                        predictor.SetColliders(ToSim(Decode.Colliders(frame.Reader)));
+                        break;
+                    case Msg.Snapshot:
+                    {
+                        Snapshot snap = Decode.Snapshot(frame.Reader);
+                        foreach (EntityRow row in snap.Entities)
+                        {
+                            if (row.Id != net.EntityId) continue;
+                            var authPos = new Vec3(row.PosX, row.PosY, row.PosZ);
+
+                            if (forced && !corrected)
+                            {
+                                // The reconcile that answers the corruption.
+                                predictor.Reconcile(
+                                    authPos, new Vec3(row.VelX, row.VelY, row.VelZ),
+                                    look, row.Grounded, snap.AckSeq);
+                                snapDist = (predictor.State.Pos - authPos).Length;
+                                corrected = true;
+                                correctedAtMs = Elapsed();
+                                correctedTick = snap.Tick;
+                                break;
+                            }
+
+                            predictor.Reconcile(
+                                authPos, new Vec3(row.VelX, row.VelY, row.VelZ),
+                                look, row.Grounded, snap.AckSeq);
+
+                            // Corrupt once, after the walk, on a snapshot so
+                            // the offset is measured against a fresh truth.
+                            if (!forced && Elapsed() > WalkMs)
+                            {
+                                Vec3 up = predictor.State.Pos.Normalized();
+                                // Any direction along the surface will do; the
+                                // facing projected onto the tangent plane is
+                                // the one that reads as "the player moved".
+                                Vec3 tang = (look - up * Vec3.Dot(look, up)).Normalized();
+                                predictor.ForceOffset(tang * CorruptDist);
+                                preDist = (predictor.State.Pos - authPos).Length;
+                                forced = true;
+                                forcedAtMs = Elapsed();
+                                forcedTick = snap.Tick;
+                                forcedDir = tang;
+                                Console.WriteLine(
+                                    $"CORRUPT at tick {snap.Tick}: auth={V(authPos)} -> " +
+                                    $"forced={V(predictor.State.Pos)} preDist={preDist:F4} m");
+                            }
+                            break;
+                        }
+                        break;
+                    }
+                    default:
+                        break; // everything else is not this criterion
+                }
+            }
+
+            // Inputs on the 20 Hz grid: walk forward until the corruption, then
+            // stand, so the only thing moving the body afterwards is the
+            // server's correction.
+            if (terrain != null && Elapsed() >= nextInputAt)
+            {
+                nextInputAt = Elapsed() + 50;
+                double moveY = forced ? 0 : 1;
+                seq++;
+                predictor.Apply(seq, new Input { MoveX = 0, MoveY = moveY, LookDir = look, ActionMask = 0 });
+                net.Send(Encode.Input(0f, (float)moveY,
+                                      (float)look.X, (float)look.Y, (float)look.Z, 0, seq));
+            }
+            System.Threading.Thread.Sleep(2);
+        }
+
+        _failed = 0;
+        Check("c3a: the forced offset reached the live predicted state",
+              forced && Math.Abs(preDist - CorruptDist) < 1e-2,
+              $"preDist={preDist:F4} m (target {CorruptDist})");
+        Check("c3b: one reconcile snaps back onto the authoritative position",
+              corrected && snapDist < SnapEps,
+              $"snapDist={snapDist:E3} m (limit {SnapEps})");
+        double dt = correctedAtMs - forcedAtMs;
+        Check("c3c: the correction lands within one tick plus network",
+              corrected && dt <= OneTickNetMs,
+              $"{dt:F1} ms (budget {OneTickNetMs} ms), tick {forcedTick} -> {correctedTick}");
+
+        if (!string.IsNullOrEmpty(evidencePath))
+        {
+            var evidence = new
+            {
+                harness = "SimDump --authority (C# Predictor, Game/Core/Prediction.cs)",
+                url,
+                corrupt_dist_m = CorruptDist,
+                pre_dist_m = preDist,
+                snap_dist_m = snapDist,
+                correction_ms = dt,
+                forced_tick = forcedTick,
+                corrected_tick = correctedTick,
+                forced_dir = new[] { forcedDir.X, forcedDir.Y, forcedDir.Z },
+                pass = _failed == 0,
+            };
+            System.IO.File.WriteAllText(evidencePath,
+                Newtonsoft.Json.JsonConvert.SerializeObject(evidence, Newtonsoft.Json.Formatting.Indented) + "\n");
+            Console.WriteLine($"evidence: {evidencePath}");
+        }
+
+        Console.WriteLine(_failed == 0 ? "OVERALL: PASS" : $"OVERALL: FAIL ({_failed})");
+        return _failed == 0 ? 0 : 1;
+    }
+
+    private static string V(Vec3 v) => $"({v.X:F3},{v.Y:F3},{v.Z:F3})";
+
+    private static SpaceAdventure.Sim.Collider[] ToSim(SpaceAdventure.Net.Collider[] rows)
+    {
+        var outp = new SpaceAdventure.Sim.Collider[rows.Length];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            outp[i] = new SpaceAdventure.Sim.Collider
+            {
+                Kind = (SpaceAdventure.Sim.ColliderKind)rows[i].Kind,
+                Center = new Vec3(rows[i].CenterX, rows[i].CenterY, rows[i].CenterZ),
+                Half = new Vec3(rows[i].HalfX, rows[i].HalfY, rows[i].HalfZ),
+                Rot = new Quat(rows[i].QuatX, rows[i].QuatY, rows[i].QuatZ, rows[i].QuatW),
+            };
+        }
+        return outp;
     }
 
     // ---- collider parity ----------------------------------------------------

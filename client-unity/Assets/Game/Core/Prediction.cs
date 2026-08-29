@@ -54,6 +54,22 @@ namespace SpaceAdventure.Game
         /// <summary>The predicted state right now. What the camera follows.</summary>
         public State State => _state;
 
+        /// <summary>
+        /// Shoves the predicted position off the truth, on purpose.
+        ///
+        /// This is the C# half of the retired TypeScript client's `?corrupt`
+        /// dev override, and it exists for one caller: the authority harness,
+        /// which forces the prediction 4 m off and then asserts the server
+        /// drags it back within a tick. C3 is "the server is authoritative",
+        /// and the only way to test that is to lie to the server and watch it
+        /// refuse — which needs a client that CAN lie.
+        ///
+        /// Prediction is client-side by definition, so this grants nothing:
+        /// the server never reads it, and the very next snapshot overwrites
+        /// it. That is the whole assertion.
+        /// </summary>
+        public void ForceOffset(Vec3 delta) => _state.Pos += delta;
+
         /// <summary>Unacknowledged inputs currently being replayed on top of the server's state.</summary>
         public int PendingCount => _pending.Count;
 
