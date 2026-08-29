@@ -26,8 +26,17 @@ For each imported asset, `art/manifest.json` carries:
 
 ## Sources in use
 
-Licence read from `License.txt` inside the downloaded archive, not from the
-website: *"License: (Creative Commons Zero, CC0)"*, Space Kit 2.0, Kenney.
+Licence read from `License.txt` inside each downloaded archive, not from the
+website: *"License: (Creative Commons Zero, CC0)"* — Space Kit 2.0 and Blocky
+Characters 2.0, both Kenney.
+
+Two packs, and the second one contributes no geometry at all. The Space Kit
+astronaut is the right look and ships no animation; Blocky Characters ship 27
+clips on six boxes that would be a downgrade to look at. So the characters
+below are Space Kit geometry carrying Blocky Characters **clips**, retargeted
+by `tools/import_pack.mjs` — which is possible only because both packs put limb
+nodes at the joint with the mesh hanging off the node origin. Any asset whose
+manifest row says `rig: "animated"` has clips from `kenney-blocky-characters`.
 
 | asset id | model | author | licence | source |
 |---|---|---|---|---|
@@ -39,6 +48,8 @@ website: *"License: (Creative Commons Zero, CC0)"*, Space Kit 2.0, Kenney.
 | `npc.shopkeeper` | `astronautB` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `npc.grunt` | `alien` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `npc.gunner` | `alien` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `prop.loot.crate` | `barrel` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| *(clips for every `rig: animated` asset)* | `character-a` | Kenney | CC0 | [Blocky Characters](https://kenney.nl/assets/blocky-characters) |
 
 ## Candidate packs
 
