@@ -25,6 +25,18 @@ NAMESPACE   ?= space-adventure
 SERVER_IMG  := space-adventure/server:latest
 SERVER_PORT ?= 18080
 
+# What the server we are about to build will call itself. Stamped into the
+# binary (Dockerfile.server -> -X main.buildID) and served at /version, so the
+# readiness check below can assert it reached THIS build.
+#
+# "is the server up?" was never the question. curl /healthz returns ok from
+# whatever holds the port -- a pod from yesterday, a cluster nobody remembered
+# starting, a second copy -- and a check that cannot tell those apart from the
+# thing you just built is a check that cannot fail. A packaged client was
+# verified three times against a server image predating the feature under test
+# for exactly that reason.
+BUILD_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(shell git diff --quiet 2>/dev/null || echo -dirty)
+
 # docker build context root (the repo root). Overridable to validate the
 # pipeline against a mirror tree while server/ is not yet compilable.
 ROOT   ?= .
@@ -56,11 +68,30 @@ images:
 	# --provenance=false: local dev images don't need buildx attestations;
 	# without it the loaded image is an OCI index, a plain manifest is simpler
 	# for the kind node's containerd to handle.
-	docker build -f Dockerfile.server --provenance=false -t $(SERVER_IMG) $(ROOT)
+	docker build -f Dockerfile.server --provenance=false \
+		--build-arg BUILD_ID=$(BUILD_ID) -t $(SERVER_IMG) $(ROOT)
 	kind load docker-image $(SERVER_IMG) --name $(CLUSTER)
 
 apply:
-	$(KUBECTL) apply -f deploy/manifests/
+	# --prune: `kubectl apply` only ever adds and updates, so deleting a
+	# manifest leaves whatever it created running forever. The browser
+	# client's Deployment and Service outlived their manifest by 23 hours
+	# that way -- still serving, still answering, long after the files were
+	# gone from the repo.
+	#
+	# Scoped by the label every manifest here carries, so pruning cannot
+	# reach anything this project did not create.
+	#
+	# The allowlist is deliberately short, and Namespace and
+	# PersistentVolumeClaim are deliberately NOT on it. Those two hold the
+	# environment and the Postgres data, and a prune that removes them turns
+	# an editing mistake into lost state. Workloads churn; storage should be
+	# removed on purpose, by hand.
+	$(KUBECTL) apply -f deploy/manifests/ \
+		--prune -l app.kubernetes.io/part-of=space-adventure \
+		--prune-allowlist=apps/v1/Deployment \
+		--prune-allowlist=core/v1/Service \
+		--prune-allowlist=core/v1/Secret
 	# Both images are tagged :latest, so `apply` reports "unchanged" and
 	# Kubernetes keeps the running pods — on freshly built code. Without this
 	# restart, `make up` silently serves whatever was built last time, which
@@ -84,6 +115,7 @@ forward:
 	done
 	@curl -fsS -o /dev/null http://127.0.0.1:$(SERVER_PORT)/healthz \
 		|| { echo "ERROR: server not reachable on :$(SERVER_PORT)" >&2; exit 1; }
+	@$(MAKE) --no-print-directory check-server
 	@echo ""
 	@echo "space-adventure is up:"
 	@echo "  server : http://localhost:$(SERVER_PORT)/healthz   (WS: ws://localhost:$(SERVER_PORT)/ws)"
@@ -227,6 +259,27 @@ art-sync:
 	    print('art-sync: %d models -> $(STREAMING)'%(len(files)-len(missing))); \
 	    sys.stderr.write('art-sync: MISSING %s\n'%missing) if missing else None"
 
+# Asserts that whatever is answering on :$(SERVER_PORT) is the build in this
+# working tree, not something left running. Depended on by anything that
+# measures the live stack, because measuring the wrong server is worse than
+# measuring nothing: it produces a green result about code that is not there.
+.PHONY: check-server
+check-server:
+	@got=$$(curl -fsS --max-time 5 http://127.0.0.1:$(SERVER_PORT)/version 2>/dev/null) || { \
+		echo "ERROR: nothing answered /version on :$(SERVER_PORT)." >&2; \
+		echo "  Either no server is running, or one too old to have /version" >&2; \
+		echo "  is holding the port. Run: make up" >&2; \
+		exit 1; \
+	}; \
+	if [ "$$got" != "$(BUILD_ID)" ]; then \
+		echo "ERROR: :$(SERVER_PORT) is serving build $$got, this tree is $(BUILD_ID)." >&2; \
+		echo "  Something else holds the port -- a stale pod, an old cluster, a" >&2; \
+		echo "  second copy. Anything measured against it is about other code." >&2; \
+		echo "  Run: make up" >&2; \
+		exit 1; \
+	fi; \
+	echo "server on :$(SERVER_PORT) is build $$got (matches this tree)"
+
 # C45: a packaged desktop build that joins the deployed server from a cold
 # start, with the URL from config rather than compiled in. The player is the
 # only thing that catches build-only failures -- shader stripping killed the
@@ -235,7 +288,7 @@ unity-build: art-sync
 	$(UNITY_CLI) build
 
 # Runs that player headless against the live stack. Needs `make up`.
-unity-run:
+unity-run: check-server
 	$(UNITY_CLI) run 20
 
 # Regenerates the one permitted scene. It is empty by design -- Boot.cs builds
