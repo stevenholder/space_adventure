@@ -41,6 +41,8 @@ internal static class Program
         if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
         if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
+        if (Array.IndexOf(args, "--predict") >= 0)
+            return Predict(Arg(args, "--predict"), Arg(args, "--evidence"));
         if (Array.IndexOf(args, "--authority") >= 0)
             return Authority(Arg(args, "--authority"), Arg(args, "--evidence"));
         int colAt = Array.IndexOf(args, "--collide");
@@ -53,6 +55,7 @@ internal static class Program
         Console.Error.WriteLine("       SimDump --join <ws-url>           join a live server, report what arrives");
         Console.Error.WriteLine("       SimDump --collide <in.json> <out.json>  run the collider scenarios");
         Console.Error.WriteLine("       SimDump --authority <ws-url> --evidence <out.json>  C3 server authority");
+        Console.Error.WriteLine("       SimDump --predict <ws-url> --evidence <out.json>    C6 prediction quality");
         return 2;
     }
 
@@ -416,6 +419,432 @@ internal static class Program
             }
         }
         return codes;
+    }
+
+    // ---- C6 prediction quality ------------------------------------------------
+    //
+    // The client's prediction must stay within 0.25 m of the server's at 100 ms
+    // injected latency, and must never be yanked BACKWARD along the player's
+    // own track. Ported from the TypeScript harness with the metric and every
+    // one of its guards intact -- those guards are the hard-won part.
+    //
+    // THE GATE IS SAME-INSTANT PAIRING. The obvious metric, |P_M - snapshot(ack
+    // M)|, pairs two different instants: P_M is the client state when input M
+    // was sent, the snapshot is the server ~RTT later. Under sustained sprint
+    // that gap is exactly one tick of motion (7.5 m/s x 0.05 s = 0.375 m),
+    // which is why the old metric read a flat 0.375 m no matter what the client
+    // did. The same-wall-time metric it reached for is unachievable by ANY
+    // client: the server's state is a 20 Hz step function lagging continuous
+    // motion by U(0, 50 ms), so p95 = 0.356 m > 0.25 for a perfect client. A
+    // criterion nothing can pass is not a gate.
+    //
+    // So: the client's POST-reconcile state at ack M is its belief about "now",
+    // and the server's belief about that same "now" is in the NEXT snapshot,
+    // ack M+1. That difference is real prediction error, and it separates exact
+    // replay (clears to wire precision) from blending (leaves a residual).
+
+    private const double GateP95M = 0.25;
+    private const double SnapbackM = -0.15;
+    private const double TickDt = 0.05;
+    private const int IdleTicks = 40;
+    private const int LegSprint = 100, LegReversal = 80, LegSlope = 100, LegCoast = 40;
+    private const int TotalTicks = IdleTicks + LegSprint + LegReversal + LegSlope + LegCoast;
+    private const double JumpLeadM = 5.5;
+    private const double Deg = Math.PI / 180.0;
+
+    private sealed class Route
+    {
+        public double Az, R0, FlatLen, SlopeFrom, SlopeTo;
+        public double SlopeLen => SlopeTo - SlopeFrom;
+    }
+
+    private sealed class Script
+    {
+        public Input[] Inputs;
+        public int JumpTick;
+        public double MaxSprint, MinReversalTrackVel;
+        public int AirTicks;
+        public double LandingS, LandingSlopeDeg;
+        public Route Route;
+    }
+
+    private static Vec3 TrackDirAt(double azRad, double s, double r0)
+    {
+        double th = s / r0;
+        return new Vec3(Math.Sin(th) * Math.Sin(azRad), Math.Cos(th), Math.Sin(th) * Math.Cos(azRad));
+    }
+
+    private static Vec3 TrackTangent(double azRad, double s, double r0)
+    {
+        double th = s / r0;
+        return new Vec3(Math.Cos(th) * Math.Sin(azRad), -Math.Sin(th), Math.Cos(th) * Math.Cos(azRad))
+            .Normalized();
+    }
+
+    private static double ArcOf(Vec3 pos, double azRad, double r0)
+    {
+        var t0 = new Vec3(Math.Sin(azRad), 0, Math.Cos(azRad));
+        Vec3 d = pos.Normalized();
+        return Math.Atan2(Vec3.Dot(d, t0), Vec3.Dot(d, new Vec3(0, 1, 0))) * r0;
+    }
+
+    /// <summary>
+    /// Great-circle routes out of spawn: a flat run, then a sustained walkable
+    /// slope to jump onto. Nothing steeper than max_slope and no step the body
+    /// cannot climb anywhere along it.
+    /// </summary>
+    private static System.Collections.Generic.List<Route> FindRoutes(TerrainField t)
+    {
+        double r0 = t.SampleRadius(new Vec3(0, 1, 0));
+        var found = new System.Collections.Generic.List<Route>();
+
+        for (double az = 0; az < 360; az += 2.5)
+        {
+            double azRad = az * Deg;
+            var sS = new System.Collections.Generic.List<double>();
+            var sR = new System.Collections.Generic.List<double>();
+            var sSlope = new System.Collections.Generic.List<double>();
+            for (double s = 0; s <= 90.001; s += 0.5)
+            {
+                Vec3 d = TrackDirAt(azRad, s, r0);
+                sS.Add(s);
+                sR.Add(t.SampleRadius(d));
+                sSlope.Add(t.Slope(d) / Deg);
+            }
+
+            double flatEnd = 80;
+            for (int i = 0; i < sS.Count; i++)
+                if (sSlope[i] >= 8) { flatEnd = sS[i]; break; }
+
+            double runStart = -1, runEnd = -1;
+            for (int i = 0; i < sS.Count; i++)
+            {
+                if (sS[i] < flatEnd) continue;
+                bool inSlope = sSlope[i] >= 15 && sSlope[i] <= 45;
+                if (inSlope)
+                {
+                    if (runStart < 0) runStart = sS[i];
+                    runEnd = sS[i];
+                }
+                else if (sS[i] > flatEnd + 1.0) break;
+            }
+
+            bool ok = runStart >= 0 && runEnd - runStart >= 8 && runEnd - runStart <= 25;
+            if (ok)
+            {
+                for (int i = 0; i < sS.Count && sS[i] <= runEnd; i++)
+                    if (sSlope[i] >= 50) ok = false;
+                for (int i = 1; ok && i < sS.Count && sS[i] <= runEnd; i++)
+                    if (Math.Abs(sR[i] - sR[i - 1]) > 0.31) ok = false;
+            }
+            if (ok)
+                found.Add(new Route { Az = az, R0 = r0, FlatLen = flatEnd, SlopeFrom = runStart, SlopeTo = runEnd });
+        }
+
+        found.Sort((a, b) => (b.FlatLen + b.SlopeLen).CompareTo(a.FlatLen + a.SlopeLen));
+        return found;
+    }
+
+    /// <summary>
+    /// Runs the scripted inputs through the real sim to place the jump and
+    /// check the route actually produces the scenario. Two passes: the first
+    /// maps arc length per tick, the second jumps and validates.
+    /// </summary>
+    private static Script BuildScript(TerrainField t, Route route)
+    {
+        double azRad = route.Az * Deg;
+
+        double[] Pass(int jumpTick, out Input[] inputs, out double maxSprint,
+                      out double minRev, out int airTicks, out int landTick,
+                      out double landS, out double landSlope)
+        {
+            State st = Step.SpawnState(t);
+            Vec3 lastLook = st.Facing;
+            var sPer = new double[TotalTicks];
+            inputs = new Input[TotalTicks];
+            maxSprint = 0; minRev = double.PositiveInfinity; airTicks = 0;
+            landTick = -1; landS = 0; landSlope = 0;
+            bool airborne = false;
+
+            for (int k = 0; k < TotalTicks; k++)
+            {
+                double s = ArcOf(st.Pos, azRad, route.R0);
+                sPer[k] = s;
+
+                double moveY = 0;
+                int mask = 0;
+                int sprintStart = IdleTicks;
+                int revStart = IdleTicks + LegSprint;
+                int slopeStart = revStart + LegReversal;
+                int coastStart = slopeStart + LegSlope;
+                if (k >= sprintStart && k < coastStart)
+                {
+                    mask = SpaceAdventure.Sim.Action.Sprint;
+                    moveY = (k >= revStart && k < slopeStart) ? -1 : 1;
+                }
+                if (jumpTick >= 0 && (k == jumpTick || k == jumpTick + 1)) mask |= SpaceAdventure.Sim.Action.Jump;
+
+                var inp = new Input
+                {
+                    MoveX = 0,
+                    MoveY = moveY,
+                    LookDir = TrackTangent(azRad, s, route.R0),
+                    ActionMask = mask,
+                };
+                inputs[k] = inp;
+                lastLook = Step.Apply(ref st, inp, lastLook, t, TickDt);
+
+                double spd = st.Vel.Length;
+                Vec3 T = TrackTangent(azRad, s, route.R0);
+                double trackVel = Vec3.Dot(st.Vel, T);
+                if (k >= sprintStart && k < revStart) maxSprint = Math.Max(maxSprint, spd);
+                if (k >= revStart && k < slopeStart) minRev = Math.Min(minRev, trackVel);
+
+                if (!st.Grounded) { airborne = true; airTicks++; }
+                else if (airborne)
+                {
+                    airborne = false;
+                    landTick = k;
+                    landS = ArcOf(st.Pos, azRad, route.R0);
+                    landSlope = t.Slope(st.Pos.Normalized()) / Deg;
+                }
+            }
+            return sPer;
+        }
+
+        double[] s1 = Pass(-1, out _, out _, out _, out _, out _, out _, out _);
+
+        int slopeLeg = IdleTicks + LegSprint + LegReversal;
+        double target = route.FlatLen - JumpLeadM;
+        int jump = -1;
+        for (int k = slopeLeg; k < slopeLeg + LegSlope - 10; k++)
+            if (s1[k] >= target) { jump = k; break; }
+        if (jump < 0) return null;
+
+        Pass(jump, out Input[] inputs2, out double maxSprint2, out double minRev2,
+             out int air2, out int landTick2, out double landS2, out double landSlope2);
+
+        bool flatOk = route.FlatLen >= 42 && route.SlopeLen >= 8;
+        bool sprintOk = maxSprint2 >= 7.0 && maxSprint2 <= 7.9;
+        bool revOk = minRev2 <= -6.0;
+        bool jumpOk = landTick2 >= 0 && air2 >= 10 && landTick2 >= jump + 5
+                      && landS2 >= route.FlatLen - 1.5 && landSlope2 >= 8 && landSlope2 < 50;
+        if (!(flatOk && sprintOk && revOk && jumpOk)) return null;
+
+        return new Script
+        {
+            Inputs = inputs2, JumpTick = jump, MaxSprint = maxSprint2,
+            MinReversalTrackVel = minRev2, AirTicks = air2,
+            LandingS = landS2, LandingSlopeDeg = landSlope2, Route = route,
+        };
+    }
+
+    private sealed class Snap
+    {
+        public uint T;
+        public int M = -1;
+        public Vec3 Auth, Post, Trk;
+        public bool HasAuth, HasTrk;
+
+        /// <summary>
+        /// Inputs still unacked AFTER this reconcile, i.e. how many ticks of
+        /// replay stand between the server's state and the client's belief.
+        /// This is what says which future snapshot describes the same instant.
+        /// </summary>
+        public int Ahead;
+    }
+
+    private static int Predict(string url, string evidencePath)
+    {
+        using var net = new NetClient();
+        net.Connect(url, "qa-t6", $"t6-{Guid.NewGuid():N}");
+
+        TerrainField terrain = null;
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (terrain == null && DateTime.UtcNow < deadline)
+        {
+            while (net.Poll(out var f))
+            {
+                if (f.Type != Msg.Terrain) continue;
+                var t = Decode.Terrain(f.Reader);
+                terrain = TerrainField.FromWire(t.Radii, t.RadiusMin, t.RadiusMax);
+            }
+            System.Threading.Thread.Sleep(5);
+        }
+        if (terrain == null) { Console.Error.WriteLine("t6: no terrain"); return 1; }
+
+        Script script = null;
+        foreach (Route r in FindRoutes(terrain))
+        {
+            script = BuildScript(terrain, r);
+            if (script != null) break;
+        }
+        if (script == null)
+        {
+            Console.Error.WriteLine("t6: no route produced the scenario");
+            return 1;
+        }
+        Console.WriteLine(
+            $"route az={script.Route.Az:F1} flat={script.Route.FlatLen:F1} m " +
+            $"slope={script.Route.SlopeFrom:F1}..{script.Route.SlopeTo:F1} m jumpTick={script.JumpTick}");
+
+        var predictor = new Predictor();
+        predictor.Seed(terrain, Array.Empty<SpaceAdventure.Sim.Collider>());
+
+        var snaps = new System.Collections.Generic.List<Snap>();
+        ushort seq = 0;
+        int k = 0;
+        var start = DateTime.UtcNow;
+        double Elapsed() => (DateTime.UtcNow - start).TotalMilliseconds;
+        double nextTickAt = 0;
+
+        while (k < TotalTicks || Elapsed() < TotalTicks * 50 + 1500)
+        {
+            while (net.Poll(out var f))
+            {
+                if (f.Type != Msg.Snapshot) continue;
+                Snapshot snap = Decode.Snapshot(f.Reader);
+                var rec = new Snap { T = snap.Tick, M = snap.AckSeq };
+                foreach (EntityRow row in snap.Entities)
+                {
+                    if (row.Id != net.EntityId) continue;
+                    rec.Auth = new Vec3(row.PosX, row.PosY, row.PosZ);
+                    rec.HasAuth = true;
+
+                    // The track the player actually has, evaluated BEFORE the
+                    // reconcile. Tangential velocity when there is any; else
+                    // the wish direction; else facing. Mid-jump the motion is
+                    // mostly radial and a tangential track is ill-defined --
+                    // counting snap-backs there produced an intermittent 1
+                    // while the position error stayed at wire precision.
+                    State st = predictor.State;
+                    Vec3 up = st.Pos.Normalized();
+                    Vec3 vt = st.Vel - up * Vec3.Dot(st.Vel, up);
+                    if (vt.Length > 0.3) { rec.Trk = vt.Normalized(); rec.HasTrk = true; }
+
+                    int pendBefore = predictor.PendingCount;
+                    predictor.Reconcile(rec.Auth, new Vec3(row.VelX, row.VelY, row.VelZ),
+                                        st.Facing, row.Grounded, snap.AckSeq);
+                    rec.Post = predictor.State.Pos;
+                    rec.Ahead = predictor.PendingCount;
+                    if (Environment.GetEnvironmentVariable("T6_DEBUG") != null && snaps.Count < 12)
+                        Console.WriteLine($"  dbg M={snap.AckSeq} seqSent={seq} pendBefore={pendBefore} ahead={rec.Ahead}");
+                    break;
+                }
+                snaps.Add(rec);
+            }
+
+            if (k < TotalTicks && Elapsed() >= nextTickAt)
+            {
+                nextTickAt = Elapsed() + 50;
+                Input inp = script.Inputs[k];
+                seq++;
+                predictor.Apply(seq, inp);
+                net.Send(Encode.Input(0f, (float)inp.MoveY,
+                                      (float)inp.LookDir.X, (float)inp.LookDir.Y, (float)inp.LookDir.Z,
+                                      (ushort)inp.ActionMask, seq));
+                k++;
+            }
+            System.Threading.Thread.Sleep(2);
+        }
+
+        // ---- the gate
+        var errs = new System.Collections.Generic.List<double>();
+        int snapbacks = 0;
+        for (int i = 0; i < snaps.Count; i++)
+        {
+            Snap a = snaps[i];
+            if (a.Post.Length == 0 || a.M <= 0) continue;
+
+            // WHICH future snapshot describes the same instant.
+            //
+            // After reconciling ack M the client has snapped to the server's
+            // state and replayed everything still unacked, so its belief is
+            // about tick M + pending. The TypeScript harness wrote that as a
+            // literal M+1, which was right for ITS in-flight depth: one input
+            // outstanding. Through a 100 ms proxy this client carries two, and
+            // pairing against M+1 measured the client one tick in the FUTURE
+            // against the server -- p50 came out at 0.375 m, exactly
+            // 7.5 m/s x 0.05 s, which is the cross-instant artifact this metric
+            // exists to avoid, and 271 phantom snap-backs from the server
+            // appearing to lag its own prediction.
+            //
+            // So pair by replay depth rather than by a constant. It reduces to
+            // M+1 whenever one input is in flight, and stays the same-instant
+            // comparison at any RTT.
+            //
+            // The tick must advance in step with the ack too: when the server
+            // carries an ack across two ticks, auth is not `ahead` steps on
+            // from post and the difference reads as whole ticks of motion
+            // again.
+            int ahead = a.Ahead;
+            if (ahead <= 0) continue;
+            Snap b = null;
+            for (int j = i + 1; j < snaps.Count; j++)
+            {
+                if (snaps[j].M != a.M + ahead) continue;
+                if (snaps[j].HasAuth && snaps[j].T == a.T + ahead) b = snaps[j];
+                break;
+            }
+            if (b == null) continue;
+
+            errs.Add((a.Post - b.Auth).Length);
+            if (a.HasTrk && Vec3.Dot(b.Auth - a.Post, a.Trk) < SnapbackM) snapbacks++;
+        }
+
+        errs.Sort();
+        double P(double q)
+        {
+            if (errs.Count == 0) return double.NaN;
+            double idx = (errs.Count - 1) * q;
+            int lo = (int)Math.Floor(idx), hi = (int)Math.Ceiling(idx);
+            return errs[lo] + (errs[hi] - errs[lo]) * (idx - lo);
+        }
+
+        double p95 = P(0.95);
+        _failed = 0;
+        Check("c6 pairs enough snapshots to mean anything", errs.Count >= 50, $"n={errs.Count}");
+        Check("c6 p95 prediction error under the budget", errs.Count > 0 && p95 < GateP95M,
+              $"p95={p95:E3} m (budget {GateP95M} m), p50={P(0.5):E3}, max={(errs.Count > 0 ? errs[^1] : double.NaN):E3}");
+        Check("c6 the server never pulls the player backward", snapbacks == 0, $"{snapbacks} snap-backs");
+        // Without this the criterion can pass by not being under latency at
+        // all: the whole point of C6 is prediction quality AT 100 ms, and a
+        // proxy that failed to start would otherwise read as a clean run.
+        Check("the run was actually under injected latency", net.RttMs >= 80,
+              $"rtt={net.RttMs:F1} ms (expect ~100 through the proxy)");
+        Check("scenario: sprint reached full speed", script.MaxSprint >= 7.0 && script.MaxSprint <= 7.9,
+              $"{script.MaxSprint:F2} m/s");
+        Check("scenario: the reversal actually reversed", script.MinReversalTrackVel <= -6.0,
+              $"{script.MinReversalTrackVel:F2} m/s along track");
+        Check("scenario: the jump landed on walkable slope", script.LandingSlopeDeg >= 8 && script.LandingSlopeDeg < 50,
+              $"{script.LandingSlopeDeg:F1} deg after {script.AirTicks} air ticks");
+
+        if (!string.IsNullOrEmpty(evidencePath))
+        {
+            var evidence = new
+            {
+                criterion = "C6 - prediction quality at 100 ms injected latency",
+                harness = "SimDump --predict (C# Predictor, Game/Core/Prediction.cs)",
+                url,
+                pairs = errs.Count,
+                p50 = P(0.5),
+                p95,
+                max = errs.Count > 0 ? errs[^1] : double.NaN,
+                snapbacks,
+                route_az = script.Route.Az,
+                sprint_max = script.MaxSprint,
+                reversal_min_track_vel = script.MinReversalTrackVel,
+                air_ticks = script.AirTicks,
+                landing_slope_deg = script.LandingSlopeDeg,
+                verdict = _failed == 0 ? "PASS" : "FAIL",
+            };
+            System.IO.File.WriteAllText(evidencePath,
+                Newtonsoft.Json.JsonConvert.SerializeObject(evidence, Newtonsoft.Json.Formatting.Indented) + "\n");
+            Console.WriteLine($"evidence: {evidencePath}");
+        }
+
+        Console.WriteLine(_failed == 0 ? "OVERALL: PASS" : $"OVERALL: FAIL ({_failed})");
+        return _failed == 0 ? 0 : 1;
     }
 
     // ---- C3 server authority -------------------------------------------------
