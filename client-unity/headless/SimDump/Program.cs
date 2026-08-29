@@ -42,7 +42,9 @@ internal static class Program
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
         if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
         if (Array.IndexOf(args, "--predict") >= 0)
-            return Predict(Arg(args, "--predict"), Arg(args, "--evidence"));
+            return Predict(Arg(args, "--predict"), Arg(args, "--evidence"),
+                           Array.IndexOf(args, "--server-origin") >= 0
+                               ? Arg(args, "--server-origin") : null);
         if (Array.IndexOf(args, "--authority") >= 0)
             return Authority(Arg(args, "--authority"), Arg(args, "--evidence"));
         int colAt = Array.IndexOf(args, "--collide");
@@ -654,7 +656,7 @@ internal static class Program
         public int Ahead;
     }
 
-    private static int Predict(string url, string evidencePath)
+    private static int Predict(string url, string evidencePath, string serverOrigin)
     {
         using var net = new NetClient();
         net.Connect(url, "qa-t6", $"t6-{Guid.NewGuid():N}");
@@ -826,6 +828,7 @@ internal static class Program
                 criterion = "C6 - prediction quality at 100 ms injected latency",
                 harness = "SimDump --predict (C# Predictor, Game/Core/Prediction.cs)",
                 url,
+                server_build = ServerBuild(url, serverOrigin),
                 pairs = errs.Count,
                 p50 = P(0.5),
                 p95,
@@ -992,6 +995,7 @@ internal static class Program
             {
                 harness = "SimDump --authority (C# Predictor, Game/Core/Prediction.cs)",
                 url,
+                server_build = ServerBuild(url),
                 corrupt_dist_m = CorruptDist,
                 pre_dist_m = preDist,
                 snap_dist_m = snapDist,
@@ -1011,6 +1015,55 @@ internal static class Program
     }
 
     private static string V(Vec3 v) => $"({v.X:F3},{v.Y:F3},{v.Z:F3})";
+
+    /// <summary>
+    /// Asks the server what build it is, over HTTP, for the evidence file.
+    ///
+    /// Recorded rather than asserted: this harness cannot know which build it
+    /// SHOULD have reached -- that is `make check-server`'s job, which knows
+    /// the working tree. What it can do is stop producing evidence that does
+    /// not say what it measured. A green result against a server nobody can
+    /// identify afterwards is not evidence, and a packaged client was verified
+    /// three times against a stale image before anyone noticed.
+    ///
+    /// Never fatal: a server too old to have /version is worth a note in the
+    /// file, not a failed criterion.
+    /// </summary>
+    private static string ServerBuild(string wsUrl, string originOverride = null)
+    {
+        try
+        {
+            // A harness that goes through a latency proxy reaches the server on
+            // a port that speaks WebSocket and nothing else, so deriving the
+            // HTTP origin from the connect URL asks the PROXY what build it is
+            // and times out. The caller that set the proxy up knows what is
+            // behind it and can say so.
+            if (!string.IsNullOrEmpty(originOverride))
+            {
+                using var direct = new System.Net.Http.HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(5),
+                };
+                return direct.GetStringAsync(originOverride.TrimEnd('/') + "/version")
+                    .GetAwaiter().GetResult().Trim();
+            }
+
+            var u = new UriBuilder(wsUrl)
+            {
+                Scheme = wsUrl.StartsWith("wss", StringComparison.OrdinalIgnoreCase) ? "https" : "http",
+                Path = "/version",
+            };
+            using var http = new System.Net.Http.HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(5),
+            };
+            return http.GetStringAsync(u.Uri).GetAwaiter().GetResult().Trim();
+        }
+        catch (Exception e)
+        {
+            return $"unknown ({e.GetType().Name})";
+        }
+    }
 
     private static SpaceAdventure.Sim.Collider[] ToSim(SpaceAdventure.Net.Collider[] rows)
     {

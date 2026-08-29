@@ -493,8 +493,19 @@ that nothing referenced. That failure mode is not going to be fixed by hoping.
 - **C41 Codec parity.** C# encodes and decodes every v2 message byte-identically
   to the Go implementation, against Go's own vectors (`t22`). The Node half
   went with the TypeScript client in U18; `t22` asserts the same bytes t12 did.
-- **C42 Prediction.** Replay reconciliation from `ack_seq`, never blending, and
-  the same corrections as the TS client on an identical input trace.
+- **C42 Prediction.** Replay reconciliation from `ack_seq`, never blending.
+  Was defined as "the same corrections as the TS client on an identical input
+  trace", which stopped being a definition when U18 retired that client —
+  a criterion whose reference implementation does not exist cannot be run.
+
+  Stated as the observable property instead, which is stronger than deferring
+  to another implementation: after reconciling ack M the client has snapped to
+  the server's state and replayed what is still unacked, so its belief is
+  about tick `M + pending` and must agree with the server's own state at that
+  tick to wire precision. Blending cannot reach that — it leaves a persistent
+  residual toward the stale anchor, which is the whole difference the
+  criterion exists to catch. Evidence: `t6` measures exactly this pairing and
+  clears to ~7e-06 m, plus the replay/reconcile checks in `make unity-test`.
 - **C43 Regression.** C1–C25 re-run against the Unity client on the deployed
   kind stack. All pass. This is the phase gate.
 - **C44 Headless CI.** `Sim` and `Net` build and test with no Unity Editor, in

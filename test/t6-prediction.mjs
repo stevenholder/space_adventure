@@ -67,6 +67,9 @@ try {
     'dotnet',
     ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
       '--predict', `ws://127.0.0.1:${PROXY_PORT}/ws`,
+      // The connect URL is the proxy, which speaks WebSocket and nothing
+      // else; the build worth recording belongs to what is behind it.
+      '--server-origin', `http://${TARGET_HOST}:${TARGET_PORT}`,
       '--evidence', path.join(root, 'test', 'out', 't6-prediction.json')],
     { cwd: root, encoding: 'utf8' },
   )

@@ -35,7 +35,14 @@ SERVER_PORT ?= 18080
 # thing you just built is a check that cannot fail. A packaged client was
 # verified three times against a server image predating the feature under test
 # for exactly that reason.
-BUILD_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(shell git diff --quiet 2>/dev/null || echo -dirty)
+#
+# Keyed on the SERVER SUBTREE, not on HEAD. The first version of this hashed
+# the whole repo, which meant editing a shader or a README invalidated a
+# perfectly good deployed server and the gate fired on every unrelated commit.
+# A check that cries wolf gets bypassed, which is worse than not having it.
+# `HEAD:server` moves when and only when server code moves, and the dirty
+# marker is scoped the same way.
+BUILD_ID := $(shell git rev-parse --short HEAD:server 2>/dev/null || echo unknown)$(shell git diff --quiet -- server 2>/dev/null || echo -dirty)
 
 # docker build context root (the repo root). Overridable to validate the
 # pipeline against a mirror tree while server/ is not yet compilable.
@@ -196,9 +203,11 @@ unity-conformance:
 unity-codec:
 	node test/t22-csharp-codec.mjs
 
-# U10: the transport's only real test is a real server. Needs `make up`.
+# U10: the transport's only real test is a real server. Needs `make up`, and
+# gated on check-server for the same reason unity-run is -- "a real server" has
+# to mean THIS one.
 .PHONY: unity-join
-unity-join:
+unity-join: check-server
 	dotnet run --project client-unity/headless/SimDump --nologo -- --join ws://127.0.0.1:$(SERVER_PORT)/ws
 
 # The Unity CLI wrapper. It resolves the editor from the project's own
@@ -272,9 +281,10 @@ check-server:
 		exit 1; \
 	}; \
 	if [ "$$got" != "$(BUILD_ID)" ]; then \
-		echo "ERROR: :$(SERVER_PORT) is serving build $$got, this tree is $(BUILD_ID)." >&2; \
-		echo "  Something else holds the port -- a stale pod, an old cluster, a" >&2; \
-		echo "  second copy. Anything measured against it is about other code." >&2; \
+		echo "ERROR: :$(SERVER_PORT) serves server build $$got; this tree is $(BUILD_ID)." >&2; \
+		echo "  The deployed server is not built from the server/ code you have." >&2; \
+		echo "  Either something else holds the port, or the cluster predates a" >&2; \
+		echo "  server change. Anything measured now is about other code." >&2; \
 		echo "  Run: make up" >&2; \
 		exit 1; \
 	fi; \
