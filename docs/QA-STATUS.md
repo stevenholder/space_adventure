@@ -279,7 +279,8 @@ headless client that makes the port safe.
   `lib/field.mjs` (independent GDD terrain sampling).
 - **Per-criterion:** `t2`–`t4` (visibility, authority, despawn), `t5/` (Go↔TS
   conformance route + diff), `t6` (prediction), `t7` (sustain), `t9-terrain.py`,
-  `t10/` (circumnavigation), `t12`/`t13` (codec + collider parity), `t14` (buy
+  `t10/` (circumnavigation), `t22`/`t13` (codec + collider parity, both C#
+  against Go since U18 retired the TypeScript client), `t14` (buy
   and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
   `t18` (currency authority, hit registration under latency, snapshot budget),
   `t19` (remote fidelity — weapon, pitch and shot ordering, all green),

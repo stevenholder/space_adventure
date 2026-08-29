@@ -471,7 +471,7 @@ is the single largest thing Three.js was never going to give us.
 | U6 | sonnet | Port collider resolution | `Sim/Collide.cs` | parity vs t13 vectors |
 | U7 | main | Three-way conformance runner (Go/TS/C#) | `test/t18-csharp-conformance.mjs` | max dPos < 1e-10 m |
 | U8 | sonnet | Little-endian binary reader/writer | `Net/Wire.cs` | round-trip fuzz |
-| U9 | sonnet | v2 message codecs, all opcodes | `Net/Messages.cs` | byte-identical vs t12 vectors |
+| U9 | sonnet | v2 message codecs, all opcodes | `Net/Messages.cs` | byte-identical vs the Go vectors (`t22`) |
 | U10 | sonnet | WebSocket transport, hello/join, reconnect | `Net/Client.cs` | joins deployed server, decodes snapshot |
 | U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Prediction.cs` | same corrections as TS on one input trace |
 | U12 | sonnet | Terrain mesh from u16 radius grids | `Game/TerrainMesh.cs` | mesh matches sampled radii |
@@ -490,7 +490,8 @@ that nothing referenced. That failure mode is not going to be fixed by hoping.
 - **C40 Sim conformance.** The C# sim matches Go on the C5 trajectory route
   within 1e-10 m, running headless with no UnityEngine reference.
 - **C41 Codec parity.** C# encodes and decodes every v2 message byte-identically
-  to the Go and Node implementations, against the t12 vectors.
+  to the Go implementation, against Go's own vectors (`t22`). The Node half
+  went with the TypeScript client in U18; `t22` asserts the same bytes t12 did.
 - **C42 Prediction.** Replay reconciliation from `ack_seq`, never blending, and
   the same corrections as the TS client on an identical input trace.
 - **C43 Regression.** C1–C25 re-run against the Unity client on the deployed

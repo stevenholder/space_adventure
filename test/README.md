@@ -2,7 +2,7 @@
 
 - Owner: `qa` (reports bugs, never fixes product code)
 
-**Cross-language parity (`t12-codec-parity.mjs`, `t13-collide-parity.mjs`,
+**Cross-language parity (`t22-csharp-codec.mjs`, `t13-collide-parity.mjs`,
 Phase 2).** Anything implemented twice — once in Go, once in TypeScript — needs
 a test that runs BOTH and diffs. Per-side unit tests exercise one
 implementation against itself and prove nothing about agreement, and this

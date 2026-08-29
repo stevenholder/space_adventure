@@ -41,12 +41,15 @@ internal static class Program
         if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
         if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
+        int colAt = Array.IndexOf(args, "--collide");
+        if (colAt >= 0 && colAt + 2 < args.Length) return Collide(args[colAt + 1], args[colAt + 2]);
 
         Console.Error.WriteLine("usage: SimDump --selftest");
         Console.Error.WriteLine("       SimDump --dump <script.jsonl> --world <world.json>");
         Console.Error.WriteLine("       SimDump --codec-decode <go.hex>   decode Go's S->C frames");
         Console.Error.WriteLine("       SimDump --codec-encode <out.hex>  write C->S frames for Go");
         Console.Error.WriteLine("       SimDump --join <ws-url>           join a live server, report what arrives");
+        Console.Error.WriteLine("       SimDump --collide <in.json> <out.json>  run the collider scenarios");
         return 2;
     }
 
@@ -410,6 +413,95 @@ internal static class Program
             }
         }
         return codes;
+    }
+
+    // ---- collider parity ----------------------------------------------------
+    //
+    // The C# half of the cross-language collider check. Go writes the same
+    // shape from `server collide`, and test/t13-collide-parity.mjs diffs them.
+    //
+    // Why a separate harness at all, when both sides have unit tests: those
+    // exercise one implementation against itself and say nothing about the two
+    // AGREEING. This project has been bitten by that twice -- the strafe axis
+    // was wrong in both sims for all of M1, so they agreed and every criterion
+    // stayed green. And the C5 trajectory route touches no collider on any
+    // tick, so the conformance diff cannot close this gap.
+    //
+    // This replaces the TypeScript half, which went with the browser client.
+
+    private sealed class CollideScenario
+    {
+        public string name { get; set; }
+        public double[] pos { get; set; }
+        public double[] vel { get; set; }
+        public double[] up { get; set; }
+        public bool grounded { get; set; }
+        public double radius { get; set; }
+        public CollideJson[] colliders { get; set; }
+    }
+
+    private sealed class CollideJson
+    {
+        public int kind { get; set; }
+        public double[] center { get; set; }
+        public double[] half { get; set; }
+        public double[] quat { get; set; }
+    }
+
+    private sealed class CollideResult
+    {
+        public string Name { get; set; }
+        public double[] Pos { get; set; }
+        public double[] Vel { get; set; }
+        public bool Grounded { get; set; }
+    }
+
+    private static int Collide(string inPath, string outPath)
+    {
+        var scenarios = Newtonsoft.Json.JsonConvert.DeserializeObject<CollideScenario[]>(
+            System.IO.File.ReadAllText(inPath));
+
+        var results = new System.Collections.Generic.List<CollideResult>(scenarios.Length);
+        foreach (CollideScenario s in scenarios)
+        {
+            var cs = new SpaceAdventure.Sim.Collider[s.colliders?.Length ?? 0];
+            for (int i = 0; i < cs.Length; i++)
+            {
+                CollideJson c = s.colliders[i];
+                // Narrowed to f32 exactly as Go does, because collider fields
+                // are f32 ON THE WIRE. Skipping this would make the two sides
+                // disagree about arithmetic that is not actually different.
+                cs[i] = new SpaceAdventure.Sim.Collider
+                {
+                    Kind = (SpaceAdventure.Sim.ColliderKind)c.kind,
+                    Center = new Vec3((float)c.center[0], (float)c.center[1], (float)c.center[2]),
+                    Half = new Vec3((float)c.half[0], (float)c.half[1], (float)c.half[2]),
+                    Rot = new Quat((float)c.quat[0], (float)c.quat[1],
+                                   (float)c.quat[2], (float)c.quat[3]),
+                };
+            }
+
+            var pos = new Vec3(s.pos[0], s.pos[1], s.pos[2]);
+            var vel = new Vec3(s.vel[0], s.vel[1], s.vel[2]);
+            var up = new Vec3(s.up[0], s.up[1], s.up[2]);
+            bool grounded = s.grounded;
+            double radius = s.radius;
+
+            SpaceAdventure.Sim.Collide.ResolveColliders(
+                ref pos, ref vel, up, ref grounded, cs, _ => radius);
+
+            results.Add(new CollideResult
+            {
+                Name = s.name,
+                Pos = new[] { pos.X, pos.Y, pos.Z },
+                Vel = new[] { vel.X, vel.Y, vel.Z },
+                Grounded = grounded,
+            });
+        }
+
+        System.IO.File.WriteAllText(outPath,
+            Newtonsoft.Json.JsonConvert.SerializeObject(results, Newtonsoft.Json.Formatting.Indented) + "\n");
+        return 0;
     }
 
     // ---- C41 codec parity --------------------------------------------------

@@ -2,18 +2,20 @@
 /**
  * C41 — the C# codec against the Go one, both directions.
  *
- * Same argument as t12, which does this for TypeScript: each codec implements
- * docs/PROTOCOL.md independently, and a codec's own round-trip test agrees
- * with its own bug. Only a cross-check catches a framing or offset slip. t12
- * exists because the first TypeScript encoders returned bare payloads where
- * the Go parsers expected `u16 type | payload`, which put a seq on the wire in
- * place of the message type and passed both suites.
+ * Each codec implements docs/PROTOCOL.md independently, and a codec's own
+ * round-trip test agrees with its own bug. Only a cross-check catches a
+ * framing or offset slip. The TypeScript predecessor of this file, t12, exists
+ * in history because the first TypeScript encoders returned bare payloads
+ * where the Go parsers expected `u16 type | payload` — putting a seq on the
+ * wire in place of the message type, and passing both suites.
+ *
+ * This replaced t12 when the browser client was retired (ROADMAP U18). The
+ * vectors are the same ones, still Go's, so the bytes asserted here are the
+ * bytes t12 asserted.
  *
  *   S->C   Go `server codec emit`   ->  C# decoders
  *   C->S   C# encoders              ->  Go `server codec parse`
  *
- * The vectors are Go's, unchanged, so this and t12 assert the same bytes
- * against two different clients.
  *
  * Run: node test/t22-csharp-codec.mjs      (needs the dotnet SDK, no Editor)
  */
