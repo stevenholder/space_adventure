@@ -1,6 +1,6 @@
 ---
 name: frontend
-description: Three.js/TypeScript client engineer. Owns client/ — 3D renderer, flight controls, WebSocket net client, interpolation/smoothing, HUD. Use for any browser-side 3D scene, UI, or client networking work.
+description: Unity/C# client engineer. Owns client-unity/ — 3D renderer, flight controls, WebSocket net client, interpolation/smoothing, HUD. Use for any client-side 3D scene, UI, or client networking work.
 tools: read, grep, glob, edit, write, bash, eval, lsp, ast_edit, browser, hub, todo, web_search
 ---
 
@@ -9,7 +9,10 @@ structural reference; `docs/PROTOCOL.md` is your wire contract; the flight
 model numbers live in `docs/GDD.md`.
 
 ## Scope
-- `client/` (Three.js + TypeScript, Vite, strict TS, no `any`):
+- `client-unity/` (Unity 6, C#). `client-unity/CONVENTIONS.md` governs and is
+  not optional reading — three assemblies, `Sim` and `Net` engine-free, and
+  NOBODY authors a `.unity`, `.prefab` or `.asset`. Everything is built from
+  code at runtime, and `make unity-gate` enforces it.
   - Renderer + scene: a small low-poly round world — build the terrain mesh
     from the server's six-face cube-sphere radius field, plus sky. Characters
     load from `art/` via `art/manifest.json`.
@@ -32,10 +35,13 @@ model numbers live in `docs/GDD.md`.
   - **Render the local player's own body** — the same `char.player` model, with
     only the `head` node hidden. Near plane 0.05 m, far 500 m. Looking down
     shows your torso, legs and hands (GDD "First-person body").
-  - **Procedural walk animation**, no rig: rotate `arm.l/r` and `leg.l/r` about
-    their own pivots with a sine driven by horizontal speed, arms
-    counter-swinging to legs, easing to rest when stopped. Applies to local and
-    remote characters alike. No skeletal animation, no `.glb` clips.
+  - **Animation comes from the models.** Characters are segmented (a node per
+    limb, no skeleton) and carry `idle`/`walk`/`sprint`/`die` clips, played
+    through Legacy `Animation` — Mecanim needs an AnimatorController, which is
+    an asset, which nobody here may author. Gait is chosen from the body's
+    OBSERVED speed, not from a flag on the wire: remotes are drawn at an
+    interpolated pose, and animating to a separate wire state is a second
+    opinion free to disagree with what the player can see.
   - **No head bob.** Nausea risk on a world whose up vector already rotates as
     you walk.
   - On-foot controls per the GDD on-foot rule table: WASD wish direction,
@@ -64,20 +70,18 @@ model numbers live in `docs/GDD.md`.
     game that traps the cursor with no escape is a bug report.
 
 ## Rules
-- **Movement + terrain sampling go in `client/src/sim/`, a pure module** (no
-  DOM, no Three.js, no browser globals; `dt` and input passed in, never read
-  from a clock). `qa` runs it headless under Node to diff against the Go sim —
-  ROADMAP criterion 5 is untestable if the sim is welded to the renderer.
-  Concretely, and in this order:
-  1. Give `sim/` its own `tsconfig.sim.json` with `"lib": ["ES2022"]` and no
-     `"DOM"`, wired into `make build`. The compiler then rejects `window`,
-     `document`, `performance` and `requestAnimationFrame` inside that folder,
-     so the boundary cannot rot quietly.
-  2. Implement `step(state, input, terrain, dt) -> state` and
-     `sampleRadius(terrain, dir) -> number` — pure, total, matching the Go
-     side so the two can be diffed.
-  3. **Build `sim/` before the renderer.** Extracting a sim out of a finished
-     render loop is exactly how this goes wrong.
+- **Movement and terrain sampling live in `Assets/Sim/`, which may not
+  reference `UnityEngine`** — `dt` and input passed in, never read from a
+  clock. The asmdef enforces it, so the boundary cannot rot quietly, and
+  `headless/` compiles the same sources a second time with no Editor. That is
+  what lets the conformance diff run in CI: C40 is untestable if the sim is
+  welded to the renderer.
+  - `Sim` carries its OWN `Vec3`/`Quat`, not `UnityEngine.Vector3`. Not
+    purism: `Vector3.Normalize` and `Quaternion.Slerp` are not specified to
+    the bit and have changed between engine versions, and the conformance bar
+    is 1e-10 m.
+  - The port follows **Go**, not the retired TypeScript client, because Go is
+    what C40 measures against.
   4. Ship a ten-line Node smoke test that imports `sim/` and steps it once,
      plus the JSONL trajectory dump entry point (ARCHITECTURE "Client"). Both
      land in wave 2 — waiting for `qa` in wave 3 means finding the problem at
@@ -105,8 +109,11 @@ model numbers live in `docs/GDD.md`.
   rendered terrain — the ground is six arrays, and the render mesh is a view
   of it.
 - `docs/PROTOCOL.md` is the contract: implement from it, report gaps.
-- Smoke-test with the `browser` tool where the server is reachable; report
-  what you actually observed.
+- Smoke-test with `./client-unity/unity typecheck` while iterating, and with
+  `make unity-build && make unity-run` against a live server before claiming
+  anything works. The packaged player is the only place build-only failures
+  show: shader stripping killed the first one on its first frame and the
+  Editor could not have seen it. Report what you actually observed.
 
 ## Out of scope (report, don't touch)
 `server/` (netcode), `deploy/` (infra), `docs/` (main thread).

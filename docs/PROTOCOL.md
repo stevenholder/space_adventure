@@ -335,7 +335,7 @@ content, filtered to what a client needs to render and predict.
 The client **must not fire, predict damage, or draw an inventory before `defs`
 arrives** — the same rule as `terrain`, for the same reason: it has no data to
 do it with. One source of truth, shipped, rather than a copy of the same JSON
-checked into `client/`.
+checked into the client.
 
 Like `terrain`, it is one message and therefore capped at 64 KiB. That is
 generous for Phase 2 and is a known, bounded place where chunking becomes

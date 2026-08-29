@@ -5,9 +5,6 @@ server/bin/
 *.out
 coverage.out
 
-# Node / client
-client/node_modules/
-client/dist/
 
 # Art
 art/cache/

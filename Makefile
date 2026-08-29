@@ -12,20 +12,21 @@
 #              run the Go store tests against it, then always remove the
 #              container (even on test failure).
 #
-# CLIENT_PORT/SERVER_PORT change only which host port the readiness check
-# probes. The real mapping is fixed in deploy/kind.yaml at cluster-creation
-# time -- edit that file and recreate the cluster to actually move it.
+# SERVER_PORT changes only which host port the readiness check probes. The
+# real mapping is fixed in deploy/kind.yaml at cluster-creation time -- edit
+# that file and recreate the cluster to actually move it.
+#
+# There is no client port any more. The cluster serves the game SERVER; the
+# client is a packaged desktop build (`make unity-build`) that connects to it,
+# not a page the cluster hands out. See ROADMAP U18.
 
 CLUSTER     ?= space-adventure
 NAMESPACE   ?= space-adventure
 SERVER_IMG  := space-adventure/server:latest
-CLIENT_IMG  := space-adventure/client:latest
-CLIENT_PORT ?= 3000
 SERVER_PORT ?= 18080
 
 # docker build context root (the repo root). Overridable to validate the
-# pipeline against a mirror tree while server/ and client/ are not yet
-# compilable.
+# pipeline against a mirror tree while server/ is not yet compilable.
 ROOT   ?= .
 LOGDIR := deploy/.logs
 # always pin the context: kubectl's current-context may point elsewhere
@@ -57,8 +58,6 @@ images:
 	# for the kind node's containerd to handle.
 	docker build -f Dockerfile.server --provenance=false -t $(SERVER_IMG) $(ROOT)
 	kind load docker-image $(SERVER_IMG) --name $(CLUSTER)
-	docker build -f Dockerfile.client --provenance=false -t $(CLIENT_IMG) $(ROOT)
-	kind load docker-image $(CLIENT_IMG) --name $(CLUSTER)
 
 apply:
 	$(KUBECTL) apply -f deploy/manifests/
@@ -68,32 +67,27 @@ apply:
 	# looks exactly like a code change that did nothing. `kind load` has
 	# already replaced the image under the tag on the node, so the new pods
 	# come up on the new build.
-	$(KUBECTL) -n $(NAMESPACE) rollout restart deploy/server deploy/client
+	$(KUBECTL) -n $(NAMESPACE) rollout restart deploy/server
 	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/server --timeout=120s
-	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/client --timeout=120s
 
 # No proxy process: deploy/kind.yaml maps the host ports straight onto the
 # NodePort services, so "forwarding" is now just waiting for the stack to
 # answer. See deploy/kind.yaml for why port-forward was removed.
 forward:
 	@mkdir -p $(LOGDIR)
-	@pkill -f 'space-adventure port-forward svc/clien[t]' 2>/dev/null || true
 	@pkill -f 'space-adventure port-forward svc/serve[r]' 2>/dev/null || true
 	@for i in $$(seq 1 60); do \
-		if curl -fsS -o /dev/null http://127.0.0.1:$(CLIENT_PORT)/ \
-		   && curl -fsS -o /dev/null http://127.0.0.1:$(SERVER_PORT)/healthz; then \
+		if curl -fsS -o /dev/null http://127.0.0.1:$(SERVER_PORT)/healthz; then \
 			break; \
 		fi; \
 		sleep 1; \
 	done
-	@curl -fsS -o /dev/null http://127.0.0.1:$(CLIENT_PORT)/ \
-		|| { echo "ERROR: client not reachable on :$(CLIENT_PORT)" >&2; exit 1; }
 	@curl -fsS -o /dev/null http://127.0.0.1:$(SERVER_PORT)/healthz \
 		|| { echo "ERROR: server not reachable on :$(SERVER_PORT)" >&2; exit 1; }
 	@echo ""
 	@echo "space-adventure is up:"
-	@echo "  client : http://localhost:$(CLIENT_PORT)   (WS: ws://localhost:$(CLIENT_PORT)/ws, same-origin)"
-	@echo "  server : http://localhost:$(SERVER_PORT)/healthz   (WS: ws://localhost:$(SERVER_PORT)/ws, direct)"
+	@echo "  server : http://localhost:$(SERVER_PORT)/healthz   (WS: ws://localhost:$(SERVER_PORT)/ws)"
+	@echo "  client : make unity-build && make unity-run"
 
 down:
 	# Legacy cleanup: earlier revisions ran kubectl port-forward (and, briefly,
@@ -110,7 +104,7 @@ down:
 	# exists, so checking first would fail every single time.
 	@sleep 1
 	@ok=1; \
-	for p in $(CLIENT_PORT) $(SERVER_PORT); do \
+	for p in $(SERVER_PORT); do \
 		if ss -ltnH | awk '{print $$4}' | grep -Eq "[:.]$$p$$"; then \
 			echo "ERROR: port $$p still in use after teardown — something else holds it" >&2; \
 			ok=0; \

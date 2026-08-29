@@ -12,17 +12,17 @@
 # kernel-level: nothing to supervise, nothing to restart, no added jitter.
 #
 # The host ports are fixed at cluster-creation time, so changing them means
-# recreating the cluster (`make down && make up CLIENT_PORT=... SERVER_PORT=...`
-# will not move them on its own).
+# recreating the cluster (`make down && make up SERVER_PORT=...` will not move
+# them on its own).
+#
+# Only the server is mapped. The client is a packaged desktop build that
+# connects in, not a page this cluster serves (ROADMAP U18).
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: space-adventure
 nodes:
   - role: control-plane
     extraPortMappings:
-      - containerPort: 30000   # client Service nodePort -> host :3000
-        hostPort: 3000
-        protocol: TCP
       - containerPort: 30080   # server Service nodePort -> host :18080
         hostPort: 18080
         protocol: TCP

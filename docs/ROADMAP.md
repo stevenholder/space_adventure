@@ -211,7 +211,7 @@ actually parallel.
   terrain step).
 - `server/data/` schemas (`game` owns): `items.json`, `npcs.json`,
   `zones/range.json`. Server-owned and shipped to the client in `defs` — one
-  source of truth, no duplicated data files in `client/`.
+  source of truth, no duplicated data files in the client.
 - `art/manifest.json`: `weapon.pulse` (with `grip` and `muzzle` nodes),
   `npc.shopkeeper`, `prop.target`, `struct.range.*`.
 - **Storage contract** (`docs/ARCHITECTURE.md`, "Persistence"): `DATABASE_URL`
@@ -453,7 +453,8 @@ is the single largest thing Three.js was never going to give us.
    C14 caught it only at the wire level; no server-side test can catch it, so
    U13 carries the obligation and `t21` is its check.
 
-4. **`Sim` carries its own math types**, mirroring `client/src/sim/types.ts` —
+4. **`Sim` carries its own math types**, originally mirroring the TypeScript
+   client's `sim/types.ts` (retired in U18; in git history) —
    not `UnityEngine.Vector3`. Normalize and lerp implementations differ between
    libraries and C5's bar is 1e-10 m.
 5. **C5 runs three-way during the transition** — Go / TS / C#. TS leaves the
@@ -480,7 +481,7 @@ is the single largest thing Three.js was never going to give us.
 | U15 | sonnet | HUD: vitals, hotbar, shop, interact prompt | `Game/UI/` | buy flow completes |
 | U16 | sonnet | Weapon, projectiles, hit feedback | `Game/Combat.cs` | shot_fired renders |
 | U17 | **main** | **Wire it into the frame loop** | `Game/Boot.cs` | end-to-end join → walk → shoot |
-| U18 | main | Retire `client/`, drop TS from C5, update Makefile + deploy | — | C43 green |
+| U18 | main | Retire `client/`, drop TS from C5, update Makefile + deploy | — | **done** — harnesses ported to C# first (t3, t6, t13), t12 superseded by t22 |
 
 U17 is a task because Phase 2 and Phase 3 both shipped fully-built subsystems
 that nothing referenced. That failure mode is not going to be fixed by hoping.

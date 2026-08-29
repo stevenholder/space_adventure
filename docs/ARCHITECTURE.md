@@ -32,10 +32,14 @@ flowchart LR
 - What kind does *not* exercise is sharding, delta snapshots and load; that is
   the scale-out phase's job, not now.
 
-## Client (`client/`) — Three.js + TypeScript
+## Client (`client-unity/`) — Unity 6, C#
 
-- Vite dev server in M1 (also the `/ws` proxy); a static production bundle
-  behind a real web server is a concern for the scale-out milestone.
+- A packaged desktop build. Browser delivery was dropped in Phase 3.5: the
+  original Three.js client lived in `client/` and was retired by ROADMAP U18
+  once the Unity one passed the same criteria. It is in git history.
+- Code-first, and that is a hard rule rather than a style: no agent authors a
+  `.unity`, `.prefab` or `.asset`, so every object, material and camera is
+  built from C# at runtime. `client-unity/CONVENTIONS.md` has the why.
 - Scene: a small low-poly round world — terrain mesh built from the server's
   six-face cube-sphere radius field, sky, scattered props; characters loaded
   from `art/` via `art/manifest.json` by asset id.
@@ -68,11 +72,13 @@ flowchart LR
 
   Four things keep this honest, in order of how much work they save:
 
-  1. **The compiler enforces it.** `client/src/sim/` compiles under its own
-     `tsconfig.sim.json` with `"lib": ["ES2022"]` and **no `"DOM"`**. Touching
-     `window`, `document`, `performance` or `requestAnimationFrame` in that
-     folder is then a build error, not a code-review note — and `make build`
-     already runs it. No lint rules, no custom tooling, no discipline required.
+  1. **The compiler enforces it.** `Assets/Sim/` is its own assembly and may
+     not reference `UnityEngine` at all, so touching a `GameObject`, a
+     `Transform` or `Time` in that folder is a build error rather than a
+     code-review note. `make unity-test` compiles it a second time with no
+     Editor in sight, which is what lets the conformance diff run in CI.
+     (The retired TypeScript client did the same job with a DOM-free
+     `tsconfig.sim.json`.)
   2. **A signature, fixed now**, so the Go and TypeScript sims mirror each
      other and criterion 5 has something to diff:
      `step(state, input, terrain, dt) -> state` and

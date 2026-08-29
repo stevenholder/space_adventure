@@ -35,4 +35,4 @@ Files:
 Both Dockerfiles use the repo root as build context, so `make up` builds them
 with `-f Dockerfile.<x> .`. `ROOT` is overridable (`make up ROOT=<dir>`) to
 point the context at a mirror tree — used to validate the pipeline before
-`server/` and `client/` are compilable.
+`server/` is compilable.

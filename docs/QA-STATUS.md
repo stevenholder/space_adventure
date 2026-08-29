@@ -114,7 +114,7 @@ its smoothed **RTT/2** and nothing else. One RTT/2 back from the moment a shot
 *arrives* is the present, not the past the client fired at: the snapshot the
 client aimed from was already one one-way old, and the shot spent another
 one-way getting back. The deployed TS client was further out still —
-`client/src/net/interp.ts` renders remotes another 100 ms behind *local receive
+The client renders remotes another 100 ms behind *local receive
 time* — so a real player had to lead a moving target by one-way + 100 ms to hit
 it, which is exactly what lag compensation exists to remove.
 

@@ -36,7 +36,7 @@ for the scale-out milestone, when there is more than one server process to sched
   code.
 
 ## Out of scope (report, don't touch)
-`server/` internals, `client/` code, `art/`, `docs/`.
+`server/` internals, `client-unity/` code, `art/`, `docs/`.
 
 ## Done means
 From a clean clone: `make up` yields a running stack (both processes up,
