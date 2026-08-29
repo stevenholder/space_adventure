@@ -115,6 +115,9 @@ namespace SpaceAdventure.Game
                 // distracting than the gap.
                 _assets.Attach(p.Asset, go.transform, null);
             }
+            // Logged like the colliders beside them, so a headless run says
+            // whether the zone dressing arrived at all.
+            Debug.Log($"props: {props.Length}");
         }
 
         /// <summary>

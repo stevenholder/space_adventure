@@ -7,5 +7,6 @@
   "budget": 1000,
   "license": "CC0",
   "author": "Kenney",
-  "source_url": "https://kenney.nl/assets/space-kit"
+  "source_url": "https://kenney.nl/assets/space-kit",
+  "merge": true
 }

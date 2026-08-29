@@ -83,7 +83,19 @@ namespace SpaceAdventure.Game
                 receiveShadows = true,
                 worldBounds = new Bounds(Vector3.zero, new Vector3(extent, extent, extent)),
             };
-            _ready = true;
+
+            // A headless run has a Null graphics device and no instancing, and
+            // RenderMeshInstanced throws on the first call. Asking up front
+            // turns that into one calm line instead of an error the log reader
+            // has to decide is harmless -- `unity run` is a batchmode player
+            // and hits this every time.
+            _ready = SystemInfo.supportsInstancing;
+            if (!_ready)
+            {
+                Debug.Log("rocks: skipped, this device has no GPU instancing " +
+                          "(expected headless; a graphical run instances them)");
+                return;
+            }
 
             for (int v = 0; v < 3; v++)
             {

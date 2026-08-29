@@ -50,7 +50,7 @@ import { fileURLToPath } from "node:url";
 
 import { NodeIO, Document } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { dedup, prune, weld, simplify } from "@gltf-transform/functions";
+import { dedup, join, prune, weld, simplify } from "@gltf-transform/functions";
 import { MeshoptSimplifier } from "meshoptimizer";
 
 const artDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -467,6 +467,20 @@ export async function importPack(recipe) {
   // After the renames: the map in a recipe is written in terms of this
   // project's node names, not the source pack's.
   const anim = await retargetAnimations(doc, recipe.animations);
+
+  // `merge` collapses the model to ONE mesh, for props the client draws with
+  // Graphics.RenderMeshInstanced.
+  //
+  // That path takes a single Mesh and a list of transforms, so a model split
+  // across several meshes gets only its first one drawn -- four hundred rocks
+  // rendering their first third and nothing saying why. AssetRegistry warns
+  // when it has to pick, and this is what stops it having to: after the bake
+  // every primitive shares one material, so they join cleanly.
+  //
+  // Opt-in, NOT the default: joining a character would weld the limbs into one
+  // mesh and take its animation with them. Only props that are instanced ask
+  // for it.
+  if (recipe.merge) await doc.transform(join({ keepNamed: false }));
 
   // Weld before simplify: meshoptimizer needs shared vertices to collapse
   // edges, and a flat-shaded export has none.
