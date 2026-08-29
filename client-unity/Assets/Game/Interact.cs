@@ -82,6 +82,15 @@ namespace SpaceAdventure.Game
                 if (v.Root == null || !v.Root.activeSelf) continue;
                 if (v.Type != EntityType.Npc && v.Type != EntityType.Loot) continue;
 
+                // A corpse is not a conversation. This used to be implied by
+                // activeSelf -- a dead body was switched off, so it fell out of
+                // the loop for free -- and stopped being implied the moment
+                // bodies started staying up to play a death animation. Then a
+                // dead grunt lying on top of the loot it dropped won the cone
+                // test against the crate, and the prompt offered to talk to it
+                // instead of picking the loot up.
+                if (v.Dead) continue;
+
                 // Aim at the target's EYE, not its feet. The server does the
                 // same, and against a 1.8 m body at 2 m the difference is most
                 // of the cone.

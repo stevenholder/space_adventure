@@ -82,10 +82,10 @@
     {
       "id": "struct.wall",
       "file": "structs/wall.glb",
-      "tris": 24,
+      "tris": 72,
       "license": "CC0",
       "source": "tools/gen_struct.py",
-      "description": "Phase 2 range wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Visual only — the authoritative shape is the `colliders` message."
+      "description": "Wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Banded in Y -- dark plinth, mid shaft, light coping -- because Y is the only axis that survives that scaling: a camp wall is 32 m long and 0.8 m thick, so anything modelled in X or Z is stretched past recognition, while a band in Y stays a band. Visual only; the authoritative shape is the colliders message."
     },
     {
       "id": "struct.post",

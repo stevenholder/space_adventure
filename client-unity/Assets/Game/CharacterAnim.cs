@@ -70,6 +70,20 @@ namespace SpaceAdventure.Game
             return anim == null || anim.GetClipCount() == 0 ? null : new CharacterAnim(anim);
         }
 
+        /// <summary>
+        /// How long the death clip runs, so a caller knows when a body has
+        /// finished dying and can be taken off screen. Zero when there is no
+        /// death clip, which means "do not wait for one".
+        /// </summary>
+        public float DeathLength
+        {
+            get
+            {
+                AnimationClip clip = _anim.GetClip("die");
+                return clip == null ? 0f : clip.length;
+            }
+        }
+
         /// <summary>Call every frame with the body's observed ground speed.</summary>
         public void Drive(float speed, bool dead)
         {

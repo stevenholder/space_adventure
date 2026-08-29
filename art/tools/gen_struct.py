@@ -29,8 +29,19 @@ from glb import Node, face_normal, out_path, write_glb
 
 MATERIALS = [{"name": "opaque", "double_sided": True}]
 
+# Three bands up the wall. The mid tone is the old flat colour; the base is
+# darker so the wall sits ON the ground rather than floating against it, and
+# the coping is lighter so there is a readable top edge against the sky --
+# which is the line that tells you how tall the thing you are behind is.
+WALL_BASE = (0.34, 0.34, 0.37)
 WALL_COLOR = (0.55, 0.55, 0.58)
+WALL_CAP = (0.70, 0.69, 0.66)
 POST_COLOR = (0.42, 0.44, 0.48)
+
+# Fractions of the wall's height. Proportional, not absolute, because the
+# client scales this to walls of different heights.
+BASE_TOP = 0.14
+CAP_BOTTOM = 0.88
 
 
 def _fan_tri(tris, center, p, q, color):
@@ -44,10 +55,24 @@ def _fan_tri(tris, center, p, q, color):
     tris.append((center, p, q, color))
 
 
-def wall_box(color):
-    """Unit box, base at the origin, up +Y: 6 faces x 4 fan triangles = 24."""
-    v = [(-0.5, 0.0, -0.5), (0.5, 0.0, -0.5), (0.5, 1.0, -0.5), (-0.5, 1.0, -0.5),
-         (-0.5, 0.0, 0.5), (0.5, 0.0, 0.5), (0.5, 1.0, 0.5), (-0.5, 1.0, 0.5)]
+def wall_box(color, y0=0.0, y1=1.0, inset=0.0):
+    """
+    Box spanning y0..y1, footprint 1x1 shrunk by `inset` on each side.
+
+    Banded rather than plain, and the bands run in Y for a reason: the client
+    scales this unit mesh to each collider's half-extents, and a camp wall is
+    32 m long, 3 m tall and 0.8 m thick. Any detail in X or Z is stretched
+    forty-fold and turns to mush; a band in Y stays a band, because Y is
+    scaled by the wall's height and nothing else.
+
+    One flat slab 32 m across in a single colour has no edge you can read at
+    the top and nothing to give it a base, and under this shader's ambient
+    (0.30 + 0.72 * lambert) its shaded side sits at 0.16 of its own colour --
+    which is why the camp read as a black void rather than as a wall.
+    """
+    lo, hi = -0.5 + inset, 0.5 - inset
+    v = [(lo, y0, lo), (hi, y0, lo), (hi, y1, lo), (lo, y1, lo),
+         (lo, y0, hi), (hi, y0, hi), (hi, y1, hi), (lo, y1, hi)]
     # Each 4-tuple is a face loop (a, b, c, d) walked CCW as seen from outside.
     loops = [(0, 3, 2, 1),   # -Z
              (4, 5, 6, 7),   # +Z
@@ -94,9 +119,14 @@ def post_sphere(color, segments=8, rings=3):
 
 def main():
     wall = Node("struct.wall")
-    wall.add("opaque", wall_box(WALL_COLOR))
+    # The base is inset slightly so its edge catches light differently from
+    # the shaft above it, which reads as a plinth rather than as a colour
+    # change painted on a flat face.
+    wall.add("opaque", wall_box(WALL_BASE, 0.0, BASE_TOP, inset=-0.03))
+    wall.add("opaque", wall_box(WALL_COLOR, BASE_TOP, CAP_BOTTOM))
+    wall.add("opaque", wall_box(WALL_CAP, CAP_BOTTOM, 1.0, inset=-0.04))
     n = write_glb(out_path("structs", "wall.glb"), wall, MATERIALS)
-    print(f"structs/wall.glb: {n} tris (manifest 24)")
+    print(f"structs/wall.glb: {n} tris")
 
     post = Node("struct.post")
     post.add("opaque", post_sphere(POST_COLOR))

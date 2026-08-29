@@ -43,6 +43,9 @@ namespace SpaceAdventure.Game
         public GameObject Held;
         public string HeldItem = "";
 
+        /// <summary>When this body was first seen dead, for the death fade.</summary>
+        public float DiedAt = -1f;
+
         /// <summary>
         /// Where this body was drawn last frame, and how fast it is therefore
         /// moving. Speed comes from the drawn positions rather than from the
@@ -265,12 +268,21 @@ namespace SpaceAdventure.Game
                 view.HasLastDrawn = true;
                 view.Anim?.Drive(view.Speed, view.Dead);
 
-                // A body with a death clip stays visible to play it out.
-                // Anything WITHOUT one still vanishes the moment it dies, as
-                // it always has: a target dummy has no death animation and
-                // respawns after three seconds, and leaving it standing there
-                // dead would just look like the hit did not register.
-                view.Root.SetActive(!kv.Value.Dead || view.Anim != null);
+                // Dying is allowed to take as long as the death clip, and not
+                // one second longer.
+                //
+                // The first version of this kept any body with a clip up
+                // indefinitely, which is not "playing the animation out", it
+                // is leaving corpses standing in the camp forever. The server
+                // does not despawn a dead NPC promptly -- it never had to,
+                // because the client used to switch the body off the instant
+                // it died, which looked like a despawn.
+                if (kv.Value.Dead && view.DiedAt < 0f) view.DiedAt = Time.time;
+                if (!kv.Value.Dead) view.DiedAt = -1f;
+
+                float linger = view.Anim?.DeathLength ?? 0f;
+                bool stillDying = view.DiedAt >= 0f && Time.time - view.DiedAt < linger;
+                view.Root.SetActive(!kv.Value.Dead || stillDying);
             }
         }
 
