@@ -13,6 +13,7 @@
 // draw calls and no transforms. Four hundred GameObjects would be four hundred
 // renderers to cull and re-evaluate every frame, for props that never move.
 
+using System;
 using System.Collections.Generic;
 using SpaceAdventure.Sim;
 using UnityEngine;
@@ -69,7 +70,19 @@ namespace SpaceAdventure.Game
                     new Vector3((float)p.Scale.X, (float)p.Scale.Y, (float)p.Scale.Z)));
             }
 
-            _rp = new RenderParams(_material) { receiveShadows = true };
+            // worldBounds has to be set. RenderMeshInstanced does not derive
+            // it from the instance list -- it culls against whatever is in
+            // RenderParams, and the default is a zero-size box at the origin,
+            // which culls every rock on the planet and looks exactly like the
+            // scatter never ran. The planet fits inside RadiusMax, so a box
+            // that contains the whole sphere is both correct and the least
+            // that can be said about props spread over all of it.
+            float extent = (float)TerrainField.RadiusMax * 2f;
+            _rp = new RenderParams(_material)
+            {
+                receiveShadows = true,
+                worldBounds = new Bounds(Vector3.zero, new Vector3(extent, extent, extent)),
+            };
             _ready = true;
 
             for (int v = 0; v < 3; v++)
@@ -84,10 +97,25 @@ namespace SpaceAdventure.Game
         public void Render()
         {
             if (!_ready) return;
-            for (int v = 0; v < 3; v++)
+            try
             {
-                if (_meshes[v] == null || _batches[v].Count == 0) continue;
-                Graphics.RenderMeshInstanced(_rp, _meshes[v], 0, _batches[v]);
+                for (int v = 0; v < 3; v++)
+                {
+                    if (_meshes[v] == null || _batches[v].Count == 0) continue;
+                    // Each batch is at most TargetCount, well under
+                    // RenderMeshInstanced's 1023-per-call limit.
+                    Graphics.RenderMeshInstanced(_rp, _meshes[v], 0, _batches[v]);
+                }
+            }
+            catch (Exception e)
+            {
+                // Draw calls happen every frame, so anything that throws here
+                // throws sixty times a second and buries the console -- which
+                // is exactly what a material without instancing enabled did.
+                // Say it once, then stop drawing rocks. Scenery is not worth
+                // hiding every other message in the log.
+                _ready = false;
+                Debug.LogError($"rock scatter disabled after a draw error: {e.Message}");
             }
         }
     }

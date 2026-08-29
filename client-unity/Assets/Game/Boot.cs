@@ -128,6 +128,12 @@ namespace SpaceAdventure.Game
 
             _material = new Material(RequireShader("SpaceAdventure/TerrainVertexColor", "Standard"));
 
+            // Still ONE material for everything, now also usable by
+            // Graphics.RenderMeshInstanced -- which throws on any material
+            // that has not opted in, however capable its shader is. Enabling
+            // it costs nothing for the meshes drawn the ordinary way.
+            _material.enableInstancing = true;
+
             int vmLayer = LayerMask.NameToLayer("ViewModel");
             if (vmLayer < 0) vmLayer = 8; // unnamed until the Editor runs EnsureLayers
 

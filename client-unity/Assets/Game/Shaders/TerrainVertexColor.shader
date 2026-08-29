@@ -30,6 +30,12 @@ Shader "SpaceAdventure/TerrainVertexColor"
         CGPROGRAM
         #pragma surface surf Lambert vertex:vert
         #pragma target 3.0
+        // The rock scatter draws ~400 props through
+        // Graphics.RenderMeshInstanced, which refuses any material whose
+        // shader has no instancing variant: "Material needs to enable
+        // instancing for use with RenderMeshInstanced". The variant costs
+        // nothing when nothing instances.
+        #pragma multi_compile_instancing
 
         fixed4 _Tint;
 
