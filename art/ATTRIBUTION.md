@@ -49,6 +49,11 @@ manifest row says `rig: "animated"` has clips from `kenney-blocky-characters`.
 | `npc.grunt` | `alien` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `npc.gunner` | `alien` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.loot.crate` | `barrel` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `prop.barrel` | `barrel` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `prop.barrels` | `barrels` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `prop.generator` | `machine_generator` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `prop.dish` | `satelliteDish` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `prop.bones` | `bones` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | *(clips for every `rig: animated` asset)* | `character-a` | Kenney | CC0 | [Blocky Characters](https://kenney.nl/assets/blocky-characters) |
 
 ## Candidate packs

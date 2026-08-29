@@ -427,6 +427,11 @@ namespace SpaceAdventure.Game
                     Debug.Log($"colliders: {_colliders.Length}");
                     break;
                 }
+                case Msg.Props:
+                    // Visual only, and deliberately not routed anywhere near
+                    // the predictor: props have no collision.
+                    _structures.BuildProps(Decode.Props(frame.Reader));
+                    break;
                 case Msg.Defs:
                 {
                     // Item names, kinds and equipment slots -- the shop needs

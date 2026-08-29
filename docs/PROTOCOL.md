@@ -52,6 +52,7 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 | `0x0010` | `defs` | S→C | `u32 data_len` \| `bytes data` (UTF-8 JSON) |
 | `0x0011` | `fire` | C→S | `u16 seq` \| `f32 dir[3]` |
 | `0x0012` | `colliders` | S→C | `u16 count` \| `collider × count` |
+| `0x0013` | `props` | S→C | `u16 count` \| `prop × count` |
 
 `entity` (inside `snapshot`) — **54 bytes, fixed**:
 
@@ -65,6 +66,24 @@ u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3]
 ```
 u8 kind | u8 _pad | f32 center[3] | f32 half[3] | f32 quat[4]
 ```
+
+`prop` (inside `props`) — **variable length**:
+
+```
+f32 pos[3] | f32 quat[4] | f32 scale | u16 asset_len | bytes asset
+```
+
+`asset` is an id from `art/manifest.json` (`prop.barrel`, `prop.dish`), UTF-8.
+
+Props are **visual only**: zone dressing with no collider, which the sim never
+sees. A client that ignored this message entirely would still agree with the
+server about everything that can be walked into or shot — which is why the row
+may be variable-length where `collider` may not. Colliders are bulk data
+(1560 rows in a message) and every byte counts; props are hand-authored and the
+two zones that have any carry fourteen between them, so the row simply carries
+the name instead of an index into a table the client would have to hold.
+
+Sent once, immediately after `colliders`, and never resent.
 
 Constants:
 

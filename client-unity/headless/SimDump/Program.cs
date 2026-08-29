@@ -467,7 +467,10 @@ internal static class Program
         Console.WriteLine($"cmd_result seq={cr.Seq} opcode={cr.Opcode} status={cr.StatusCode} data={cr.Body}");
 
         Expect("defs", Msg.Defs, out var r2);
-        Console.WriteLine($"defs data={Decode.Defs(r2)}");
+        // Raw, not the parsed tables: C41 compares BYTES with Go, and
+        // re-serialising what this client understood would compare the client
+        // with itself.
+        Console.WriteLine($"defs data={Decode.Defs(r2).Raw}");
 
         Expect("colliders", Msg.Colliders, out var r3);
         foreach (var c in Decode.Colliders(r3))
@@ -476,6 +479,15 @@ internal static class Program
                               $" half={G(c.HalfX)},{G(c.HalfY)},{G(c.HalfZ)}" +
                               $" quat={G(c.QuatX)},{G(c.QuatY)},{G(c.QuatZ)},{G(c.QuatW)}");
         }
+
+        Expect("props", Msg.Props, out var r4);
+        foreach (var p in Decode.Props(r4))
+        {
+            Console.WriteLine($"prop asset={p.Asset} pos={G(p.PosX)},{G(p.PosY)},{G(p.PosZ)}" +
+                              $" quat={G(p.QuatX)},{G(p.QuatY)},{G(p.QuatZ)},{G(p.QuatW)}" +
+                              $" scale={G(p.Scale)}");
+        }
+
         return 0;
     }
 

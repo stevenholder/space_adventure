@@ -54,6 +54,7 @@ type Server struct {
 	terrainF   []byte // pre-encoded terrain frame, sent on every join
 	defsF      []byte // pre-encoded defs frame, built once at startup
 	collidersF []byte // pre-encoded colliders frame, built once at startup
+	propsF     []byte // pre-encoded props frame, built once at startup
 	colliders  []protocol.Collider
 
 	reg   *defs.Registry
@@ -135,6 +136,7 @@ func New(t *terrain.Field, seed uint64) *Server {
 	world := sim.NewWorld()
 	var worldEnts []*sim.Ent
 	var allColliders []protocol.Collider
+	var allProps []protocol.Prop
 	// World entity ids are drawn from a separate range above where player
 	// ids (Server.nextID, starting at 1) will ever reach in a single run, so
 	// the two id spaces never collide and player ids keep starting at 1
@@ -142,11 +144,12 @@ func New(t *terrain.Field, seed uint64) *Server {
 	worldID := uint32(worldEntityIDBase)
 	for _, id := range zoneIDs {
 		z := reg.Zones[id]
-		cols, placements, err := defs.ComposeZone(z, radiusFn)
+		cols, placements, props, err := defs.ComposeZone(z, radiusFn)
 		if err != nil {
 			panic(fmt.Errorf("server: compose zone %q: %w", id, err))
 		}
 		allColliders = append(allColliders, cols...)
+		allProps = append(allProps, props...)
 		for _, p := range placements {
 			worldID++
 			kind := sim.EntityKind(protocol.EntityTypeTarget)
@@ -217,6 +220,13 @@ func New(t *terrain.Field, seed uint64) *Server {
 	s.terrainF = frame(protocol.MsgTerrain, t.Encode())
 	s.defsF = protocol.EncodeDefs(protocol.Defs{Data: reg.Payload})
 	s.collidersF = protocol.EncodeColliders(protocol.Colliders{List: allColliders})
+	// Zone dressing. Visual only and pre-encoded once, exactly like the
+	// colliders it sits among -- a client that never decodes this still agrees
+	// with the server about everything that can be walked into or shot.
+	if len(allProps) > protocol.PropMax {
+		panic(fmt.Errorf("server: %d props exceeds PropMax %d", len(allProps), protocol.PropMax))
+	}
+	s.propsF = protocol.EncodeProps(protocol.Props{List: allProps})
 	s.snapPool.New = func() any { return []byte(nil) }
 	return s
 }
@@ -489,6 +499,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	c.send(msg{data: s.terrainF})
 	c.send(msg{data: s.defsF})
 	c.send(msg{data: s.collidersF})
+	c.send(msg{data: s.propsF})
 	for _, m := range others {
 		c.send(m)
 	}

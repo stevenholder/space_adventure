@@ -115,7 +115,7 @@ func quatMul(a, b quat) quat {
 // ComposeZone transforms a zone's locally-authored colliders and entities
 // (local tangent frame) into world-space colliders and placements, per
 // docs/GDD.md "Static colliders" -> "Authoring frame".
-func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.Collider, placements []Placement, err error) {
+func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.Collider, placements []Placement, props []protocol.Prop, err error) {
 	// Zone files are hand-authored, so this is the likelier source of a bad
 	// number than the wire. A non-finite value here survives the composition
 	// and ends up in the sim's push-out, which writes it into the player's
@@ -125,26 +125,39 @@ func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.
 	for i, c := range z.Colliders {
 		for j := 0; j < 3; j++ {
 			if !isFinite(c.Pos[j]) || !isFinite(c.Half[j]) {
-				return nil, nil, fmt.Errorf("zone %s: collider %d has a non-finite pos/half", z.ID, i)
+				return nil, nil, nil, fmt.Errorf("zone %s: collider %d has a non-finite pos/half", z.ID, i)
 			}
 		}
 		if !isFinite(c.Yaw) {
-			return nil, nil, fmt.Errorf("zone %s: collider %d has a non-finite yaw", z.ID, i)
+			return nil, nil, nil, fmt.Errorf("zone %s: collider %d has a non-finite yaw", z.ID, i)
 		}
 	}
 	for i, e := range z.Entities {
 		for j := 0; j < 3; j++ {
 			if !isFinite(e.Pos[j]) {
-				return nil, nil, fmt.Errorf("zone %s: entity %d (%s) has a non-finite pos", z.ID, i, e.Def)
+				return nil, nil, nil, fmt.Errorf("zone %s: entity %d (%s) has a non-finite pos", z.ID, i, e.Def)
 			}
 		}
 		if !isFinite(e.Yaw) {
-			return nil, nil, fmt.Errorf("zone %s: entity %d (%s) has a non-finite yaw", z.ID, i, e.Def)
+			return nil, nil, nil, fmt.Errorf("zone %s: entity %d (%s) has a non-finite yaw", z.ID, i, e.Def)
+		}
+	}
+	for i, p := range z.Props {
+		for j := 0; j < 3; j++ {
+			if !isFinite(p.Pos[j]) {
+				return nil, nil, nil, fmt.Errorf("zone %s: prop %d (%s) has a non-finite pos", z.ID, i, p.Asset)
+			}
+		}
+		if !isFinite(p.Yaw) || !isFinite(p.Scale) {
+			return nil, nil, nil, fmt.Errorf("zone %s: prop %d (%s) has a non-finite yaw/scale", z.ID, i, p.Asset)
+		}
+		if p.Asset == "" {
+			return nil, nil, nil, fmt.Errorf("zone %s: prop %d has no asset id", z.ID, i)
 		}
 	}
 	for j := 0; j < 3; j++ {
 		if !isFinite(z.OriginDir[j]) {
-			return nil, nil, fmt.Errorf("zone %s: non-finite origin_dir", z.ID)
+			return nil, nil, nil, fmt.Errorf("zone %s: non-finite origin_dir", z.ID)
 		}
 	}
 
@@ -183,7 +196,7 @@ func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.
 		case "sphere":
 			kind = protocol.ColliderSphere
 		default:
-			return nil, nil, fmt.Errorf("defs: zone %q: unknown collider kind %q", z.ID, c.Kind)
+			return nil, nil, nil, fmt.Errorf("defs: zone %q: unknown collider kind %q", z.ID, c.Kind)
 		}
 
 		pos, q := worldTransform(c.Pos, c.Yaw)
@@ -206,7 +219,26 @@ func ComposeZone(z Zone, radius func([3]float64) float64) (colliders []protocol.
 		})
 	}
 
-	return colliders, placements, nil
+	// Props ride the same worldTransform as colliders and entities, so a prop
+	// authored at (12, 0, 11) stands exactly where a collider authored at
+	// (12, 0, 11) would -- which is the only reason the numbers in a zone file
+	// can be read off against each other.
+	props = make([]protocol.Prop, 0, len(z.Props))
+	for _, p := range z.Props {
+		pos, q := worldTransform(p.Pos, p.Yaw)
+		scale := p.Scale
+		if scale == 0 {
+			scale = 1
+		}
+		props = append(props, protocol.Prop{
+			Asset: p.Asset,
+			Pos:   [3]float32{float32(pos[0]), float32(pos[1]), float32(pos[2])},
+			Quat:  [4]float32{float32(q[0]), float32(q[1]), float32(q[2]), float32(q[3])},
+			Scale: float32(scale),
+		})
+	}
+
+	return colliders, placements, props, nil
 }
 
 // isFinite reports whether v is neither NaN nor an infinity.

@@ -109,6 +109,21 @@ namespace SpaceAdventure.Net
         /// every variable-length field on this wire uses (`hello` name and
         /// token, `spawn` data, `cmd` body).
         /// </summary>
+        /// <summary>
+        /// A u16-length-prefixed UTF-8 string, as `props` uses for an asset id.
+        /// Bounded before the allocation for the same reason the u32 form is:
+        /// a length field is attacker-controlled input, not a promise.
+        /// </summary>
+        public string ReadU16Utf8(string what = "string")
+        {
+            ushort n = ReadU16(what + " length");
+            if (n > Remaining)
+            {
+                throw new WireException($"{what}: length {n} exceeds the {Remaining} bytes remaining");
+            }
+            return Utf8.GetString(ReadBytes(n, what));
+        }
+
         public string ReadLengthPrefixedUtf8(string what = "string")
         {
             uint n = ReadU32(what + " length");

@@ -126,6 +126,56 @@
       "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
       "source_url": "https://kenney.nl/assets/space-kit",
       "author": "Kenney"
+    },
+    {
+      "id": "prop.barrel",
+      "file": "props/barrel.glb",
+      "tris": 56,
+      "license": "CC0",
+      "source": "recipes/prop.barrel.json",
+      "description": "Fuel drum. Camp dressing, placed from zone data.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.barrels",
+      "file": "props/barrels.glb",
+      "tris": 268,
+      "license": "CC0",
+      "source": "recipes/prop.barrels.json",
+      "description": "A stack of three drums, for filling a corner without three placements.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.generator",
+      "file": "props/generator.glb",
+      "tris": 406,
+      "license": "CC0",
+      "source": "recipes/prop.generator.json",
+      "description": "Portable generator. The reason a camp in vacuum has lights.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.dish",
+      "file": "props/dish.glb",
+      "tris": 274,
+      "license": "CC0",
+      "source": "recipes/prop.dish.json",
+      "description": "Comms dish. Reads as a camp that is talking to someone.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.bones",
+      "file": "props/bones.glb",
+      "tris": 168,
+      "license": "CC0",
+      "source": "recipes/prop.bones.json",
+      "description": "Bones. Dressing for a hostile camp -- the cheapest way to say someone lost here.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
     }
   ]
 }

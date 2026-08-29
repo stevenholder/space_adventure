@@ -64,6 +64,13 @@ check('S->C colliders[0] (box)', decoded[2],
   'collider kind=0 center=12,1.25,6 half=17,1.25,0.3 quat=0,0,0,1')
 check('S->C colliders[1] (sphere)', decoded[3],
   'collider kind=1 center=8,1,4 half=1,0,0 quat=0.5,-0.5,0.5,0.5')
+// Two props with DIFFERENT-length asset ids: a variable-length row is where a
+// decoder that reads the wrong number of bytes still gets row 0 right and then
+// walks off the end of row 1.
+check('S->C props[0]', decoded[4],
+  'prop asset=prop.barrel pos=12,1.25,6 quat=0,0,0,1 scale=1')
+check('S->C props[1]', decoded[5],
+  'prop asset=prop.dish pos=-8,0.5,4 quat=0.5,-0.5,0.5,0.5 scale=1.5')
 
 // ---- C->S : C# encodes, Go must parse --------------------------------------
 cs('--codec-encode', csHex)

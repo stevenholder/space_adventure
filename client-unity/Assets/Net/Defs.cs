@@ -72,13 +72,48 @@ namespace SpaceAdventure.Net
         [JsonProperty("entities")] public Dictionary<string, EntityDef> Entities { get; set; }
         [JsonProperty("npcs")] public Dictionary<string, NpcDef> Npcs { get; set; }
 
+        /// <summary>
+        /// The payload exactly as it arrived.
+        ///
+        /// Kept because the tables above are a LOSSY read of it: they take the
+        /// handful of fields this client uses and drop the rest. Anything that
+        /// needs the bytes -- the C41 codec-parity harness compares them
+        /// against Go's -- has to have them, and re-serialising the parsed
+        /// object would compare this client's idea of the payload with itself.
+        /// </summary>
+        public string Raw { get; private set; } = "";
+
         /// <summary>An empty table, so callers never hold a null.</summary>
         public static readonly Defs Empty = new Defs();
 
+        /// <summary>
+        /// Parses the payload, failing SOFT.
+        ///
+        /// Every lookup on this class already declines to throw -- an unknown
+        /// id gives back the id, or an empty string. The parse itself did not,
+        /// and it is called straight from the message loop: one payload whose
+        /// shape this client does not expect (`items` as an array rather than
+        /// a map, say) took the whole connection down with a Newtonsoft
+        /// exception. A client that cannot read `defs` should show items by
+        /// their ids, not disconnect.
+        /// </summary>
         public static Defs Parse(string json)
         {
             if (string.IsNullOrEmpty(json)) return Empty;
-            return JsonConvert.DeserializeObject<Defs>(json) ?? Empty;
+
+            Defs defs;
+            try
+            {
+                defs = JsonConvert.DeserializeObject<Defs>(json);
+            }
+            catch (JsonException)
+            {
+                defs = null;
+            }
+
+            defs ??= new Defs();
+            defs.Raw = json;
+            return defs;
         }
 
         /// <summary>Display name for an item, falling back to its id.</summary>

@@ -35,6 +35,7 @@ namespace SpaceAdventure.Net
         public const ushort Cmd = 0x000E;
         public const ushort CmdResult = 0x000F;
         public const ushort Defs = 0x0010;
+        public const ushort Props = 0x0013;
         public const ushort Fire = 0x0011;
         public const ushort Colliders = 0x0012;
     }
@@ -271,6 +272,22 @@ namespace SpaceAdventure.Net
         public bool Ok => StatusCode == Status.Ok;
     }
 
+    /// <summary>
+    /// One piece of zone dressing (PROTOCOL `props`): a model id from
+    /// art/manifest.json, where it stands, and how it is turned.
+    ///
+    /// Visual only. Props carry no collider and the sim never sees them, so a
+    /// client that dropped this message entirely would still agree with the
+    /// server about everything that can be walked into or shot.
+    /// </summary>
+    public struct Prop
+    {
+        public string Asset;
+        public float PosX, PosY, PosZ;
+        public float QuatX, QuatY, QuatZ, QuatW;
+        public float Scale;
+    }
+
     public struct Collider
     {
         public byte Kind;
@@ -414,6 +431,34 @@ namespace SpaceAdventure.Net
             string json = r.ReadLengthPrefixedUtf8("defs data");
             r.ExpectEnd("defs");
             return SpaceAdventure.Net.Defs.Parse(json);
+        }
+
+        /// <summary>
+        /// Decodes `props`. Variable-length rows, unlike colliders, so this
+        /// cannot check the total size up front -- it walks the count and lets
+        /// the reader's own bounds checks catch a truncated frame.
+        /// </summary>
+        public static Prop[] Props(WireReader r)
+        {
+            int count = r.ReadU16("props count");
+            var list = new Prop[count];
+            for (int i = 0; i < count; i++)
+            {
+                list[i] = new Prop
+                {
+                    PosX = r.ReadF32("prop pos.x"),
+                    PosY = r.ReadF32("prop pos.y"),
+                    PosZ = r.ReadF32("prop pos.z"),
+                    QuatX = r.ReadF32("prop quat.x"),
+                    QuatY = r.ReadF32("prop quat.y"),
+                    QuatZ = r.ReadF32("prop quat.z"),
+                    QuatW = r.ReadF32("prop quat.w"),
+                    Scale = r.ReadF32("prop scale"),
+                    Asset = r.ReadU16Utf8("prop asset"),
+                };
+            }
+            r.ExpectEnd("props");
+            return list;
         }
 
         public static Collider[] Colliders(WireReader r)

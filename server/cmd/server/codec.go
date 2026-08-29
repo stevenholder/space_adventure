@@ -60,6 +60,13 @@ func codecEmit(path string) error {
 		{Kind: protocol.ColliderBox, Center: [3]float32{12, 1.25, 6}, Half: [3]float32{17, 1.25, 0.3}, Quat: [4]float32{0, 0, 0, 1}},
 		{Kind: protocol.ColliderSphere, Center: [3]float32{8, 1, 4}, Half: [3]float32{1, 0, 0}, Quat: [4]float32{0.5, -0.5, 0.5, 0.5}},
 	}}))
+	// Two props, because one row cannot show that the NEXT row starts where
+	// this one ended -- and a variable-length row is exactly where that goes
+	// wrong. The asset ids are deliberately different lengths.
+	put("props", protocol.EncodeProps(protocol.Props{List: []protocol.Prop{
+		{Asset: "prop.barrel", Pos: [3]float32{12, 1.25, 6}, Quat: [4]float32{0, 0, 0, 1}, Scale: 1},
+		{Asset: "prop.dish", Pos: [3]float32{-8, 0.5, 4}, Quat: [4]float32{0.5, -0.5, 0.5, 0.5}, Scale: 1.5},
+	}}))
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 

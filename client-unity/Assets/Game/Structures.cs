@@ -33,6 +33,7 @@
 //   about its local X would need the mirror handled rather than absorbed.
 
 using UnityEngine;
+using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 
 namespace SpaceAdventure.Game
@@ -47,6 +48,7 @@ namespace SpaceAdventure.Game
         private readonly Material _material;
         private readonly AssetRegistry _assets;
         private GameObject _root;
+        private GameObject _propRoot;
 
         public Structures(Transform parent, Material material, AssetRegistry assets)
         {
@@ -64,8 +66,54 @@ namespace SpaceAdventure.Game
 
             foreach (Sim.Collider c in colliders)
             {
-                if (c.Kind == ColliderKind.Sphere) AddSphere(c);
+                if (c.Kind == Sim.ColliderKind.Sphere) AddSphere(c);
                 else AddBox(c);
+            }
+        }
+
+        /// <summary>
+        /// Zone dressing: barrels, a generator, a comms dish, bones.
+        ///
+        /// Authored in the zone files and composed to world space by the
+        /// SERVER, through the very same transform the colliders go through --
+        /// which is what lets an author put a barrel at (12, 0, 11) by reading
+        /// the collider list. The client does not decide where any of this
+        /// goes, and could not: the colliders arrive world-space with no zone
+        /// identity, so nothing here can tell the camp's walls from the
+        /// range's.
+        ///
+        /// No collider of their own. Walk straight through a barrel.
+        /// </summary>
+        public void BuildProps(Prop[] props)
+        {
+            if (_propRoot != null) Object.Destroy(_propRoot);
+            _propRoot = new GameObject("props");
+            _propRoot.transform.SetParent(_parent, false);
+            if (props == null) return;
+
+            foreach (Prop p in props)
+            {
+                var go = new GameObject(p.Asset);
+                go.transform.SetParent(_propRoot.transform, false);
+                go.transform.position = TerrainMesh.ToUnity(
+                    new Vec3(p.PosX, p.PosY, p.PosZ));
+
+                // Same handedness problem as a box collider, same answer:
+                // rotate the prop's own axes in sim space and convert those,
+                // rather than converting a quaternion across a mirror.
+                var q = new Quat(p.QuatX, p.QuatY, p.QuatZ, p.QuatW);
+                Vector3 up = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 1, 0)));
+                Vector3 fwd = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 0, 1)));
+                go.transform.rotation = Quaternion.LookRotation(fwd, up);
+
+                float s = p.Scale <= 0f ? 1f : p.Scale;
+                go.transform.localScale = new Vector3(s, s, s);
+
+                // No box fallback here, unlike walls. A wall you cannot see is
+                // a wall you walk into; a barrel you cannot see is just not
+                // there yet, and a grey cube standing in for it would be more
+                // distracting than the gap.
+                _assets.Attach(p.Asset, go.transform, null);
             }
         }
 
@@ -115,7 +163,7 @@ namespace SpaceAdventure.Game
             var go = new GameObject(assetId);
             go.transform.SetParent(_root.transform, false);
 
-            Mesh fallback = c.Kind == ColliderKind.Sphere ? Models.Post() : Models.Wall();
+            Mesh fallback = c.Kind == Sim.ColliderKind.Sphere ? Models.Post() : Models.Wall();
             GameObject box = BoxMesh.Attach(go.transform, "model", fallback, _material, 0);
             _assets.Attach(assetId, go.transform, _ => { if (box != null) Object.Destroy(box); });
             return go;

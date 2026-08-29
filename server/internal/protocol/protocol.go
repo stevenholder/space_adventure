@@ -38,6 +38,7 @@ const (
 	MsgDefs       uint16 = 0x0010
 	MsgFire       uint16 = 0x0011
 	MsgColliders  uint16 = 0x0012
+	MsgProps      uint16 = 0x0013
 )
 
 // entity_type values (PROTOCOL.md constants).
@@ -118,6 +119,12 @@ const ColliderSize = 1 + 1 + 3*4 + 3*4 + 4*4 // 42
 
 // ColliderMax is how many colliders fit one 64 KiB message.
 const ColliderMax = 1560
+
+// PropMax is how many props one `props` message may carry. Props are hand-
+// authored zone dressing, not bulk data -- the two zones that have any carry
+// fourteen between them -- so this is a sanity bound on a hand-edited file
+// rather than a limit anyone is expected to reach.
+const PropMax = 4096
 
 // Errors.
 var (
