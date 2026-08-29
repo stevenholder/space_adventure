@@ -167,6 +167,43 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
+        /// Hands back the loaded model's first Mesh, for callers that draw
+        /// geometry themselves rather than mounting a GameObject -- the rock
+        /// scatter instances one mesh four hundred times and wants no
+        /// transforms at all.
+        ///
+        /// First, not merged: the props this is used for are single-mesh by
+        /// contract (art/manifest.json describes each rock as one unit-sized
+        /// variant). A multi-mesh model asked for this way would silently
+        /// lose its other parts, so it logs rather than picking quietly.
+        /// </summary>
+        public async void Mesh(string assetId, Action<Mesh> onReady)
+        {
+            if (!Has(assetId)) return;
+            try
+            {
+                GltfImport import = await LoadOnce(assetId);
+                if (import == null) return;
+
+                Mesh[] meshes = import.GetMeshes();
+                if (meshes == null || meshes.Length == 0)
+                {
+                    Debug.LogWarning($"asset {assetId} has no mesh to instance");
+                    return;
+                }
+                if (meshes.Length > 1)
+                    Debug.LogWarning(
+                        $"asset {assetId} has {meshes.Length} meshes; instancing only the first");
+
+                onReady?.Invoke(meshes[0]);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"asset {assetId} failed to load: {e.Message}");
+            }
+        }
+
+        /// <summary>
         /// One load per id, shared by every caller that asks for it while it
         /// is still in flight. Returns null when the file is missing or does
         /// not parse.

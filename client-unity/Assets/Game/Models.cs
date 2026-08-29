@@ -170,6 +170,32 @@ namespace SpaceAdventure.Game
 
         // ---- props --------------------------------------------------------
 
+        // ---- static structures -------------------------------------------
+        //
+        // Fallbacks for the `colliders` message, and each one matches the
+        // FRAME of the .glb it stands in for -- Structures.cs positions and
+        // scales the holder once, and both the box and the model that
+        // replaces it have to read that transform the same way.
+
+        /// <summary>
+        /// Unit box, base at origin, 1x1 footprint: struct.wall's frame.
+        /// </summary>
+        public static Mesh Wall() => Get("wall", () => new List<Box>
+        {
+            new Box(new Vector3(0f, 0.5f, 0f), new Vector3(1f, 1f, 1f),
+                    new Color(0.42f, 0.44f, 0.47f)),
+        });
+
+        /// <summary>
+        /// Unit-RADIUS cube centred on the origin: struct.post's frame, which
+        /// is a unit sphere spanning -1..1 rather than a box standing on 0.
+        /// </summary>
+        public static Mesh Post() => Get("post", () => new List<Box>
+        {
+            new Box(Vector3.zero, new Vector3(2f, 2f, 2f),
+                    new Color(0.38f, 0.40f, 0.43f)),
+        });
+
         /// <summary>A range target: a plate on a stand, not a floating cube.</summary>
         public static Mesh Target() => Get("target", () =>
         {

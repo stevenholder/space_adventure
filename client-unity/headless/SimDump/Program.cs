@@ -188,6 +188,7 @@ internal static class Program
 
         FrameConventionChecks();
         PredictionChecks();
+        RockScatterChecks();
 
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
@@ -268,6 +269,83 @@ internal static class Program
         Check("a stale ack is rejected", !twin.Reconcile(spawn, Vec3.Zero, fwd, true, 2));
     }
 
+    // ---- rock scatter ------------------------------------------------------
+    //
+    // The scatter is never sent over the wire. The server ships `world_seed`
+    // and every client scatters its own rocks from it, so the ONLY thing
+    // keeping two clients showing the same planet is that this function is a
+    // pure, stable function of (terrain, seed). Nothing checks it at runtime:
+    // rocks have no collision, so two clients disagreeing about where four
+    // hundred of them sit is completely silent.
+    //
+    // Which makes the rng draw order load-bearing. Adding one rng() call, or
+    // moving one, shifts every rock after it.
+
+    private static void RockScatterChecks()
+    {
+        var terrain = TerrainField.FromWire(FlatCodes(65), 150, 150);
+
+        var a = RockScatter.Scatter(terrain, 12345);
+        var b = RockScatter.Scatter(terrain, 12345);
+        var c = RockScatter.Scatter(terrain, 12346);
+
+        Check("scatter fills its target on open ground",
+              a.Count == RockScatter.TargetCount, $"got {a.Count}");
+
+        bool same = a.Count == b.Count;
+        for (int i = 0; same && i < a.Count; i++)
+            same = a[i].Pos.Equals(b[i].Pos) && a[i].Variant == b[i].Variant
+                   && a[i].Spin == b[i].Spin;
+        Check("same seed gives byte-identical placements", same);
+
+        bool differs = false;
+        for (int i = 0; i < Math.Min(a.Count, c.Count) && !differs; i++)
+            differs = !a[i].Pos.Equals(c[i].Pos);
+        Check("a different seed gives a different scatter", differs);
+
+        // Every rock seated on the surface, upright along its own radius, and
+        // within the size band the GDD gives (0.3-1.5 m, times the per-axis
+        // jitter, so 0.165 at the smallest and 1.8 at the largest).
+        bool seated = true, sized = true, radial = true;
+        var used = new bool[3];
+        foreach (var p in a)
+        {
+            used[p.Variant] = true;
+            double r = p.Pos.Length;
+            if (r < 150.0 || r > 150.0 + 1.5 * 0.05 + 1e-9) seated = false;
+            if (p.Scale.X < 0.16 || p.Scale.X > 1.81
+                || p.Scale.Y < 0.16 || p.Scale.Y > 1.81) sized = false;
+            if (Math.Abs(p.Dir.Length - 1) > 1e-12) radial = false;
+        }
+        Check("every rock sits on the surface, not in or above it", seated);
+        Check("every rock is within the GDD size band", sized);
+        Check("every rock direction is a unit vector", radial);
+        Check("all three variants are used", used[0] && used[1] && used[2]);
+
+        // The slope rule is the one rule with a number in it from the GDD, and
+        // it has to be checked against terrain that actually HAS slopes -- on
+        // the flat fixture above the assertion holds whether the filter exists
+        // or not.
+        var rough = TerrainField.FromWire(BumpyCodes(65), 124, 190);
+        var onRough = RockScatter.Scatter(rough, 99);
+
+        bool steepExists = false;
+        for (int i = 0; i < 2000 && !steepExists; i++)
+        {
+            double z = (i % 41) / 20.0 - 1.0, th = i * 0.37;
+            double rr = Math.Sqrt(Math.Max(0, 1 - z * z));
+            var d = new Vec3(rr * Math.Cos(th), z, rr * Math.Sin(th)).Normalized();
+            if (rough.Slope(d) > RockScatter.SlopeMax) steepExists = true;
+        }
+        Check("the rough fixture really does have unwalkable ground", steepExists);
+
+        bool slopeOk = true;
+        foreach (var p in onRough)
+            if (rough.Slope(p.Dir) > RockScatter.SlopeMax) slopeOk = false;
+        Check("no rock on a slope above 35 degrees", slopeOk,
+              $"{onRough.Count} placed on rough ground");
+    }
+
     /// <summary>A fresh predictor that has applied the same five inputs.</summary>
     private static Predictor Replay(TerrainField t, Vec3 fwd)
     {
@@ -302,6 +380,35 @@ internal static class Program
     {
         var codes = new ushort[6 * faceGrid * faceGrid];
         for (int i = 0; i < codes.Length; i++) codes[i] = 0; // min == max == 150
+        return codes;
+    }
+
+    /// <summary>
+    /// A field with real slopes in it, for checks that a flat ball makes
+    /// vacuous.
+    ///
+    /// On FlatCodes every slope is 0 and every curvature is 0, so "no rock on
+    /// a slope above 35 degrees" passes whether or not the filter is there --
+    /// which makes it not a check. This corrugates each face hard enough that
+    /// a good part of the surface is unwalkable, so deleting the filter turns
+    /// the assertion red.
+    /// </summary>
+    private static ushort[] BumpyCodes(int faceGrid)
+    {
+        var codes = new ushort[6 * faceGrid * faceGrid];
+        for (int f = 0; f < 6; f++)
+        {
+            for (int j = 0; j < faceGrid; j++)
+            {
+                for (int i = 0; i < faceGrid; i++)
+                {
+                    double w = Math.Sin(i * 0.9 + f) * Math.Cos(j * 0.9 - f);
+                    double t = 0.5 + 0.5 * w;               // 0..1
+                    codes[(f * faceGrid + j) * faceGrid + i] =
+                        (ushort)Math.Round(t * ushort.MaxValue);
+                }
+            }
+        }
         return codes;
     }
 

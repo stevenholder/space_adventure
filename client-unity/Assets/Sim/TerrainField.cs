@@ -179,5 +179,35 @@ namespace SpaceAdventure.Sim
         }
 
         public bool Walkable(Vec3 d) => Slope(d) <= MaxSlope;
+
+        /// <summary>Radians. Sub-cell on purpose -- this measures the shape of
+        /// a crater floor, not of a grid cell.</summary>
+        private const double CurvStep = 0.02;
+
+        /// <summary>
+        /// Discrete Laplacian of the radius field (m/rad^2) at d. Positive is
+        /// locally a basin (a crater floor); negative is a ridge crest.
+        ///
+        /// This one has NO Go counterpart and is not part of C40 conformance.
+        /// It exists only to bias client-side prop scatter, never for
+        /// collision -- the server does not know props exist. It lives here
+        /// anyway because client/src/sim/terrain.ts puts it here, and
+        /// CONVENTIONS.md wants the port to stay a transliteration rather than
+        /// become a rewrite.
+        /// </summary>
+        public double Curvature(Vec3 d)
+        {
+            Vec3 k = Math.Abs(d.X) <= 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+            Vec3 e1 = (k - d * Vec3.Dot(k, d)).Normalized();
+            Vec3 e2 = Vec3.Cross(d, e1);
+            double r0 = SampleRadius(d);
+            Vec3 d1 = (d + e1 * CurvStep).Normalized();
+            Vec3 d2 = (d + e2 * CurvStep).Normalized();
+            Vec3 d3 = (d - e1 * CurvStep).Normalized();
+            Vec3 d4 = (d - e2 * CurvStep).Normalized();
+            double sum = SampleRadius(d1) + SampleRadius(d2)
+                       + SampleRadius(d3) + SampleRadius(d4);
+            return (sum - 4 * r0) / (CurvStep * CurvStep);
+        }
     }
 }

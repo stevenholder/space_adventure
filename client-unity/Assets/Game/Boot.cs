@@ -80,6 +80,8 @@ namespace SpaceAdventure.Game
         private FpsController _fps;
         private EntityViews _views;
         private AssetRegistry _assets;
+        private Structures _structures;
+        private Rocks _rocks;
         private SnapshotTimeline _timeline;
         private Hud _hud;
         private CombatFx _fx;
@@ -178,6 +180,8 @@ namespace SpaceAdventure.Game
             _timeline = new SnapshotTimeline();
             _assets = new AssetRegistry(_material);
             _views = new EntityViews(transform, _material, _assets);
+            _structures = new Structures(transform, _material, _assets);
+            _rocks = new Rocks(_material, _assets);
             _viewModel = new ViewModel(cam, _material, vmLayer, transform);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
@@ -293,6 +297,9 @@ namespace SpaceAdventure.Game
 
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
+            // Instanced, so this is a submit rather than a scene walk: three
+            // draw calls for four hundred rocks and no GameObjects to cull.
+            _rocks.Render();
             _fps.PlaceCamera(_predictor.State.Pos);
 
             // The body stands where the simulation puts it, and the rig sways
@@ -406,6 +413,11 @@ namespace SpaceAdventure.Game
                         };
                     }
                     _predictor.SetColliders(_colliders);
+                    // Same array to the predictor and to the renderer, so what
+                    // you walk into is what you can see. Until now only the
+                    // predictor got it, and the camp perimeter and range walls
+                    // were solid and invisible.
+                    _structures.Build(_colliders);
                     Debug.Log($"colliders: {_colliders.Length}");
                     break;
                 }
@@ -511,6 +523,10 @@ namespace SpaceAdventure.Game
             if (_planet != null) Destroy(_planet);
             _planet = TerrainMesh.Build(_terrain, _material, transform);
             _predictor.Seed(_terrain, _colliders);
+
+            // Scatter is pure in (terrain, world_seed), so it can only run
+            // once the terrain has landed -- which is here, and not earlier.
+            _rocks.Build(_terrain, _net.WorldSeed);
             _worldBuilt = true;
 
             // A packaged player has no HUD anyone is watching when it is run
