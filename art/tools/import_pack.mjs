@@ -261,15 +261,40 @@ function fit(doc, { height, axis = "y", ground = true, yaw = 0 }) {
  * subtree holding `head`, which is the contract verify.mjs checks: the local
  * player hides its own head, and an eye parented under it would take the
  * camera along.
+ *
+ * A mount can instead name a PARENT, and then it is added under that node and
+ * MOVES WITH IT. `hand.r` under `arm.r` is the case that needs it: a weapon
+ * parented to the scene root would hang in the air while the arm swings past
+ * it. Two consequences follow, and both are easy to get wrong:
+ *
+ *   - Its position is in the PARENT's local frame, not the finished model's.
+ *     `fit` scales the whole scene from above, so a parented mount inherits
+ *     that scale; write the number you measure off the SOURCE geometry, not
+ *     off the 1.8 m result.
+ *   - Anything hidden by hiding the parent hides it too. That is why `eye` is
+ *     a root mount and not parented under `head` -- the local player draws its
+ *     own head shadows-only.
  */
 function addMounts(doc, mounts) {
   if (!mounts) return 0;
+
+  const byName = new Map();
+  for (const node of doc.getRoot().listNodes()) byName.set(node.getName(), node);
+
   let n = 0;
-  for (const scene of doc.getRoot().listScenes()) {
-    for (const [name, pos] of Object.entries(mounts)) {
-      scene.addChild(doc.createNode(name).setTranslation(pos));
-      n++;
+  for (const [name, spec] of Object.entries(mounts)) {
+    const pos = Array.isArray(spec) ? spec : spec.pos;
+    const parentName = Array.isArray(spec) ? null : spec.parent;
+    const node = doc.createNode(name).setTranslation(pos);
+
+    if (parentName) {
+      const parent = byName.get(parentName);
+      if (!parent) throw new Error(`mount ${name}: no node named ${parentName} to parent it to`);
+      parent.addChild(node);
+    } else {
+      for (const scene of doc.getRoot().listScenes()) scene.addChild(node);
     }
+    n++;
   }
   return n;
 }

@@ -31,13 +31,22 @@ parallel without a handoff.
 
 Node-name contract:
 
-- **`char.player`** is **segmented, not rigged** — separate named nodes the
-  client rotates procedurally for a walk cycle. No skeleton, no skinning, no
-  animation clips.
+- **`char.player`** is **segmented, not skinned** — separate named nodes per
+  limb, no skeleton and no skinning. It DOES carry animation clips: they are
+  transform tracks on those nodes, retargeted from another CC0 pack by
+  `tools/import_pack.mjs` (see `ATTRIBUTION.md`). An asset that carries them
+  says so with `rig: "animated"` in the manifest, and `verify.mjs` then
+  requires the clips `idle`, `walk`, `sprint`, `die` and checks every track
+  lands on a node that exists.
+
+  Segmented rather than skinned is not a limitation here, it is what lets the
+  local player draw its own head shadows-only while the rest of the body still
+  renders — one `SkinnedMeshRenderer` is all or nothing.
 
   | node | what |
   |---|---|
-  | `eye` | empty at the view point, `-Z` forward — the camera mounts here, so eye height lives in the model |
+  | `eye` | empty at the view point, `-Z` forward — the camera mounts here, so eye height lives in the model. A ROOT mount, deliberately not parented under `head`: the local player draws its head shadows-only and would take the camera with it |
+  | `hand.r` | empty in the right hand, parented under `arm.r` so it swings with the arm. A weapon's `grip` node is aligned to this |
   | `head` | hidden for the local player (the camera is inside it); visible on everyone else |
   | `torso` | body |
   | `arm.l` / `arm.r` | pivot at the shoulder, so a rotation swings the arm |

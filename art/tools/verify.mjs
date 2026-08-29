@@ -63,22 +63,22 @@ const CLIP_CONTRACTS = {
 
 const NODE_CONTRACTS = {
   "char.player": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   // The hostiles carry the same layout on purpose: the client's nametag,
   // health-bar and animation code walks these names and does not care which
   // archetype it is looking at.
   "npc.grunt": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "npc.gunner": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },

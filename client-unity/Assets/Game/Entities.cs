@@ -36,6 +36,13 @@ namespace SpaceAdventure.Game
         /// <summary>Set once the model loads, null for anything without clips.</summary>
         public CharacterAnim Anim;
 
+        /// <summary>The loaded body, once it arrives; null while it is boxes.</summary>
+        public GameObject Model;
+
+        /// <summary>What is currently in this body's hand, and which item it is.</summary>
+        public GameObject Held;
+        public string HeldItem = "";
+
         /// <summary>
         /// Where this body was drawn last frame, and how fast it is therefore
         /// moving. Speed comes from the drawn positions rather than from the
@@ -141,7 +148,74 @@ namespace SpaceAdventure.Game
         /// <summary>Records an `equipped` event so a body can show its weapon.</summary>
         public void OnEquipped(uint id, string item)
         {
-            if (_views.TryGetValue(id, out var v)) v.EquippedItem = item;
+            if (!_views.TryGetValue(id, out var v)) return;
+            v.EquippedItem = item;
+            Equip(v);
+        }
+
+        /// <summary>
+        /// Puts the equipped weapon in a body's right hand.
+        ///
+        /// `equipped` has been arriving and being stored since Phase 2 with
+        /// nothing reading it -- Models.cs said the rifle was "held in the
+        /// viewmodel and, later, in a remote player's hands", and this is that
+        /// later. Until now an NPC shot at you with empty hands.
+        ///
+        /// Which model to hold is the SERVER's answer again: items.json gives
+        /// weapon.pulse an `asset`, exactly as entity defs do, so there is no
+        /// client-side table mapping items to art.
+        ///
+        /// Called from both the equip event and the model load because either
+        /// can arrive first, and it needs both.
+        /// </summary>
+        private void Equip(EntityView view)
+        {
+            if (view.Model == null) return;
+            if (view.HeldItem == view.EquippedItem) return;
+
+            if (view.Held != null) { Object.Destroy(view.Held); view.Held = null; }
+            view.HeldItem = view.EquippedItem;
+            if (string.IsNullOrEmpty(view.EquippedItem)) return;
+
+            string asset = Defs.ItemAsset(view.EquippedItem);
+            if (string.IsNullOrEmpty(asset)) return;
+
+            Transform hand = FindDeep(view.Model.transform, "hand.r");
+            if (hand == null) return;
+
+            _assets.Attach(asset, hand, weapon =>
+            {
+                view.Held = weapon;
+
+                // Undo the body's scale. `hand.r` lives inside the model, under
+                // the wrapper that fits the character to 1.8 m -- about 2.3x
+                // for these -- and a child inherits that. Left alone, a 0.9 m
+                // rifle is carried as a 2 m one. The mount's POSITION should
+                // scale with the body (the hand is where the hand is); only
+                // the weapon's own size should not.
+                float s = hand.lossyScale.x;
+                if (s > 1e-4f) weapon.transform.localScale = Vector3.one / s;
+
+                // Line the weapon's `grip` node up with the hand rather than
+                // its origin: art/README.md puts `grip` "where the character's
+                // right hand holds it", and the model's origin is its centre.
+                //
+                // Done in WORLD space on purpose. `grip` is a grandchild of the
+                // holder (glTFast puts a scene root in between) and the holder
+                // has just been counter-scaled, so its local offset is in
+                // neither the hand's units nor the weapon's. A world-space
+                // delta needs to know none of that.
+                Transform grip = FindDeep(weapon.transform, "grip");
+                if (grip != null)
+                    weapon.transform.position += hand.position - grip.position;
+            });
+        }
+
+        private static Transform FindDeep(Transform root, string name)
+        {
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                if (t.gameObject.name == name) return t;
+            return null;
         }
 
         /// <summary>
@@ -226,6 +300,10 @@ namespace SpaceAdventure.Game
             {
                 if (box != null) Object.Destroy(box);
                 view.Anim = CharacterAnim.For(model);
+                view.Model = model;
+                // The equip event usually beats the model here, so the weapon
+                // is mounted once the thing to mount it ON exists.
+                Equip(view);
             });
 
             return view;
