@@ -191,7 +191,8 @@ namespace SpaceAdventure.Sim
         /// This one has NO Go counterpart and is not part of C40 conformance.
         /// It exists only to bias client-side prop scatter, never for
         /// collision -- the server does not know props exist. It lives here
-        /// anyway because client/src/sim/terrain.ts puts it here, and
+        /// anyway because the TypeScript sim/terrain.ts it was ported from put
+        /// it here, and
         /// CONVENTIONS.md wants the port to stay a transliteration rather than
         /// become a rewrite.
         /// </summary>

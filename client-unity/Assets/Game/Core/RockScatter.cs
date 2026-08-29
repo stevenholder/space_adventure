@@ -18,7 +18,8 @@
 // than every other client's. M1 rocks have no collision, so nothing would
 // complain.
 //
-// Ported from client/src/scene/rocks.ts step for step for that reason. That
+// Ported from the retired TypeScript client's scene/rocks.ts step for step
+// for that reason (git history; ROADMAP U18). That
 // client is retired (ROADMAP U18), so this is no longer about agreeing with
 // IT -- it is that the TypeScript is the written-down spec and a literal port
 // cannot drift from a spec it is a transliteration of.

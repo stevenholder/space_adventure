@@ -8,7 +8,7 @@
 // somewhere neither the client nor the server believes in, which turns every
 // collision and every shot into a disagreement that grows with latency.
 //
-// Mirrors client/src/net/predictor.ts, which is the implementation C42
+// Mirrors the retired TypeScript client's predictor (git history), which C42
 // compares against on an identical input trace.
 //
 // No UnityEngine here either: this is arithmetic over Sim types, and keeping

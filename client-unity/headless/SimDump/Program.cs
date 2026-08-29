@@ -859,7 +859,7 @@ internal static class Program
     // and the assertion is exactly that -- the next reconcile puts it back.
     //
     // The unit under test is the predictor that ships. That used to be
-    // client/src/net/predictor.ts and is now Game/Core/Prediction.cs, which is
+    // the TypeScript client's predictor and is now Game/Core/Prediction.cs, which is
     // why this harness moved rather than being deleted with the browser
     // client.
 

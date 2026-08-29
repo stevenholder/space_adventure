@@ -30,7 +30,8 @@ namespace SpaceAdventure.Sim
         /// The quaternion whose rotation has the given column vectors
         /// (local X -> x, local Y -> y, local Z -> z).
         ///
-        /// This same maths exists in the Go sim, in client/src/util/quat.ts and
+        /// This same maths exists in the Go sim, in the retired TypeScript
+        /// client's util/quat.ts and
         /// in defs/zone.go. This is a fourth copy, and it is deliberate for the
         /// same reason Vec3 is: Sim may not depend on anything, and the branch
         /// order below is load-bearing — a different branch selects a different

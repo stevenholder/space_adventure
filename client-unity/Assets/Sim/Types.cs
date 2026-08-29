@@ -4,7 +4,8 @@
 // Sim.asmdef and is compiled headless by headless/Sim/Sim.csproj, because the
 // conformance diff against the Go server has to run in CI with no Editor.
 //
-// Mirrors client/src/sim/types.ts field-for-field. Keeping it a
+// Mirrors the retired TypeScript client's sim/types.ts field-for-field
+// (git history; ROADMAP U18). Keeping it a
 // transliteration rather than a rewrite is what makes a disagreement with Go
 // traceable to one line in one file.
 //

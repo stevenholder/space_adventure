@@ -2,8 +2,9 @@
 
 Phase 3.5 rebuilds the client in Unity (C#) as a packaged **native desktop**
 build. Browser delivery is dropped. Scope is renderer, input and assets — the
-Go server, the wire protocol, the sim rule tables and the twelve `.mjs`
-harnesses are untouched.
+Go server, the wire protocol and the sim rule tables are untouched. So were the
+`.mjs` harnesses, until U18 retired the browser client: the few that imported
+its sim or codec now measure the C# ones instead (`t3`, `t6`, `t13`, `t22`).
 
 These rules exist to keep the thing that has been working — one file, ~150
 lines, one verify command — from being destroyed by an engine whose native
@@ -91,9 +92,10 @@ Everything that touches a `GameObject`, a `Transform`, a `Camera` or an
 
 This is not purism. `Vector3.Normalize` and `Quaternion.Slerp` are not
 specified to the bit, they have changed between engine versions, and the
-conformance bar is 1e-10 m. The types mirror `client/src/sim/types.ts`
-field-for-field so the port stays a transliteration rather than a rewrite, and
-so a disagreement is traceable to one line in one file.
+conformance bar is 1e-10 m. The types mirror the retired TypeScript client's
+`sim/types.ts` (git history) field-for-field, so the port stays a
+transliteration rather than a rewrite and a disagreement is traceable to one
+line in one file.
 
 `Game` converts at the boundary — `sim.Vec3` in, `UnityEngine.Vector3` out —
 and that conversion is the only place the two ever meet.

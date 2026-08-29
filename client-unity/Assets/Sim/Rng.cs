@@ -1,6 +1,7 @@
 // Deterministic PRNG for client-side decoration (props, scatter).
 //
-// Ported from client/src/sim/rng.ts. NOT on the conformance path: the server
+// Ported from the retired TypeScript client's sim/rng.ts. NOT on the
+// conformance path: the server
 // owns every random outcome that affects the world (weapon spread, loot rolls
 // are rolled server-side and arrive over the wire). This exists so every
 // client scatters decoration identically from world_seed, which is the only
