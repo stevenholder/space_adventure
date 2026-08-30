@@ -13,10 +13,46 @@ against local receive time. **One half of the C14 fix is not landed and cannot
 be here: `interp_delay` is now a client-binding contract, and the Unity client
 owes it at U13** (see that row). Verdicts and evidence: `docs/QA-STATUS.md`.
 
-Next is **Phase 3.5 — rebuild the client in Unity as a native desktop build**,
+**Phase 3.5 — rebuild the client in Unity as a native desktop build** was
 inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
 explodes and the Phase 1–3 client is the cheapest version of that port that
 will ever exist. Browser delivery is dropped.
+
+### Where Phase 3.5 stands (2026-08-29)
+
+The Unity client renders real art, and `client/` is gone.
+
+**Landed.** A runtime glTF asset pipeline: models live in `art/`, are named by
+the `asset` id the SERVER already sends for every entity and item, and are
+loaded by `Assets/Game/AssetRegistry.cs` from StreamingAssets — no prefabs, no
+Editor import, so C47 holds. `art/tools/import_pack.mjs` conforms downloaded
+CC0 models to this project (bakes colour to vertices, fits to game units, adds
+mount nodes, retargets animation clips). 18 assets, all Kenney CC0, recorded in
+`art/ATTRIBUTION.md`. Characters walk. The camp and range are visible and
+dressed from zone data over a new `props` message (0x0013). U18 retired the
+TypeScript client, with its harnesses ported to C# first.
+
+**Verified.** `make unity-build` + `make unity-run` against the deployed
+cluster; server 7 packages; art 18/18; `unity-gate`, `unity-test`,
+`unity-codec`, `unity-typecheck`, C40 conformance, `t3`, `t6`, `t13`.
+
+**Open, in rough order.**
+
+1. **C43 is the phase gate and has not been run.** C1–C25 re-run against the
+   Unity client on the deployed stack. `docs/QA-STATUS.md` defines what each
+   criterion asserts; a third of that surface was never executed.
+2. **U13 `interp_delay`** — still owed by the client, and Phase 3 could not
+   land it (see the C14 note above). This is a correctness debt, not polish.
+3. **C46 frame budget** — 60 fps with the camp live has not been measured.
+4. Ship and vehicle entities render as a loot crate: `EntityType.Ship` and
+   `Vehicle` have no entity def, which is correct until Phase 4/5 creates one.
+5. `vehicle.rover.v1` does not exist. Kenney's `rover` is already vendored.
+
+**Two things to know before touching this.** The Unity Editor takes the
+project lock, so `unity compile` and `unity build` fail while it is open —
+`unity typecheck` works either way. And the kind cluster owns `:18080`: a
+`go run ./cmd/server` beside it fails to bind and exits unread, which is what
+`make check-server` now exists to catch.
 
 Phases 2–5 replaced the old M2/M3 ordering (ship first, combat later). Ships
 land last, after the game has NPCs, combat and a vehicle. Nothing spec'd for
@@ -465,16 +501,16 @@ is the single largest thing Three.js was never going to give us.
 | # | Agent | Task | File | Verify |
 |---|---|---|---|---|
 | U1 | main | Unity project skeleton, three asmdefs, gitignore | `client-unity/` | `Sim` builds headless, references no UnityEngine |
-| U2 | sonnet | Port math types (vec3, quat, basis) | `Sim/Types.cs` | unit test vs TS golden values |
+| U2 | sonnet | Port math types (vec3, quat, basis) | `Sim/Types.cs` | golden values in `unity-test` |
 | U3 | sonnet | Port cube-sphere terrain sampling | `Sim/Terrain.cs` | face/dir addressing golden values |
-| U4 | sonnet | Port deterministic RNG | `Sim/Rng.cs` | same sequence as `sim/rng.ts` |
-| U5 | sonnet | Port on-foot step rule table | `Sim/Step.cs` | trajectory diff vs TS |
-| U6 | sonnet | Port collider resolution | `Sim/Collide.cs` | parity vs t13 vectors |
-| U7 | main | Three-way conformance runner (Go/TS/C#) | `test/t18-csharp-conformance.mjs` | max dPos < 1e-10 m |
+| U4 | sonnet | Port deterministic RNG | `Sim/Rng.cs` | same sequence as the TS generator (golden values in `unity-test`) |
+| U5 | sonnet | Port on-foot step rule table | `Sim/Step.cs` | trajectory diff vs Go (C40, `t20`) |
+| U6 | sonnet | Port collider resolution | `Sim/Collide.cs` | `t13` diffs Go against C# over the shared scenarios |
+| U7 | main | Conformance runner (Go vs C#) | `test/t20-csharp-conformance.mjs` | max dPos < 1e-10 m; TS leg dropped with U18 |
 | U8 | sonnet | Little-endian binary reader/writer | `Net/Wire.cs` | round-trip fuzz |
 | U9 | sonnet | v2 message codecs, all opcodes | `Net/Messages.cs` | byte-identical vs the Go vectors (`t22`) |
 | U10 | sonnet | WebSocket transport, hello/join, reconnect | `Net/Client.cs` | joins deployed server, decodes snapshot |
-| U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Prediction.cs` | same corrections as TS on one input trace |
+| U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Core/Prediction.cs` | `t6` p95 clears to wire precision (~7e-06 m) with 0 snap-backs — see C42 |
 | U12 | sonnet | Terrain mesh from u16 radius grids | `Game/TerrainMesh.cs` | mesh matches sampled radii |
 | U13 | sonnet | Entity views, interpolation, nametags | `Game/Entities.cs` | two clients agree (C24, strengthened); `t21` stale volley stays green |
 | U14 | sonnet | FPS controller + Input System, emits mode byte | `Game/Fps.cs` | walks, strafes correct handedness |
