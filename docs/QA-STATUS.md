@@ -277,9 +277,11 @@ headless client that makes the port safe.
 - **Libs:** `lib/ws.mjs` (raw-TCP RFC-6455 client, incl. `kill`, ns timestamps),
   `lib/wire.mjs` (independent codec, written from `PROTOCOL.md` only),
   `lib/field.mjs` (independent GDD terrain sampling).
-- **Per-criterion:** `t2`–`t4` (visibility, authority, despawn), `t5/` (Go↔TS
-  conformance route + diff), `t6` (prediction), `t7` (sustain), `t9-terrain.py`,
-  `t10/` (circumnavigation), `t22`/`t13` (codec + collider parity, both C#
+- **Per-criterion:** `t2`–`t4` (visibility, authority, despawn), `t20` (sim
+  conformance, replaying `test/t5/script-go.jsonl` — the C5 route; the M1-era
+  `t5/`/`t10/` scratch that designed it lives in git history, evidence in
+  `t10-final-report.*`), `t6` (prediction), `t7` (sustain), `t9-terrain.py`,
+  `t22`/`t13` (codec + collider parity, both C#
   against Go since U18 retired the TypeScript client), `t14` (buy
   and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
   `t18` (currency authority, hit registration under latency, snapshot budget),

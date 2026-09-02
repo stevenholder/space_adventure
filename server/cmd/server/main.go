@@ -57,29 +57,15 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) > 0 && args[0] == "dump" {
-		return runDump(args[1:])
-	}
-	if len(args) > 0 && args[0] == "codec" {
-		return runCodec(args[1:])
-	}
-	if len(args) > 0 && args[0] == "collide" {
-		return runCollide(args[1:])
-	}
-	if len(args) > 0 && args[0] == "route" {
-		return runRoute(args[1:])
-	}
-	if len(args) > 0 && args[0] == "reach" {
-		return runReach(args[1:])
-	}
-	if len(args) > 0 && args[0] == "lapscan" {
-		return runLapScan(args[1:])
-	}
-	if len(args) > 0 && args[0] == "rimscan" {
-		return runRimScan(args[1:])
-	}
-	if len(args) > 0 && args[0] == "lap" {
-		return runLap(args[1:])
+	if len(args) > 0 {
+		sub := map[string]func([]string) error{
+			"dump":    runDump,
+			"codec":   runCodec,
+			"collide": runCollide,
+		}
+		if run, ok := sub[args[0]]; ok {
+			return run(args[1:])
+		}
 	}
 	return runServer(args)
 }
