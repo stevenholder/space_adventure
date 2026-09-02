@@ -649,6 +649,20 @@ Structurally the old M2 criteria, retargeted at a ground vehicle:
 
 # Phase 5 — buy a ship, fly it in space
 
+### Where Phase 5 stands (2026-09-02)
+
+Built and green: tasks 1–12 and 14 landed, C33–C39 all PASS
+(`docs/QA-STATUS.md` "Phase 5" has the measured values; `t26`/`t27` are
+the live harnesses, `t25` the cross-sim gate in CI). The seat machinery
+generalised as designed — the ship reuses Phase 4's board/disembark/
+composition through a shared SeatBank, and ownership reuses Phase 2's
+shop and inventory persistence outright (ship.v1 is an item; possession
+IS ownership). Task 13 (cockpit polish) is deferred as the spec itself
+suggested ("polish the cockpit last"): ship.v1 already carries the
+walk-in cockpit and seat nodes, and polish has no criterion. Task 15 of
+Phase 4 (rover ownership) can now ride this machinery whenever a rover
+shop entry is wanted — one items.json row plus one spawn branch.
+
 **Playable proof.** Buy a ship from an NPC. It spawns on a pad. Walk up to it,
 walk in, take the pilot seat. Fly off the surface, out of the atmosphere, and
 around the planet in space — with the planet below reading as a planet. Come
