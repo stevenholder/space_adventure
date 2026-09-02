@@ -96,15 +96,24 @@ func (g *gatekeeper) release(ip string) {
 	}
 }
 
-// clientIP is the peer address, preferring X-Forwarded-For's first hop
-// because the LAN path arrives through Traefik and RemoteAddr would
-// otherwise cap the whole ingress as one caller.
+// clientIP is the caller's address for the per-IP gate, chosen so a
+// public client cannot spoof its way past the caps:
+//
+//   - CF-Connecting-IP when present: the public path is Cloudflare-
+//     proxied, and this is the one header Cloudflare sets to the real
+//     client, unforgeable through that path.
+//   - else the LAST X-Forwarded-For entry: appended by Traefik, i.e. the
+//     peer Traefik actually saw. The first entry is CLIENT-SUPPLIED and
+//     trusting it (as this function first did) let anyone rotate fake
+//     addresses to dodge the rate limit.
+//   - else RemoteAddr (direct connections, kind, tests).
 func clientIP(r *http.Request) string {
+	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
+		return cf
+	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[len(parts)-1])
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
