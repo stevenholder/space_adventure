@@ -84,14 +84,23 @@ func TestCheckOrigin(t *testing.T) {
 	}
 }
 
-func TestClientIPPrefersForwardedFor(t *testing.T) {
+func TestClientIPUnspoofable(t *testing.T) {
 	r, _ := http.NewRequest("GET", "/ws", nil)
 	r.RemoteAddr = "10.42.0.7:51234"
 	if ip := clientIP(r); ip != "10.42.0.7" {
 		t.Fatalf("remote addr ip = %q", ip)
 	}
-	r.Header.Set("X-Forwarded-For", "192.168.1.50, 10.42.0.7")
+	// The LAST XFF entry is Traefik-appended (the peer it saw); the first
+	// is client-supplied and must never win — a spoofer sends
+	// "X-Forwarded-For: <random>" to rotate identities.
+	r.Header.Set("X-Forwarded-For", "6.6.6.6, 192.168.1.50")
 	if ip := clientIP(r); ip != "192.168.1.50" {
-		t.Fatalf("xff ip = %q", ip)
+		t.Fatalf("xff ip = %q, want the Traefik-appended last hop", ip)
+	}
+	// Behind Cloudflare the real client is CF-Connecting-IP; XFF's last
+	// entry would be a Cloudflare edge (useless for per-client limits).
+	r.Header.Set("CF-Connecting-IP", "203.0.113.9")
+	if ip := clientIP(r); ip != "203.0.113.9" {
+		t.Fatalf("cf ip = %q", ip)
 	}
 }

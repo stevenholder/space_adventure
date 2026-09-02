@@ -1,17 +1,17 @@
 {
   "harness": "SimDump --authority (C# Predictor, Game/Core/Prediction.cs)",
-  "url": "ws://192.168.1.163/ws",
+  "url": "wss://game.stevenholder.info/ws",
   "server_build": "5ff5703",
   "corrupt_dist_m": 4.0,
-  "pre_dist_m": 3.9999999999999996,
+  "pre_dist_m": 0.0,
   "snap_dist_m": 0.0,
-  "correction_ms": 50.452200000000175,
-  "forced_tick": 571,
-  "corrected_tick": 572,
+  "correction_ms": 0.0,
+  "forced_tick": 0,
+  "corrected_tick": 0,
   "forced_dir": [
-    0.9990827966904935,
-    -0.04282015129704548,
+    0.0,
+    0.0,
     0.0
   ],
-  "pass": true
+  "pass": false
 }

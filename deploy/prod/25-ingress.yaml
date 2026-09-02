@@ -1,9 +1,15 @@
 # Client exposure through the cluster's existing Traefik LoadBalancer,
-# path-routed with NO host rule: clients dial any node IP —
-# ws://192.168.1.163/ws — and nothing depends on LAN DNS existing. Only
-# the three paths the server actually serves are claimed, so Traefik's
-# port 80 stays free for anything else this cluster hosts. WebSocket
-# upgrade needs no annotation on Traefik.
+# two rules with the same three paths:
+#
+#   - game.stevenholder.info — the public door. Cloudflare-proxied DNS to
+#     the router; TLS terminates at Cloudflare, so public clients dial
+#     wss://game.stevenholder.info/ws and the origin still speaks plain
+#     HTTP behind it. Cloudflare proxies WebSockets natively.
+#   - hostless — the LAN door (ws://<node-ip>/ws) and the in-cluster
+#     smoke check; nothing local depends on public DNS resolving.
+#
+# Only the three paths the server serves are claimed, so Traefik's port 80
+# stays free for anything else this cluster hosts.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,6 +20,30 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
+    - host: game.stevenholder.info
+      http:
+        paths:
+          - path: /ws
+            pathType: Exact
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
+          - path: /version
+            pathType: Exact
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
     - http:
         paths:
           - path: /ws

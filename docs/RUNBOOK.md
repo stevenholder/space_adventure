@@ -26,9 +26,19 @@ kubectl --context default apply -k deploy/prod   # pin the tag in kustomization.
 ## Verify what is running
 
 ```sh
-curl -s http://192.168.1.163/version   # any node IP; must equal `git rev-parse --short HEAD:server`
+curl -s http://192.168.1.163/version              # LAN, any node IP
+curl -s https://game.stevenholder.info/version    # public, via Cloudflare
 kubectl --context default -n space-adventure get pods,cluster
 ```
+
+Both must equal `git rev-parse --short HEAD:server`. The public door is
+Cloudflare-proxied DNS to the router: TLS ends at Cloudflare, clients dial
+`wss://game.stevenholder.info/ws` (the packaged client:
+`-serverUrl wss://game.stevenholder.info/ws`). Per-IP limits identify
+public callers by CF-Connecting-IP — if the Cloudflare proxying is ever
+turned off, that header disappears and the limits fall back to the
+Traefik-appended X-Forwarded-For hop, which is then the router; check
+gatekeeper.go before changing the edge.
 
 ## Roll back
 
