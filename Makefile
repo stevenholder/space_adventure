@@ -274,9 +274,21 @@ art-sync:
 # working tree, not something left running. Depended on by anything that
 # measures the live stack, because measuring the wrong server is worse than
 # measuring nothing: it produces a green result about code that is not there.
+#
+# Retries for ~16 s before judging: `make up` returns while the rollout is
+# still swapping pods, and a probe in that window sees the OLD pod (or a
+# connection reset) and fails a check that would pass two seconds later —
+# which burned three verification runs before this loop existed. A genuinely
+# wrong build still fails, with the last answer in the message.
 .PHONY: check-server
 check-server:
-	@got=$$(curl -fsS --max-time 5 http://127.0.0.1:$(SERVER_PORT)/version 2>/dev/null) || { \
+	@got=""; \
+	for i in 1 2 3 4 5 6 7 8; do \
+		got=$$(curl -fsS --max-time 5 http://127.0.0.1:$(SERVER_PORT)/version 2>/dev/null) && \
+			[ "$$got" = "$(BUILD_ID)" ] && break; \
+		sleep 2; \
+	done; \
+	[ -n "$$got" ] || { \
 		echo "ERROR: nothing answered /version on :$(SERVER_PORT)." >&2; \
 		echo "  Either no server is running, or one too old to have /version" >&2; \
 		echo "  is holding the port. Run: make up" >&2; \
