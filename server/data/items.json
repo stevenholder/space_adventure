@@ -58,6 +58,14 @@
       "hitbox": { "radius": 0.45, "height": 1.8 },
       "damageable": true,
       "respawn": 3.0
+    },
+    {
+      "$comment": "Phase 4 rover. Not damageable: no criterion shoots it, and a destroyed only-vehicle would strand the playable proof. The hitbox exists for interaction targeting only - vehicle collision is the origin point (GDD).",
+      "type": "vehicle",
+      "asset": "vehicle.rover.v1",
+      "max_health": 200,
+      "hitbox": { "radius": 1.2, "height": 1.6 },
+      "damageable": false
     }
   ]
 }
