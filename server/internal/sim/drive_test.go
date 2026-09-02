@@ -15,7 +15,7 @@ func newRover(t *terrain.Field) *Ent {
 		Kind: EntityKind(protocol.EntityTypeVehicle),
 		Pos:  [3]float64(pos),
 		Quat: [4]float64(quat),
-		Data: &VehicleState{Grounded: true},
+		Data: NewVehicleState(),
 	}
 }
 
@@ -134,8 +134,8 @@ func TestSpawnRoverDeterministic(t *testing.T) {
 func TestComposeSeatOffsets(t *testing.T) {
 	f := terrain.Generate(1337)
 	pos, quat := SpawnRover(f)
-	driver := ComposeSeat(pos, quat, 1)
-	pass := ComposeSeat(pos, quat, 2)
+	driver := ComposeSeat(EntityKind(protocol.EntityTypeVehicle), pos, quat, 1)
+	pass := ComposeSeat(EntityKind(protocol.EntityTypeVehicle), pos, quat, 2)
 	if d := driver.Sub(pos).Len(); math.Abs(d-RoverSeatPos[1].Len()) > 1e-9 {
 		t.Fatalf("driver offset %.4f, want %.4f", d, RoverSeatPos[1].Len())
 	}
@@ -143,7 +143,7 @@ func TestComposeSeatOffsets(t *testing.T) {
 		t.Fatal("driver and passenger composed to the same point")
 	}
 	// Seat 0 / out-of-range degrade to the vehicle origin, never panic.
-	if ComposeSeat(pos, quat, 0) != pos || ComposeSeat(pos, quat, 9) != pos {
+	if ComposeSeat(EntityKind(protocol.EntityTypeVehicle), pos, quat, 0) != pos || ComposeSeat(EntityKind(protocol.EntityTypeVehicle), pos, quat, 9) != pos {
 		t.Fatal("invalid seat did not degrade to vehicle origin")
 	}
 }
@@ -151,7 +151,7 @@ func TestComposeSeatOffsets(t *testing.T) {
 func TestDisembarkStateOnGround(t *testing.T) {
 	f := terrain.Generate(1337)
 	pos, quat := SpawnRover(f)
-	s := DisembarkState(f, pos, quat)
+	s := DisembarkState(EntityKind(protocol.EntityTypeVehicle), f, pos, quat)
 	up := terrain.Normalize(s.Pos)
 	if math.Abs(s.Pos.Len()-f.SampleRadius(up)) > 1e-9 {
 		t.Fatal("disembarked body not on the surface")
@@ -168,7 +168,7 @@ func TestDisembarkStateOnGround(t *testing.T) {
 }
 
 func TestVehicleSeatOf(t *testing.T) {
-	v := &VehicleState{}
+	v := NewVehicleState()
 	v.Seats[1] = 42
 	if v.SeatOf(42) != 1 || v.SeatOf(7) != 0 {
 		t.Fatal("SeatOf lookup wrong")

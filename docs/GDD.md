@@ -989,7 +989,11 @@ stepShip(s, input, terrain, dt):     # input = (thrust, roll, yaw_rate, pitch_ra
   # 1. Rotation — first-order toward the target, ship frame
   ω_t  ← (pitch_rate, yaw_rate, roll · angvel_max_roll)      # about local +X, +Y, +Z
   ω    ← ω_t + (s.ω − ω_t) · e^(−dt / angvel_tau)
-  q    ← normalize(s.quat ⊗ axisAngle(rotate(s.quat, ω) · dt))   # post-multiply: rotate about local axes
+  q    ← normalize(s.quat ⊗ axisAngle(ω · dt))   # post-multiply: rotate about local axes
+       # (corrected at Phase 5 implementation: the draft wrapped ω in
+       #  rotate(s.quat, ·), a world-axis quat post-multiplied — which
+       #  contradicts "rotate about local axes"; ω's components ARE the
+       #  local axes' rates, so the local form is the one both sims build)
   # 2. Translation — thrust along ship forward (semi-implicit, base model)
   fwd  ← rotate(s.quat, (0, 0, 1))
   a    ← fwd · (boost ? accel_boost : accel) · (thrust > 0 ? thrust : 0.5 · thrust)

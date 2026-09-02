@@ -24,15 +24,15 @@ func (s *Server) board(c *client, b protocol.Board) {
 	defer s.mu.Unlock()
 
 	result := protocol.SeatInvalid
-	if c.seat == 0 && b.Seat >= 1 && b.Seat <= sim.CrewSizeRover {
-		if ent, v := s.vehicleByID(b.VehicleID); v != nil {
+	if c.seat == 0 {
+		if ent, bank := s.vehicleByID(b.VehicleID); bank != nil && bank.ValidSeat(b.Seat) {
 			switch {
 			case sim.Vec(ent.Pos).Sub(c.entity.State.Pos).Len() > boardDist:
 				result = protocol.SeatOutOfRange
-			case v.Seats[b.Seat] != 0:
+			case bank.Seats[b.Seat] != 0:
 				result = protocol.SeatOccupied
 			default:
-				v.Seats[b.Seat] = c.entity.ID
+				bank.Seats[b.Seat] = c.entity.ID
 				c.seatVehicle, c.seat = b.VehicleID, b.Seat
 				result = protocol.SeatGranted
 			}
@@ -56,9 +56,9 @@ func (s *Server) disembark(c *client) {
 		return
 	}
 	seat := c.seat
-	if ent, v := s.vehicleByID(c.seatVehicle); v != nil {
-		v.Seats[seat] = 0
-		st := sim.DisembarkState(s.terrain, sim.Vec(ent.Pos), sim.Quat(ent.Quat))
+	if ent, bank := s.vehicleByID(c.seatVehicle); bank != nil {
+		bank.Seats[seat] = 0
+		st := sim.DisembarkState(ent.Kind, s.terrain, sim.Vec(ent.Pos), sim.Quat(ent.Quat))
 		c.entity.State = st
 		c.entity.PrevLook = st.Facing
 	}
@@ -76,20 +76,21 @@ func (s *Server) freeSeat(c *client) {
 	if c.seat == 0 {
 		return
 	}
-	if _, v := s.vehicleByID(c.seatVehicle); v != nil {
-		v.Seats[c.seat] = 0
+	if _, bank := s.vehicleByID(c.seatVehicle); bank != nil {
+		bank.Seats[c.seat] = 0
 	}
 	c.seatVehicle, c.seat = 0, 0
 }
 
-// vehicleByID finds a world vehicle and its state. Non-vehicles and unknown
-// ids return nil — a board request naming a shopkeeper is result 3, not a
-// panic. Caller holds s.mu.
-func (s *Server) vehicleByID(id uint32) (*sim.Ent, *sim.VehicleState) {
+// vehicleByID finds a world vehicle (rover OR ship — anything whose state
+// carries seats) and its seat bank. Non-vehicles and unknown ids return
+// nil — a board request naming a shopkeeper is result 3, not a panic.
+// Caller holds s.mu.
+func (s *Server) vehicleByID(id uint32) (*sim.Ent, *sim.SeatBank) {
 	for _, e := range s.worldEnts {
 		if e.ID == id {
-			if v, ok := e.Data.(*sim.VehicleState); ok {
-				return e, v
+			if v, ok := e.Data.(sim.Seater); ok {
+				return e, v.Bank()
 			}
 			return nil, nil
 		}

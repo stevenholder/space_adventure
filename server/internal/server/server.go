@@ -200,7 +200,7 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 		Quat:   [4]float64(roverQuat),
 		Health: reg.Entities["vehicle"].MaxHealth,
 		Def:    "vehicle",
-		Data:   &sim.VehicleState{Grounded: true},
+		Data:   sim.NewVehicleState(),
 	}
 	world.Add(rover)
 	worldEnts = append(worldEnts, rover)
@@ -272,6 +272,8 @@ func entityDefKind(k sim.EntityKind) string {
 		return "target"
 	case protocol.EntityTypeVehicle:
 		return "vehicle"
+	case protocol.EntityTypeShip:
+		return "ship"
 	default:
 		return "player"
 	}
@@ -345,8 +347,11 @@ func (s *Server) tick() {
 	// input, the same step coasts the rover to a stop (GDD "Control
 	// handoff").
 	for _, e := range s.worldEnts {
-		if v, ok := e.Data.(*sim.VehicleState); ok {
+		switch v := e.Data.(type) {
+		case *sim.VehicleState:
 			v.Throttle, v.Steer = 0, 0
+		case *sim.ShipState:
+			v.Thrust, v.Roll, v.YawRate, v.PitchRate, v.Boost = 0, 0, 0, 0, false
 		}
 	}
 	for _, c := range s.clients {
@@ -355,13 +360,25 @@ func (s *Server) tick() {
 			c.step(s.terrain, s.colliders)
 			s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		case c.seat == 1:
-			// The driver's input drives the vehicle; the body itself is
-			// attached, not co-simulated (GDD "Seats and occupancy"). Mode
-			// is a declaration, not authority: occupancy decides these are
-			// throttle/steer (PROTOCOL "input").
-			if _, v := s.vehicleByID(c.seatVehicle); v != nil {
+			// The control seat's input drives the vehicle; the body itself
+			// is attached, not co-simulated (GDD "Seats and occupancy").
+			// Mode is a declaration, not authority: occupancy AND the
+			// vehicle's kind decide the interpretation (PROTOCOL "input") —
+			// a rover driver's v[0..1] are throttle/steer, a ship pilot's
+			// v[0..3] are thrust/roll/yaw_rate/pitch_rate plus the boost
+			// bit.
+			if ent, _ := s.vehicleByID(c.seatVehicle); ent != nil {
 				if w := c.input.Load(); w != nil {
-					v.Throttle, v.Steer = float64(w.MoveX), float64(w.MoveY)
+					switch v := ent.Data.(type) {
+					case *sim.VehicleState:
+						v.Throttle, v.Steer = float64(w.MoveX), float64(w.MoveY)
+					case *sim.ShipState:
+						v.Thrust = float64(w.MoveX)
+						v.Roll = float64(w.MoveY)
+						v.YawRate = float64(w.LookDir[0])
+						v.PitchRate = float64(w.LookDir[1])
+						v.Boost = w.ActionMask&protocol.ActionBoost != 0
+					}
 				}
 			}
 		}
@@ -389,10 +406,10 @@ func (s *Server) tick() {
 		if c.seat == 0 {
 			continue
 		}
-		if ent, v := s.vehicleByID(c.seatVehicle); v != nil {
-			c.entity.State.Pos = sim.ComposeSeat(sim.Vec(ent.Pos), sim.Quat(ent.Quat), c.seat)
+		if ent, bank := s.vehicleByID(c.seatVehicle); bank != nil {
+			c.entity.State.Pos = sim.ComposeSeat(ent.Kind, sim.Vec(ent.Pos), sim.Quat(ent.Quat), c.seat)
 			c.entity.State.Vel = sim.Vec(ent.Vel)
-			c.entity.State.Grounded = v.Grounded
+			c.entity.State.Grounded = ent.Flags&protocol.FlagGrounded != 0
 		}
 		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 	}
@@ -587,6 +604,11 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	// After publishing, so every client that must hear the joiner's weapon
 	// is already in s.clients.
 	s.syncEquipped(c)
+
+	// An owner's ship follows them across reconnects (GDD "Ownership":
+	// spawn on join). After publishing, so the spawn broadcast lands on a
+	// registered client.
+	s.syncOwnedShip(c)
 }
 
 // leave removes c's entity from the world and tells the remaining clients.
@@ -646,6 +668,11 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		s.mu.Lock()
 		s.broadcast(f)
 		s.mu.Unlock()
+	}
+	// A successful buy may have put a ship in the inventory; make the world
+	// agree (GDD "Ownership": spawn on purchase). Idempotent.
+	if req.Opcode == protocol.OpShopBuy && result.Status == protocol.StatusOK {
+		s.syncOwnedShip(c)
 	}
 	return result
 }
