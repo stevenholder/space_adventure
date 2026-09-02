@@ -14,6 +14,7 @@ package sim
 import (
 	"math"
 
+	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/terrain"
 )
 
@@ -121,6 +122,15 @@ func StepRover(e *Ent, dt float64, ctx StepCtx) {
 
 	e.Pos, e.Vel = [3]float64(pos), [3]float64(vel)
 	e.Quat = [4]float64(QuatFromBasis(terrain.Cross(n, h2), n, h2))
+
+	// The wire's grounded flag mirrors the carried state so the client's
+	// rover predictor can reconcile it instead of re-deriving it at the
+	// snap boundary, where a re-derivation can disagree by one tick.
+	if v.Grounded {
+		e.Flags |= protocol.FlagGrounded
+	} else {
+		e.Flags &^= protocol.FlagGrounded
+	}
 }
 
 // rotateAboutAxis rotates v about unit axis k by ang (Rodrigues). The C#

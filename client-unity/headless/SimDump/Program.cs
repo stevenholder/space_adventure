@@ -203,6 +203,7 @@ internal static class Program
         PredictionChecks();
         RockScatterChecks();
         TimelineChecks();
+        RoverPredictionChecks();
 
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
@@ -319,6 +320,53 @@ internal static class Program
         foreach (var kv in poses)
             if (kv.Key == id) return kv.Value.Pos.X;
         return double.NaN;
+    }
+
+    // ---- rover prediction --------------------------------------------------
+    //
+    // Snap-then-replay must be a no-op when nothing new happened: predicting
+    // N inputs and then reconciling against the state the server reached
+    // after K < N of them must land exactly where continuous prediction did,
+    // because the replay runs the same arithmetic over the same inputs.
+
+    private static void RoverPredictionChecks()
+    {
+        // A uniform 150 m sphere: min == max makes every u16 code decode to
+        // the same radius, so terrain contributes nothing but the contact.
+        var field = TerrainField.FromWire(
+            new ushort[6 * TerrainField.FaceGrid * TerrainField.FaceGrid], 150, 150);
+
+        var start = new RoverState
+        {
+            Pos = new Vec3(0, 150, 0),
+            Vel = Vec3.Zero,
+            Quat = Quat.FromBasis(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)),
+            Grounded = true,
+        };
+
+        var a = new RoverPredictor();
+        a.Seed(field);
+        a.Reconcile(start.Pos, start.Vel, start.Quat, true, 0);
+        for (ushort seq = 1; seq <= 10; seq++) a.Apply(seq, 1, 0.3);
+        RoverState continuous = a.State;
+
+        // The server's own view after the first 4 inputs.
+        var server = start;
+        for (int i = 0; i < 4; i++) Drive.Apply(ref server, 1, 0.3, field, Rules.DT);
+
+        var b = new RoverPredictor();
+        b.Seed(field);
+        b.Reconcile(start.Pos, start.Vel, start.Quat, true, 0);
+        for (ushort seq = 1; seq <= 10; seq++) b.Apply(seq, 1, 0.3);
+        b.Reconcile(server.Pos, server.Vel, server.Quat, server.Grounded, 4);
+
+        Check("rover reconcile+replay matches continuous prediction exactly",
+            (b.State.Pos - continuous.Pos).Length == 0 &&
+            (b.State.Vel - continuous.Vel).Length == 0,
+            $"dPos {F((b.State.Pos - continuous.Pos).Length)}");
+        Check("rover predictor moved at all", (continuous.Pos - start.Pos).Length > 0.1);
+        Check("a stale ack is ignored",
+            !b.Reconcile(start.Pos, start.Vel, start.Quat, true, 2));
     }
 
     private static void TimelineChecks()

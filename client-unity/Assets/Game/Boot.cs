@@ -84,6 +84,21 @@ namespace SpaceAdventure.Game
         private Rocks _rocks;
         private SnapshotTimeline _timeline;
 
+        // Phase 4 — seat occupancy, from our own snapshot row (the mode byte
+        // is a declaration; occupancy is what the server says). Seat 1 drives.
+        private uint _seatVehicle;
+        private ushort _seat;
+        private float _noticeUntil;
+        private readonly RoverPredictor _rover = new RoverPredictor();
+
+        // GDD "Rover seats" seat_eye column, sim frame, indexed by seat.
+        private static readonly Vec3[] RoverSeatEye =
+        {
+            default,
+            new Vec3(-0.35, 1.55, +0.10), // driver
+            new Vec3(+0.35, 1.55, -0.40), // passenger
+        };
+
         // C46 frame-budget evidence: every 5 s, log the window's average fps
         // and worst frame to the player log, where `unity run` and the C46
         // measurement pass can read them. One compare and one add per frame.
@@ -280,7 +295,10 @@ namespace SpaceAdventure.Game
             _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked;
 
             var state = _predictor.State;
-            LocalInput li = _fps.Sample(state.Pos.Normalized(), state.Facing);
+            // Seated, the local up comes from the rover — the body predictor
+            // is reset and its position stale.
+            Vec3 upPos = _seat != 0 && _rover.Ready ? _rover.State.Pos : state.Pos;
+            LocalInput li = _fps.Sample(upPos.Normalized(), state.Facing);
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
             // rate would put several inputs in one tick, and the server keeps
@@ -294,12 +312,28 @@ namespace SpaceAdventure.Game
 
             // Look-at targeting, then E. The shop swallows E so closing it
             // does not immediately reopen it on the same key press.
-            Vector3 eye = TerrainMesh.ToUnity(state.Pos);
-            eye += eye.normalized * FpsController.EyeHeight;
-            _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
+            if (_seat == 0)
+            {
+                Vector3 eye = TerrainMesh.ToUnity(state.Pos);
+                eye += eye.normalized * FpsController.EyeHeight;
+                _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
+            }
+            if (_seat != 0) _interact.Notice = "E  ·  exit rover";
+            else if (Time.time > _noticeUntil) _interact.Notice = "";
             if (li.InteractPressed && !_map.Open && !_character.AnyOpen)
             {
-                if (_interact.ShopOpen) _interact.CloseShop();
+                if (_seat != 0)
+                {
+                    // Always available, at any speed (GDD; C32).
+                    _net.Send(Encode.Disembark());
+                }
+                else if (_interact.ShopOpen) _interact.CloseShop();
+                else if (_interact.TargetType == EntityType.Vehicle && _interact.Target != 0)
+                {
+                    // Ask for the driver seat; on "occupied" the seat_result
+                    // handler retries the passenger seat.
+                    _net.Send(Encode.Board(_interact.Target, 1));
+                }
                 else
                 {
                     byte[] cmd = _interact.OpenShop(NextCmdSeq());
@@ -314,14 +348,15 @@ namespace SpaceAdventure.Game
             // The rig follows the character sheet, which is the one place
             // that knows what is equipped — whether it learned from the
             // broadcast event or from an accepted equip.
-            _viewModel.WeaponVisible = !string.IsNullOrEmpty(_character.Primary);
+            _viewModel.WeaponVisible = _seat == 0 && !string.IsNullOrEmpty(_character.Primary);
 
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
             // Instanced, so this is a submit rather than a scene walk: three
             // draw calls for four hundred rocks and no GameObjects to cull.
             _rocks.Render();
-            _fps.PlaceCamera(_predictor.State.Pos);
+            if (_seat != 0) PlaceSeatCamera();
+            else _fps.PlaceCamera(_predictor.State.Pos);
 
             // The body stands where the simulation puts it, and the rig sways
             // against the real speed rather than the input.
@@ -349,6 +384,47 @@ namespace SpaceAdventure.Game
         private ushort NextCmdSeq() => ++_cmdSeq;
 
         /// <summary>
+        /// Camera at the seat eye point (GDD "Rover seats" seat_eye, sim
+        /// frame → Unity local is (x, y, −z)). The driver's rover draws at
+        /// the PREDICTED state — steering a vehicle that lags your own wheel
+        /// by a round trip is the exact bug prediction exists to kill; a
+        /// passenger rides the interpolated view like any remote entity.
+        /// Rotation stays the FpsController's: the camera never changes mode
+        /// (GDD), free look in every seat.
+        /// </summary>
+        private void PlaceSeatCamera()
+        {
+            Vector3 pos;
+            Quaternion rot;
+            bool haveView = _views.TryGet(_seatVehicle, out var vv) && vv.Root != null;
+            if (_seat == 1 && _rover.Ready)
+            {
+                var s = _rover.State;
+                pos = TerrainMesh.ToUnity(s.Pos);
+                rot = RotFrom(s.Quat);
+                if (haveView) vv.Root.transform.SetPositionAndRotation(pos, rot);
+            }
+            else if (haveView)
+            {
+                pos = vv.Root.transform.position;
+                rot = vv.Root.transform.rotation;
+            }
+            else return; // no rover row seen yet; keep last camera pose
+
+            int seat = _seat < RoverSeatEye.Length ? _seat : 1;
+            Vec3 eye = RoverSeatEye[seat];
+            _camera.transform.position = pos + rot * new Vector3((float)eye.X, (float)eye.Y, (float)-eye.Z);
+        }
+
+        private static Quaternion RotFrom(Quat q)
+        {
+            Vector3 fwd = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 0, 1)));
+            Vector3 up = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 1, 0)));
+            if (fwd.sqrMagnitude < 1e-8f || up.sqrMagnitude < 1e-8f) return Quaternion.identity;
+            return Quaternion.LookRotation(fwd, up);
+        }
+
+        /// <summary>
         /// Toggles a panel and, if it just opened, asks the server for fresh
         /// credits and inventory. Panels show server truth rather than
         /// whatever was last seen — a bag that still lists a rifle you sold on
@@ -363,6 +439,26 @@ namespace SpaceAdventure.Game
         private void SendTick(LocalInput li)
         {
             _seq++;
+
+            if (_seat == 1)
+            {
+                // Driving: mode 2, v = [throttle, steer, 0, 0, 0]. Forward
+                // key is throttle, strafe keys steer (PROTOCOL "input").
+                double throttle = li.MoveY, steer = li.MoveX;
+                _rover.Apply(_seq, throttle, steer);
+                _net.Send(Encode.Input((float)throttle, (float)steer, 0, 0, 0, 0, _seq, 2));
+                return;
+            }
+            if (_seat != 0)
+            {
+                // Passenger: movement is ignored server-side (the body is
+                // composed from the vehicle), but look still flows for
+                // pitch_q. Send it zeroed so nothing depends on the mercy.
+                _net.Send(Encode.Input(0, 0,
+                    (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z, 0, _seq));
+                return;
+            }
+
             var input = new Sim.Input
             {
                 MoveX = li.MoveX,
@@ -483,15 +579,41 @@ namespace SpaceAdventure.Game
                     _timeline.Add(snap, Time.time);
                     foreach (var row in snap.Entities)
                     {
-                        if (row.Id != _net.EntityId) continue;
-                        _predictor.Reconcile(
-                            new Vec3(row.PosX, row.PosY, row.PosZ),
-                            new Vec3(row.VelX, row.VelY, row.VelZ),
-                            FacingFrom(row),
-                            row.Grounded,
-                            snap.AckSeq);
-                        _hud.Health = row.Health;
-                        _character.Health = row.Health;
+                        if (row.Id == _net.EntityId)
+                        {
+                            // Occupancy is whatever our row says. On a seat
+                            // change, drop the stale predictor: the on-foot
+                            // one on boarding, the rover one on leaving.
+                            if (row.ParentId != _seatVehicle || row.Seat != _seat)
+                            {
+                                _seatVehicle = row.ParentId;
+                                _seat = row.Seat;
+                                _rover.Reset();
+                                if (_seat != 0) _predictor.Reset();
+                            }
+                            if (_seat == 0)
+                            {
+                                _predictor.Reconcile(
+                                    new Vec3(row.PosX, row.PosY, row.PosZ),
+                                    new Vec3(row.VelX, row.VelY, row.VelZ),
+                                    FacingFrom(row),
+                                    row.Grounded,
+                                    snap.AckSeq);
+                            }
+                            _hud.Health = row.Health;
+                            _character.Health = row.Health;
+                        }
+                        else if (_seat != 0 && row.Id == _seatVehicle)
+                        {
+                            // Our row precedes world entities in the snapshot
+                            // (players first), so _seat is already current.
+                            _rover.Reconcile(
+                                new Vec3(row.PosX, row.PosY, row.PosZ),
+                                new Vec3(row.VelX, row.VelY, row.VelZ),
+                                new Quat(row.QuatX, row.QuatY, row.QuatZ, row.QuatW),
+                                row.Grounded,
+                                snap.AckSeq);
+                        }
                     }
                     break;
                 }
@@ -524,6 +646,28 @@ namespace SpaceAdventure.Game
                         }
                     }
                     _hud.OnEvent(ev, _net.EntityId);
+                    break;
+                }
+                case Msg.SeatResult:
+                {
+                    SeatResult sr = Decode.SeatResult(frame.Reader);
+                    if (sr.Result == SeatResult.Occupied && sr.Seat == 1)
+                    {
+                        // Driver seat taken — ride along instead.
+                        _net.Send(Encode.Board(sr.EntityId, 2));
+                    }
+                    else if (!sr.Ok)
+                    {
+                        _interact.Notice = sr.Result switch
+                        {
+                            SeatResult.Occupied => "seat taken",
+                            SeatResult.OutOfRange => "too far away",
+                            _ => "can't do that",
+                        };
+                        _noticeUntil = Time.time + 2f;
+                    }
+                    // A grant needs no handling here: occupancy is whatever
+                    // our next snapshot row says (PROTOCOL "board/disembark").
                     break;
                 }
                 case Msg.CmdResult:
@@ -562,6 +706,7 @@ namespace SpaceAdventure.Game
             if (_planet != null) Destroy(_planet);
             _planet = TerrainMesh.Build(_terrain, _material, transform);
             _predictor.Seed(_terrain, _colliders);
+            _rover.Seed(_terrain);
 
             // Scatter is pure in (terrain, world_seed), so it can only run
             // once the terrain has landed -- which is here, and not earlier.
