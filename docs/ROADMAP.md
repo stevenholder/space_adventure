@@ -581,10 +581,8 @@ also have to solve flight. Phase 5 then reuses it.
 
 - `docs/PROTOCOL.md`: activate `board` / `disembark` / `seat_result` and start
   filling `parent_id`/`seat` in the entity row already shipped in Phase 2. The
-  input mode byte — **added in Phase 3.5**, server and harness only — gains
-  mode `2`, ground vehicle (`v = [throttle, steer, 0, 0, 0]`). The byte does
-  not exist in the shipped v2 `input` layout; Phase 3.5 introduces it so the
-  Unity client is built against it from the start.
+  input mode byte — shipped in Phase 3.5 as a trailing, optional byte — gains
+  mode `2`, ground vehicle (`v = [throttle, steer, 0, 0, 0]`).
 - `docs/GDD.md`: the existing "Seats and occupancy" applies as written; add a
   **ground drive model** rule table (accel, top speed, steer rate, grip, slope
   limit, terrain-following suspension) and the rover's seat table.

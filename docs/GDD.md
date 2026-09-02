@@ -1073,6 +1073,120 @@ Edge cases already settled: backward thrust is `accel · 0.5` under the same
 speed); the same fixed-step semi-implicit integrator and replay reconciliation
 apply, with orientation normalized every step.
 
+## Phase 4 — ground drive model
+
+Spec for `netcode` + `frontend`, same contract status as the on-foot rules:
+every number is in the rule table; every rule is a formula or a named
+reference to one. There are no prose-only rules in this section. "Seats and
+occupancy" applies to the rover **as written** (board/disembark semantics,
+result codes, `board_dist`, composition, one control seat, handoff) — only
+the seat table and `disembark_local` below are rover-specific.
+
+The drive model is deliberately simpler than flight: no angular velocity
+state, no boost, no first-order steering response. Yaw is applied directly
+from the steer input, the wheels' job is done by a lateral-grip decay, and
+the terrain does the suspension — the rover's origin follows the surface the
+same way a body's foot point does. State is `pos/quat/vel` (f64) plus
+carried `grounded`; nothing beyond the wire triplet plus one bool.
+
+### Rule table
+
+| name | value | unit | justification |
+|------|-------|------|---------------|
+| `accel_drive` | 8 | m/s² | 0 → `vmax_drive` in 2 s; brisk without out-accelerating the 20 Hz correction loop |
+| `vmax_drive` | 16 | m/s | ~3× a sprint — walking should feel slow beside it, steering should still be possible at full speed (`steer_rate` gives a 13 m turn radius) |
+| `steer_rate` | 1.2 | rad/s | full-lock U-turn in ~2.6 s; skid-steer — a stationary rover can turn in place |
+| `grip` | 6 | 1/s | lateral velocity half-life ~0.12 s: a hard turn drifts for a beat, then bites |
+| `damp_drive` | 0.8 | 1/s | coast half-life ~0.87 s — lifting throttle is a brake, there is no brake input |
+| `drive_slope_max` | 40 | deg | throttle authority cutoff; less capable than feet (`max_slope` 50), so the last stretch of a climb is on foot |
+| `rover_spawn_dist` | 20 | m | deterministic parked spawn along the spawn bearing (pseudocode below) |
+| `crew_size_rover` | 2 | — | 1 driver + 1 passenger; the wire `seat` field is u16, more later is a table change |
+
+Reused M1/M2 rows, by reference: `tick_hz`/`dt`, `gravity` (9.8, along local
+−up, always), `ground_snap` (0.15 m), `eps_degen`, `board_dist` (8 m), and
+the reverse rule from the flight model: negative throttle accelerates at
+`accel_drive · 0.5` under the same clamp.
+
+### `stepRover` (both sims, bit-for-bit intent — C30 diffs at ≤ 1e-6)
+
+Input is sanitised first: `throttle`/`steer` clamped to [−1, 1], non-finite
+→ 0. `up`, `h` (heading), `n` (ground normal) are unit vectors. Projection
+fallback: wherever a projection is degenerate (`‖·‖ < eps_degen`), fall back
+to `rotate(quat, +Y)` projected the same way, exactly as M1's spawn-facing
+fallback.
+
+```
+1  up ← normalize(pos)
+2  h  ← project rotate(quat, +Z) onto plane ⊥ up, normalized  (fallback above)
+3  if grounded and steer ≠ 0:
+       h ← rotate_about_axis(h, up, −steer · steer_rate · dt)
+       (positive steer turns toward local +X, i.e. right; the sign is the
+        right-hand rule about up)
+4  if grounded and slope(terrain, up) ≤ drive_slope_max and throttle ≠ 0:
+       a ← throttle > 0 ? accel_drive : accel_drive · 0.5
+       vel ← vel + h · (throttle · a · dt)
+5  vel ← vel − up · (gravity · dt)
+6  if grounded:                       # grip and coast, tangent-frame split
+       vr ← dot(vel, up);  vt ← vel − up·vr
+       vf ← dot(vt, h);    vlat ← vt − h·vf
+       vlat ← vlat · exp(−grip · dt)
+       if throttle = 0: vf ← vf · exp(−damp_drive · dt)
+       vel ← up·vr + h·vf + vlat
+7  vt ← vel − up·dot(vel, up)
+   if ‖vt‖ > vmax_drive: vel ← vt · (vmax_drive/‖vt‖) + up·dot(vel, up)
+8  pos ← pos + vel · dt
+9  u' ← normalize(pos); R ← radius(terrain, u')
+   if ‖pos‖ ≤ R + ground_snap:
+       pos ← u' · R
+       vr ← dot(vel, u'); if vr < 0: vel ← vel − u'·vr
+       grounded ← true
+   else: grounded ← false
+10 n ← grounded ? surface_normal(terrain, u') : u'
+   h' ← project h onto plane ⊥ n, normalized (fallback above)
+   quat ← quat_from_basis(+X = n × h', +Y = n, +Z = h'), normalized
+```
+
+Steps 3, 4 and 6 are grounded-only: airborne, the rover is a ballistic
+brick — no steering, no throttle, no grip, which is what makes crests feel
+like crests. The one collision the rover has is step 9's origin point,
+exactly like a body's foot point ("Vehicles and crew": hull volume is
+visual-only, and there is no body-vs-vehicle collision).
+
+### Rover seats
+
+Rover local frame, +X right / +Y up / +Z forward, same conventions as the
+ship's seat table. The glb's `seat.driver` / `seat.passenger.0` nodes are
+these points in the art frame — the 180°-Y flip, (x, y, z) → (−x, y, −z).
+
+| seat | role | `seat_pos` (body origin / feet, m) | `seat_eye` (camera, m) |
+|------|------|------------------------------------|------------------------|
+| 1 | driver — the only control seat | (−0.35, 0.95, +0.10) | (−0.35, 1.55, +0.10) |
+| 2 | passenger | (+0.35, 0.95, −0.40) | (+0.35, 1.55, −0.40) |
+
+`disembark_local` **(+2.0, 0.0, 0.0)** m, rover frame — right side, 2 m from
+the origin: outside the hull, well inside `board_dist`, so a disembarked
+driver can re-board. Placement follows the "Seats and occupancy" disembark
+rule verbatim (radial projection onto the surface, `vel = 0`, facing = rover
+forward projected to the tangent plane).
+
+### Deterministic spawn
+
+The ship's deterministic-spawn pseudocode ("Vehicles and crew", M2 spec)
+applies with `rover_spawn_dist` in place of the ship's 15 m: a candidate
+point `rover_spawn_dist` from spawn along the spawn bearing, walkable-retry
+`k = 1..7` at +10 m steps, quat basis `+X = up × forward, +Y = up,
++Z = forward`. One rover, spawned at world build, entity type `0x0005`,
+def `vehicle`, asset `vehicle.rover.v1`.
+
+### Tuning targets (advisory — the rule table is the contract)
+
+- Flat ground, full throttle: ~2 s to `vmax_drive`, top speed pins at 16 m/s.
+- Full-speed full-lock: settles into a ~13 m-radius circle, drifting visibly
+  for the first ~0.3 s of the turn.
+- A 45° slope stalls the climb (throttle authority cut at 40°); gravity plus
+  grip walks it back down without spinning.
+- Lifting throttle at `vmax_drive` coasts to under 2 m/s in ~3 s.
+
 ## Phase 2 — items, weapons, combat, interaction
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules
