@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Net/Net.csproj" />
+  <Project Path="GameCore/GameCore.csproj" />
+  <Project Path="Sim/Sim.csproj" />
+  <Project Path="SimDump/SimDump.csproj" />
+</Solution>

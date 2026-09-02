@@ -1,0 +1,12 @@
+{
+  "id": "prop.generator",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/machine_generator.glb",
+  "out": "props/generator.glb",
+  "height": 1.30,
+  "axis": "y",
+  "ground": true,
+  "budget": 1000,
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

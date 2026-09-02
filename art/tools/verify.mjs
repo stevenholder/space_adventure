@@ -26,26 +26,59 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 const artDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const manifest = JSON.parse(readFileSync(path.join(artDir, "manifest.json"), "utf8"));
 
+// Triangle budgets, per id class.
+//
+// These were raised when the models stopped being generated box stacks. The
+// old numbers (char 1500, ship 2000, prop 500) were set for a browser client
+// delivered over the network, and that client is retired -- ROADMAP Phase 3.5
+// drops browser delivery for a packaged native desktop build. A real CC0
+// character lands around 2-5k triangles and there is no reason left to
+// decimate it to 1500.
+//
+// They are still ENFORCED, and deliberately: the failure mode this guards is a
+// 50k-tri pack model landing unnoticed because nothing counted it. Raising a
+// budget is a decision; drifting past one is an accident.
 const BUDGETS = [
-  [/^char\./, 1500],
-  [/^ship\./, 2000],
-  [/^prop\./, 500],
-  [/^npc\./, 1500],
-  [/^weapon\./, 400],
-  [/^struct\./, 200],
+  [/^char\./, 6000],
+  [/^npc\./, 6000],
+  [/^ship\./, 15000],
+  [/^vehicle\./, 15000],
+  [/^weapon\./, 3000],
+  [/^struct\./, 1500],
+  [/^prop\./, 1000],
 ];
 
 // Node-name contracts: the client mounts things by these names, so a rename
 // in a generator is a silent runtime break. `eyeHeadSiblings` additionally
 // asserts eye is not under head — hiding head for a local body must not hide
 // the camera.
+// Clip contracts. An asset whose manifest row says `rig: "animated"` must
+// carry these, and every track in them must land on a node that exists --
+// retargeting animation from another model is a rename away from producing
+// clips that animate nothing, and a body that slides instead of walking looks
+// exactly like a body that was never animated.
+const CLIP_CONTRACTS = {
+  animated: ["idle", "walk", "sprint", "die"],
+};
+
 const NODE_CONTRACTS = {
   "char.player": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r"],
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    eyeHeadSiblings: true,
+  },
+  // The hostiles carry the same layout on purpose: the client's nametag,
+  // health-bar and animation code walks these names and does not care which
+  // archetype it is looking at.
+  "npc.grunt": {
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    eyeHeadSiblings: true,
+  },
+  "npc.gunner": {
+    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
@@ -115,6 +148,29 @@ for (const asset of selected) {
 
   const tris = countTriangles(gltf.scene);
   const problems = [];
+
+  // Clips, for anything declaring a rig. GLTFLoader hands animations back as
+  // THREE.AnimationClip, and a track name is "<node>.<property>" -- so a
+  // track whose node is missing from the scene is one that will silently do
+  // nothing at runtime.
+  const rig = asset.rig ?? null;
+  if (rig && CLIP_CONTRACTS[rig]) {
+    const clips = new Map((gltf.animations ?? []).map((c) => [c.name, c]));
+    for (const want of CLIP_CONTRACTS[rig]) {
+      const clip = clips.get(want);
+      if (!clip) {
+        problems.push(`missing clip "${want}"`);
+        continue;
+      }
+      if (clip.tracks.length === 0) problems.push(`clip "${want}" has no tracks`);
+      for (const track of clip.tracks) {
+        const node = track.name.split(".")[0];
+        if (findByName(gltf.scene, node).length === 0)
+          problems.push(`clip "${want}" targets missing node "${node}"`);
+      }
+    }
+  }
+
 
   if (tris !== asset.tris)
     problems.push(`manifest tris ${asset.tris} != counted ${tris}`);

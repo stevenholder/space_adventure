@@ -4,34 +4,43 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 192,
+      "tris": 296,
       "license": "CC0",
-      "source": "tools/gen_player.py",
-      "description": "M1 player character. Segmented, unrigged: named nodes eye/head/torso/arm.l/arm.r/leg.l/leg.r; limb pivots at shoulder and hip; eye at 1.7 m, -Z forward; head is a sibling of eye so the local player can hide it without hiding the camera. Orange suit with teal backpack, reads from 50 m and from the inside-down view."
+      "source": "recipes/char.player.json",
+      "description": "Player character. Kenney astronautA, rescaled to 1.8 m and renamed to the node contract (eye/head/torso/arm.l/arm.r/leg.l/leg.r). Segmented, unrigged -- the client rotates the limbs. Faces -Z (the backpack sits further +Z than the head). eye is at 1.7 m because GDD eye_height is 1.7, not because of where this head sits. NOTE: 1.10 m across with the arms out, against a server capsule 0.70 m wide -- the height matches the capsule, the arm span does not.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney",
+      "rig": "animated"
     },
     {
       "id": "prop.rock.a",
       "file": "props/rock_a.glb",
-      "tris": 320,
+      "tris": 176,
       "license": "CC0",
-      "source": "tools/gen_rocks.py",
-      "description": "Rounded boulder variant, fine facets. Unit-sized, base at origin, up +Y; client seats on surface, orients radially, scales 0.3-1.5 m."
+      "source": "recipes/prop.rock.a.json",
+      "description": "Rounded boulder. Kenney rock_largeA, normalised to 1 m tall with the base at origin, up +Y; the client seats it on the surface, orients it radially and scales it 0.3-1.5 m.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
     },
     {
       "id": "prop.rock.b",
       "file": "props/rock_b.glb",
-      "tris": 80,
+      "tris": 172,
       "license": "CC0",
-      "source": "tools/gen_rocks.py",
-      "description": "Flat-topped slab variant, coarse facets."
+      "source": "recipes/prop.rock.b.json",
+      "description": "Low broad rock. Kenney rock, normalised as rock.a.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
     },
     {
       "id": "prop.rock.c",
       "file": "props/rock_c.glb",
-      "tris": 80,
+      "tris": 364,
       "license": "CC0",
-      "source": "tools/gen_rocks.py",
-      "description": "Sharp angular shard variant, coarse facets, high-amplitude noise."
+      "source": "recipes/prop.rock.c.json",
+      "description": "Crystal outcrop -- the sharp, angular silhouette in the set. Kenney rock_crystals, normalised as rock.a.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
     },
     {
       "id": "ship.v1",
@@ -44,18 +53,23 @@
     {
       "id": "weapon.pulse",
       "file": "weapons/pulse.glb",
-      "tris": 180,
+      "tris": 106,
       "license": "CC0",
-      "source": "tools/gen_weapon.py",
-      "description": "Phase 2 pulse rifle. -Z forward. Named empty nodes: `grip` (where the character's right hand holds it, at the origin of the hand pose) and `muzzle` (barrel tip, -Z, where the flash and tracer originate). Reads in silhouette from 30 m and from the first-person down-view at 0.5 m."
+      "source": "recipes/weapon.pulse.json",
+      "description": "Pulse rifle. Kenney weapon_rifle, 0.9 m long, yawed 180 so it points -Z (the source points +Z: its +Z half has the smaller cross-section, i.e. the barrel). Mount nodes `grip` (where the right hand holds it) and `muzzle` (barrel tip at the -Z end, where flash and tracer start).",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
     },
     {
       "id": "npc.shopkeeper",
       "file": "chars/shopkeeper.glb",
-      "tris": 220,
+      "tris": 314,
       "license": "CC0",
-      "source": "tools/gen_npc.py",
-      "description": "Phase 2 quartermaster NPC. Same segmented node layout as char.player (eye/head/torso/arm.l/arm.r/leg.l/leg.r) so the client's procedural animation and nametag code work unchanged; different palette so it does not read as a player."
+      "source": "recipes/npc.shopkeeper.json",
+      "description": "Quartermaster NPC. Kenney astronautB, so it does not read as another player. Same node contract as char.player, so nametag and animation code work unchanged.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney",
+      "rig": "animated"
     },
     {
       "id": "prop.target",
@@ -68,10 +82,10 @@
     {
       "id": "struct.wall",
       "file": "structs/wall.glb",
-      "tris": 24,
+      "tris": 72,
       "license": "CC0",
       "source": "tools/gen_struct.py",
-      "description": "Phase 2 range wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Visual only \u2014 the authoritative shape is the `colliders` message."
+      "description": "Wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Banded in Y -- dark plinth, mid shaft, light coping -- because Y is the only axis that survives that scaling: a camp wall is 32 m long and 0.8 m thick, so anything modelled in X or Z is stretched past recognition, while a band in Y stays a band. Visual only; the authoritative shape is the colliders message."
     },
     {
       "id": "struct.post",
@@ -80,6 +94,88 @@
       "license": "CC0",
       "source": "tools/gen_struct.py",
       "description": "Phase 2 cover post. Unit sphere, centre at origin, scaled to the sphere collider's radius. Visual only, as above."
+    },
+    {
+      "id": "npc.grunt",
+      "file": "chars/grunt.glb",
+      "tris": 292,
+      "license": "CC0",
+      "source": "recipes/npc.grunt.json",
+      "description": "Phase 3 camp grunt (melee). server/data/npcs.json has referenced this asset id since Phase 3 with nothing behind it -- the client fell back to a red-tinted box stack. Same node contract as char.player so nametags and animation code work unchanged; tinted red to read as hostile at a distance.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney",
+      "rig": "animated"
+    },
+    {
+      "id": "npc.gunner",
+      "file": "chars/gunner.glb",
+      "tris": 292,
+      "license": "CC0",
+      "source": "recipes/npc.gunner.json",
+      "description": "Phase 3 camp gunner (ranged). As npc.grunt, tinted purple so the two archetypes are told apart at a glance -- which matters, because they behave differently: the gunner shoots from 26 m and the grunt closes to 2 m.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney",
+      "rig": "animated"
+    },
+    {
+      "id": "prop.loot.crate",
+      "file": "props/loot_crate.glb",
+      "tris": 56,
+      "license": "CC0",
+      "source": "recipes/prop.loot.crate.json",
+      "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.barrel",
+      "file": "props/barrel.glb",
+      "tris": 56,
+      "license": "CC0",
+      "source": "recipes/prop.barrel.json",
+      "description": "Fuel drum. Camp dressing, placed from zone data.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.barrels",
+      "file": "props/barrels.glb",
+      "tris": 268,
+      "license": "CC0",
+      "source": "recipes/prop.barrels.json",
+      "description": "A stack of three drums, for filling a corner without three placements.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.generator",
+      "file": "props/generator.glb",
+      "tris": 406,
+      "license": "CC0",
+      "source": "recipes/prop.generator.json",
+      "description": "Portable generator. The reason a camp in vacuum has lights.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.dish",
+      "file": "props/dish.glb",
+      "tris": 274,
+      "license": "CC0",
+      "source": "recipes/prop.dish.json",
+      "description": "Comms dish. Reads as a camp that is talking to someone.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.bones",
+      "file": "props/bones.glb",
+      "tris": 168,
+      "license": "CC0",
+      "source": "recipes/prop.bones.json",
+      "description": "Bones. Dressing for a hostile camp -- the cheapest way to say someone lost here.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
     }
   ]
 }

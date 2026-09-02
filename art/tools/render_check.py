@@ -42,71 +42,158 @@ def read_glb(path):
     return doc, binbuf
 
 
+# Component type -> (struct code, bytes, normalising divisor).
+_CT = {
+    5120: ("b", 1, 127.0),
+    5121: ("B", 1, 255.0),
+    5122: ("h", 2, 32767.0),
+    5123: ("H", 2, 65535.0),
+    5125: ("I", 4, 1.0),
+    5126: ("f", 4, 1.0),
+}
+
+
 def accessor_array(doc, binbuf, acc, per):
+    """
+    Read one accessor.
+
+    Honours the accessor's OWN byteOffset and the bufferView's byteStride,
+    both of which the earlier version ignored. That was invisible while every
+    .glb here came from tools/glb.py, which writes one tightly packed
+    bufferView per accessor -- so accessor byteOffset was always 0 and there
+    was never a stride. Every other glTF writer in the world packs several
+    accessors into one bufferView, and reading from the view's start then
+    returns a different attribute's bytes: colours outside [0,1], positions
+    that are garbage, and a crash somewhere downstream rather than here.
+    """
     bv = doc["bufferViews"][acc["bufferView"]]
     n = acc["count"]
-    raw = binbuf[bv["byteOffset"]:bv["byteOffset"] + bv["byteLength"]]
-    ct = acc["componentType"]
-    if ct == 5126:
-        fmt = struct.unpack_from("<%df" % (n * per), raw, 0)
-        scale = 1.0
-    elif ct == 5121:
-        fmt = struct.unpack_from("<%dB" % (n * per), raw, 0)
-        scale = 1.0 / 255.0
-    else:
-        fmt = struct.unpack_from("<%dH" % (n * per), raw, 0)
-        scale = 1.0
-    return [[fmt[i * per + k] * scale for k in range(per)] for i in range(n)]
+    code, size, divisor = _CT[acc["componentType"]]
+    base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0)
+    stride = bv.get("byteStride") or (size * per)
+    scale = (1.0 / divisor) if acc.get("normalized") else 1.0
+
+    out = []
+    for i in range(n):
+        vals = struct.unpack_from("<%d%s" % (per, code), binbuf, base + i * stride)
+        out.append([v * scale for v in vals])
+    return out
+
+
+def _node_matrix(nd):
+    """A node's local transform as a column-major 4x4, from `matrix` or TRS."""
+    if "matrix" in nd:
+        return list(nd["matrix"])
+    tx, ty, tz = nd.get("translation", (0.0, 0.0, 0.0))
+    qx, qy, qz, qw = nd.get("rotation", (0.0, 0.0, 0.0, 1.0))
+    sx, sy, sz = nd.get("scale", (1.0, 1.0, 1.0))
+    x2, y2, z2 = qx + qx, qy + qy, qz + qz
+    xx, xy, xz = qx * x2, qx * y2, qx * z2
+    yy, yz, zz = qy * y2, qy * z2, qz * z2
+    wx, wy, wz = qw * x2, qw * y2, qw * z2
+    return [
+        (1 - (yy + zz)) * sx, (xy + wz) * sx, (xz - wy) * sx, 0.0,
+        (xy - wz) * sy, (1 - (xx + zz)) * sy, (yz + wx) * sy, 0.0,
+        (xz + wy) * sz, (yz - wx) * sz, (1 - (xx + yy)) * sz, 0.0,
+        tx, ty, tz, 1.0,
+    ]
+
+
+def _mat_mul(a, b):
+    out = [0.0] * 16
+    for c in range(4):
+        for r in range(4):
+            out[c * 4 + r] = sum(a[k * 4 + r] * b[c * 4 + k] for k in range(4))
+    return out
+
+
+def _xform(m, v):
+    return (
+        m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12],
+        m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13],
+        m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14],
+    )
+
+
+def _xform_dir(m, v):
+    """Direction transform: rotation and scale, no translation."""
+    x = m[0] * v[0] + m[4] * v[1] + m[8] * v[2]
+    y = m[1] * v[0] + m[5] * v[1] + m[9] * v[2]
+    z = m[2] * v[0] + m[6] * v[1] + m[10] * v[2]
+    n = math.sqrt(x * x + y * y + z * z)
+    return (x / n, y / n, z / n) if n > 1e-12 else (0.0, 1.0, 0.0)
 
 
 def load_triangles(path):
-    """World-space triangles: (a, b, c, normal, color, is_glass)."""
+    """
+    World-space triangles: (a, b, c, normal, color, is_glass).
+
+    Walks the SCENE GRAPH rather than the mesh list, so a mesh referenced by
+    two nodes is drawn twice, once per instance. The earlier version built a
+    mesh -> node map, which silently kept only the last node of any shared
+    mesh; that never came up while each model had its own unique meshes, and
+    it does now that the import pipeline runs dedup().
+    """
     doc, binbuf = read_glb(path)
     mats = doc.get("materials", [])
-
-    # cumulative translation along each node path (translation-only trees)
-    node_t = {}
-
-    def walk(i, parent_t):
-        t = doc["nodes"][i].get("translation", (0, 0, 0))
-        node_t[i] = (parent_t[0] + t[0], parent_t[1] + t[1], parent_t[2] + t[2])
-        for c in doc["nodes"][i].get("children", []):
-            walk(c, node_t[i])
-
-    for root_i in doc["scenes"][0]["nodes"]:
-        walk(root_i, (0.0, 0.0, 0.0))
-
-    node_of_mesh = {}
-    for i, nd in enumerate(doc["nodes"]):
-        if "mesh" in nd:
-            node_of_mesh[nd["mesh"]] = i
-
+    nodes = doc.get("nodes", [])
     tris = []
-    for mi, mesh in enumerate(doc["meshes"]):
-        t = node_t[node_of_mesh[mi]]
-        prim0 = mesh["primitives"][0]
-        mat = mats[prim0["material"]] if mats else {}
-        is_glass = mat.get("alphaMode") == "BLEND"
+
+    def emit(mesh_index, world):
+        mesh = doc["meshes"][mesh_index]
         for prim in mesh["primitives"]:
             attrs = prim["attributes"]
+            mat = mats[prim["material"]] if mats and "material" in prim else {}
+            is_glass = mat.get("alphaMode") == "BLEND"
+
             pos = accessor_array(doc, binbuf, doc["accessors"][attrs["POSITION"]], 3)
-            nrm = accessor_array(doc, binbuf, doc["accessors"][attrs["NORMAL"]], 3)
+            nrm = (accessor_array(doc, binbuf, doc["accessors"][attrs["NORMAL"]], 3)
+                   if "NORMAL" in attrs else None)
             col = None
             if "COLOR_0" in attrs:
-                col = accessor_array(doc, binbuf,
-                                     doc["accessors"][attrs["COLOR_0"]], 3)
+                acc = doc["accessors"][attrs["COLOR_0"]]
+                per = 4 if acc["type"] == "VEC4" else 3
+                col = accessor_array(doc, binbuf, acc, per)
+
             if "indices" in prim:
-                raw_idx = [int(row[0]) for row in accessor_array(doc, binbuf,
-                           doc["accessors"][prim["indices"]], 1)]
+                idx = [int(r[0]) for r in
+                       accessor_array(doc, binbuf, doc["accessors"][prim["indices"]], 1)]
             else:
-                raw_idx = list(range(len(pos)))
-            for i in range(0, len(raw_idx), 3):
-                k0, k1, k2 = raw_idx[i], raw_idx[i + 1], raw_idx[i + 2]
-                a = (pos[k0][0] + t[0], pos[k0][1] + t[1], pos[k0][2] + t[2])
-                b = (pos[k1][0] + t[0], pos[k1][1] + t[1], pos[k1][2] + t[2])
-                c = (pos[k2][0] + t[0], pos[k2][1] + t[1], pos[k2][2] + t[2])
-                tris.append((a, b, c, nrm[k0],
-                             col[k0] if col else (1.0, 1.0, 1.0), is_glass))
+                idx = list(range(len(pos)))
+
+            wp = [_xform(world, p) for p in pos]
+            for i in range(0, len(idx), 3):
+                k0, k1, k2 = idx[i], idx[i + 1], idx[i + 2]
+                if nrm:
+                    n = _xform_dir(world, nrm[k0])
+                else:
+                    # Face normal from winding, for a mesh with no NORMAL.
+                    a, b, c = wp[k0], wp[k1], wp[k2]
+                    u = (b[0] - a[0], b[1] - a[1], b[2] - a[2])
+                    v = (c[0] - a[0], c[1] - a[1], c[2] - a[2])
+                    n = _xform_dir(
+                        [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                        (u[1] * v[2] - u[2] * v[1],
+                         u[2] * v[0] - u[0] * v[2],
+                         u[0] * v[1] - u[1] * v[0]))
+                # Colour is clamped on the way in: a value outside [0,1] is
+                # out of spec, and letting one through only turns into a
+                # "byte must be in range(0, 256)" a hundred lines later.
+                c0 = col[k0] if col else (1.0, 1.0, 1.0)
+                c0 = tuple(min(1.0, max(0.0, x)) for x in c0[:3])
+                tris.append((wp[k0], wp[k1], wp[k2], n, c0, is_glass))
+
+    def walk(i, parent):
+        nd = nodes[i]
+        world = _mat_mul(parent, _node_matrix(nd))
+        if "mesh" in nd:
+            emit(nd["mesh"], world)
+        for c in nd.get("children", []):
+            walk(c, world)
+
+    ident = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    for root_i in doc["scenes"][0]["nodes"]:
+        walk(root_i, ident)
     return tris
 
 

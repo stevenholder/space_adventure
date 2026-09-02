@@ -151,3 +151,50 @@ func TestNPCRespawn_ExactBoundaryAndReturnsToPost(t *testing.T) {
 		t.Fatalf("respawn itself must not emit an event, got %v", events)
 	}
 }
+
+// TestShopNPCIsNotACombatant pins the bug that hid the quartermaster.
+//
+// A shop archetype has no max_health, so it spawns at 0 health. Giving it
+// NPCState made StepNPCRespawn treat it as a corpse: it set the dead flag,
+// emitted a death event, and started a respawn countdown that returned it to
+// 0 health to die again every npc_respawn seconds. The dead flag is honoured
+// by any correct client, so the only NPC a new player must talk to was
+// invisible, 3.6 m from the spawn point, while the event log filled with its
+// deaths.
+func TestShopNPCIsNotACombatant(t *testing.T) {
+	w := NewWorld()
+	reg := spawnerTestRegistry()
+	reg.NPCs["npc.quartermaster"] = defs.NPC{ID: "npc.quartermaster", Kind: "shop"} // no MaxHealth
+
+	ids := SpawnZoneNPCs(w, reg, []defs.Placement{
+		{Type: "npc", Def: "npc.quartermaster", Pos: [3]float64{1, 0, 0}, Quat: [4]float64{0, 0, 0, 1}},
+		{Type: "npc", Def: "npc.grunt", Pos: [3]float64{2, 0, 0}, Quat: [4]float64{0, 0, 0, 1}},
+	}, newIDGen(1))
+	if len(ids) != 2 {
+		t.Fatalf("spawned %d entities, want 2", len(ids))
+	}
+	shop, grunt := w.Ents[ids[0]], w.Ents[ids[1]]
+
+	if _, ok := shop.Data.(*NPCState); ok {
+		t.Error("the shop NPC carries combat state; StepNPCRespawn will kill it on a timer")
+	}
+	if _, ok := grunt.Data.(*NPCState); !ok {
+		t.Error("the grunt has no combat state, so it can never respawn")
+	}
+
+	// Step well past npc_respawn: the shop NPC must never be flagged dead and
+	// must never emit an event.
+	var events []protocol.Event
+	ctx := StepCtx{Events: &events, World: w}
+	for i := 0; i < NPCRespawnTicks*3; i++ {
+		StepNPCRespawn(shop, DT, ctx)
+	}
+	if shop.Flags&protocol.FlagDead != 0 {
+		t.Error("the shop NPC is flagged dead, so every client hides it")
+	}
+	for _, e := range events {
+		if e.EntityID == shop.ID {
+			t.Errorf("the shop NPC emitted event %#04x; it is not a combatant", e.EventID)
+		}
+	}
+}

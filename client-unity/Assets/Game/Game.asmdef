@@ -1,0 +1,19 @@
+{
+    "name": "Game",
+    "rootNamespace": "SpaceAdventure.Game",
+    "references": [
+        "Sim",
+        "Net",
+        "glTFast",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

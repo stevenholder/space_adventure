@@ -167,3 +167,61 @@ func TestHandleCmdBuyOK(t *testing.T) {
 		t.Fatalf("second buy: status=%d credits=%d, want StatusOK/300", res2.Status, p.Credits)
 	}
 }
+
+// TestReloadMovesAmmoIntoTheMagazine covers the opcode that was routed and
+// then did nothing: a player was permanently dry after thirty shots, because
+// the only thing that ever refilled the magazine was CHANGING weapon.
+func TestReloadMovesAmmoIntoTheMagazine(t *testing.T) {
+	reg := &defs.Registry{
+		Items: map[string]defs.Item{
+			"weapon.pulse": {
+				ID: "weapon.pulse", Slot: "primary", StackMax: 1,
+				Weapon: &defs.Weapon{Magazine: 30, AmmoItem: "ammo.cell"},
+			},
+			"ammo.cell": {ID: "ammo.cell", StackMax: 300},
+		},
+		InvSlots: 20,
+	}
+	p := &store.Player{
+		Equipped:  map[string]string{"primary": "weapon.pulse"},
+		Inventory: []store.Stack{{Item: "weapon.pulse", Qty: 1}, {Item: "ammo.cell", Qty: 50}},
+	}
+	ent := &entity{Magazine: 4}
+	w := cmdWorld{Player: p, Reg: reg, Ent: ent}
+
+	call := func(seq uint16) protocol.CmdResult {
+		return handleCmd(newCmdRate(time.Now()), time.Now(),
+			protocol.Cmd{Seq: seq, Opcode: protocol.OpReload, Data: []byte("{}")}, w)
+	}
+
+	if got := call(1); got.Status != protocol.StatusOK {
+		t.Fatalf("reload status %d, body %s", got.Status, got.Data)
+	}
+	if ent.Magazine != 30 {
+		t.Errorf("magazine = %d, want a full 30", ent.Magazine)
+	}
+	// The rounds come OUT of the carried stack; a reload that leaves the
+	// reserve untouched is a reload that invents ammunition.
+	if left := sim.CountItem(p, "ammo.cell"); left != 50-26 {
+		t.Errorf("reserve = %d, want %d", left, 50-26)
+	}
+
+	// A full magazine is not an error, and must not consume anything.
+	before := sim.CountItem(p, "ammo.cell")
+	if got := call(2); got.Status != protocol.StatusOK {
+		t.Errorf("reloading a full magazine returned status %d", got.Status)
+	}
+	if after := sim.CountItem(p, "ammo.cell"); after != before {
+		t.Errorf("a full reload consumed %d rounds", before-after)
+	}
+
+	// Nothing carried: refused, and the magazine is left alone.
+	p.Inventory = []store.Stack{{Item: "weapon.pulse", Qty: 1}}
+	ent.Magazine = 0
+	if got := call(3); got.Status != protocol.StatusRefused {
+		t.Errorf("reload with no ammo returned status %d, want refused", got.Status)
+	}
+	if ent.Magazine != 0 {
+		t.Errorf("magazine = %d after a refused reload, want 0", ent.Magazine)
+	}
+}

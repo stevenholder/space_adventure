@@ -1,0 +1,18 @@
+{
+  "$comment": "Kenney's rifle points +Z with the bulky receiver at -Z (measured: the +Z half has the smaller XY cross-section, i.e. the barrel). This project's contract is -Z forward, so yaw 180. Scaled along Z, not Y: a gun is sized by its length -- scaling by height would size it by its sights. Mounts are in FINISHED coordinates, taken off the measured geometry: the barrel tip sits at y=0.31 in the source frame, the pistol grip bottoms out at y=0 around z=-0.05.",
+  "id": "weapon.pulse",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/weapon_rifle.glb",
+  "out": "weapons/pulse.glb",
+  "height": 0.9,
+  "axis": "z",
+  "ground": false,
+  "yaw": 180,
+  "budget": 3000,
+  "mounts": {
+    "muzzle": [0, 0.279, -0.45],
+    "grip": [0, 0.09, 0.045]
+  },
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

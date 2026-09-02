@@ -1,0 +1,55 @@
+{
+  "$comment": "Kenney's astronaut already ships the segmented node layout this project's contract wants (armLeft/armRight/body/head/legLeft/legRight); only the names differ. The backpack extends further +Z than the head does, which is how we know the model faces -Z -- so no yaw. eye is added at 1.7 m because GDD eye_height is 1.7 and the server fires ranged shots from that height (server/internal/server/cmd.go); it is NOT derived from where this particular head happens to sit.",
+  "id": "char.player",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/astronautA.glb",
+  "out": "chars/player.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "rename": {
+    "armLeft": "arm.l",
+    "armRight": "arm.r",
+    "body": "torso",
+    "legLeft": "leg.l",
+    "legRight": "leg.r"
+  },
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ],
+    "hand.r": {
+      "parent": "arm.r",
+      "pos": [
+        0.05,
+        -0.3,
+        -0.05
+      ]
+    }
+  },
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit",
+  "animations": {
+    "$comment": "Clips come off Kenney's Blocky Characters, whose rig uses the same joint-pivot convention as the Space Kit astronaut -- checked before relying on it. Mapped in terms of THIS project's node names, since the renames above have already run. Only rotations survive the retarget; see import_pack.mjs.",
+    "src": "vendor/kenney-blocky-characters/Models/GLB format/character-a.glb",
+    "map": {
+      "leg-left": "leg.l",
+      "leg-right": "leg.r",
+      "arm-left": "arm.l",
+      "arm-right": "arm.r",
+      "head": "head",
+      "torso": "torso"
+    },
+    "keep": [
+      "idle",
+      "walk",
+      "sprint",
+      "die"
+    ]
+  },
+  "rig": "animated"
+}

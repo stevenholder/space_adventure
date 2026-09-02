@@ -62,6 +62,12 @@ func SpawnZoneNPCs(w *World, reg *defs.Registry, placements []defs.Placement, ne
 
 		npc := reg.NPCs[p.Def]
 		id := nextID()
+
+		var data any
+		if st := CombatStateFor(p.Def, npc, p.Pos, p.Quat); st != nil {
+			data = st
+		}
+
 		w.Add(&Ent{
 			ID:     id,
 			Kind:   EntityKind(protocol.EntityTypeNPC),
@@ -69,16 +75,47 @@ func SpawnZoneNPCs(w *World, reg *defs.Registry, placements []defs.Placement, ne
 			Quat:   p.Quat,
 			Health: npc.MaxHealth,
 			Def:    p.Def,
-			Data: &NPCState{
-				Archetype: p.Def,
-				Post:      p.Pos,
-				PostQuat:  p.Quat,
-				MaxHealth: npc.MaxHealth,
-			},
+			Data:   data,
 		})
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// CombatStateFor returns the combat state a placed NPC should carry, or nil
+// when the archetype is not a combatant.
+//
+// Combat state ONLY for a combatant. A shop NPC has no max_health, so it
+// spawns at 0 health, and StepNPCRespawn — which keys off exactly this state
+// being present — flags it dead, emits a death event, and starts a respawn
+// countdown that lands it back on 0 health to do it all again every
+// npc_respawn seconds, forever.
+//
+// That is not hypothetical. The quartermaster stood 3.6 m from the spawn
+// point with the dead flag set, so every correct client hid the one NPC a new
+// player has to talk to, while the event log filled with its deaths.
+// StepNPCRespawn's own doc comment already described the intended design ("an
+// entity with no NPCState, e.g. a shop NPC ... is left alone") — two separate
+// placement paths just did not honour it.
+//
+// It lives here, alone, because that was the actual defect: the server has
+// its own placement loop, and fixing the rule in SpawnZoneNPCs changed
+// nothing, because SpawnZoneNPCs is not what runs.
+//
+// CALLERS MUST CHECK FOR nil BEFORE ASSIGNING TO Ent.Data. A typed nil
+// pointer stored in an interface is not a nil interface: the type assertion
+// in StepNPCRespawn would succeed, hand back a nil *NPCState, and panic on
+// the first field access.
+func CombatStateFor(def string, npc defs.NPC, pos [3]float64, quat [4]float64) *NPCState {
+	if npc.MaxHealth <= 0 {
+		return nil
+	}
+	return &NPCState{
+		Archetype: def,
+		Post:      pos,
+		PostQuat:  quat,
+		MaxHealth: npc.MaxHealth,
+	}
 }
 
 func init() {
@@ -96,8 +133,8 @@ func init() {
 // but carries no combat state) is left alone: nothing to respawn.
 func StepNPCRespawn(e *Ent, dt float64, ctx StepCtx) {
 	state, ok := e.Data.(*NPCState)
-	if !ok {
-		return
+	if !ok || state == nil {
+		return // not a combatant — see CombatStateFor on the nil-interface trap
 	}
 
 	if e.Health <= 0 && e.Flags&protocol.FlagDead == 0 {

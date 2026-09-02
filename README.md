@@ -1,7 +1,6 @@
 # Space Adventure
 
-Low-poly 3D MMO space/fantasy adventure, played in the browser, entirely in
-first person.
+Low-poly 3D MMO space/fantasy adventure, played entirely in first person.
 
 Board a ship with your friends, fly it to a planet, climb out and explore on
 foot, drive a rover across the surface, load back up and leave. Vehicles are
@@ -14,7 +13,7 @@ on each other — NPCs and gun combat (Phase 2), fighting an enemy encampment
 (Phase 3), a rover you climb into and drive (Phase 4), then a ship you buy,
 board and fly into space (Phase 5). See `docs/ROADMAP.md`.
 
-- **Client:** Three.js + TypeScript, 3D-first UI
+- **Client:** Unity 6 (C#), packaged desktop build, 3D-first UI
 - **Server:** Go, authoritative fixed-tick simulation over WebSocket
 - **Infra:** local kind cluster (server + client in a namespace, nginx `/ws` proxy) behind a Makefile
 - **Development:** agent-first — specialized AI agents work in parallel on
@@ -25,7 +24,6 @@ board and fly into space (Phase 5). See `docs/ROADMAP.md`.
 | Path | What | Owner (agent) |
 |------|------|---------------|
 | `server/` | Go game server: simulation, networking, protocol | `netcode` (rules: `game`) |
-| `client/` | Three.js/TS browser client: render, controls, net client, HUD | `frontend` |
 | `art/` | Low-poly assets (glTF), shaders, asset manifest | `art` |
 | `deploy/` | local kind run (Makefile) + K8s manifests + Dockerfiles | `infra` |
 | `test/` | Cross-module integration/e2e tests | `qa` |
@@ -44,9 +42,37 @@ board and fly into space (Phase 5). See `docs/ROADMAP.md`.
 ## Local development
 
 ```sh
-make up     # kind cluster + server/client images + manifests + port-forwards
+make up     # kind cluster + server image + manifests + readiness check
 make down   # tear down the cluster, forwards, and logs
 ```
+
+### The Unity client
+
+`client-unity/unity` is the command line for the client. It resolves the
+editor from the project's own `ProjectVersion.txt` and the project path with
+`wslpath`, so neither the editor version nor the repo location is written down
+twice — and unlike `Unity -quit`, it fails on a compiler error instead of
+exiting 0 with "Aborting batchmode".
+
+```sh
+./client-unity/unity compile   # full compile (close the Editor first)
+./client-unity/unity typecheck # typecheck Assets/Game with the Editor still open
+./client-unity/unity build     # package a standalone player
+./client-unity/unity run 20    # run that player headless against the live server
+./client-unity/unity open      # launch the Editor
+./client-unity/unity where     # which editor, which project
+```
+
+The same commands are `make unity-compile`, `unity-build`, `unity-run`,
+`unity-scene`. `make unity-test` and `unity-codec` need no Editor at all: the
+`Sim`, `Net` and `GameCore` assemblies build headless from
+`client-unity/headless/`, which is what keeps C40 (sim conformance) and C41
+(codec parity) runnable in CI.
+
+To play in the Editor, press Play — `Boot.cs` builds the whole hierarchy at
+runtime from a `RuntimeInitializeOnLoadMethod`, so no scene setup is needed.
+It connects to `ws://127.0.0.1:18080/ws` unless `SA_SERVER_URL` or
+`-serverUrl` says otherwise, so bring the server up with `make up` first.
 
 ## Agent-first development
 
@@ -57,7 +83,7 @@ main session orchestrates; agents run in parallel on paths they own:
 |-------|-------|
 | `game` | Gameplay design → precise, implementable rules (GDD) |
 | `netcode` | Go server, simulation tick loop, network protocol |
-| `frontend` | Three.js client, 3D UI, prediction/interpolation |
+| `frontend` | Unity client, 3D UI, prediction/interpolation |
 | `art` | Low-poly asset pipeline (glTF, shaders, manifest) |
 | `infra` | kind, K8s manifests, Docker, Makefile |
 | `qa` | Verification against acceptance criteria, e2e tests |

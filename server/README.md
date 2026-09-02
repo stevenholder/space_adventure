@@ -14,7 +14,10 @@ go run ./cmd/server            # listen :8080, world seed 1337
 go run ./cmd/server -listen 127.0.0.1:8090 -seed 42
 ```
 
-- `GET /healthz` → `ok`
+- `GET /healthz` → `ok` (the k8s probe contract; kept as the cheapest
+  possible 200)
+- `GET /version` → the build id stamped in at link time, so a caller can ask
+  WHICH server it reached rather than only whether something answered
 - `GET /ws` → WebSocket gateway (browser clients connect same-origin; nginx
   proxies `/ws` to this port)
 

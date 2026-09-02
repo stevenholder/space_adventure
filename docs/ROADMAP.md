@@ -1,10 +1,57 @@
 # Roadmap
 
-Status: **Phases 1–3 complete** (C1–C25 verified on the deployed kind stack;
-`docs/QA-STATUS.md`). Next is **Phase 3.5 — rebuild the client in Unity as a
-native desktop build**, inserted 2026-08-26 before Phase 4, because Phase 4/5
-is where client work explodes and the Phase 1–3 client is the cheapest version
-of that port that will ever exist. Browser delivery is dropped.
+Status: **Phases 1–3 complete**, and both open Phase 2 criteria closed
+2026-08-27. C16's weapon clause landed as the `equipped` event. C14, re-pointed
+at a moving NPC, first went red — lag compensation rewound by RTT/2, which
+lands on the target's present position rather than the frame the client fired
+at, so a player shooting what their screen showed missed a moving body — and is
+now fixed by adopting the reference design the PROTOCOL already described:
+`rewind = staleness + RTT/2 + interp_delay`, with `fire.seq` finally used.
+Three defects surfaced on the way, all fixed: camp NPCs were invulnerable to
+gunfire, a `hit` event shipped with no body, and the TS client rendered remotes
+against local receive time. **One half of the C14 fix is not landed and cannot
+be here: `interp_delay` is now a client-binding contract, and the Unity client
+owes it at U13** (see that row). Verdicts and evidence: `docs/QA-STATUS.md`.
+
+**Phase 3.5 — rebuild the client in Unity as a native desktop build** was
+inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
+explodes and the Phase 1–3 client is the cheapest version of that port that
+will ever exist. Browser delivery is dropped.
+
+### Where Phase 3.5 stands (2026-09-02)
+
+The Unity client renders real art, and `client/` is gone.
+
+**Landed.** A runtime glTF asset pipeline: models live in `art/`, are named by
+the `asset` id the SERVER already sends for every entity and item, and are
+loaded by `Assets/Game/AssetRegistry.cs` from StreamingAssets — no prefabs, no
+Editor import, so C47 holds. `art/tools/import_pack.mjs` conforms downloaded
+CC0 models to this project (bakes colour to vertices, fits to game units, adds
+mount nodes, retargets animation clips). 18 assets, all Kenney CC0, recorded in
+`art/ATTRIBUTION.md`. Characters walk. The camp and range are visible and
+dressed from zone data over a new `props` message (0x0013). U18 retired the
+TypeScript client, with its harnesses ported to C# first.
+
+**Verified.** All eight acceptance criteria, C40–C47, are PASS as of the C43
+gate run on 2026-09-02 — `docs/QA-STATUS.md` has the per-criterion numbers and
+what the run surfaced (harness rot on the retired nginx path, a vsync-pinned
+frame rate misread as a frame budget problem, and U13's missing C#-path
+verification, all fixed). CI (`.github/workflows/ci.yml`) runs the
+editor-free gates on every commit.
+
+**Open for Phase 4, not blocking 3.5.**
+
+1. Ship and vehicle entities render as a loot crate: `EntityType.Ship` and
+   `Vehicle` have no entity def, which is correct until Phase 4/5 creates one.
+2. `vehicle.rover.v1` does not exist. Kenney's `rover` is already vendored.
+3. `t18` failed 1 of 7 once between harness runs sharing a live server, then
+   passed 5 straight; unreproduced. Watch it on the next sweep.
+
+**Two things to know before touching this.** The Unity Editor takes the
+project lock, so `unity compile` and `unity build` fail while it is open —
+`unity typecheck` works either way. And the kind cluster owns `:18080`: a
+`go run ./cmd/server` beside it fails to bind and exits unread, which is what
+`make check-server` now exists to catch.
 
 Phases 2–5 replaced the old M2/M3 ordering (ship first, combat later). Ships
 land last, after the game has NPCs, combat and a vehicle. Nothing spec'd for
@@ -164,7 +211,12 @@ sprinting, `0x04` dead, `0x08` firing; rest reserved. `pitch_q` is pitch in
 units of π/254 rad (visual only).
 
 `event_id` allocation: `0x0001` explosion (reserved), `0x0002` shot fired,
-`0x0003` hit, `0x0004` death, `0x0005` loot dropped.
+`0x0003` hit, `0x0004` death, `0x0005` loot dropped, `0x0006` `equipped`
+(Phase 3.5 — how a client learns what another player is holding; see C16).
+
+`input` gains a trailing `u8 mode` in Phase 3.5. Appended, not prepended, so
+every existing field keeps its offset; a 24-byte payload still reads as mode
+`0`, so the change needs no version flip and no lockstep client update.
 
 ---
 
@@ -194,7 +246,7 @@ actually parallel.
   terrain step).
 - `server/data/` schemas (`game` owns): `items.json`, `npcs.json`,
   `zones/range.json`. Server-owned and shipped to the client in `defs` — one
-  source of truth, no duplicated data files in `client/`.
+  source of truth, no duplicated data files in the client.
 - `art/manifest.json`: `weapon.pulse` (with `grip` and `muzzle` nodes),
   `npc.shopkeeper`, `prop.target`, `struct.range.*`.
 - **Storage contract** (`docs/ARCHITECTURE.md`, "Persistence"): `DATABASE_URL`
@@ -379,6 +431,36 @@ is the single largest thing Three.js was never going to give us.
 
 ### Wave 0 — contracts, main thread, before any dispatch
 
+0. **Settle two Phase 2 criteria that the 2026-08-26 verdict run found open**
+   (`docs/QA-STATUS.md` "Phase 2"), because both are wire or spec decisions and
+   this is the phase that opens the wire:
+   - **C16 — decided 2026-08-26: a new `equipped` event, `event_id 0x0006`.**
+     Nothing carried a player's equipped weapon, so no client could render
+     another player's gun. The fix reuses the existing event channel rather
+     than widening the entity row: a value that changes a few times a session
+     has no business costing bytes on every entity on every tick. Broadcast on
+     change, and replayed once per armed player at join so late joiners are
+     correct. **Landed 2026-08-27; `t19` is green on all three clauses.**
+   - **C14 — decided 2026-08-26: re-point it at a moving NPC.** It fires at a
+     *static* target, so the rewound position equals the live one and lag
+     compensation is a no-op; the criterion cannot tell a server with rewind
+     from one without. Phase 3's camp NPCs move. The harnesses are being
+     touched for the mode byte anyway, so this rides along with that work.
+
+     **Done and fixed 2026-08-27 (`test/t21-lagcomp-moving.mjs`).** The
+     re-pointed criterion went red — rewind was RTT/2, which reconstructs the
+     present rather than what the client saw — and is now
+     `staleness + RTT/2 + interp_delay`, the reference design, using the
+     `fire.seq` the PROTOCOL always specified and the code never read. The
+     stale-aim volley went 0/8 to 8/8, and the live-aim volley — the position
+     no real client can know — went 8/8 to 2/8. The `hit` event's own point
+     puts the resolved capsule 0.33 m from the axis the client aimed at,
+     inside the 0.35 m hitbox.
+     **`interp_delay` (0.1 s) is now a contract that binds the client**, and
+     the second half of the fix belongs to U13: remotes must be rendered at
+     `serverClock − interp_delay` against a synchronised clock, never at a
+     fixed offset behind local packet arrival. Nothing server-side can catch
+     a breach of that.
 1. **Land the Phase 4 input mode byte first, and do not update the TS client.**
    `input` gains its mode byte in `docs/PROTOCOL.md`, the Go server, and the
    harness. The TS client is being retired, so it is not a third end. The
@@ -397,7 +479,17 @@ is the single largest thing Three.js was never going to give us.
    - Assembly definitions split `Sim`, `Net`, `Game`. **`Sim` references
      `UnityEngine` nowhere** and must compile and test headless.
    - `.gitignore`: `Library/`, `Temp/`, `Logs/`, `Build/`, `*.csproj`, `*.sln`.
-4. **`Sim` carries its own math types**, mirroring `client/src/sim/types.ts` —
+3b. **The client's render clock is server-synced.** Remote entities are drawn
+   at `serverClock − interp_delay` (0.1 s, GDD "Lag compensation"), against a
+   clock estimated from the server's own, **never** at a fixed offset behind
+   whenever a packet arrived locally. The server rewinds shots by that exact
+   offset, so the two conventions differ by a whole one-way trip and a client
+   on the wrong one misses every moving target. The TS client had it wrong and
+   C14 caught it only at the wire level; no server-side test can catch it, so
+   U13 carries the obligation and `t21` is its check.
+
+4. **`Sim` carries its own math types**, originally mirroring the TypeScript
+   client's `sim/types.ts` (retired in U18; in git history) —
    not `UnityEngine.Vector3`. Normalize and lerp implementations differ between
    libraries and C5's bar is 1e-10 m.
 5. **C5 runs three-way during the transition** — Go / TS / C#. TS leaves the
@@ -408,23 +500,23 @@ is the single largest thing Three.js was never going to give us.
 | # | Agent | Task | File | Verify |
 |---|---|---|---|---|
 | U1 | main | Unity project skeleton, three asmdefs, gitignore | `client-unity/` | `Sim` builds headless, references no UnityEngine |
-| U2 | sonnet | Port math types (vec3, quat, basis) | `Sim/Types.cs` | unit test vs TS golden values |
+| U2 | sonnet | Port math types (vec3, quat, basis) | `Sim/Types.cs` | golden values in `unity-test` |
 | U3 | sonnet | Port cube-sphere terrain sampling | `Sim/Terrain.cs` | face/dir addressing golden values |
-| U4 | sonnet | Port deterministic RNG | `Sim/Rng.cs` | same sequence as `sim/rng.ts` |
-| U5 | sonnet | Port on-foot step rule table | `Sim/Step.cs` | trajectory diff vs TS |
-| U6 | sonnet | Port collider resolution | `Sim/Collide.cs` | parity vs t13 vectors |
-| U7 | main | Three-way conformance runner (Go/TS/C#) | `test/t18-csharp-conformance.mjs` | max dPos < 1e-10 m |
+| U4 | sonnet | Port deterministic RNG | `Sim/Rng.cs` | same sequence as the TS generator (golden values in `unity-test`) |
+| U5 | sonnet | Port on-foot step rule table | `Sim/Step.cs` | trajectory diff vs Go (C40, `t20`) |
+| U6 | sonnet | Port collider resolution | `Sim/Collide.cs` | `t13` diffs Go against C# over the shared scenarios |
+| U7 | main | Conformance runner (Go vs C#) | `test/t20-csharp-conformance.mjs` | max dPos < 1e-10 m; TS leg dropped with U18 |
 | U8 | sonnet | Little-endian binary reader/writer | `Net/Wire.cs` | round-trip fuzz |
-| U9 | sonnet | v2 message codecs, all opcodes | `Net/Messages.cs` | byte-identical vs t12 vectors |
+| U9 | sonnet | v2 message codecs, all opcodes | `Net/Messages.cs` | byte-identical vs the Go vectors (`t22`) |
 | U10 | sonnet | WebSocket transport, hello/join, reconnect | `Net/Client.cs` | joins deployed server, decodes snapshot |
-| U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Prediction.cs` | same corrections as TS on one input trace |
+| U11 | main | Prediction + replay reconciliation from `ack_seq` | `Game/Core/Prediction.cs` | `t6` p95 clears to wire precision (~7e-06 m) with 0 snap-backs — see C42 |
 | U12 | sonnet | Terrain mesh from u16 radius grids | `Game/TerrainMesh.cs` | mesh matches sampled radii |
-| U13 | sonnet | Entity views, interpolation, nametags | `Game/Entities.cs` | two clients agree (C24, strengthened) |
+| U13 | sonnet | Entity views, interpolation, nametags | `Game/Entities.cs` | two clients agree (C24, strengthened); `t21` stale volley stays green |
 | U14 | sonnet | FPS controller + Input System, emits mode byte | `Game/Fps.cs` | walks, strafes correct handedness |
 | U15 | sonnet | HUD: vitals, hotbar, shop, interact prompt | `Game/UI/` | buy flow completes |
 | U16 | sonnet | Weapon, projectiles, hit feedback | `Game/Combat.cs` | shot_fired renders |
 | U17 | **main** | **Wire it into the frame loop** | `Game/Boot.cs` | end-to-end join → walk → shoot |
-| U18 | main | Retire `client/`, drop TS from C5, update Makefile + deploy | — | C43 green |
+| U18 | main | Retire `client/`, drop TS from C5, update Makefile + deploy | — | **done** — harnesses ported to C# first (t3, t6, t13), t12 superseded by t22 |
 
 U17 is a task because Phase 2 and Phase 3 both shipped fully-built subsystems
 that nothing referenced. That failure mode is not going to be fixed by hoping.
@@ -434,9 +526,21 @@ that nothing referenced. That failure mode is not going to be fixed by hoping.
 - **C40 Sim conformance.** The C# sim matches Go on the C5 trajectory route
   within 1e-10 m, running headless with no UnityEngine reference.
 - **C41 Codec parity.** C# encodes and decodes every v2 message byte-identically
-  to the Go and Node implementations, against the t12 vectors.
-- **C42 Prediction.** Replay reconciliation from `ack_seq`, never blending, and
-  the same corrections as the TS client on an identical input trace.
+  to the Go implementation, against Go's own vectors (`t22`). The Node half
+  went with the TypeScript client in U18; `t22` asserts the same bytes t12 did.
+- **C42 Prediction.** Replay reconciliation from `ack_seq`, never blending.
+  Was defined as "the same corrections as the TS client on an identical input
+  trace", which stopped being a definition when U18 retired that client —
+  a criterion whose reference implementation does not exist cannot be run.
+
+  Stated as the observable property instead, which is stronger than deferring
+  to another implementation: after reconciling ack M the client has snapped to
+  the server's state and replayed what is still unacked, so its belief is
+  about tick `M + pending` and must agree with the server's own state at that
+  tick to wire precision. Blending cannot reach that — it leaves a persistent
+  residual toward the stale anchor, which is the whole difference the
+  criterion exists to catch. Evidence: `t6` measures exactly this pairing and
+  clears to ~7e-06 m, plus the replay/reconcile checks in `make unity-test`.
 - **C43 Regression.** C1–C25 re-run against the Unity client on the deployed
   kind stack. All pass. This is the phase gate.
 - **C44 Headless CI.** `Sim` and `Net` build and test with no Unity Editor, in
@@ -492,19 +596,19 @@ also have to solve flight. Phase 5 then reuses it.
 | # | Agent | Task | File | Verify |
 |---|---|---|---|---|
 | 1 | `netcode` | `board`/`disembark`/`seat_result` codec | `server/internal/protocol/seats.go` | `go test ./internal/protocol` |
-| 2 | `frontend` | Same, TS side | `client/src/net/seats.ts` | `npm run codec-smoke` |
+| 2 | `frontend` | Same, C# side (opcodes `0x000B`–`0x000D` are already declared in `Messages.cs`) | `client-unity/Assets/Net/Messages.cs` | `make unity-codec` (extend `t22` vectors) |
 | 3 | `art` | `vehicle.rover.v1` GLB with seat nodes | `art/tools/gen_rover.py` | `render_check.py` |
 | 4 | `game` | Ground drive rule table + rover seat table | `docs/GDD.md` | review |
 | 5 | `netcode` | Rover entity: state, deterministic spawn, snapshot row | `server/internal/sim/vehicle.go` | `go test ./internal/sim` |
 | 6 | `netcode` | `stepRover`: drive model + terrain following | `server/internal/sim/drive.go` | `go test ./internal/sim` |
-| 7 | `frontend` | `stepRover`, mirrored | `client/src/sim/drive.ts` | trajectory diff |
+| 7 | `frontend` | `stepRover`, mirrored | `client-unity/Assets/Sim/` (new `Drive.cs`, engine-free) | `make unity-conformance` (trajectory diff) |
 | 8 | `netcode` | Board/disembark validation, occupancy, control repoint | `server/internal/server/seats.go` | `go test ./internal/server` |
 | 9 | `netcode` | Seated body composition (ship transform × seat offset) | `server/internal/sim/compose.go` | `go test ./internal/sim` |
 | 10 | `netcode` | Driver disconnect: coast, stop, seat freed | `server/internal/server/handoff.go` | `go test ./internal/server` |
-| 11 | `frontend` | Rover rendering + camera mount at the seat node | `client/src/scene/vehicle.ts` | `npm run build` |
-| 12 | `frontend` | Input mode switch driven by snapshot occupancy | `client/src/input/controls.ts` | `npm run build` |
-| 13 | `frontend` | Rover prediction + replay | `client/src/net/predictor.ts` | `npm run build` |
-| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client/src/hud/vehicle.ts` | `npm run build` |
+| 11 | `frontend` | Rover rendering + camera mount at the seat node | `client-unity/Assets/Game/Vehicle.cs` | `make unity-typecheck` |
+| 12 | `frontend` | Input mode switch driven by snapshot occupancy | `client-unity/Assets/Game/Boot.cs` | `make unity-typecheck` |
+| 13 | `frontend` | Rover prediction + replay | `client-unity/Assets/Game/Core/Prediction.cs` | `make unity-test` |
+| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client-unity/Assets/Game/Hud.cs`, `Interact.cs` | `make unity-typecheck` |
 | 15 | `netcode` | Rover ownership: purchase via `cmd`, persisted, spawn/despawn | `server/internal/sim/ownership.go` | `go test ./internal/sim` |
 | 16 | `qa` | e2e harness against C26–C32 | `test/t13-rover.mjs` | `node test/t13-rover.mjs` |
 
@@ -521,7 +625,7 @@ Structurally the old M2 criteria, retargeted at a ground vehicle:
   0, the other result 1, and the snapshot shows one occupant.
 - **C29 Refusals.** Boarding from beyond `board_dist` → result 2; disembarking
   while not seated → result 3.
-- **C30 Drive conformance.** One input script through the Go and TS sims:
+- **C30 Drive conformance.** One input script through the Go and C# sims:
   per-tick pos/quat/vel deviation ≤ 1e-6 over ≥ 1000 ticks, and conformance to
   the GDD drive table within 5%.
 - **C31 Passengers produce no vehicle input.** A passenger's movement input
@@ -563,15 +667,15 @@ ship is a moving-reference-frame problem, and it is not part of this phase.
 | 1 | `game` | Space regime + landing rules | `docs/GDD.md` | review |
 | 2 | `netcode` | Ship entity + deterministic spawn on the pad | `server/internal/sim/ship.go` | `go test ./internal/sim` |
 | 3 | `netcode` | `stepShip` flight model (Go) | `server/internal/sim/flight.go` | `go test ./internal/sim` |
-| 4 | `frontend` | `stepShip`, mirrored | `client/src/sim/flight.ts` | trajectory diff |
+| 4 | `frontend` | `stepShip`, mirrored | `client-unity/Assets/Sim/` (new `Flight.cs`, engine-free) | `make unity-conformance` (trajectory diff) |
 | 5 | `netcode` | Regime switch: gravity/drag off above the boundary, hysteresis | `server/internal/sim/regime.go` | `go test ./internal/sim` |
-| 6 | `frontend` | Regime switch, mirrored | `client/src/sim/regime.ts` | trajectory diff |
+| 6 | `frontend` | Regime switch, mirrored | `client-unity/Assets/Sim/` | `make unity-conformance` (trajectory diff) |
 | 7 | `netcode` | Ship purchase + persistent ownership + spawn on request | `server/internal/sim/ownership.go` | `go test ./internal/sim` |
 | 8 | `netcode` | Landing: contact detection, settle, grounded state | `server/internal/sim/landing.go` | `go test ./internal/sim` |
-| 9 | `frontend` | Ship rendering + walk-in interior + pilot camera mount | `client/src/scene/ship.ts` | `npm run build` |
-| 10 | `frontend` | Pilot input mapping + ship prediction/replay | `client/src/input/pilot.ts` | `npm run build` |
-| 11 | `frontend` | Space visuals: starfield, planet from outside, horizon fade | `client/src/scene/space.ts` | `npm run build` |
-| 12 | `frontend` | Flight HUD: speed, altitude, attitude, regime | `client/src/hud/flight.ts` | `npm run build` |
+| 9 | `frontend` | Ship rendering + walk-in interior + pilot camera mount | `client-unity/Assets/Game/Ship.cs` | `make unity-typecheck` |
+| 10 | `frontend` | Pilot input mapping + ship prediction/replay | `client-unity/Assets/Game/Boot.cs`, `Core/Prediction.cs` | `make unity-test` |
+| 11 | `frontend` | Space visuals: starfield, planet from outside, horizon fade | `client-unity/Assets/Game/Sky.cs` | `make unity-typecheck` |
+| 12 | `frontend` | Flight HUD: speed, altitude, attitude, regime | `client-unity/Assets/Game/Hud.cs` | `make unity-typecheck` |
 | 13 | `art` | Cockpit polish pass on `ship.v1` | `art/tools/gen_ship.py` | `render_check.py` |
 | 14 | `qa` | e2e harness against C33–C39 | `test/t14-flight.mjs` | `node test/t14-flight.mjs` |
 

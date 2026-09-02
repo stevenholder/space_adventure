@@ -1,173 +1,275 @@
 {
-  "$comment": "Hostile encampment. Contract: docs/GDD.md 'Phase 3 - NPC combat at an encampment' and 'Static colliders' for the authoring frame. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; yaw in degrees about +y, 0 = facing +z. SITE: chosen by sweeping the sphere against ALL 19 world features - spawn, the range zone, the 6 landmarks AND the 11 craters - for maximum clearance (142 m, against a 44 m flatten reach). The first site cleared landmarks but not craters and sat 39 m from one, levelling it: t9 read 10 of 11 craters confirmed in the field. The range zone made the same mistake against a landmark. Anything the terrain audit checks for has to be in the avoid set, not just the things you remembered.",
-  "version": 1,
-  "id": "camp",
-  "origin_dir": [
-    0.4020203,
-    -0.4978333,
-    -0.7684671
-  ],
-  "flatten_radius": 30.0,
-  "flatten_falloff": 12.0,
-  "colliders": [
-    {
-      "$note": "perimeter wall, north",
-      "kind": "box",
-      "pos": [
-        0.0,
-        1.5,
-        14.0
-      ],
-      "half": [
-        16.0,
-        1.5,
-        0.4
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "perimeter wall, south",
-      "kind": "box",
-      "pos": [
-        0.0,
-        1.5,
-        -14.0
-      ],
-      "half": [
-        16.0,
-        1.5,
-        0.4
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "perimeter wall, east",
-      "kind": "box",
-      "pos": [
-        15.6,
-        1.5,
-        0.0
-      ],
-      "half": [
-        0.4,
-        1.5,
-        14.0
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "west wall, north half \u2014 the gap between these two is the entrance",
-      "kind": "box",
-      "pos": [
-        -15.6,
-        1.5,
-        8.0
-      ],
-      "half": [
-        0.4,
-        1.5,
-        6.0
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "west wall, south half",
-      "kind": "box",
-      "pos": [
-        -15.6,
-        1.5,
-        -8.0
-      ],
-      "half": [
-        0.4,
-        1.5,
-        6.0
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "inner cover block",
-      "kind": "box",
-      "pos": [
-        3.0,
-        1.0,
-        2.0
-      ],
-      "half": [
-        2.0,
-        1.0,
-        2.0
-      ],
-      "yaw": 30.0
-    },
-    {
-      "$note": "cover post \u2014 the sphere collider path",
-      "kind": "sphere",
-      "pos": [
-        -6.0,
-        1.0,
-        -5.0
-      ],
-      "half": [
-        1.2,
-        0.0,
-        0.0
-      ],
-      "yaw": 0.0
-    }
-  ],
-  "entities": [
-    {
-      "$note": "gunners hold the back, behind cover",
-      "type": "npc",
-      "def": "npc.gunner",
-      "pos": [
-        10.0,
-        0.0,
-        6.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "npc",
-      "def": "npc.gunner",
-      "pos": [
-        10.0,
-        0.0,
-        -6.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "$note": "grunts patrol the approach and close first",
-      "type": "npc",
-      "def": "npc.grunt",
-      "pos": [
-        -4.0,
-        0.0,
-        4.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "npc",
-      "def": "npc.grunt",
-      "pos": [
-        -4.0,
-        0.0,
-        -4.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "npc",
-      "def": "npc.grunt",
-      "pos": [
-        2.0,
-        0.0,
-        -9.0
-      ],
-      "yaw": 180.0
-    }
-  ]
+ "$comment": "Hostile encampment. Contract: docs/GDD.md 'Phase 3 - NPC combat at an encampment' and 'Static colliders' for the authoring frame. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; yaw in degrees about +y, 0 = facing +z. SITE: chosen by sweeping the sphere against ALL 19 world features - spawn, the range zone, the 6 landmarks AND the 11 craters - for maximum clearance (142 m, against a 44 m flatten reach). The first site cleared landmarks but not craters and sat 39 m from one, levelling it: t9 read 10 of 11 craters confirmed in the field. The range zone made the same mistake against a landmark. Anything the terrain audit checks for has to be in the avoid set, not just the things you remembered.",
+ "version": 1,
+ "id": "camp",
+ "origin_dir": [
+  0.4020203,
+  -0.4978333,
+  -0.7684671
+ ],
+ "flatten_radius": 30.0,
+ "flatten_falloff": 12.0,
+ "colliders": [
+  {
+   "$note": "perimeter wall, north",
+   "kind": "box",
+   "pos": [
+    0.0,
+    1.5,
+    14.0
+   ],
+   "half": [
+    16.0,
+    1.5,
+    0.4
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "perimeter wall, south",
+   "kind": "box",
+   "pos": [
+    0.0,
+    1.5,
+    -14.0
+   ],
+   "half": [
+    16.0,
+    1.5,
+    0.4
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "perimeter wall, east",
+   "kind": "box",
+   "pos": [
+    15.6,
+    1.5,
+    0.0
+   ],
+   "half": [
+    0.4,
+    1.5,
+    14.0
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "west wall, north half \u2014 the gap between these two is the entrance",
+   "kind": "box",
+   "pos": [
+    -15.6,
+    1.5,
+    8.0
+   ],
+   "half": [
+    0.4,
+    1.5,
+    6.0
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "west wall, south half",
+   "kind": "box",
+   "pos": [
+    -15.6,
+    1.5,
+    -8.0
+   ],
+   "half": [
+    0.4,
+    1.5,
+    6.0
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "inner cover block",
+   "kind": "box",
+   "pos": [
+    3.0,
+    1.0,
+    2.0
+   ],
+   "half": [
+    2.0,
+    1.0,
+    2.0
+   ],
+   "yaw": 30.0
+  },
+  {
+   "$note": "cover post \u2014 the sphere collider path",
+   "kind": "sphere",
+   "pos": [
+    -6.0,
+    1.0,
+    -5.0
+   ],
+   "half": [
+    1.2,
+    0.0,
+    0.0
+   ],
+   "yaw": 0.0
+  }
+ ],
+ "entities": [
+  {
+   "$note": "gunners hold the back, behind cover",
+   "type": "npc",
+   "def": "npc.gunner",
+   "pos": [
+    10.0,
+    0.0,
+    6.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "npc",
+   "def": "npc.gunner",
+   "pos": [
+    10.0,
+    0.0,
+    -6.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "$note": "grunts patrol the approach and close first",
+   "type": "npc",
+   "def": "npc.grunt",
+   "pos": [
+    -4.0,
+    0.0,
+    4.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "npc",
+   "def": "npc.grunt",
+   "pos": [
+    -4.0,
+    0.0,
+    -4.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "npc",
+   "def": "npc.grunt",
+   "pos": [
+    2.0,
+    0.0,
+    -9.0
+   ],
+   "yaw": 180.0
+  }
+ ],
+ "$props_comment": "Camp dressing. VISUAL ONLY: props carry no collider and the server does not simulate them -- walk straight through one. They exist because a walled enclosure with five hostiles and bare ground in between reads as a test fixture rather than as somewhere anyone lives. Authored here rather than scattered client-side because the `colliders` message is world-space with no zone identity, so a client cannot tell this camp's walls from the range's and has nothing to place 'inside the camp' against. Same local frame as the colliders above: +x east, +y height above the surface, +z north, yaw degrees about +y. Kept clear of the five NPC spawns, the inner cover block at (3,2), the cover post at (-6,-5) and the west entrance gap at z in [-2,2] -- a barrel in the doorway is a barrel someone walks into and cannot push.",
+ "props": [
+  {
+   "asset": "prop.barrels",
+   "pos": [
+    12.6,
+    0.0,
+    11.4
+   ],
+   "yaw": 20.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    11.2,
+    0.0,
+    12.3
+   ],
+   "yaw": -35.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    13.8,
+    0.0,
+    12.6
+   ],
+   "yaw": 70.0
+  },
+  {
+   "asset": "prop.generator",
+   "pos": [
+    -11.5,
+    0.0,
+    10.5
+   ],
+   "yaw": 115.0
+  },
+  {
+   "asset": "prop.dish",
+   "pos": [
+    -13.0,
+    0.0,
+    6.5
+   ],
+   "yaw": 140.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    13.2,
+    0.0,
+    -11.0
+   ],
+   "yaw": 10.0
+  },
+  {
+   "asset": "prop.barrels",
+   "pos": [
+    12.0,
+    0.0,
+    -12.2
+   ],
+   "yaw": -60.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    -1.5,
+    0.0,
+    -12.4
+   ],
+   "yaw": 45.0
+  },
+  {
+   "asset": "prop.bones",
+   "pos": [
+    -8.5,
+    0.0,
+    -11.5
+   ],
+   "yaw": -20.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    -13.4,
+    0.0,
+    4.2
+   ],
+   "yaw": -15.0
+  },
+  {
+   "asset": "prop.bones",
+   "pos": [
+    6.5,
+    0.0,
+    8.0
+   ],
+   "yaw": 95.0
+  }
+ ]
 }

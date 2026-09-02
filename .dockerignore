@@ -4,7 +4,6 @@
 docs
 test
 node_modules
-client/dist
 art
 server/server
 deploy/.logs

@@ -75,7 +75,10 @@ func (c *wsClient) nextOf(t *testing.T, want uint16) []byte {
 func newTestServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	field := terrain.Generate(1337)
-	world := New(field, 1337)
+	world, err := New(field, 1337)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", world.HandleWS)
 	ts := httptest.NewServer(mux)

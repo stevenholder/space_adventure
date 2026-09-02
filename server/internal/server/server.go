@@ -54,6 +54,7 @@ type Server struct {
 	terrainF   []byte // pre-encoded terrain frame, sent on every join
 	defsF      []byte // pre-encoded defs frame, built once at startup
 	collidersF []byte // pre-encoded colliders frame, built once at startup
+	propsF     []byte // pre-encoded props frame, built once at startup
 	colliders  []protocol.Collider
 
 	reg   *defs.Registry
@@ -107,15 +108,14 @@ type Server struct {
 // means (docs/PROTOCOL.md, "Identity token"). Call before serving.
 func (s *Server) SetStore(st *store.Store) { s.store = st }
 
-func New(t *terrain.Field, seed uint64) *Server {
+func New(t *terrain.Field, seed uint64) (*Server, error) {
 	reg, err := defs.Load()
 	if err != nil {
 		// The content registry is embedded, repo-controlled data (server/data).
-		// A failure here is a broken build, not a runtime condition — same
-		// judgment call defs.ComposeZone's own doc comment makes for a zone
-		// that will not compose. New has no error return (its signature is
-		// shared with cmd/server/main.go), so this is the load-bearing check.
-		panic(fmt.Errorf("server: load defs: %w", err))
+		// A failure here is a broken build, not a runtime condition — but a
+		// content typo should die with a message at startup, not a stack
+		// trace, so it surfaces as an error rather than a panic.
+		return nil, fmt.Errorf("load defs: %w", err)
 	}
 
 	// Zone iteration order must be deterministic (world entity ids are
@@ -135,6 +135,7 @@ func New(t *terrain.Field, seed uint64) *Server {
 	world := sim.NewWorld()
 	var worldEnts []*sim.Ent
 	var allColliders []protocol.Collider
+	var allProps []protocol.Prop
 	// World entity ids are drawn from a separate range above where player
 	// ids (Server.nextID, starting at 1) will ever reach in a single run, so
 	// the two id spaces never collide and player ids keep starting at 1
@@ -142,11 +143,12 @@ func New(t *terrain.Field, seed uint64) *Server {
 	worldID := uint32(worldEntityIDBase)
 	for _, id := range zoneIDs {
 		z := reg.Zones[id]
-		cols, placements, err := defs.ComposeZone(z, radiusFn)
+		cols, placements, props, err := defs.ComposeZone(z, radiusFn)
 		if err != nil {
-			panic(fmt.Errorf("server: compose zone %q: %w", id, err))
+			return nil, fmt.Errorf("compose zone %q: %w", id, err)
 		}
 		allColliders = append(allColliders, cols...)
+		allProps = append(allProps, props...)
 		for _, p := range placements {
 			worldID++
 			kind := sim.EntityKind(protocol.EntityTypeTarget)
@@ -156,11 +158,15 @@ func New(t *terrain.Field, seed uint64) *Server {
 				// sim.NPCState carries the post and respawn timer the sim
 				// owns; the AI runner's own state lives separately in
 				// Server.npcAI, split by which package owns the rule.
-				data = &sim.NPCState{
-					Archetype: p.Def,
-					Post:      p.Pos,
-					PostQuat:  p.Quat,
-					MaxHealth: reg.NPCs[p.Def].MaxHealth,
+				//
+				// Whether a placement gets that state at all is one rule, and
+				// it lives in sim.CombatStateFor — this loop is a second
+				// implementation of sim.SpawnZoneNPCs, and when they disagreed
+				// it was this one that ran (see CombatStateFor). Checking for
+				// nil rather than assigning straight through is required: a
+				// typed nil in an interface is not a nil interface.
+				if st := sim.CombatStateFor(p.Def, reg.NPCs[p.Def], p.Pos, p.Quat); st != nil {
+					data = st
 				}
 			}
 			ent := &sim.Ent{
@@ -187,6 +193,12 @@ func New(t *terrain.Field, seed uint64) *Server {
 		seed:    seed,
 		tickHz:  sim.TickHz,
 		upgrader: websocket.Upgrader{
+			// Known deferral: any Origin is accepted. Fine while the only
+			// clients are the packaged build and the test harnesses against a
+			// kind-local cluster — and the same trust posture as the identity
+			// token (docs/PROTOCOL.md "Identity token": anyone who has it IS
+			// that player). Both must change together before any public
+			// exposure.
 			CheckOrigin: func(*http.Request) bool { return true },
 		},
 		clients:   make(map[uint32]*client),
@@ -213,8 +225,15 @@ func New(t *terrain.Field, seed uint64) *Server {
 	s.terrainF = frame(protocol.MsgTerrain, t.Encode())
 	s.defsF = protocol.EncodeDefs(protocol.Defs{Data: reg.Payload})
 	s.collidersF = protocol.EncodeColliders(protocol.Colliders{List: allColliders})
+	// Zone dressing. Visual only and pre-encoded once, exactly like the
+	// colliders it sits among -- a client that never decodes this still agrees
+	// with the server about everything that can be walked into or shot.
+	if len(allProps) > protocol.PropMax {
+		return nil, fmt.Errorf("%d props exceeds PropMax %d", len(allProps), protocol.PropMax)
+	}
+	s.propsF = protocol.EncodeProps(protocol.Props{List: allProps})
 	s.snapPool.New = func() any { return []byte(nil) }
-	return s
+	return s, nil
 }
 
 // frame prepends the 2-byte little-endian message type to payload.
@@ -304,6 +323,7 @@ func (s *Server) tick() {
 	s.list = s.list[:0]
 	for _, c := range s.clients {
 		c.step(s.terrain, s.colliders)
+		c.recordCmdTick(tick)
 		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		s.list = append(s.list, c)
 	}
@@ -484,6 +504,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	c.send(msg{data: s.terrainF})
 	c.send(msg{data: s.defsF})
 	c.send(msg{data: s.collidersF})
+	c.send(msg{data: s.propsF})
 	for _, m := range others {
 		c.send(m)
 	}
@@ -498,6 +519,10 @@ func (s *Server) join(c *client, h protocol.Hello) {
 		}
 	}
 	s.mu.Unlock()
+
+	// After publishing, so every client that must hear the joiner's weapon
+	// is already in s.clients.
+	s.syncEquipped(c)
 }
 
 // leave removes c's entity from the world and tells the remaining clients.
@@ -532,7 +557,9 @@ func (s *Server) leave(c *client) {
 // identity.go's Mutate doc comment calls for.
 func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	var result protocol.CmdResult
+	var before, after string
 	c.ident.Mutate(func(p *store.Player) {
+		before = p.Equipped[slotPrimary]
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
 			Player:  p,
 			Reg:     s.reg,
@@ -540,9 +567,86 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			Up:      terrain.Normalize(c.entity.State.Pos),
 			Look:    c.lookDir(),
 			FindNPC: s.findNPC,
+			Ent:     c.entity,
 		})
+		after = p.Equipped[slotPrimary]
 	})
+	// The primary slot is on no entity row, so a change reaches the other
+	// clients only as an `equipped` event (PROTOCOL.md event_id 0x0006).
+	// Broadcast outside Mutate: the cmd path takes the identity lock and then
+	// s.mu (handleCmd -> findNPC), so taking them the other way round here
+	// would invert the order.
+	if after != before {
+		f := equippedFrame(c.entity.ID, after)
+		s.mu.Lock()
+		s.broadcast(f)
+		s.mu.Unlock()
+	}
 	return result
+}
+
+// slotPrimary is the equipment slot the `equipped` event reports. Only the
+// slot that is visible in another player's hands goes on the wire.
+const slotPrimary = "primary"
+
+// equippedFrame renders the `equipped` event for a player's primary slot:
+// entity_id is the player, data is the item id as UTF-8, empty for "nothing
+// equipped" (PROTOCOL.md event_id 0x0006).
+func equippedFrame(entityID uint32, item string) []byte {
+	return protocol.EncodeEvent(protocol.Event{
+		EntityID: entityID,
+		EventID:  protocol.EventEquipped,
+		Data:     []byte(item),
+	})
+}
+
+// syncEquipped brings a joining client and the clients already in the world
+// into agreement about who is holding what: one `equipped` event per armed
+// player replayed to the joiner, and the joiner's own weapon announced to
+// everyone else (a reconnecting player arrives already armed, off their
+// stored row).
+//
+// The lock dance is deliberate. Reading an identity takes its mutex, and the
+// cmd path already takes that mutex before s.mu, so s.mu is released before
+// any Snapshot call and retaken to send.
+func (s *Server) syncEquipped(c *client) {
+	s.mu.Lock()
+	peers := make([]*client, 0, len(s.clients))
+	for _, oc := range s.clients {
+		if oc != c {
+			peers = append(peers, oc)
+		}
+	}
+	s.mu.Unlock()
+
+	frames := make([][]byte, 0, len(peers))
+	for _, oc := range peers {
+		if item := oc.ident.Snapshot().Equipped[slotPrimary]; item != "" {
+			frames = append(frames, equippedFrame(oc.entity.ID, item))
+		}
+	}
+	self := c.ident.Snapshot().Equipped[slotPrimary]
+
+	for _, f := range frames {
+		c.send(msg{data: f})
+	}
+	if self == "" {
+		return
+	}
+	f := equippedFrame(c.entity.ID, self)
+
+	// To the joiner as well as to the peers. A player whose stored row
+	// already holds a weapon is told about everyone else's and nothing about
+	// their own, so they reconnect with empty hands and no way to find out —
+	// re-equipping the same item changes nothing, so it broadcasts nothing
+	// either. Every client learns about every armed player, including itself.
+	c.send(msg{data: f})
+
+	s.mu.Lock()
+	for _, oc := range peers {
+		oc.send(msg{data: f})
+	}
+	s.mu.Unlock()
 }
 
 // findNPC looks up a shop NPC's archetype and world position by entity id,
@@ -587,7 +691,7 @@ func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
 // follows a tick later from sim.StepTarget's own health check, reused
 // rather than duplicated here).
 func (s *Server) fire(c *client, f protocol.Fire) {
-	primary := c.ident.Snapshot().Equipped["primary"]
+	primary := c.ident.Snapshot().Equipped[slotPrimary]
 	wp, ok := s.weaponFor(primary)
 	if !ok {
 		return // nothing equipped, or an unknown item: drop the shot
@@ -619,7 +723,7 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 		return // empty magazine: dropped
 	}
 
-	rewindTicks := c.rewindTicks()
+	rewindTicks := c.rewindTicks(tick, f.Seq)
 	rewindTick := tick - uint32(rewindTicks)
 	// Early-out before spending a round: ResolveShot also needs this sample,
 	// but a shot it cannot resolve should not cost the player ammunition.

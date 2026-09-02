@@ -2,6 +2,8 @@
 // "Phase 3 — NPC combat at an encampment").
 package ai
 
+import "space-adventure/server/internal/terrain"
+
 // RangedState is one gunner's shot timer. Same shape as MeleeState by
 // design: a ranged attack is the same windup/cadence machine as a melee
 // swing, it just resolves to a projectile instead of direct damage.
@@ -24,7 +26,7 @@ type Shot struct {
 // ground immediately and looks like the gunner is shooting its own boots.
 // Line of sight is likewise an eye-to-eye ray (GDD "Line of sight"), so the
 // aim point uses the same offset.
-const eyeHeight = 1.7
+const eyeHeight = terrain.EyeHeightMeters
 
 // StepRanged advances one gunner by a tick. It returns the projectile to
 // spawn this tick, or a zero Shot. Mirrors StepMelee's (melee.go)

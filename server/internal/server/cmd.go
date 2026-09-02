@@ -36,12 +36,11 @@ const (
 // server's own positions — a client's own check is a UI affordance only.
 const interactDist = 3.0
 
-// eyeHeightMeters is eye_height (GDD "M1 on-foot movement" rule table),
-// duplicated locally the same way internal/sim/combat.go and
-// internal/terrain/generate.go do — a server-authoritative eye position
-// must never come from the client, and re-deriving it here from a
-// registry would be one more place a bad def value could bite.
-const eyeHeightMeters = 1.7
+// eyeHeightMeters is terrain.EyeHeightMeters — one definition, aliased so
+// call sites read locally. A server-authoritative eye position must never
+// come from the client, and re-deriving it from a registry would be one
+// more place a bad def value could bite.
+const eyeHeightMeters = terrain.EyeHeightMeters
 
 // interactCosMin is cos(interact_cone), interact_cone = 20 deg half-angle.
 var interactCosMin = math.Cos(20.0 * math.Pi / 180)
@@ -83,6 +82,15 @@ type cmdWorld struct {
 	Up      sim.Vec
 	Look    sim.Vec
 	FindNPC func(entityID uint32) (npc defs.NPC, pos sim.Vec, ok bool)
+
+	// Ent is the requester's own server-side entity, for the rounds
+	// currently in the magazine.
+	//
+	// The magazine lives on the connection rather than on the stored player
+	// row: it is per-life state, not something to persist. It is only ever
+	// touched by this connection's reader goroutine — `fire` and this
+	// handler are both dispatched from it — so it needs no lock of its own.
+	Ent *entity
 }
 
 // inRange re-validates interact_dist and interact_cone (GDD "Interaction")
@@ -202,10 +210,44 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		}))
 
 	case protocol.OpReload:
-		// Per-weapon magazine/reserve state has not landed on store.Player
-		// yet (a later wave item); until it does, reload is routed but
-		// reports an empty magazine rather than fabricating ammo.
-		return reply(protocol.StatusOK, encodeJSON(map[string]any{"magazine": 0, "reserve": 0}))
+		// Moves carried ammunition into the magazine. Until this landed,
+		// `reload` was routed but did nothing, so a player was permanently
+		// dry after thirty shots — the only way to get rounds back was to
+		// re-equip, because equipping is what resets the magazine.
+		if w.Ent == nil {
+			return refuse("refused")
+		}
+		weapon := w.Player.Equipped[slotPrimary]
+		def, ok := w.Reg.Items[weapon]
+		if !ok || def.Weapon == nil {
+			return refuse(sim.ReasonNotOwned)
+		}
+
+		capacity := def.Weapon.Magazine
+		if w.Ent.Magazine >= capacity {
+			return reply(protocol.StatusOK, encodeJSON(map[string]any{
+				"magazine": w.Ent.Magazine,
+				"reserve":  sim.CountItem(w.Player, def.Weapon.AmmoItem),
+			}))
+		}
+
+		reserve := sim.CountItem(w.Player, def.Weapon.AmmoItem)
+		take := capacity - w.Ent.Magazine
+		if take > reserve {
+			take = reserve
+		}
+		if take <= 0 {
+			return refuse("no_ammo")
+		}
+		if err := sim.TakeItem(w.Player, def.Weapon.AmmoItem, take); err != nil {
+			return refuse("refused")
+		}
+		w.Ent.Magazine += take
+
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"magazine": w.Ent.Magazine,
+			"reserve":  reserve - take,
+		}))
 
 	default:
 		return reply(protocol.StatusUnknownOpcode, nil)

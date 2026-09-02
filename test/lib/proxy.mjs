@@ -3,7 +3,11 @@
  * direction (100 ms RTT). QA harness for criterion 6 (docs/ROADMAP.md):
  * prediction quality under injected network latency.
  *
- *   node test/lib/proxy.mjs <listenPort> <targetHost> <targetPort>
+ *   node test/lib/proxy.mjs <listenPort> <targetHost> <targetPort> [delayMs]
+ *
+ * delayMs is the ONE-WAY injection and defaults to 50 (100 ms RTT, C6's
+ * figure). t21 raises it: lag compensation rewinds by RTT/2, so the rewind
+ * window only exceeds an NPC's own hitbox once the RTT is a few hundred ms.
  *
  * Transparency contract (locked by the C6 method):
  *   - byte-identical frame forwarding: each WebSocket frame is passed
@@ -21,11 +25,12 @@ import net from 'node:net'
 const listenPort = Number(process.argv[2])
 const targetHost = process.argv[3]
 const targetPort = Number(process.argv[4])
-if (!listenPort || !targetHost || !targetPort) {
-  console.error('usage: node test/lib/proxy.mjs <listenPort> <targetHost> <targetPort>')
+const delayArg = process.argv[5] === undefined ? 50 : Number(process.argv[5])
+if (!listenPort || !targetHost || !targetPort || !Number.isFinite(delayArg) || delayArg < 0) {
+  console.error('usage: node test/lib/proxy.mjs <listenPort> <targetHost> <targetPort> [delayMs]')
   process.exit(2)
 }
-const DELAY_MS = 50 // one-way injection; 100 ms RTT
+const DELAY_MS = delayArg // one-way injection; RTT is twice this
 
 const server = net.createServer((cli) => {
   const t0 = Date.now()

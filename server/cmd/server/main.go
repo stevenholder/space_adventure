@@ -27,6 +27,20 @@ import (
 	"space-adventure/server/internal/terrain"
 )
 
+// buildID identifies the binary. Set at link time:
+//
+//	go build -ldflags "-X main.buildID=$(git rev-parse --short HEAD)"
+//
+// It exists because "is the server up?" is not the question anyone actually
+// needs answered. A `curl /healthz` returns ok from WHATEVER is bound to that
+// port -- a stale pod, a cluster left running from yesterday, a second copy
+// someone forgot -- and a readiness check that cannot tell those from the
+// build you just made is a check that cannot fail. That is not hypothetical:
+// a packaged client was verified three times against a server image built
+// before the feature under test, because a `go run` had lost the port bind
+// and healthz answered anyway.
+var buildID = "dev"
+
 const (
 	defaultListen = ":8080"
 	// defaultSeed is fixed on purpose (ARCHITECTURE "Server"): a changing
@@ -43,29 +57,15 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) > 0 && args[0] == "dump" {
-		return runDump(args[1:])
-	}
-	if len(args) > 0 && args[0] == "codec" {
-		return runCodec(args[1:])
-	}
-	if len(args) > 0 && args[0] == "collide" {
-		return runCollide(args[1:])
-	}
-	if len(args) > 0 && args[0] == "route" {
-		return runRoute(args[1:])
-	}
-	if len(args) > 0 && args[0] == "reach" {
-		return runReach(args[1:])
-	}
-	if len(args) > 0 && args[0] == "lapscan" {
-		return runLapScan(args[1:])
-	}
-	if len(args) > 0 && args[0] == "rimscan" {
-		return runRimScan(args[1:])
-	}
-	if len(args) > 0 && args[0] == "lap" {
-		return runLap(args[1:])
+	if len(args) > 0 {
+		sub := map[string]func([]string) error{
+			"dump":    runDump,
+			"codec":   runCodec,
+			"collide": runCollide,
+		}
+		if run, ok := sub[args[0]]; ok {
+			return run(args[1:])
+		}
 	}
 	return runServer(args)
 }
@@ -79,7 +79,10 @@ func runServer(args []string) error {
 	}
 
 	field := terrain.Generate(uint64(*seed))
-	world := server.New(field, uint64(*seed))
+	world, err := server.New(field, uint64(*seed))
+	if err != nil {
+		return err
+	}
 
 	// Persistence is opt-in on DATABASE_URL. A failure here is fatal at
 	// STARTUP on purpose: silently falling back to ephemeral sessions would
@@ -110,6 +113,13 @@ func runServer(args []string) error {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "ok")
 	})
+	// Deliberately NOT folded into /healthz: that path is the k8s probe
+	// contract and wants to stay the cheapest possible 200.
+	mux.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, buildID)
+	})
 	mux.HandleFunc("/ws", world.HandleWS)
 
 	srv := &http.Server{Addr: *listen, Handler: mux}
@@ -120,7 +130,7 @@ func runServer(args []string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		fmt.Printf("listening on %s (seed %d)\n", *listen, *seed)
+		fmt.Printf("listening on %s (seed %d, build %s)\n", *listen, *seed, buildID)
 		errCh <- srv.ListenAndServe()
 	}()
 

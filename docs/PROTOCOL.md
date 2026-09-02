@@ -36,7 +36,7 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 |----|------|-----|---------|
 | `0x0001` | `hello` | C→S | `u16 client_ver` \| `u32 name_len` \| `bytes name` \| `u32 token_len` \| `bytes token` |
 | `0x0002` | `hello_ack` | S→C | `u16 server_ver` \| `u16 tick_hz` \| `u32 world_seed` \| `u32 entity_id` |
-| `0x0003` | `input` | C→S | `f32 move_x` \| `f32 move_y` \| `f32 look_dir[3]` \| `u16 action_mask` \| `u16 seq` (24 B) |
+| `0x0003` | `input` | C→S | `f32 v[5]` \| `u16 action_mask` \| `u16 seq` \| `u8 mode` (25 B; 24 B accepted as mode `0`) |
 | `0x0004` | `snapshot` | S→C | `u32 tick` \| `u16 ack_seq` \| `u16 count` \| `entity × count` |
 | `0x0005` | `spawn` | S→C | `u32 entity_id` \| `u16 entity_type` \| `u32 data_len` \| `bytes data` (M1: UTF-8 display name) |
 | `0x0006` | `despawn` | S→C | `u32 entity_id` |
@@ -52,6 +52,7 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 | `0x0010` | `defs` | S→C | `u32 data_len` \| `bytes data` (UTF-8 JSON) |
 | `0x0011` | `fire` | C→S | `u16 seq` \| `f32 dir[3]` |
 | `0x0012` | `colliders` | S→C | `u16 count` \| `collider × count` |
+| `0x0013` | `props` | S→C | `u16 count` \| `prop × count` |
 
 `entity` (inside `snapshot`) — **54 bytes, fixed**:
 
@@ -65,6 +66,24 @@ u32 entity_id | f32 pos[3] | f32 quat[4] | f32 vel[3]
 ```
 u8 kind | u8 _pad | f32 center[3] | f32 half[3] | f32 quat[4]
 ```
+
+`prop` (inside `props`) — **variable length**:
+
+```
+f32 pos[3] | f32 quat[4] | f32 scale | u16 asset_len | bytes asset
+```
+
+`asset` is an id from `art/manifest.json` (`prop.barrel`, `prop.dish`), UTF-8.
+
+Props are **visual only**: zone dressing with no collider, which the sim never
+sees. A client that ignored this message entirely would still agree with the
+server about everything that can be walked into or shot — which is why the row
+may be variable-length where `collider` may not. Colliders are bulk data
+(1560 rows in a message) and every byte counts; props are hand-authored and the
+two zones that have any carry fourteen between them, so the row simply carries
+the name instead of an index into a table the client would have to hold.
+
+Sent once, immediately after `colliders`, and never resent.
 
 Constants:
 
@@ -111,7 +130,14 @@ Constants:
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
 - `event_id`: `0x0001` explosion (reserved); `0x0002` shot fired; `0x0003`
-  hit; `0x0004` death; `0x0005` loot dropped (Phase 3).
+  hit; `0x0004` death; `0x0005` loot dropped (Phase 3); `0x0006` `equipped`
+  (Phase 3.5) — `entity_id` is the player whose primary slot changed and
+  `data` is the item id as UTF-8, empty for "nothing equipped". Broadcast when
+  the slot changes, and sent once per already-armed player when a client
+  joins, so a late joiner starts with correct state. This is how another
+  client learns what someone is holding: the entity row has no weapon field,
+  because a value that changes a few times a session has no business costing
+  bytes on every entity on every tick.
 
 ## Semantics
 
@@ -120,8 +146,16 @@ Constants:
   client's `entity_id`, then `terrain`, then includes the entity in snapshots.
   A client must not simulate before `terrain` arrives — it has no ground to
   stand on until then.
-- `input` carries **command state with a mode**. Mode `0` is the on-foot
-  layout and the only one Phase 2 implements: `move_x`/`move_y` are the wish direction in the body's
+- `input` carries **command state with a mode**. The five floats are one
+  vector `v[5]` whose meaning the trailing `mode` byte selects; every mode
+  uses the same 20 bytes, so the message never changes shape.
+- **The mode byte is the LAST field, and it is optional.** Appending rather
+  than prepending leaves every other field at the offset it has had since
+  Phase 1, and a 24-byte payload is read as mode `0` — so a client that
+  predates the byte keeps working. This is the same backward-compatible shape
+  as `hello`, whose payload may end after the name.
+- Mode `0` is the on-foot layout: `v = [move_x, move_y, look_dir[0..2]]`.
+  `move_x`/`move_y` are the wish direction in the body's
   tangent frame, each in [−1, 1] and jointly clamped to unit length;
   `look_dir` is the absolute world-space unit vector the eyes point along —
   not angles, not rates. Mode `1` is the pilot layout: `thrust` ∈ [−1, 1],
@@ -301,7 +335,7 @@ content, filtered to what a client needs to render and predict.
 The client **must not fire, predict damage, or draw an inventory before `defs`
 arrives** — the same rule as `terrain`, for the same reason: it has no data to
 do it with. One source of truth, shipped, rather than a copy of the same JSON
-checked into `client/`.
+checked into the client.
 
 Like `terrain`, it is one message and therefore capped at 64 KiB. That is
 generous for Phase 2 and is a known, bounded place where chunking becomes
@@ -321,8 +355,17 @@ arrives. Not command state, not idempotent, not replayed.
   position for that shooter at the rewound tick. A client that could name its
   own muzzle position could shoot from anywhere on the planet.
 - **Rewind is bounded by the server's measurement, not the client's claim.**
-  The server rewinds candidate targets by its own smoothed RTT/2 for that
-  connection, clamped to `[0, 500] ms`. A client cannot ask for more.
+  The server rewinds candidate targets by `staleness + RTT/2 + interp_delay`,
+  clamped to `[0, 500] ms` (GDD "Lag compensation" has the derivation). Every
+  term is server-observed: the RTT is its own measurement, and `staleness`
+  comes from the tick the server itself chose to run that `seq` on. Naming an
+  ancient `seq` buys nothing but the clamp. A client cannot ask for more.
+- **The client owes `interp_delay` back.** The rewind above assumes the shooter
+  was rendering remote entities at `serverClock − interp_delay`, on a clock
+  synchronised to the server's. A client that instead renders a fixed offset
+  behind local packet arrival sits a whole one-way trip further into the past
+  than the server rewinds to, and will miss every moving target. See GDD "Lag
+  compensation".
 - Cadence is enforced server-side from the weapon's rule table with one tick of
   tolerance; an early shot is dropped, not queued. Ammunition is likewise
   checked and decremented server-side.
@@ -338,6 +381,7 @@ arrives. Not command state, not idempotent, not replayed.
 | shot fired `0x0002` | shooter | `f32 origin[3]` \| `f32 dir[3]` \| `f32 dist` |
 | hit `0x0003` | victim | `u32 shooter` \| `f32 point[3]` \| `u16 damage` \| `u16 health_after` |
 | death `0x0004` | victim | `u32 killer` (0 = none) |
+| equipped `0x0006` | the player | item id, UTF-8 (empty = nothing equipped) |
 
 ### `colliders` — static world geometry (Phase 2)
 

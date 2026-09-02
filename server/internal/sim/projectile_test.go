@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"space-adventure/server/internal/defs"
@@ -177,5 +178,41 @@ func TestProjectileExpires(t *testing.T) {
 	}
 	if len(*events) != 0 {
 		t.Fatalf("expected no events on silent expiry, got %v", *events)
+	}
+}
+
+// TestProjectileHitEventCarriesItsPayload pins the `hit` body against
+// PROTOCOL.md: u32 shooter | f32 point[3] | u16 damage | u16 health_after.
+// This emitted the 10-byte header alone, and a client decoding the documented
+// layout ran off the end of the frame.
+func TestProjectileHitEventCarriesItsPayload(t *testing.T) {
+	w, ctx, events := newProjectileWorld(nil)
+	addProjTarget(w, 2, [3]float64{200, 0, 20})
+	w.Add(newProjectile(1, 99, [3]float64{200, 0, 0}, [3]float64{0, 0, 1}, 45, 25, 100))
+
+	for i := 0; i < 12 && w.Ents[1] != nil; i++ {
+		w.Step(DT, ctx)
+	}
+
+	var hit *protocol.Event
+	for i := range *events {
+		if (*events)[i].EntityID == 2 && (*events)[i].EventID == protocol.EventHit {
+			hit = &(*events)[i]
+		}
+	}
+	if hit == nil {
+		t.Fatal("no EventHit for entity 2")
+	}
+	if len(hit.Data) != 20 {
+		t.Fatalf("hit data = %d bytes, want 20 (PROTOCOL.md `event` payloads)", len(hit.Data))
+	}
+	if got := binary.LittleEndian.Uint32(hit.Data[0:]); got != 99 {
+		t.Errorf("shooter = %d, want the projectile's owner 99", got)
+	}
+	if got := binary.LittleEndian.Uint16(hit.Data[16:]); got != 25 {
+		t.Errorf("damage = %d, want 25", got)
+	}
+	if got := binary.LittleEndian.Uint16(hit.Data[18:]); got != 75 {
+		t.Errorf("health_after = %d, want 75", got)
 	}
 }

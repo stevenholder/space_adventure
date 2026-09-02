@@ -1,13 +1,27 @@
 // Lag compensation position history (GDD "Health and damage" -> "Lag
 // compensation"). The server keeps rewind_max of position history per
-// entity at tick granularity so a shot can be resolved against target
-// positions rewound by the server's own smoothed RTT/2, clamped to
-// [0, rewind_max]. See docs/tasks/phase2-wave2.md "W2-10".
+// entity at tick granularity so a shot can be resolved against the world as
+// the shooter SAW it: the tick their command executed on, less the render
+// offset every client holds. See docs/tasks/phase2-wave2.md "W2-10".
 package sim
 
 // RewindMaxSeconds is rewind_max (GDD "Health and damage" -> "Lag
 // compensation"): the longest a shot may be rewound.
 const RewindMaxSeconds = 0.5
+
+// InterpDelaySeconds is interp_delay (GDD "Lag compensation"): how far
+// behind the server's simulation clock every client renders remote
+// entities. It is a CONTRACT, not a client preference — the server rewinds
+// by it, so a client that renders at a different offset misses.
+//
+// It is subtracted from the tick the shooter's command executed on, which
+// is why it is a plain constant here rather than something a client sends:
+// a client-supplied render offset is a client-supplied rewind, and that is
+// the hole that lets someone shoot into the past.
+const InterpDelaySeconds = 0.1
+
+// InterpTicks is interp_delay in whole ticks at the documented tick rate.
+const InterpTicks = int(InterpDelaySeconds * TickHz) // 0.1s * 20Hz = 2 ticks
 
 // HistoryTicks is the ring length: rewind_max expressed in ticks at the
 // documented tick rate (sim.TickHz), not a bare constant.

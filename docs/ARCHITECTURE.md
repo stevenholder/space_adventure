@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v1 — reflects Phase 1 as built. Updated as each phase lands
+Status: v2 — reflects Phase 3.5 as built. Updated as each phase lands
 (`docs/ROADMAP.md`).
 
 ## System overview
@@ -8,15 +8,14 @@ Status: v1 — reflects Phase 1 as built. Updated as each phase lands
 ```mermaid
 flowchart LR
   subgraph Desktop
-    C[Unity client<br/>render + controls + HUD]
+    C[Unity client<br/>packaged build: render + controls + HUD]
   end
-  subgraph localhost
-    S[Go game server<br/>WS :8080 + authoritative sim @ 20 Hz]
-    V[Vite dev server<br/>:5173, proxies /ws to :8080]
+  subgraph kind cluster
+    S[Go game server<br/>authoritative sim @ 20 Hz<br/>/ws on NodePort 30080 → host :18080]
+    P[(Postgres<br/>identity + persistence)]
   end
-  C -- WebSocket, binary --> V
-  V -- proxy --> S
-  C -- HTTP, static --> V
+  C -- WebSocket, binary --> S
+  S --- P
 ```
 
 - One authoritative Go server process per world instance (M1: single
@@ -24,18 +23,22 @@ flowchart LR
 - Clients connect over WebSocket; all world state is server-authoritative.
 - **Client delivery is a packaged native desktop build** (Unity, C#) as of the
   Phase 3.5 decision, 2026-08-26. Browser delivery is dropped. See "Client
-  delivery" below — the TS/Three.js client shipped Phases 1–3 and is retired at
-  the end of Phase 3.5.
-- `make up` runs the whole stack on a local **kind** cluster — server, nginx-
-  backed client, and (from Phase 2) Postgres — so the deployed path is the
-  development path. See "Deployment".
+  delivery" below — the TS/Three.js client shipped Phases 1–3 and was retired
+  in Phase 3.5 (ROADMAP U18).
+- `make up` runs the stack on a local **kind** cluster — server and (from
+  Phase 2) Postgres — so the deployed path is the development path. The client
+  is a packaged desktop build that connects in. See "Deployment".
 - What kind does *not* exercise is sharding, delta snapshots and load; that is
   the scale-out phase's job, not now.
 
-## Client (`client/`) — Three.js + TypeScript
+## Client (`client-unity/`) — Unity 6, C#
 
-- Vite dev server in M1 (also the `/ws` proxy); a static production bundle
-  behind a real web server is a concern for the scale-out milestone.
+- A packaged desktop build. Browser delivery was dropped in Phase 3.5: the
+  original Three.js client lived in `client/` and was retired by ROADMAP U18
+  once the Unity one passed the same criteria. It is in git history.
+- Code-first, and that is a hard rule rather than a style: no agent authors a
+  `.unity`, `.prefab` or `.asset`, so every object, material and camera is
+  built from C# at runtime. `client-unity/CONVENTIONS.md` has the why.
 - Scene: a small low-poly round world — terrain mesh built from the server's
   six-face cube-sphere radius field, sky, scattered props; characters loaded
   from `art/` via `art/manifest.json` by asset id.
@@ -68,11 +71,13 @@ flowchart LR
 
   Four things keep this honest, in order of how much work they save:
 
-  1. **The compiler enforces it.** `client/src/sim/` compiles under its own
-     `tsconfig.sim.json` with `"lib": ["ES2022"]` and **no `"DOM"`**. Touching
-     `window`, `document`, `performance` or `requestAnimationFrame` in that
-     folder is then a build error, not a code-review note — and `make build`
-     already runs it. No lint rules, no custom tooling, no discipline required.
+  1. **The compiler enforces it.** `Assets/Sim/` is its own assembly and may
+     not reference `UnityEngine` at all, so touching a `GameObject`, a
+     `Transform` or `Time` in that folder is a build error rather than a
+     code-review note. `make unity-test` compiles it a second time with no
+     Editor in sight, which is what lets the conformance diff run in CI.
+     (The retired TypeScript client did the same job with a DOM-free
+     `tsconfig.sim.json`.)
   2. **A signature, fixed now**, so the Go and TypeScript sims mirror each
      other and criterion 5 has something to diff:
      `step(state, input, terrain, dt) -> state` and
@@ -303,17 +308,18 @@ kind cluster (namespace `space-adventure`) is the M1 entry point (ROADMAP
 criterion 1).
 
 - `make up` — creates the kind cluster (`deploy/kind.yaml`) if absent, builds
-  `Dockerfile.server` / `Dockerfile.client` and loads both images into the
-  cluster, applies `deploy/manifests/` (server Deployment + nginx-backed
-  client, each with readiness/liveness probes), then waits and fails until
-  both host endpoints answer. The endpoints are **kind `extraPortMappings`
-  onto NodePort Services** (`deploy/kind.yaml` → `30000`/`30080`), a
+  `Dockerfile.server` and loads the image into the cluster, applies
+  `deploy/manifests/` (server Deployment with readiness/liveness probes), then
+  waits and fails until the host endpoint answers. The endpoint is a **kind
+  `extraPortMapping` onto a NodePort Service** (`deploy/kind.yaml` → `30080`), a
   kernel-level mapping — not `kubectl port-forward`:
-  - `:3000` → client — nginx serves the built TS client and proxies `/ws` to
-    the server. **Retired at the end of Phase 3.5:** a native client is
-    downloaded, not served, so it dials the server URL from its own config and
-    the same-origin/no-CORS assumption goes with it.
-  - `:18080` → server — direct WS + `/healthz`.
+  - `:18080` → server — WS + `/healthz`. The only mapping there is.
+
+  There was a second one, `:3000` → an nginx pod serving the built TypeScript
+  client and proxying `/ws` so the browser was same-origin. **Retired in U18**,
+  as this section always said it would be: a native client is downloaded, not
+  served, so it dials the server URL from its own config and the
+  same-origin/no-CORS assumption went with it.
 - `make down` — deletes the cluster, removes logs, and reaps any stray
   port-forward left by an earlier revision. Leaves nothing running.
 - `make up` also `rollout restart`s both Deployments, because the images are
@@ -325,8 +331,10 @@ criterion 1).
   the cluster.
 
 **Why kind in M1.** The acceptance criteria are measured on the deployed
-stack: criterion 1 is `make up` from a clean clone, and the nginx `/ws` proxy
-is part of the wire path the client actually takes.
+stack: criterion 1 is `make up` from a clean clone, so the wire path the
+client takes is the one that is measured. (Through Phase 3 that path ran via
+an nginx `/ws` proxy in front of the browser client; a native client dials the
+server directly.)
 
 This used to cost accuracy: `kubectl port-forward` is a userspace TCP proxy
 that added its own jitter to criterion 7's latency measurement, and died on a
@@ -349,7 +357,7 @@ not a rewrite.
 | Server language | Go | one static binary; goroutines fit tick + IO |
 | Transport | WebSocket (binary) | simple, works everywhere; revisit UDP if M1 feels limited |
 | Authority | server-authoritative | MMO correctness, cheat resistance |
-| Local run (M1) | kind cluster + Makefile | `make up` from a clean clone is the M1 entry point; the nginx `/ws` proxy path is part of the contract |
+| Local run (M1) | kind cluster + Makefile | `make up` from a clean clone is the M1 entry point; the deployed wire path is the one the criteria measure |
 | K8s scale-out | deferred to M6 | sharding, delta snapshots and 100+ load earn the orchestrator's keep; kind already proves the manifests |
 | Prediction | replay from `ack_seq` | blending rubber-bands by `velocity × latency`; replay is exact when the rule tables match |
 | Assets | glTF 2.0 binary, low-poly | one universal format, reproducible generation |
@@ -381,6 +389,6 @@ not a rewrite.
   casual testing. Movement, camera, character orientation and prop placement
   all have to derive up from position; ROADMAP criterion 10 (walk a full lap) is
   what catches the ones that slip through.
-- M1 runs on kind from day one, so the deployed stack (probes, nginx `/ws`
-  proxy, image pipeline) is exercised for real; what it does not exercise is
+- M1 runs on kind from day one, so the deployed stack (probes, WS path, image
+  pipeline) is exercised for real; what it does not exercise is
   sharding, delta snapshots and load — the scale-out milestone's job.

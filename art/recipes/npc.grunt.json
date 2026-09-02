@@ -1,0 +1,60 @@
+{
+  "$comment": "The alien, tinted red. Melee archetype, closes to 2 m.",
+  "id": "npc.grunt",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/alien.glb",
+  "out": "chars/grunt.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "rename": {
+    "armLeft": "arm.l",
+    "armRight": "arm.r",
+    "body": "torso",
+    "legLeft": "leg.l",
+    "legRight": "leg.r"
+  },
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ],
+    "hand.r": {
+      "parent": "arm.r",
+      "pos": [
+        0.05,
+        -0.3,
+        -0.05
+      ]
+    }
+  },
+  "tint": [
+    1.0,
+    0.42,
+    0.34
+  ],
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit",
+  "animations": {
+    "$comment": "Clips come off Kenney's Blocky Characters, whose rig uses the same joint-pivot convention as the Space Kit astronaut -- checked before relying on it. Mapped in terms of THIS project's node names, since the renames above have already run. Only rotations survive the retarget; see import_pack.mjs.",
+    "src": "vendor/kenney-blocky-characters/Models/GLB format/character-a.glb",
+    "map": {
+      "leg-left": "leg.l",
+      "leg-right": "leg.r",
+      "arm-left": "arm.l",
+      "arm-right": "arm.r",
+      "head": "head",
+      "torso": "torso"
+    },
+    "keep": [
+      "idle",
+      "walk",
+      "sprint",
+      "die"
+    ]
+  },
+  "rig": "animated"
+}

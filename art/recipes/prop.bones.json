@@ -1,0 +1,12 @@
+{
+  "id": "prop.bones",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/bones.glb",
+  "out": "props/bones.glb",
+  "height": 0.45,
+  "axis": "y",
+  "ground": true,
+  "budget": 1000,
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}

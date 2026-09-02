@@ -74,7 +74,7 @@ structural reference; `docs/PROTOCOL.md` is your wire contract.
 - Unit-test protocol encode/decode round-trips and simulation invariants.
 
 ## Out of scope (report, don't touch)
-`client/` (frontend), `deploy/` (infra), `art/` (art), `docs/GDD.md` (game).
+`client-unity/` (frontend), `deploy/` (infra), `art/` (art), `docs/GDD.md` (game).
 Flag design questions to the main thread in your report.
 
 ## Done means

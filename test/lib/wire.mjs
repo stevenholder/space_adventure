@@ -36,8 +36,17 @@ export function encodeHello(clientVer, name) {
 }
 
 /** input: f32 move_x | f32 move_y | f32 look_dir[3] | u16 action_mask | u16 seq (24 B) */
-export function encodeInput(moveX, moveY, lookDir, actionMask, seq) {
-  const out = Buffer.alloc(24)
+/**
+ * `input` — 25 bytes: f32 v[5] | u16 action_mask | u16 seq | u8 mode.
+ *
+ * The mode byte is APPENDED, so every field above it sits where it has sat
+ * since Phase 1 and the server still accepts a 24-byte payload as mode 0.
+ * Several of the self-contained harnesses (t14, t18, t19) deliberately still
+ * send 24 bytes: that keeps the compatibility path under live test instead of
+ * only under a unit test.
+ */
+export function encodeInput(moveX, moveY, lookDir, actionMask, seq, mode = 0) {
+  const out = Buffer.alloc(25)
   out.writeFloatLE(moveX, 0)
   out.writeFloatLE(moveY, 4)
   out.writeFloatLE(lookDir[0], 8)
@@ -45,6 +54,7 @@ export function encodeInput(moveX, moveY, lookDir, actionMask, seq) {
   out.writeFloatLE(lookDir[2], 16)
   out.writeUInt16LE(actionMask & 0xffff, 20)
   out.writeUInt16LE(seq & 0xffff, 22)
+  out.writeUInt8(mode & 0xff, 24)
   return out
 }
 

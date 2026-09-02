@@ -50,6 +50,31 @@ type Colliders struct {
 	List []Collider
 }
 
+// Prop is one row inside props (PROTOCOL.md, variable length):
+// f32 pos[3] | f32 quat[4] | f32 scale | u16 asset_len | bytes asset.
+//
+// Variable rather than fixed, unlike Collider, because the payload IS a name:
+// the asset id straight out of art/manifest.json. The alternative -- a string
+// table plus fixed rows of indices -- buys nothing here. Colliders are bulk
+// data with up to 1560 rows in a message and every byte counts; props are
+// hand-authored dressing and the two zones that have any carry fourteen
+// between them.
+type Prop struct {
+	Asset string
+	Pos   [3]float32
+	Quat  [4]float32
+	Scale float32
+}
+
+// Props is the S→C zone dressing: u16 count | prop × count.
+//
+// Purely visual. Props carry no collider and the sim never sees them -- a
+// client that ignored this message entirely would still agree with the server
+// about everything that can be walked into or shot.
+type Props struct {
+	List []Prop
+}
+
 // dirLenTolerance is how far a fire.Dir's length may stray from 1 and still
 // be accepted (PROTOCOL.md, ParseFire validation).
 const dirLenTolerance = 1e-3
@@ -107,6 +132,24 @@ func EncodeColliders(c Colliders) []byte {
 		for i := 0; i < 4; i++ {
 			b = putF32(b, col.Quat[i])
 		}
+	}
+	return b
+}
+
+// EncodeProps renders a props frame.
+func EncodeProps(p Props) []byte {
+	b := putU16(nil, MsgProps)
+	b = putU16(b, uint16(len(p.List)))
+	for _, pr := range p.List {
+		for i := 0; i < 3; i++ {
+			b = putF32(b, pr.Pos[i])
+		}
+		for i := 0; i < 4; i++ {
+			b = putF32(b, pr.Quat[i])
+		}
+		b = putF32(b, pr.Scale)
+		b = putU16(b, uint16(len(pr.Asset)))
+		b = append(b, pr.Asset...)
 	}
 	return b
 }

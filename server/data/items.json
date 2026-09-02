@@ -1,5 +1,5 @@
 {
-  "$comment": "Item table. Contract: docs/GDD.md 'Items and currency' + 'Weapons'. Owned by the `game` agent. Shipped to clients in the `defs` message; never duplicated under client/.",
+  "$comment": "Item table. Contract: docs/GDD.md 'Items and currency' + 'Weapons'. Owned by the `game` agent. Shipped to clients in the `defs` message; never duplicated in the client.",
   "version": 1,
   "start_credits": 1000,
   "start_items": [{ "item": "ammo.cell", "qty": 120 }],
@@ -44,11 +44,12 @@
       "damageable": false
     },
     {
+      "$comment": "One def serves every EntityTypeNPC. It was authored for the Phase 2 shopkeeper and `damageable` stayed false when Phase 3 added hostile NPCs, which made every camp grunt and gunner immune to gunfire: ResolveShot skips a non-damageable entity outright, so the camp could be shot at forever and never cleared. Hostiles are damageable; the shopkeeper stays immune because its archetype has no max_health, so it spawns at 0 health and ResolveShot's dead-entity guard drops it before this flag is ever read. max_health here is unused for NPCs - a placement takes its pool from the npcs.json archetype.",
       "type": "npc",
       "asset": "npc.shopkeeper",
       "max_health": 0,
       "hitbox": { "radius": 0.35, "height": 1.8 },
-      "damageable": false
+      "damageable": true
     },
     {
       "type": "target",

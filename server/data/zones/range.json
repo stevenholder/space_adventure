@@ -1,126 +1,156 @@
 {
-  "$comment": "Target range, 110 m from spawn. Contract: docs/GDD.md 'Static colliders'. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; lane runs along +x; yaw in degrees about +y, 0 = facing +z. SITE CHOICE IS LOAD-BEARING: flatten_radius 32 + flatten_falloff 12 levels terrain out to 44 m, so the origin must clear both the spawn disc and every landmark by more than that. The first placement was 60 m from spawn on a bearing that put it 8 m from the 'beacon' landmark -- it flattened the landmark away (t9 read 154 m against an expected 165 m) and its falloff band tilted the spawn disc to 2.59 m against a 0.5 m tolerance. This site is 110 m from spawn and 161 m from the nearest landmark.",
-  "version": 1,
-  "id": "range",
-  "origin_dir": [
-    -0.6547229,
-    0.7429474,
-    0.1391657
-  ],
-  "flatten_radius": 32.0,
-  "flatten_falloff": 12.0,
-  "colliders": [
-    {
-      "$note": "side wall, north",
-      "kind": "box",
-      "pos": [
-        12.0,
-        1.25,
-        6.0
-      ],
-      "half": [
-        17.0,
-        1.25,
-        0.3
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "side wall, south",
-      "kind": "box",
-      "pos": [
-        12.0,
-        1.25,
-        -6.0
-      ],
-      "half": [
-        17.0,
-        1.25,
-        0.3
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "backstop",
-      "kind": "box",
-      "pos": [
-        29.0,
-        1.5,
-        0.0
-      ],
-      "half": [
-        0.4,
-        1.5,
-        6.3
-      ],
-      "yaw": 0.0
-    },
-    {
-      "$note": "cover post - the sphere collider path",
-      "kind": "sphere",
-      "pos": [
-        8.0,
-        1.0,
-        4.0
-      ],
-      "half": [
-        1.0,
-        0.0,
-        0.0
-      ],
-      "yaw": 0.0
-    }
-  ],
-  "entities": [
-    {
-      "type": "target",
-      "def": "target",
-      "pos": [
-        15.0,
-        0.0,
-        -3.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "target",
-      "def": "target",
-      "pos": [
-        15.0,
-        0.0,
-        3.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "target",
-      "def": "target",
-      "pos": [
-        20.0,
-        0.0,
-        0.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "target",
-      "def": "target",
-      "pos": [
-        25.0,
-        0.0,
-        -3.0
-      ],
-      "yaw": -90.0
-    },
-    {
-      "type": "target",
-      "def": "target",
-      "pos": [
-        25.0,
-        0.0,
-        3.0
-      ],
-      "yaw": -90.0
-    }
-  ]
+ "$comment": "Target range, 110 m from spawn. Contract: docs/GDD.md 'Static colliders'. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; lane runs along +x; yaw in degrees about +y, 0 = facing +z. SITE CHOICE IS LOAD-BEARING: flatten_radius 32 + flatten_falloff 12 levels terrain out to 44 m, so the origin must clear both the spawn disc and every landmark by more than that. The first placement was 60 m from spawn on a bearing that put it 8 m from the 'beacon' landmark -- it flattened the landmark away (t9 read 154 m against an expected 165 m) and its falloff band tilted the spawn disc to 2.59 m against a 0.5 m tolerance. This site is 110 m from spawn and 161 m from the nearest landmark.",
+ "version": 1,
+ "id": "range",
+ "origin_dir": [
+  -0.6547229,
+  0.7429474,
+  0.1391657
+ ],
+ "flatten_radius": 32.0,
+ "flatten_falloff": 12.0,
+ "colliders": [
+  {
+   "$note": "side wall, north",
+   "kind": "box",
+   "pos": [
+    12.0,
+    1.25,
+    6.0
+   ],
+   "half": [
+    17.0,
+    1.25,
+    0.3
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "side wall, south",
+   "kind": "box",
+   "pos": [
+    12.0,
+    1.25,
+    -6.0
+   ],
+   "half": [
+    17.0,
+    1.25,
+    0.3
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "backstop",
+   "kind": "box",
+   "pos": [
+    29.0,
+    1.5,
+    0.0
+   ],
+   "half": [
+    0.4,
+    1.5,
+    6.3
+   ],
+   "yaw": 0.0
+  },
+  {
+   "$note": "cover post - the sphere collider path",
+   "kind": "sphere",
+   "pos": [
+    8.0,
+    1.0,
+    4.0
+   ],
+   "half": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "yaw": 0.0
+  }
+ ],
+ "entities": [
+  {
+   "type": "target",
+   "def": "target",
+   "pos": [
+    15.0,
+    0.0,
+    -3.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "target",
+   "def": "target",
+   "pos": [
+    15.0,
+    0.0,
+    3.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "target",
+   "def": "target",
+   "pos": [
+    20.0,
+    0.0,
+    0.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "target",
+   "def": "target",
+   "pos": [
+    25.0,
+    0.0,
+    -3.0
+   ],
+   "yaw": -90.0
+  },
+  {
+   "type": "target",
+   "def": "target",
+   "pos": [
+    25.0,
+    0.0,
+    3.0
+   ],
+   "yaw": -90.0
+  }
+ ],
+ "$props_comment": "Range dressing, kept deliberately thin: this is a firing line and anything between the shooter and the targets is something to shoot by accident. Props are visual only and have no collider.",
+ "props": [
+  {
+   "asset": "prop.barrels",
+   "pos": [
+    -2.0,
+    0.0,
+    6.5
+   ],
+   "yaw": 25.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    -3.0,
+    0.0,
+    -6.8
+   ],
+   "yaw": -40.0
+  },
+  {
+   "asset": "prop.generator",
+   "pos": [
+    -4.5,
+    0.0,
+    5.0
+   ],
+   "yaw": 90.0
+  }
+ ]
 }

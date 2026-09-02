@@ -1,0 +1,17 @@
+{
+  "criterion": "C6 - prediction quality at 100 ms injected latency",
+  "harness": "SimDump --predict (C# Predictor, Game/Core/Prediction.cs)",
+  "url": "ws://127.0.0.1:28092/ws",
+  "server_build": "4dea6f2",
+  "pairs": 354,
+  "p50": 3.529744734353524E-06,
+  "p95": 7.397591425724247E-06,
+  "max": 0.3750006436900224,
+  "snapbacks": 0,
+  "route_az": 132.5,
+  "sprint_max": 7.499976562667085,
+  "reversal_min_track_vel": -7.49995312540741,
+  "air_ticks": 19,
+  "landing_slope_deg": 21.904500643678297,
+  "verdict": "PASS"
+}

@@ -13,13 +13,13 @@ import (
 	"space-adventure/server/internal/terrain"
 )
 
-// eyeHeightMeters is eye_height (GDD "M1 on-foot movement" rule table: "camera
-// offset above the foot position"). That table calls it client-only, but a
-// hitscan shot's origin must be server-authoritative, so ResolveShot uses the
-// same constant here rather than any client-supplied eye position. It is
-// distinct from an entity's hitbox Height (the capsule used to hit *other*
-// entities) — the shooter's own hitbox plays no part in where its eye sits.
-const eyeHeightMeters = 1.7
+// eyeHeightMeters is terrain.EyeHeightMeters, aliased so call sites read
+// locally. The GDD table calls eye_height client-only, but a hitscan shot's
+// origin must be server-authoritative, so ResolveShot uses this constant
+// rather than any client-supplied eye position. It is distinct from an
+// entity's hitbox Height (the capsule used to hit *other* entities) — the
+// shooter's own hitbox plays no part in where its eye sits.
+const eyeHeightMeters = terrain.EyeHeightMeters
 
 // Shot is a single hitscan shot request to resolve.
 type Shot struct {

@@ -103,6 +103,19 @@ type ZoneEntity struct {
 	Yaw  float64    `json:"yaw"`
 }
 
+// ZoneProp is one piece of visual dressing authored in a zone's local tangent
+// frame: a model id from art/manifest.json, where it stands and which way it
+// faces.
+//
+// Scale is optional and defaults to 1 — the models are imported at their real
+// size, so a barrel that needs scaling is usually a barrel imported wrong.
+type ZoneProp struct {
+	Asset string     `json:"asset"`
+	Pos   [3]float64 `json:"pos"`
+	Yaw   float64    `json:"yaw"`
+	Scale float64    `json:"scale,omitempty"`
+}
+
 // Zone is a zone file parsed as authored — raw local-frame coordinates.
 // Composing it to world space is a separate later brief (W2-4); this
 // package does not transform it.
@@ -113,6 +126,7 @@ type Zone struct {
 	FlattenFalloff float64        `json:"flatten_falloff"`
 	Colliders      []ZoneCollider `json:"colliders"`
 	Entities       []ZoneEntity   `json:"entities"`
+	Props          []ZoneProp     `json:"props"`
 }
 
 // LootEntry is one row of a loot table in server/data/loot.json: an item, how
