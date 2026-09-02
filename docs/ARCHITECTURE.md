@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v1 — reflects Phase 1 as built. Updated as each phase lands
+Status: v2 — reflects Phase 3.5 as built. Updated as each phase lands
 (`docs/ROADMAP.md`).
 
 ## System overview
@@ -8,15 +8,14 @@ Status: v1 — reflects Phase 1 as built. Updated as each phase lands
 ```mermaid
 flowchart LR
   subgraph Desktop
-    C[Unity client<br/>render + controls + HUD]
+    C[Unity client<br/>packaged build: render + controls + HUD]
   end
-  subgraph localhost
-    S[Go game server<br/>WS :8080 + authoritative sim @ 20 Hz]
-    V[Vite dev server<br/>:5173, proxies /ws to :8080]
+  subgraph kind cluster
+    S[Go game server<br/>authoritative sim @ 20 Hz<br/>/ws on NodePort 30080 → host :18080]
+    P[(Postgres<br/>identity + persistence)]
   end
-  C -- WebSocket, binary --> V
-  V -- proxy --> S
-  C -- HTTP, static --> V
+  C -- WebSocket, binary --> S
+  S --- P
 ```
 
 - One authoritative Go server process per world instance (M1: single

@@ -9,7 +9,7 @@
   "id": "C20/21",
   "name": "camp NPCs damage a player who stands in range",
   "ok": true,
-  "detail": "18 hit events, health 100 -> 0 (died) at 8.9 m"
+  "detail": "15 hit events, health 100 -> 0 (died) at 8.9 m"
  },
  {
   "id": "C21b",
@@ -27,7 +27,7 @@
   "id": "C19b",
   "name": "NPC leashes back to its post and stays on the surface",
   "ok": true,
-  "detail": "returned to 0.88 m of post (limit 2.5), |pos|=157.2 m"
+  "detail": "returned to 1.63 m of post (limit 2.5), |pos|=157.2 m"
  },
  {
   "id": "C24",
@@ -39,7 +39,7 @@
   "id": "C25a",
   "name": "per-client snapshot bandwidth under 100 KB/s",
   "ok": true,
-  "detail": "39.2 KB/s over 5.0 s, 45 entities (interest culling NOT wired)"
+  "detail": "13.9 KB/s over 5.0 s, 18 entities (interest culling NOT wired)"
  },
  {
   "id": "C25b",

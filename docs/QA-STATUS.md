@@ -244,7 +244,7 @@ client rendering the wrong thing indefinitely:
 | C40 | The C# sim matches Go on the C5 route, headless | **max dPos 0.000e+0 m** over 1993 ticks; max dVel 5.088e-16 m/s; 0 grounded mismatches | **PASS** (`t20`) |
 | C44 | `Sim` builds and its checks run with no Unity Editor | `make unity-test`, 13 checks | **PASS** |
 | C47 | No agent-authored scenes or prefabs | `make unity-gate` | **PASS** |
-| C41 | Codec parity, C# against Go and Node | — | not started (`Net` is empty) |
+| C41 | Codec parity, C# against Go and Node | byte-for-byte against Go vectors, both directions | **PASS** (`t22`, `make unity-codec`) |
 
 **Positions are bit-identical**, not merely inside the 1e-10 m bar — four
 orders tighter than C5's 0.01125 m, and six orders better than the bar it was

@@ -41,8 +41,14 @@ cluster; server 7 packages; art 18/18; `unity-gate`, `unity-test`,
 1. **C43 is the phase gate and has not been run.** C1–C25 re-run against the
    Unity client on the deployed stack. `docs/QA-STATUS.md` defines what each
    criterion asserts; a third of that surface was never executed.
-2. **U13 `interp_delay`** — still owed by the client, and Phase 3 could not
-   land it (see the C14 note above). This is a correctness debt, not polish.
+2. **U13 `interp_delay` — implemented, never verified.** The client side
+   exists: `Assets/Game/Entities.cs` (`SnapshotTimeline`) estimates the server
+   clock, renders at `serverNow − interp_delay`, and extrapolates past the
+   window, per the contract the C14 lag-comp fix demands. But no harness has
+   ever driven the C# path — `t21` drives the `.mjs` harness only — so the
+   correctness debt stands until the C43 run exercises it. Until then, treat
+   `InterpDelaySeconds` as load-bearing: changing it alone silently breaks hit
+   registration for this client (see the warning at its definition).
 3. **C46 frame budget** — 60 fps with the camp live has not been measured.
 4. Ship and vehicle entities render as a loot crate: `EntityType.Ship` and
    `Vehicle` have no entity def, which is correct until Phase 4/5 creates one.
@@ -597,19 +603,19 @@ also have to solve flight. Phase 5 then reuses it.
 | # | Agent | Task | File | Verify |
 |---|---|---|---|---|
 | 1 | `netcode` | `board`/`disembark`/`seat_result` codec | `server/internal/protocol/seats.go` | `go test ./internal/protocol` |
-| 2 | `frontend` | Same, TS side | `client/src/net/seats.ts` | `npm run codec-smoke` |
+| 2 | `frontend` | Same, C# side (opcodes `0x000B`–`0x000D` are already declared in `Messages.cs`) | `client-unity/Assets/Net/Messages.cs` | `make unity-codec` (extend `t22` vectors) |
 | 3 | `art` | `vehicle.rover.v1` GLB with seat nodes | `art/tools/gen_rover.py` | `render_check.py` |
 | 4 | `game` | Ground drive rule table + rover seat table | `docs/GDD.md` | review |
 | 5 | `netcode` | Rover entity: state, deterministic spawn, snapshot row | `server/internal/sim/vehicle.go` | `go test ./internal/sim` |
 | 6 | `netcode` | `stepRover`: drive model + terrain following | `server/internal/sim/drive.go` | `go test ./internal/sim` |
-| 7 | `frontend` | `stepRover`, mirrored | `client/src/sim/drive.ts` | trajectory diff |
+| 7 | `frontend` | `stepRover`, mirrored | `client-unity/Assets/Sim/` (new `Drive.cs`, engine-free) | `make unity-conformance` (trajectory diff) |
 | 8 | `netcode` | Board/disembark validation, occupancy, control repoint | `server/internal/server/seats.go` | `go test ./internal/server` |
 | 9 | `netcode` | Seated body composition (ship transform × seat offset) | `server/internal/sim/compose.go` | `go test ./internal/sim` |
 | 10 | `netcode` | Driver disconnect: coast, stop, seat freed | `server/internal/server/handoff.go` | `go test ./internal/server` |
-| 11 | `frontend` | Rover rendering + camera mount at the seat node | `client/src/scene/vehicle.ts` | `npm run build` |
-| 12 | `frontend` | Input mode switch driven by snapshot occupancy | `client/src/input/controls.ts` | `npm run build` |
-| 13 | `frontend` | Rover prediction + replay | `client/src/net/predictor.ts` | `npm run build` |
-| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client/src/hud/vehicle.ts` | `npm run build` |
+| 11 | `frontend` | Rover rendering + camera mount at the seat node | `client-unity/Assets/Game/Vehicle.cs` | `make unity-typecheck` |
+| 12 | `frontend` | Input mode switch driven by snapshot occupancy | `client-unity/Assets/Game/Boot.cs` | `make unity-typecheck` |
+| 13 | `frontend` | Rover prediction + replay | `client-unity/Assets/Game/Core/Prediction.cs` | `make unity-test` |
+| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client-unity/Assets/Game/Hud.cs`, `Interact.cs` | `make unity-typecheck` |
 | 15 | `netcode` | Rover ownership: purchase via `cmd`, persisted, spawn/despawn | `server/internal/sim/ownership.go` | `go test ./internal/sim` |
 | 16 | `qa` | e2e harness against C26–C32 | `test/t13-rover.mjs` | `node test/t13-rover.mjs` |
 
@@ -626,7 +632,7 @@ Structurally the old M2 criteria, retargeted at a ground vehicle:
   0, the other result 1, and the snapshot shows one occupant.
 - **C29 Refusals.** Boarding from beyond `board_dist` → result 2; disembarking
   while not seated → result 3.
-- **C30 Drive conformance.** One input script through the Go and TS sims:
+- **C30 Drive conformance.** One input script through the Go and C# sims:
   per-tick pos/quat/vel deviation ≤ 1e-6 over ≥ 1000 ticks, and conformance to
   the GDD drive table within 5%.
 - **C31 Passengers produce no vehicle input.** A passenger's movement input
@@ -668,15 +674,15 @@ ship is a moving-reference-frame problem, and it is not part of this phase.
 | 1 | `game` | Space regime + landing rules | `docs/GDD.md` | review |
 | 2 | `netcode` | Ship entity + deterministic spawn on the pad | `server/internal/sim/ship.go` | `go test ./internal/sim` |
 | 3 | `netcode` | `stepShip` flight model (Go) | `server/internal/sim/flight.go` | `go test ./internal/sim` |
-| 4 | `frontend` | `stepShip`, mirrored | `client/src/sim/flight.ts` | trajectory diff |
+| 4 | `frontend` | `stepShip`, mirrored | `client-unity/Assets/Sim/` (new `Flight.cs`, engine-free) | `make unity-conformance` (trajectory diff) |
 | 5 | `netcode` | Regime switch: gravity/drag off above the boundary, hysteresis | `server/internal/sim/regime.go` | `go test ./internal/sim` |
-| 6 | `frontend` | Regime switch, mirrored | `client/src/sim/regime.ts` | trajectory diff |
+| 6 | `frontend` | Regime switch, mirrored | `client-unity/Assets/Sim/` | `make unity-conformance` (trajectory diff) |
 | 7 | `netcode` | Ship purchase + persistent ownership + spawn on request | `server/internal/sim/ownership.go` | `go test ./internal/sim` |
 | 8 | `netcode` | Landing: contact detection, settle, grounded state | `server/internal/sim/landing.go` | `go test ./internal/sim` |
-| 9 | `frontend` | Ship rendering + walk-in interior + pilot camera mount | `client/src/scene/ship.ts` | `npm run build` |
-| 10 | `frontend` | Pilot input mapping + ship prediction/replay | `client/src/input/pilot.ts` | `npm run build` |
-| 11 | `frontend` | Space visuals: starfield, planet from outside, horizon fade | `client/src/scene/space.ts` | `npm run build` |
-| 12 | `frontend` | Flight HUD: speed, altitude, attitude, regime | `client/src/hud/flight.ts` | `npm run build` |
+| 9 | `frontend` | Ship rendering + walk-in interior + pilot camera mount | `client-unity/Assets/Game/Ship.cs` | `make unity-typecheck` |
+| 10 | `frontend` | Pilot input mapping + ship prediction/replay | `client-unity/Assets/Game/Boot.cs`, `Core/Prediction.cs` | `make unity-test` |
+| 11 | `frontend` | Space visuals: starfield, planet from outside, horizon fade | `client-unity/Assets/Game/Sky.cs` | `make unity-typecheck` |
+| 12 | `frontend` | Flight HUD: speed, altitude, attitude, regime | `client-unity/Assets/Game/Hud.cs` | `make unity-typecheck` |
 | 13 | `art` | Cockpit polish pass on `ship.v1` | `art/tools/gen_ship.py` | `render_check.py` |
 | 14 | `qa` | e2e harness against C33–C39 | `test/t14-flight.mjs` | `node test/t14-flight.mjs` |
 
