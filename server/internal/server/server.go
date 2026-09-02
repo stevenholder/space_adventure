@@ -108,15 +108,14 @@ type Server struct {
 // means (docs/PROTOCOL.md, "Identity token"). Call before serving.
 func (s *Server) SetStore(st *store.Store) { s.store = st }
 
-func New(t *terrain.Field, seed uint64) *Server {
+func New(t *terrain.Field, seed uint64) (*Server, error) {
 	reg, err := defs.Load()
 	if err != nil {
 		// The content registry is embedded, repo-controlled data (server/data).
-		// A failure here is a broken build, not a runtime condition — same
-		// judgment call defs.ComposeZone's own doc comment makes for a zone
-		// that will not compose. New has no error return (its signature is
-		// shared with cmd/server/main.go), so this is the load-bearing check.
-		panic(fmt.Errorf("server: load defs: %w", err))
+		// A failure here is a broken build, not a runtime condition — but a
+		// content typo should die with a message at startup, not a stack
+		// trace, so it surfaces as an error rather than a panic.
+		return nil, fmt.Errorf("load defs: %w", err)
 	}
 
 	// Zone iteration order must be deterministic (world entity ids are
@@ -146,7 +145,7 @@ func New(t *terrain.Field, seed uint64) *Server {
 		z := reg.Zones[id]
 		cols, placements, props, err := defs.ComposeZone(z, radiusFn)
 		if err != nil {
-			panic(fmt.Errorf("server: compose zone %q: %w", id, err))
+			return nil, fmt.Errorf("compose zone %q: %w", id, err)
 		}
 		allColliders = append(allColliders, cols...)
 		allProps = append(allProps, props...)
@@ -194,6 +193,12 @@ func New(t *terrain.Field, seed uint64) *Server {
 		seed:    seed,
 		tickHz:  sim.TickHz,
 		upgrader: websocket.Upgrader{
+			// Known deferral: any Origin is accepted. Fine while the only
+			// clients are the packaged build and the test harnesses against a
+			// kind-local cluster — and the same trust posture as the identity
+			// token (docs/PROTOCOL.md "Identity token": anyone who has it IS
+			// that player). Both must change together before any public
+			// exposure.
 			CheckOrigin: func(*http.Request) bool { return true },
 		},
 		clients:   make(map[uint32]*client),
@@ -224,11 +229,11 @@ func New(t *terrain.Field, seed uint64) *Server {
 	// colliders it sits among -- a client that never decodes this still agrees
 	// with the server about everything that can be walked into or shot.
 	if len(allProps) > protocol.PropMax {
-		panic(fmt.Errorf("server: %d props exceeds PropMax %d", len(allProps), protocol.PropMax))
+		return nil, fmt.Errorf("%d props exceeds PropMax %d", len(allProps), protocol.PropMax)
 	}
 	s.propsF = protocol.EncodeProps(protocol.Props{List: allProps})
 	s.snapPool.New = func() any { return []byte(nil) }
-	return s
+	return s, nil
 }
 
 // frame prepends the 2-byte little-endian message type to payload.

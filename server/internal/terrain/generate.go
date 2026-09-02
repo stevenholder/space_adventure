@@ -295,16 +295,20 @@ func rotateAround(d, k Vec, a float64) Vec {
 	return d.Scale(c).Add(Cross(k, d).Scale(s)).Add(k.Scale(d.Dot(k) * (1 - c)))
 }
 
-// eyeHeightMeters is the GDD eye_height (1.7 m) used by the landmark
-// visibility cap.
-const eyeHeightMeters = 1.7
+// EyeHeightMeters is the GDD eye_height (1.7 m): where a standing
+// character's eye sits above its feet. Defined once, here, because terrain
+// is the package every consumer already imports. Server-authoritative on
+// purpose — hitscan origins and line-of-sight rays (sim.ResolveShot, ai's
+// gunners, server's interact cone) must never come from a client-supplied
+// eye position. Used locally by the landmark visibility cap.
+const EyeHeightMeters = 1.7
 
 // visibleCap returns the GDD angular visibility cap (half-angle, radians)
 // for an object at absolute radius H: an object rising H above the
 // nominal radius is visible from an angular distance of
 // acos(R/(R+H)) + acos(R/(R+eye)) (GDD "Landmarks").
 func visibleCap(H float64) float64 {
-	return math.Acos(PlanetRadius/H) + math.Acos(PlanetRadius/(PlanetRadius+eyeHeightMeters))
+	return math.Acos(PlanetRadius/H) + math.Acos(PlanetRadius/(PlanetRadius+EyeHeightMeters))
 }
 
 // unitLattice returns a dense set of unit directions (every cube-face

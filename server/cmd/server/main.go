@@ -79,7 +79,10 @@ func runServer(args []string) error {
 	}
 
 	field := terrain.Generate(uint64(*seed))
-	world := server.New(field, uint64(*seed))
+	world, err := server.New(field, uint64(*seed))
+	if err != nil {
+		return err
+	}
 
 	// Persistence is opt-in on DATABASE_URL. A failure here is fatal at
 	// STARTUP on purpose: silently falling back to ephemeral sessions would

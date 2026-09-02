@@ -36,12 +36,11 @@ const (
 // server's own positions — a client's own check is a UI affordance only.
 const interactDist = 3.0
 
-// eyeHeightMeters is eye_height (GDD "M1 on-foot movement" rule table),
-// duplicated locally the same way internal/sim/combat.go and
-// internal/terrain/generate.go do — a server-authoritative eye position
-// must never come from the client, and re-deriving it here from a
-// registry would be one more place a bad def value could bite.
-const eyeHeightMeters = 1.7
+// eyeHeightMeters is terrain.EyeHeightMeters — one definition, aliased so
+// call sites read locally. A server-authoritative eye position must never
+// come from the client, and re-deriving it from a registry would be one
+// more place a bad def value could bite.
+const eyeHeightMeters = terrain.EyeHeightMeters
 
 // interactCosMin is cos(interact_cone), interact_cone = 20 deg half-angle.
 var interactCosMin = math.Cos(20.0 * math.Pi / 180)
