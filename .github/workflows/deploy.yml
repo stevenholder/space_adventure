@@ -86,8 +86,10 @@ jobs:
       - name: Smoke — the cluster serves THIS build, or roll back
         run: |
           TAG='${{ steps.build.outputs.id }}'
-          got=$(kubectl -n space-adventure run smoke-$RANDOM --rm -i --restart=Never \
-            --image=curlimages/curl:8.10.1 -- -sf http://server:8080/version || true)
+          # --quiet, or kubectl's own "pod deleted" chatter lands in $got and
+          # a correct deploy fails its own smoke (it did — versions matched).
+          got=$(kubectl -n space-adventure run smoke-$RANDOM --rm -i --quiet --restart=Never \
+            --image=curlimages/curl:8.10.1 -- -sf http://server:8080/version | head -1 || true)
           echo "cluster serves: $got, pushed: $TAG"
           if [ "$got" != "$TAG" ]; then
             echo "::error::smoke failed — rolling back"
