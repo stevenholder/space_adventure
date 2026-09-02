@@ -1,0 +1,26 @@
+{
+  "$comment": "Kenney's space-kit rover, conformed like every other vendored asset. Fit to 1.4 m tall so the seat eye points (1.55 m, GDD 'Rover seats') clear the hull -- riders sit above an open buggy, and seated bodies are not rendered anyway. Mount positions are the GDD seat_eye rows in the art frame: the 180-degree-Y flip, (x,y,z) -> (-x,y,-z), same convention as ship.v1. Forward is -Z in the art frame like the astronaut; the model reads near-symmetric fore/aft, so if a render check shows it driving backwards, fix it with yaw here, not in code.",
+  "id": "vehicle.rover.v1",
+  "src": "vendor/kenney-space-kit/Models/GLTF format/rover.glb",
+  "out": "vehicles/rover.v1.glb",
+  "height": 1.4,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 15000,
+  "mounts": {
+    "seat.driver": [
+      0.35,
+      1.55,
+      -0.1
+    ],
+    "seat.passenger.0": [
+      -0.35,
+      1.55,
+      0.4
+    ]
+  },
+  "license": "CC0",
+  "author": "Kenney",
+  "source_url": "https://kenney.nl/assets/space-kit"
+}
