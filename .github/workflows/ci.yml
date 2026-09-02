@@ -1,0 +1,42 @@
+# C44: Sim and Net build and their checks run with no Unity Editor, in CI, on
+# every commit. C47's grep gate runs here too — a convention nobody checks is a
+# convention that lasts two weeks. Editor-bound targets (unity-typecheck,
+# unity-compile, unity-build) stay local: CI has no Editor, by design.
+name: ci
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+      - run: go vet ./...
+      - run: go test ./...
+
+  client-headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: make unity-gate
+      - run: make unity-test
+      - run: make unity-codec
+      - run: make unity-conformance
