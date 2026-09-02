@@ -61,6 +61,7 @@ func run(args []string) error {
 		sub := map[string]func([]string) error{
 			"dump":    runDump,
 			"drive":   runDrive,
+			"flight":  runFlight,
 			"codec":   runCodec,
 			"collide": runCollide,
 		}

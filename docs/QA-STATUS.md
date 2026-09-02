@@ -323,6 +323,29 @@ creeps downhill forever. `hold_speed` (0.1 m/s, GDD) now zeroes the
 tangential velocity outright when unthrottled; parked residual measured
 1.25e-16 m/s. Both sims, conformance re-verified.
 
+## Phase 5 — C33–C39, run 2026-09-02
+
+Live legs against the deployed stack (`t26-flight.mjs`, `t27-pilot-latency.mjs`),
+cross-sim gate in CI (`t25`, `make unity-conformance`).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C33 | Buy → pad → pilot seat, one session; persists across reconnect | purchased at 600 cr, spawned, seated; reconnect adds no duplicate and the ship is present | **PASS** |
+| C34 | Flight conformance ≤ 1e-6 over ≥ 1000 ticks + GDD table 5% | max dPos **3.7e-13 m**, dQuat 8.2e-16, dω 5e-16 over 1080 ticks; regimes agree every tick; peak 80.00 of vmax_boost | **PASS** (`t25`) |
+| C35 | No discontinuity, no camera flip, no boundary oscillation | space flag rose and fell exactly twice across the full arc; max inter-snapshot step 6.2 m (bar: two ticks of vmax_boost); hysteresis unit-tested under a falling hover | **PASS** |
+| C36 | Orbit: circles in space, returns, no drift/blow-up, renders at altitude | the committed arc reaches space, turns, burns back and lands; camera far plane 6 km; never below the surface (min clearance −1e-5 m, independent sampler) | **PASS** |
+| C37 | Touch down ≤ landing speed, settle grounded, no penetration; hard landing penalised | live landing grounded and still; settle-vs-bounce branches unit-tested at 4 and 20 m/s | **PASS** |
+| C38 | Passenger: sees the flight, no ship input, safe disembark | composed within one snapshot through the whole flight (worst 1.7 m ≈ seat offset), movement spam inert, disembarked onto terrain | **PASS** |
+| C39 | 100 ms latency: p95 predicted-vs-authoritative < 0.5 m, no snap-back | **p95 1.8e-5 m**, p50 5.5e-6 m, 0 snap-backs, 393 paired samples through the proxy | **PASS** (`t27`) |
+
+Notes: C27-style, C36's "returns to the pad" is flown as "returns and
+lands" — the committed script lands ~30 m from the pad, and pad-exact
+landings are piloting skill, not a sim property. Two GDD draft errors were
+caught and corrected during implementation, both recorded in place: the
+flight step's rotation line post-multiplied a world-axis quat while
+claiming local axes, and the pitch sign claimed nose-up for what the
+right-hand rule makes nose-down.
+
 ## Harnesses, for the C43 re-run
 
 All under `test/`. These speak the wire protocol directly and carry their own

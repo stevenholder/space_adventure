@@ -196,6 +196,7 @@ unity-test:
 unity-conformance:
 	node test/t20-csharp-conformance.mjs
 	node test/t23-drive-conformance.mjs
+	node test/t25-flight-conformance.mjs
 
 # C41: the C# codec must agree with the Go one BYTE FOR BYTE, both
 # directions. A codec's own round-trip test agrees with its own bug, so this

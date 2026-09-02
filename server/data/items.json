@@ -33,6 +33,14 @@
       "name": "Energy Cell",
       "kind": "ammo",
       "stack_max": 300
+    },
+    {
+      "$comment": "Phase 5: owning this item IS owning a ship (GDD 'Ownership') - the server spawns the owner's ship on the pad at purchase and on join. stack_max 1: one ship per owner.",
+      "id": "ship.v1",
+      "name": "Scout Ship",
+      "kind": "vehicle",
+      "asset": "ship.v1",
+      "stack_max": 1
     }
   ],
   "entity_defs": [
@@ -65,6 +73,14 @@
       "asset": "vehicle.rover.v1",
       "max_health": 200,
       "hitbox": { "radius": 1.2, "height": 1.6 },
+      "damageable": false
+    },
+    {
+      "$comment": "Phase 5 ship. Same reasoning as the rover: not damageable, origin-point collision, hitbox for interaction targeting only.",
+      "type": "ship",
+      "asset": "ship.v1",
+      "max_health": 400,
+      "hitbox": { "radius": 2.0, "height": 2.6 },
       "damageable": false
     }
   ]

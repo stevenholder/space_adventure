@@ -381,6 +381,7 @@ namespace SpaceAdventure.Game
             EntityType.Target => Defs.EntityAsset("target"),
             EntityType.Npc => Fallback(Defs.NpcAsset(def), Defs.EntityAsset("npc")),
             EntityType.Vehicle => Defs.EntityAsset("vehicle"),
+            EntityType.Ship => Defs.EntityAsset("ship"),
 
             // Loot is the one id named here rather than by the server, and it
             // is not an exception being smuggled in. The server has an

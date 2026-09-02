@@ -117,6 +117,7 @@ func TestBoardDriveDisembark(t *testing.T) {
 	})
 	roverRow := rowOf(t, a, rover.ID)
 	want := sim.ComposeSeat(
+		sim.EntityKind(protocol.EntityTypeVehicle),
 		sim.Vec{float64(roverRow.Pos[0]), float64(roverRow.Pos[1]), float64(roverRow.Pos[2])},
 		sim.Quat{float64(roverRow.Quat[0]), float64(roverRow.Quat[1]), float64(roverRow.Quat[2]), float64(roverRow.Quat[3])},
 		1)

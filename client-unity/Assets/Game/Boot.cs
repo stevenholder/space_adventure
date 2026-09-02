@@ -90,6 +90,15 @@ namespace SpaceAdventure.Game
         private ushort _seat;
         private float _noticeUntil;
         private readonly RoverPredictor _rover = new RoverPredictor();
+        private readonly ShipPredictor _ship = new ShipPredictor();
+
+        // Mouse delta accumulated ACROSS the frames within one tick while
+        // piloting — per-frame deltas consumed per-tick would drop most of
+        // the motion (the drive-phase gotcha, avoided this time).
+        private Vector2 _mouseAccum;
+
+        /// <summary>k_rate (GDD flight input map): mouse px/s → rad/s.</summary>
+        private const float KRate = 0.0022f;
 
         // GDD "Rover seats" seat_eye column, sim frame, indexed by seat.
         private static readonly Vec3[] RoverSeatEye =
@@ -98,6 +107,21 @@ namespace SpaceAdventure.Game
             new Vec3(-0.35, 1.55, +0.10), // driver
             new Vec3(+0.35, 1.55, -0.40), // passenger
         };
+
+        // GDD "Seats and occupancy" ship seat_eye column, sim frame.
+        private static readonly Vec3[] ShipSeatEye =
+        {
+            default,
+            new Vec3(0.00, 2.21, +1.90), // pilot
+            new Vec3(+0.35, 2.21, +0.75),
+            new Vec3(-0.35, 2.21, +0.75),
+        };
+
+        /// <summary>The seated vehicle's EntityType, 0 when on foot.</summary>
+        private ushort SeatKind =>
+            _seat != 0 && _views.TryGet(_seatVehicle, out var v) ? v.Type : (ushort)0;
+
+        private bool Piloting => _seat == 1 && SeatKind == EntityType.Ship;
 
         // C46 frame-budget evidence: every 5 s, log the window's average fps
         // and worst frame to the player log, where `unity run` and the C46
@@ -170,7 +194,10 @@ namespace SpaceAdventure.Game
             var camGo = new GameObject("Eye");
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.05f;
-            cam.farClipPlane = 2000f;
+            // Far enough that the whole planet reads as a planet from any
+            // altitude a flight reaches (C36) — the world is ~380 m across
+            // and the scripted orbits sit within ~1500 m.
+            cam.farClipPlane = 6000f;
             cam.fieldOfView = 60f; // ~90 degrees horizontal at 16:9, the FPS norm
             cam.cullingMask = ~(1 << vmLayer); // the world, minus the rig
 
@@ -292,7 +319,15 @@ namespace SpaceAdventure.Game
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
             }
-            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked;
+            // The pilot's mouse steers the ship, never the view (GDD:
+            // hull-fixed camera). Accumulate the raw delta for SendTick.
+            bool piloting = Piloting;
+            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked && !piloting;
+            if (piloting && Cursor.lockState == CursorLockMode.Locked)
+            {
+                var m = UnityEngine.InputSystem.Mouse.current;
+                if (m != null) _mouseAccum += m.delta.ReadValue();
+            }
 
             var state = _predictor.State;
             // Seated, the local up comes from the rover — the body predictor
@@ -318,7 +353,7 @@ namespace SpaceAdventure.Game
                 eye += eye.normalized * FpsController.EyeHeight;
                 _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
             }
-            if (_seat != 0) _interact.Notice = "E  ·  exit rover";
+            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "E  ·  exit ship" : "E  ·  exit rover";
             else if (Time.time > _noticeUntil) _interact.Notice = "";
             if (li.InteractPressed && !_map.Open && !_character.AnyOpen)
             {
@@ -328,10 +363,11 @@ namespace SpaceAdventure.Game
                     _net.Send(Encode.Disembark());
                 }
                 else if (_interact.ShopOpen) _interact.CloseShop();
-                else if (_interact.TargetType == EntityType.Vehicle && _interact.Target != 0)
+                else if ((_interact.TargetType == EntityType.Vehicle ||
+                          _interact.TargetType == EntityType.Ship) && _interact.Target != 0)
                 {
-                    // Ask for the driver seat; on "occupied" the seat_result
-                    // handler retries the passenger seat.
+                    // Ask for the control seat; on "occupied" the seat_result
+                    // handler walks down the passenger seats.
                     _net.Send(Encode.Board(_interact.Target, 1));
                 }
                 else
@@ -394,14 +430,19 @@ namespace SpaceAdventure.Game
         /// </summary>
         private void PlaceSeatCamera()
         {
+            bool ship = SeatKind == EntityType.Ship;
             Vector3 pos;
             Quaternion rot;
             bool haveView = _views.TryGet(_seatVehicle, out var vv) && vv.Root != null;
-            if (_seat == 1 && _rover.Ready)
+            if (_seat == 1 && (ship ? _ship.Ready : _rover.Ready))
             {
-                var s = _rover.State;
-                pos = TerrainMesh.ToUnity(s.Pos);
-                rot = RotFrom(s.Quat);
+                // The control seat sees the PREDICTED vehicle; steering one
+                // that lags your own input by a round trip is the bug
+                // prediction exists to kill.
+                Vec3 p = ship ? _ship.State.Pos : _rover.State.Pos;
+                Quat q = ship ? _ship.State.Quat : _rover.State.Quat;
+                pos = TerrainMesh.ToUnity(p);
+                rot = RotFrom(q);
                 if (haveView) vv.Root.transform.SetPositionAndRotation(pos, rot);
             }
             else if (haveView)
@@ -409,11 +450,51 @@ namespace SpaceAdventure.Game
                 pos = vv.Root.transform.position;
                 rot = vv.Root.transform.rotation;
             }
-            else return; // no rover row seen yet; keep last camera pose
+            else return; // no vehicle row seen yet; keep last camera pose
 
-            int seat = _seat < RoverSeatEye.Length ? _seat : 1;
-            Vec3 eye = RoverSeatEye[seat];
+            var table = ship ? ShipSeatEye : RoverSeatEye;
+            int seat = _seat < table.Length ? _seat : 1;
+            Vec3 eye = table[seat];
             _camera.transform.position = pos + rot * new Vector3((float)eye.X, (float)eye.Y, (float)-eye.Z);
+
+            // The pilot's camera is hull-fixed: orientation IS the ship's
+            // attitude, the mouse steers the ship, not the view (GDD
+            // "Camera and rig"). Passengers keep the free look the
+            // FpsController already applied this frame.
+            if (ship && _seat == 1) _camera.transform.rotation = rot;
+        }
+
+        /// <summary>
+        /// The flight readout (ROADMAP task 12): speed, altitude above the
+        /// terrain under the ship, regime, role. IMGUI like everything else
+        /// — no assets, C47 holds.
+        /// </summary>
+        private void DrawFlightHud()
+        {
+            bool pilot = Piloting;
+            ShipSimState s = _ship.Ready ? _ship.State : default;
+            Vec3 p;
+            Vec3 v;
+            bool space;
+            if (pilot && _ship.Ready)
+            {
+                p = s.Pos; v = s.Vel; space = s.Space;
+            }
+            else if (_views.TryGet(_seatVehicle, out var vv) && vv.Root != null)
+            {
+                Vector3 up0 = vv.Root.transform.position;
+                p = new Vec3(up0.x, up0.y, -up0.z);
+                v = Vec3.Zero;
+                space = p.Length >= FlightRules.SpaceRadius;
+            }
+            else return;
+
+            Vec3 dir = p.Normalized();
+            double alt = p.Length - _terrain.SampleRadius(dir);
+            string line = pilot
+                ? $"{v.Length,6:F1} m/s   alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PILOT"
+                : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER";
+            GUI.Label(new Rect(Screen.width * 0.5f - 180, 18, 360, 24), line);
         }
 
         private static Quaternion RotFrom(Quat q)
@@ -440,6 +521,32 @@ namespace SpaceAdventure.Game
         {
             _seq++;
 
+            if (Piloting)
+            {
+                // Pilot: mode 1, v = [thrust, roll, yaw_rate, pitch_rate, 0]
+                // (GDD flight input map). Mouse deltas were accumulated per
+                // frame; convert to rad/s over the tick. Signs: rightward
+                // drag → negative yaw (left turn positive, RH rule about
+                // +Y); upward drag → negative pitch (nose up — the
+                // corrected convention).
+                double yaw = -_mouseAccum.x / Rules.DT * KRate;
+                double pitch = -_mouseAccum.y / Rules.DT * KRate; // Unity +y = up = nose up = negative
+                _mouseAccum = Vector2.zero;
+                var inp = new FlightInput
+                {
+                    Thrust = li.MoveY,
+                    Roll = -li.MoveX, // A (strafe −1) = roll left = +1
+                    YawRate = yaw,
+                    PitchRate = pitch,
+                    Boost = (li.ActionMask & SpaceAdventure.Net.Action.Sprint) != 0,
+                };
+                _ship.Apply(_seq, inp);
+                _net.Send(Encode.Input(
+                    (float)inp.Thrust, (float)inp.Roll,
+                    (float)inp.YawRate, (float)inp.PitchRate, 0,
+                    inp.Boost ? SpaceAdventure.Net.Action.Boost : (ushort)0, _seq, 1));
+                return;
+            }
             if (_seat == 1)
             {
                 // Driving: mode 2, v = [throttle, steer, 0, 0, 0]. Forward
@@ -589,6 +696,8 @@ namespace SpaceAdventure.Game
                                 _seatVehicle = row.ParentId;
                                 _seat = row.Seat;
                                 _rover.Reset();
+                                _ship.Reset();
+                                _mouseAccum = Vector2.zero;
                                 if (_seat != 0) _predictor.Reset();
                             }
                             if (_seat == 0)
@@ -607,12 +716,13 @@ namespace SpaceAdventure.Game
                         {
                             // Our row precedes world entities in the snapshot
                             // (players first), so _seat is already current.
-                            _rover.Reconcile(
-                                new Vec3(row.PosX, row.PosY, row.PosZ),
-                                new Vec3(row.VelX, row.VelY, row.VelZ),
-                                new Quat(row.QuatX, row.QuatY, row.QuatZ, row.QuatW),
-                                row.Grounded,
-                                snap.AckSeq);
+                            var pos = new Vec3(row.PosX, row.PosY, row.PosZ);
+                            var vel = new Vec3(row.VelX, row.VelY, row.VelZ);
+                            var q = new Quat(row.QuatX, row.QuatY, row.QuatZ, row.QuatW);
+                            if (SeatKind == EntityType.Ship)
+                                _ship.Reconcile(pos, vel, q, row.Grounded, row.Space, snap.AckSeq);
+                            else
+                                _rover.Reconcile(pos, vel, q, row.Grounded, snap.AckSeq);
                         }
                     }
                     break;
@@ -651,10 +761,12 @@ namespace SpaceAdventure.Game
                 case Msg.SeatResult:
                 {
                     SeatResult sr = Decode.SeatResult(frame.Reader);
-                    if (sr.Result == SeatResult.Occupied && sr.Seat == 1)
+                    ushort crew = _views.TryGet(sr.EntityId, out var sv) && sv.Type == EntityType.Ship
+                        ? (ushort)3 : (ushort)2;
+                    if (sr.Result == SeatResult.Occupied && sr.Seat < crew)
                     {
-                        // Driver seat taken — ride along instead.
-                        _net.Send(Encode.Board(sr.EntityId, 2));
+                        // That seat is taken — walk down the bench.
+                        _net.Send(Encode.Board(sr.EntityId, (ushort)(sr.Seat + 1)));
                     }
                     else if (!sr.Ok)
                     {
@@ -707,6 +819,7 @@ namespace SpaceAdventure.Game
             _planet = TerrainMesh.Build(_terrain, _material, transform);
             _predictor.Seed(_terrain, _colliders);
             _rover.Seed(_terrain);
+            _ship.Seed(_terrain);
 
             // Scatter is pure in (terrain, world_seed), so it can only run
             // once the terrain has landed -- which is here, and not earlier.
@@ -728,6 +841,7 @@ namespace SpaceAdventure.Game
         private void OnGUI()
         {
             if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
+            if (_worldBuilt && SeatKind == EntityType.Ship) DrawFlightHud();
             _hud?.Draw(_net, _predictor, _character);
             if (_map == null || !_worldBuilt) return;
 

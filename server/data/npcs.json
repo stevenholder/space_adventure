@@ -17,6 +17,10 @@
         {
           "item": "ammo.cell",
           "price": 1
+        },
+        {
+          "item": "ship.v1",
+          "price": 600
         }
       ]
     },
