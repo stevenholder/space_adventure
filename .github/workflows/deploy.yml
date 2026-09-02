@@ -1,0 +1,96 @@
+# Phase 6 CD (C48): a push to main that passes CI reaches the pandas
+# cluster with no human step.
+#
+# Chained via workflow_run so this NEVER runs on red CI. One workflow does
+# image + deploy because they share the answer to "which build": the image
+# tag IS the server-subtree hash (the same BUILD_ID /version serves and
+# check-server asserts locally), so an unchanged server/ means the image
+# already exists and the build step skips itself.
+#
+# Cluster access: the runner joins the tailnet as an ephemeral tag:ci node
+# (OAuth client, writable auth_keys scope), then talks kubectl through the
+# Tailscale operator's API-server proxy. The ACL grant maps tag:ci to the
+# `ci-deployers` group; deploy/prod/05-rbac.yaml is that group's ceiling —
+# this workflow can redeploy the game and nothing else.
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency: deploy-prod
+
+env:
+  IMG: ghcr.io/${{ github.repository_owner }}/space_adventure/server
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - id: build
+        name: Compute BUILD_ID (server-subtree hash, same as make's)
+        run: echo "id=$(git rev-parse --short HEAD:server)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (skipped when this server build already exists)
+        run: |
+          TAG='${{ steps.build.outputs.id }}'
+          if docker manifest inspect "$IMG:$TAG" >/dev/null 2>&1; then
+            echo "image $IMG:$TAG already published — server/ unchanged"
+          else
+            docker build -f Dockerfile.server --provenance=false \
+              --build-arg BUILD_ID="$TAG" -t "$IMG:$TAG" -t "$IMG:latest" .
+            docker push "$IMG:$TAG"
+            docker push "$IMG:latest"
+          fi
+
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Point kubectl at the operator's API proxy
+        run: tailscale configure kubeconfig tailscale-operator
+
+      - name: Deploy the exact build
+        run: |
+          TAG='${{ steps.build.outputs.id }}'
+          cd deploy/prod
+          # Pin the tag without extra tooling: kustomization.yaml carries no
+          # images: field in git, so appending one is well-formed.
+          cat >> kustomization.yaml <<EOF
+          images:
+            - name: $IMG
+              newTag: $TAG
+          EOF
+          kubectl apply -k .
+          kubectl -n space-adventure rollout status deploy/server --timeout=180s
+
+      - name: Smoke — the cluster serves THIS build, or roll back
+        run: |
+          TAG='${{ steps.build.outputs.id }}'
+          got=$(kubectl -n space-adventure run smoke-$RANDOM --rm -i --restart=Never \
+            --image=curlimages/curl:8.10.1 -- -sf http://server:8080/version || true)
+          echo "cluster serves: $got, pushed: $TAG"
+          if [ "$got" != "$TAG" ]; then
+            echo "::error::smoke failed — rolling back"
+            kubectl -n space-adventure rollout undo deploy/server
+            exit 1
+          fi

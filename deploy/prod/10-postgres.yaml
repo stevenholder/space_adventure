@@ -1,0 +1,32 @@
+# Postgres via CloudNativePG (operator installed once, by hand, pinned
+# 1.27.1). Two instances because the cluster's local-path storage is
+# NODE-LOCAL: a single-pod Postgres here loses its data with its node, so
+# replication is what makes "a node dies" a non-event (C50). CNPG spreads
+# instances across nodes by default and fails over on its own.
+#
+# Credentials: CNPG generates them (random, never in git — C52's
+# non-default-creds requirement holds by construction) and publishes the
+# app connection URI in the secret `space-db-app`, key `uri`, which is
+# exactly what the server's DATABASE_URL wants.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: space-db
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  instances: 2
+  # The postgres superuser secret (space-db-superuser) exists for the
+  # runbook's restore drill and future migrations — the app user can't
+  # CREATE DATABASE, and a drill that can't run isn't a drill.
+  enableSuperuserAccess: true
+  storage:
+    size: 2Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

@@ -83,6 +83,7 @@ type Server struct {
 	store *store.Store
 
 	upgrader websocket.Upgrader
+	gate     *gatekeeper
 
 	mu       sync.Mutex
 	nextID   uint32
@@ -210,14 +211,13 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 		seed:    seed,
 		tickHz:  sim.TickHz,
 		upgrader: websocket.Upgrader{
-			// Known deferral: any Origin is accepted. Fine while the only
-			// clients are the packaged build and the test harnesses against a
-			// kind-local cluster — and the same trust posture as the identity
-			// token (docs/PROTOCOL.md "Identity token": anyone who has it IS
-			// that player). Both must change together before any public
-			// exposure.
-			CheckOrigin: func(*http.Request) bool { return true },
+			// Phase 6: no Origin (native clients) passes; a browser origin
+			// must be on SA_ALLOWED_ORIGINS (gatekeeper.go). The identity
+			// token stays an unverified bearer per the Deferred table —
+			// its trigger is "players other than us", not "a LAN exists".
+			CheckOrigin: checkOrigin,
 		},
+		gate: newGatekeeper(),
 		clients:   make(map[uint32]*client),
 		reg:       reg,
 		world:     world,
@@ -281,6 +281,17 @@ func entityDefKind(k sim.EntityKind) string {
 
 // HandleWS upgrades /ws and runs the connection's reader and writer.
 func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
+	// LAN exposure gate (Phase 6, C52): per-IP cap and join rate, refused
+	// before the upgrade so a flood costs one HTTP response per attempt.
+	// HandleWS blocks for the connection's whole life, so the deferred
+	// release fires exactly when the socket dies.
+	ip := clientIP(r)
+	if !s.gate.admit(ip, time.Now()) {
+		http.Error(w, "too many connections from this address", http.StatusTooManyRequests)
+		return
+	}
+	defer s.gate.release(ip)
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return // the upgrader already answered
