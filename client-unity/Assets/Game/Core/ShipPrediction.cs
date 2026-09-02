@@ -41,6 +41,9 @@ namespace SpaceAdventure.Game
         public ShipSimState State => _state;
         public bool Ready => _terrain != null && _seeded;
 
+        /// <summary>Inputs still unacked — the replay depth (see Predictor).</summary>
+        public int PendingCount => _pending.Count;
+
         public void Seed(TerrainField terrain) => _terrain = terrain;
 
         public void Apply(ushort seq, FlightInput input)
