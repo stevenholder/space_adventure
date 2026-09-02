@@ -60,6 +60,7 @@ func run(args []string) error {
 	if len(args) > 0 {
 		sub := map[string]func([]string) error{
 			"dump":    runDump,
+			"drive":   runDrive,
 			"codec":   runCodec,
 			"collide": runCollide,
 		}

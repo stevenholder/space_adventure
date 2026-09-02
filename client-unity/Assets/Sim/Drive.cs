@@ -1,0 +1,135 @@
+// Phase 4 — stepRover, mirrored from server/internal/sim/drive.go
+// line-for-line (GDD "Phase 4 — ground drive model", steps 1–10). C30 diffs
+// this against the Go sim at ≤ 1e-6 over ≥ 1000 ticks, so any change lands
+// in both files or the gate goes red.
+//
+// No UnityEngine, project math types only (CONVENTIONS.md): normalize/lerp
+// differ between engines, and this file exists to agree with Go, not Unity.
+
+using System;
+
+namespace SpaceAdventure.Sim
+{
+    /// <summary>GDD "Ground drive model" rule table.</summary>
+    public static class DriveRules
+    {
+        public const double AccelDrive = 8.0;
+        public const double VmaxDrive = 16.0;
+        public const double SteerRate = 1.2;
+        public const double Grip = 6.0;
+        public const double DampDrive = 0.8;
+        public const double DriveSlopeMax = 40.0 * Math.PI / 180.0;
+    }
+
+    /// <summary>The rover's mirrored state: the wire triplet plus carried grounded.</summary>
+    public struct RoverState
+    {
+        public Vec3 Pos;
+        public Vec3 Vel;
+        public Quat Quat;
+        public bool Grounded;
+    }
+
+    public static class Drive
+    {
+        /// <summary>One fixed-dt rover tick — the exact step order of drive.go.</summary>
+        public static void Apply(ref RoverState s, double throttle, double steer,
+                                 TerrainField t, double dt)
+        {
+            throttle = Sanitise(throttle);
+            steer = Sanitise(steer);
+
+            Vec3 pos = s.Pos, vel = s.Vel;
+
+            // 1–2: local up, heading from the quat's forward projected to the
+            // tangent plane. Fallback per the GDD: rotate(quat, +Y) projected.
+            Vec3 up = pos.Normalized();
+            Vec3 h = Tangential(Quat.Rotate(s.Quat, new Vec3(0, 0, 1)), up);
+            if (h.Length < Rules.EpsDegen)
+                h = Tangential(Quat.Rotate(s.Quat, new Vec3(0, 1, 0)), up);
+            h = h.Normalized();
+
+            // 3: steer, grounded only. Positive steer = toward local +X =
+            // negative rotation about up (right-hand rule).
+            if (s.Grounded && steer != 0)
+                h = RotateAboutAxis(h, up, -steer * DriveRules.SteerRate * dt);
+
+            // 4: throttle, grounded and under the slope cutoff. Reverse at
+            // half accel.
+            if (s.Grounded && throttle != 0 && t.Slope(up) <= DriveRules.DriveSlopeMax)
+            {
+                double a = throttle < 0 ? DriveRules.AccelDrive * 0.5 : DriveRules.AccelDrive;
+                vel += h * (throttle * a * dt);
+            }
+
+            // 5: gravity, always, along local −up.
+            vel -= up * (Rules.Gravity * dt);
+
+            // 6: grip and coast, tangent-frame split, grounded only.
+            if (s.Grounded)
+            {
+                double vr0 = Vec3.Dot(vel, up);
+                Vec3 vt0 = vel - up * vr0;
+                double vf = Vec3.Dot(vt0, h);
+                Vec3 vlat = vt0 - h * vf;
+                vlat *= Math.Exp(-DriveRules.Grip * dt);
+                if (throttle == 0) vf *= Math.Exp(-DriveRules.DampDrive * dt);
+                vel = up * vr0 + h * vf + vlat;
+            }
+
+            // 7: clamp tangential speed.
+            double vr = Vec3.Dot(vel, up);
+            Vec3 vt = vel - up * vr;
+            double l = vt.Length;
+            if (l > DriveRules.VmaxDrive)
+                vel = vt * (DriveRules.VmaxDrive / l) + up * vr;
+
+            // 8: integrate.
+            pos += vel * dt;
+
+            // 9: terrain following — the origin point, like a body's foot.
+            Vec3 u = pos.Normalized();
+            double r = t.SampleRadius(u);
+            if (pos.Length <= r + Rules.GroundSnap)
+            {
+                pos = u * r;
+                double rad = Vec3.Dot(vel, u);
+                if (rad < 0) vel -= u * rad;
+                s.Grounded = true;
+            }
+            else
+            {
+                s.Grounded = false;
+            }
+
+            // 10: orientation from the ground normal (radial up when airborne).
+            Vec3 n = s.Grounded ? t.SurfaceNormal(u) : u;
+            Vec3 h2 = Tangential(h, n);
+            if (h2.Length < Rules.EpsDegen)
+                h2 = Tangential(Quat.Rotate(s.Quat, new Vec3(0, 1, 0)), n);
+            h2 = h2.Normalized();
+
+            s.Pos = pos;
+            s.Vel = vel;
+            s.Quat = Quat.FromBasis(Vec3.Cross(n, h2), n, h2);
+        }
+
+        // Rodrigues, the exact expression of drive.go's rotateAboutAxis — not
+        // a quaternion — so the two sims agree to C30's bar.
+        private static Vec3 RotateAboutAxis(Vec3 v, Vec3 k, double ang)
+        {
+            double c = Math.Cos(ang), s = Math.Sin(ang);
+            return v * c + Vec3.Cross(k, v) * s + k * (Vec3.Dot(k, v) * (1 - c));
+        }
+
+        private static Vec3 Tangential(Vec3 v, Vec3 up) => v - up * Vec3.Dot(v, up);
+
+        private static double Sanitise(double x)
+        {
+            if (double.IsNaN(x) || double.IsInfinity(x)) return 0;
+            if (x < -1) return -1;
+            if (x > 1) return 1;
+            return x;
+        }
+    }
+}
