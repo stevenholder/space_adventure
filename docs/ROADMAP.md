@@ -566,6 +566,20 @@ wasted otherwise.
 
 # Phase 4 — get in a rover and drive
 
+### Where Phase 4 stands (2026-09-02)
+
+Built and green end to end in one pass: tasks 1–14 and 16 landed, C26–C32
+all PASS against the deployed stack (`docs/QA-STATUS.md` "Phase 4" has the
+measured values; `node test/t24-rover.mjs` is the harness — the t13 name
+this table originally assigned was already taken by collide-parity). C30
+conformance runs in CI via `make unity-conformance` (t23). Task 15 (rover
+ownership/purchase) is **deferred to Phase 5 deliberately**: no Phase 4
+criterion touches ownership, the playable proof uses the parked world
+rover, and C33 builds purchase-persistence properly for ships — rover
+ownership should ride that machinery, not grow a parallel one. The e2e
+run added one rule the spec missed: `hold_speed` (GDD), because a parked
+rover with only exponential damping creeps downhill forever.
+
 **Playable proof.** A rover is parked near spawn. Walk up to it, press E, your
 body sits in the driver seat and the camera moves to the driver's eye point.
 Drive it over the terrain — up slopes, over crests, around the camp. A second
@@ -606,9 +620,9 @@ also have to solve flight. Phase 5 then reuses it.
 | 11 | `frontend` | Rover rendering + camera mount at the seat node | `client-unity/Assets/Game/Vehicle.cs` | `make unity-typecheck` |
 | 12 | `frontend` | Input mode switch driven by snapshot occupancy | `client-unity/Assets/Game/Boot.cs` | `make unity-typecheck` |
 | 13 | `frontend` | Rover prediction + replay | `client-unity/Assets/Game/Core/Prediction.cs` | `make unity-test` |
-| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client-unity/Assets/Game/Hud.cs`, `Interact.cs` | `make unity-typecheck` |
-| 15 | `netcode` | Rover ownership: purchase via `cmd`, persisted, spawn/despawn | `server/internal/sim/ownership.go` | `go test ./internal/sim` |
-| 16 | `qa` | e2e harness against C26–C32 | `test/t13-rover.mjs` | `node test/t13-rover.mjs` |
+| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client-unity/Assets/Game/Interact.cs`, `Boot.cs` | `make unity-typecheck` |
+| 15 | `netcode` | Rover ownership — **deferred to Phase 5** (see the status block: rides C33's purchase machinery) | — | — |
+| 16 | `qa` | e2e harness against C26–C32 | `test/t24-rover.mjs` | `node test/t24-rover.mjs` |
 
 ### Acceptance criteria
 
