@@ -732,7 +732,16 @@ ship is a moving-reference-frame problem, and it is not part of this phase.
 
 # Phase 6 — host it for real
 
-### Where Phase 6 stands (2026-09-02, evening)
+### Where Phase 6 stands (2026-09-02, night: CLOSED)
+
+C48 went green on run 33693371037 after six instructive failures
+(`docs/QA-STATUS.md` "Phase 6" lists all six — each was a future outage
+pre-paid). Push to main now reaches the pandas with no human step, smoke
+compares `/version` to main's own server hash, and the rollback path is
+proven because a smoke bug once fired it against a correct deploy. All
+criteria C48–C53 PASS (C52's NetworkPolicy clause waived with probe
+evidence). The phase is closed; the game runs, for real, on real metal,
+continuously deployed.
 
 Live. The pandas cluster serves the game through Traefik on every node IP
 (`ws://192.168.1.163/ws`), build-identity verified; CNPG runs Postgres 18
