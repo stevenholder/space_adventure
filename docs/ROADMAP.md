@@ -730,6 +730,86 @@ ship is a moving-reference-frame problem, and it is not part of this phase.
 
 ---
 
+# Phase 6 — host it for real
+
+**Playable proof.** Push to `main`. CI goes green, and with no further human
+step the pandas cluster (k3s, 4 nodes, on the tailnet) is running that exact
+build — `/version` says so. A packaged client on the LAN connects through
+Traefik and plays the whole game: walk, fight, buy, drive, fly. A node dies
+mid-week and no player data is lost.
+
+This is the Deferred table's "deploying somewhere real" trigger firing, so
+the deferrals it gated come due: hosted Postgres with replication and
+backups, and the origin-check hardening the code has carried as a "before
+public exposure" note since Phase 2. What does NOT come due: real accounts
+(players are still us — the LAN is the household) and sharding (one process
+is nowhere near saturated). The kind stack stays exactly as it is — the
+local development path does not change.
+
+**Decisions taken at wave 0 (2026-09-02).** Client exposure through Traefik
+on the LAN (the cluster's existing LoadBalancer); GitHub Actions reaches the
+cluster by joining the tailnet as an ephemeral node (Tailscale GitHub
+Action + the operator's API-server proxy, currently disabled and to be
+enabled); Postgres via the CloudNativePG operator (replicated across nodes —
+local-path storage is node-local, so replication is what makes "a node dies"
+a non-event); images on GHCR pushed by the same workflow with the built-in
+token.
+
+### Wave 0 — contracts
+
+- `docs/ARCHITECTURE.md`: a "Production deployment" section — the pandas
+  topology, the request path (client → Traefik host rule → Service → pod),
+  the CD path (Actions → tailnet → operator API proxy → kubectl), and the
+  explicit statement that kind remains the dev path.
+- `deploy/` splits: the kind manifests stay put; `deploy/prod/` holds the
+  real-cluster kustomization. One server image serves both.
+- The server hostname (Traefik host rule) and the `SA_ALLOWED_ORIGINS`
+  contract for the origin check (below) are pinned before any manifest.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | GHCR publish workflow: build server image on `main`, tag `latest` + git SHA, BUILD_ID stamped | `.github/workflows/publish.yml` | image pullable, `/version` = SHA |
+| 2 | Enable the Tailscale operator's API-server proxy + tailnet ACL grants for a `tag:ci` principal | operator helm values (user's install) | `kubectl --server https://tailscale-operator.<tailnet>` works from a tailnet node |
+| 3 | Namespace, scoped ServiceAccount + Role for CD, imagePullSecret for GHCR | `deploy/prod/00-namespace.yaml` etc. | `kubectl auth can-i` matrix |
+| 4 | CNPG operator (pinned version) + `Cluster`: 2 instances on different nodes, scheduled backups + a RESTORE DRILL | `deploy/prod/postgres/` | kill the primary; C50 |
+| 5 | Server Deployment/Service/Ingress (Traefik, websocket), resources, probes, NetworkPolicies (server→pg only; pg accepts only server) | `deploy/prod/` | C49, C52 |
+| 6 | CD workflow: on CI-green `main` — tailscale join → kubectl apply -k → rollout status → smoke `/version == SHA` | `.github/workflows/deploy.yml` | C48 |
+| 7 | Origin check: `SA_ALLOWED_ORIGINS` allowlist — empty/absent Origin allowed (native clients send none), browser origins must match; the "must change together" note retired | `server/internal/server/server.go` | unit + C52 |
+| 8 | Join hardening for LAN exposure: per-IP connection cap and a hello rate limit | `server/internal/server/` | unit + C52 |
+| 9 | Non-default DB credentials via Secret, generated not committed; kind keeps its own | `deploy/prod/` | C52 |
+| 10 | e2e against prod: the existing harnesses honour `SA_SERVER_URL` — run t3/t14/t15/t24/t26 against the LAN URL | harness sweep | C49 |
+| 11 | Runbook: deploy, roll back (previous SHA tag), restore from backup, read logs | `docs/RUNBOOK.md` | review + the C50 drill follows it |
+
+### Acceptance criteria
+
+- **C48 Continuous deployment.** A push to `main` that passes CI reaches the
+  pandas cluster with no human step; `/version` equals the pushed SHA;
+  a failed smoke check leaves the previous build serving (rollout undo).
+- **C49 Real play.** A packaged client pointed at the LAN URL plays the full
+  loop — join, fight, buy, drive, fly, land — against the real cluster, with
+  the sustain harness holding 20 Hz and one-way p95 under 50 ms on the LAN.
+- **C50 A node dies.** Kill the Postgres primary's pod, then drain its node:
+  the cluster fails over with zero committed-write loss, and a restore from
+  the latest backup is DRILLED, not assumed, following the runbook.
+- **C51 Server churn.** Deleting the server pod mid-session: clients
+  reconnect on the same token and persistence holds (t15 against prod).
+- **C52 Hardening holds.** A browser-origin WS from an unlisted origin is
+  refused; Postgres is unreachable from anything but the server pods
+  (NetworkPolicy probed, not assumed); DB credentials are not the defaults
+  and not in git; the connection cap and hello rate limit refuse a
+  flood without disturbing seated players.
+- **C53 Dev path intact.** `make up` + the full local sweep still pass
+  untouched on kind — production hosting changed nothing local.
+
+### Explicitly still deferred
+
+Real accounts and token signing (players are the household; the trigger
+stays "players other than us"), wss/TLS on the LAN (an internal CA every
+client must trust buys little on a private LAN — revisit if the LAN stops
+being trusted), sharding, and everything else in the table below.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
