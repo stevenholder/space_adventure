@@ -12,7 +12,8 @@
 // test can see it. The retired TypeScript client had exactly that bug and C14
 // caught it only at the wire level (docs/QA-STATUS.md).
 //
-// So: SnapshotTimeline estimates the server's tick from arrivals, and views
+// So: SnapshotTimeline (Core/Timeline.cs, engine-free so SimDump can verify
+// it headless) estimates the server's tick from arrivals, and views here
 // interpolate between the two snapshots bracketing `serverTick - interpTicks`.
 
 using System.Collections.Generic;
@@ -101,6 +102,9 @@ namespace SpaceAdventure.Game
         }
 
         public IEnumerable<EntityView> All => _views.Values;
+
+        /// <summary>How many entities are currently drawn, for framestats.</summary>
+        public int Count => _views.Count;
 
         /// <summary>
         /// Everything currently drawn, for the map. Positions come from the
@@ -228,7 +232,7 @@ namespace SpaceAdventure.Game
         /// </summary>
         public void Render(SnapshotTimeline timeline, uint selfId)
         {
-            foreach (var kv in timeline.Interpolate())
+            foreach (var kv in timeline.Interpolate(Time.time))
             {
                 uint id = kv.Key;
                 if (id == selfId) continue;
@@ -377,140 +381,5 @@ namespace SpaceAdventure.Game
 
         private static string Fallback(string first, string second) =>
             string.IsNullOrEmpty(first) ? second : first;
-    }
-
-    /// <summary>An entity's pose at the render instant.</summary>
-    public struct Pose
-    {
-        public Vec3 Pos;
-        public Vec3 Facing;
-        public ushort Health;
-        public bool Dead;
-    }
-
-    /// <summary>
-    /// Keeps the last few snapshots and answers "where was everything at
-    /// `serverClock - interp_delay`".
-    ///
-    /// The clock is estimated, not measured: a snapshot for tick T that
-    /// arrives now means the server was at T one one-way trip ago, so it is at
-    /// about T + oneWay now. Adding the elapsed time since arrival keeps the
-    /// estimate moving between snapshots instead of stepping at 20 Hz.
-    /// </summary>
-    public sealed class SnapshotTimeline
-    {
-        /// <summary>
-        /// interp_delay, in seconds. The GDD's number, and the server rewinds
-        /// by it — changing this here alone silently breaks hit registration
-        /// for this client only.
-        /// </summary>
-        public const double InterpDelaySeconds = 0.1;
-
-        private const int MaxBuffered = 32;
-
-        private readonly List<(uint Tick, float At, Dictionary<uint, Pose> Poses)> _buf =
-            new List<(uint, float, Dictionary<uint, Pose>)>();
-
-        private readonly Dictionary<uint, Pose> _out = new Dictionary<uint, Pose>();
-
-        /// <summary>One-way trip in seconds, from the transport's RTT.</summary>
-        public double OneWaySeconds { get; set; }
-
-        public void Add(Snapshot snap, float atTime)
-        {
-            var poses = new Dictionary<uint, Pose>(snap.Entities.Length);
-            foreach (var e in snap.Entities)
-            {
-                poses[e.Id] = new Pose
-                {
-                    Pos = new Vec3(e.PosX, e.PosY, e.PosZ),
-                    Facing = FacingOf(e),
-                    Health = e.Health,
-                    Dead = e.Dead,
-                };
-            }
-            _buf.Add((snap.Tick, atTime, poses));
-            if (_buf.Count > MaxBuffered) _buf.RemoveAt(0);
-        }
-
-        public void Clear() => _buf.Clear();
-
-        /// <summary>
-        /// The world at `serverClock - interp_delay`, interpolated between the
-        /// two snapshots that bracket it. Extrapolates forward when the render
-        /// point is past the newest snapshot, which happens whenever the
-        /// one-way trip exceeds interp_delay — i.e. on any connection worse
-        /// than 200 ms round trip.
-        /// </summary>
-        public IEnumerable<KeyValuePair<uint, Pose>> Interpolate()
-        {
-            _out.Clear();
-            if (_buf.Count == 0) return _out;
-
-            var newest = _buf[_buf.Count - 1];
-            double tickSeconds = 1.0 / Rules.TickHz;
-            double elapsed = Time.time - newest.At;
-
-            // Server tick now, then the render point interp_delay behind it,
-            // expressed on the same tick timeline the snapshots carry.
-            double serverNow = newest.Tick + (elapsed + OneWaySeconds) / tickSeconds;
-            double renderTick = serverNow - InterpDelaySeconds / tickSeconds;
-
-            if (_buf.Count == 1 || renderTick >= newest.Tick)
-            {
-                foreach (var kv in newest.Poses) _out[kv.Key] = kv.Value;
-                return _out;
-            }
-
-            for (int i = _buf.Count - 1; i >= 1; i--)
-            {
-                var b = _buf[i];
-                var a = _buf[i - 1];
-                if (renderTick < a.Tick) continue;
-
-                double span = b.Tick - a.Tick;
-                float k = span > 0 ? (float)((renderTick - a.Tick) / span) : 1f;
-                foreach (var kv in b.Poses)
-                {
-                    if (a.Poses.TryGetValue(kv.Key, out var from))
-                    {
-                        _out[kv.Key] = new Pose
-                        {
-                            Pos = Lerp(from.Pos, kv.Value.Pos, k),
-                            Facing = Lerp(from.Facing, kv.Value.Facing, k),
-                            Health = kv.Value.Health,
-                            Dead = kv.Value.Dead,
-                        };
-                    }
-                    else
-                    {
-                        _out[kv.Key] = kv.Value; // appeared this tick
-                    }
-                }
-                return _out;
-            }
-
-            foreach (var kv in _buf[0].Poses) _out[kv.Key] = kv.Value;
-            return _out;
-        }
-
-        private static Vec3 Lerp(Vec3 a, Vec3 b, float k) => a + (b - a) * k;
-
-        /// <summary>
-        /// The row's quaternion turned back into a facing direction, in SIM
-        /// space — the caller converts.
-        ///
-        /// The rotation is applied with Sim.Quat, not UnityEngine.Quaternion.
-        /// The wire quaternion describes a right-handed basis whose Z axis is
-        /// the facing (Step.OrientationQuat), and feeding those components to
-        /// a left-handed Quaternion mixes the two conventions in a way that
-        /// happens to look plausible and points bodies the wrong way.
-        /// </summary>
-        internal static Vec3 FacingOf(EntityRow e)
-        {
-            if (e.QuatX == 0 && e.QuatY == 0 && e.QuatZ == 0 && e.QuatW == 0) return new Vec3(0, 0, 1);
-            var q = new Quat(e.QuatX, e.QuatY, e.QuatZ, e.QuatW);
-            return Quat.Rotate(q, new Vec3(0, 0, 1));
-        }
     }
 }

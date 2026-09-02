@@ -200,6 +200,7 @@ internal static class Program
         FrameConventionChecks();
         PredictionChecks();
         RockScatterChecks();
+        TimelineChecks();
 
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
@@ -291,6 +292,58 @@ internal static class Program
     //
     // Which makes the rng draw order load-bearing. Adding one rng() call, or
     // moving one, shifts every rock after it.
+
+    // ---- U13 render clock --------------------------------------------------
+    //
+    // The contract Timeline.cs owes the server: remotes are drawn at
+    // `serverClock - interp_delay`, on a clock estimated from snapshot
+    // arrivals plus the one-way trip. interp_delay is 0.1 s = 2 ticks at
+    // 20 Hz, so with snapshots for ticks 10..12 buffered and the newest
+    // freshly arrived, the render point sits exactly on tick 10 — and it
+    // moves with the caller's clock, not with packet arrivals. This is the
+    // C#-path check U13 owed since the C14 lag-comp fix; t21 exercises the
+    // same contract at the wire level through the .mjs harness.
+
+    private static Snapshot TimelineSnap(uint tick, params (uint Id, float X)[] ents)
+    {
+        var rows = new EntityRow[ents.Length];
+        for (int i = 0; i < ents.Length; i++)
+            rows[i] = new EntityRow { Id = ents[i].Id, PosX = ents[i].X, QuatW = 1f, Health = 100 };
+        return new Snapshot { Tick = tick, Entities = rows };
+    }
+
+    private static double TimelineX(IEnumerable<KeyValuePair<uint, Pose>> poses, uint id)
+    {
+        foreach (var kv in poses)
+            if (kv.Key == id) return kv.Value.Pos.X;
+        return double.NaN;
+    }
+
+    private static void TimelineChecks()
+    {
+        var tl = new SnapshotTimeline { OneWaySeconds = 0 };
+        tl.Add(TimelineSnap(10, (1u, 10f)), 0.00f);
+        tl.Add(TimelineSnap(11, (1u, 11f), (2u, 5f)), 0.05f);
+        tl.Add(TimelineSnap(12, (1u, 12f), (2u, 6f)), 0.10f);
+
+        Check("timeline renders exactly interp_delay behind the estimated server clock",
+            Math.Abs(TimelineX(tl.Interpolate(0.10f), 1) - 10.0) < 1e-6);
+        Check("timeline interpolates between the bracketing snapshots",
+            Math.Abs(TimelineX(tl.Interpolate(0.125f), 1) - 10.5) < 1e-6);
+        Check("an entity that appeared mid-bracket takes the newer pose",
+            Math.Abs(TimelineX(tl.Interpolate(0.125f), 2) - 5.0) < 1e-6);
+
+        // The one-way trip pushes the estimated server clock forward: at the
+        // same wall instant, a 100 ms one-way (200 ms RTT) puts the render
+        // point ON the newest snapshot, and anything worse clamps there
+        // (Timeline.cs documents the clamp-not-extrapolate choice).
+        tl.OneWaySeconds = 0.1;
+        Check("one-way delay advances the render point to the newest snapshot",
+            Math.Abs(TimelineX(tl.Interpolate(0.10f), 1) - 12.0) < 1e-6);
+        tl.OneWaySeconds = 0.5;
+        Check("past the newest snapshot the timeline clamps, never extrapolates",
+            Math.Abs(TimelineX(tl.Interpolate(0.10f), 1) - 12.0) < 1e-6);
+    }
 
     private static void RockScatterChecks()
     {

@@ -489,3 +489,64 @@
 {"client":"B2","type":"close","detail":{"reason":"TCP closed","atNs":"1787627934790000000"},"atNs":null}
 {"client":"A2","type":"despawn","detail":{"id":7},"atNs":"259454595232172"}
 {"client":"A2","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"259454898965889"},"atNs":null}
+{"client":"A","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":5},"atNs":"254597424303246"}
+{"client":"A","type":"spawn","detail":{"id":1048577,"name":"npc.gunner"},"atNs":"254597426799893"}
+{"client":"A","type":"spawn","detail":{"id":1048578,"name":"npc.gunner"},"atNs":"254597435169621"}
+{"client":"A","type":"spawn","detail":{"id":1048579,"name":"npc.grunt"},"atNs":"254597444347051"}
+{"client":"A","type":"spawn","detail":{"id":1048580,"name":"npc.grunt"},"atNs":"254597451872940"}
+{"client":"A","type":"spawn","detail":{"id":1048581,"name":"npc.grunt"},"atNs":"254597461954778"}
+{"client":"A","type":"spawn","detail":{"id":1048582,"name":"target"},"atNs":"254597470431941"}
+{"client":"A","type":"spawn","detail":{"id":1048583,"name":"target"},"atNs":"254597479276830"}
+{"client":"A","type":"spawn","detail":{"id":1048584,"name":"target"},"atNs":"254597487710004"}
+{"client":"A","type":"spawn","detail":{"id":1048585,"name":"target"},"atNs":"254597496098921"}
+{"client":"A","type":"spawn","detail":{"id":1048586,"name":"target"},"atNs":"254597503968408"}
+{"client":"A","type":"spawn","detail":{"id":1048587,"name":"npc.quartermaster"},"atNs":"254597512697462"}
+{"client":"A","type":"spawn","detail":{"id":5,"name":"qa-t4-a"},"atNs":"254597520828099"}
+{"client":"B","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":6},"atNs":"254597530906195"}
+{"client":"A","type":"spawn","detail":{"id":6,"name":"qa-t4-b"},"atNs":"254597537461349"}
+{"client":"B","type":"spawn","detail":{"id":1048577,"name":"npc.gunner"},"atNs":"254597546786362"}
+{"client":"B","type":"spawn","detail":{"id":1048578,"name":"npc.gunner"},"atNs":"254597554407386"}
+{"client":"B","type":"spawn","detail":{"id":1048579,"name":"npc.grunt"},"atNs":"254597562550349"}
+{"client":"B","type":"spawn","detail":{"id":1048580,"name":"npc.grunt"},"atNs":"254597572805855"}
+{"client":"B","type":"spawn","detail":{"id":1048581,"name":"npc.grunt"},"atNs":"254597580767720"}
+{"client":"B","type":"spawn","detail":{"id":1048582,"name":"target"},"atNs":"254597590738430"}
+{"client":"B","type":"spawn","detail":{"id":1048583,"name":"target"},"atNs":"254597598979383"}
+{"client":"B","type":"spawn","detail":{"id":1048584,"name":"target"},"atNs":"254597607144244"}
+{"client":"B","type":"spawn","detail":{"id":1048585,"name":"target"},"atNs":"254597614868441"}
+{"client":"B","type":"spawn","detail":{"id":1048586,"name":"target"},"atNs":"254597623746201"}
+{"client":"B","type":"spawn","detail":{"id":1048587,"name":"npc.quartermaster"},"atNs":"254597632165097"}
+{"client":"B","type":"spawn","detail":{"id":5,"name":"qa-t4-a"},"atNs":"254597641477924"}
+{"client":"B","type":"spawn","detail":{"id":6,"name":"qa-t4-b"},"atNs":"254597650426582"}
+{"client":"A","type":"despawn","detail":{"id":6},"atNs":"254597863210937"}
+{"client":"A","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"254598166923444"},"atNs":null}
+{"client":"A2","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":7},"atNs":"254598368970948"}
+{"client":"A2","type":"spawn","detail":{"id":1048577,"name":"npc.gunner"},"atNs":"254598371753216"}
+{"client":"A2","type":"spawn","detail":{"id":1048578,"name":"npc.gunner"},"atNs":"254598380620649"}
+{"client":"A2","type":"spawn","detail":{"id":1048579,"name":"npc.grunt"},"atNs":"254598388380965"}
+{"client":"A2","type":"spawn","detail":{"id":1048580,"name":"npc.grunt"},"atNs":"254598397353026"}
+{"client":"A2","type":"spawn","detail":{"id":1048581,"name":"npc.grunt"},"atNs":"254598407304561"}
+{"client":"A2","type":"spawn","detail":{"id":1048582,"name":"target"},"atNs":"254598416831407"}
+{"client":"A2","type":"spawn","detail":{"id":1048583,"name":"target"},"atNs":"254598427129604"}
+{"client":"A2","type":"spawn","detail":{"id":1048584,"name":"target"},"atNs":"254598436300781"}
+{"client":"A2","type":"spawn","detail":{"id":1048585,"name":"target"},"atNs":"254598444056747"}
+{"client":"A2","type":"spawn","detail":{"id":1048586,"name":"target"},"atNs":"254598451816555"}
+{"client":"A2","type":"spawn","detail":{"id":1048587,"name":"npc.quartermaster"},"atNs":"254598462183170"}
+{"client":"A2","type":"spawn","detail":{"id":7,"name":"qa-t4-a2"},"atNs":"254598470772910"}
+{"client":"A2","type":"spawn","detail":{"id":8,"name":"qa-t4-b2"},"atNs":"254598480432694"}
+{"client":"B2","type":"hello_ack","detail":{"serverVer":2,"tickHz":20,"worldSeed":1337,"entityId":8},"atNs":"254598488473264"}
+{"client":"B2","type":"spawn","detail":{"id":1048577,"name":"npc.gunner"},"atNs":"254598498401310"}
+{"client":"B2","type":"spawn","detail":{"id":1048578,"name":"npc.gunner"},"atNs":"254598506409360"}
+{"client":"B2","type":"spawn","detail":{"id":1048579,"name":"npc.grunt"},"atNs":"254598515665601"}
+{"client":"B2","type":"spawn","detail":{"id":1048580,"name":"npc.grunt"},"atNs":"254598523804378"}
+{"client":"B2","type":"spawn","detail":{"id":1048581,"name":"npc.grunt"},"atNs":"254598533058718"}
+{"client":"B2","type":"spawn","detail":{"id":1048582,"name":"target"},"atNs":"254598540982643"}
+{"client":"B2","type":"spawn","detail":{"id":1048583,"name":"target"},"atNs":"254598549700749"}
+{"client":"B2","type":"spawn","detail":{"id":1048584,"name":"target"},"atNs":"254598557473013"}
+{"client":"B2","type":"spawn","detail":{"id":1048585,"name":"target"},"atNs":"254598565328667"}
+{"client":"B2","type":"spawn","detail":{"id":1048586,"name":"target"},"atNs":"254598573795675"}
+{"client":"B2","type":"spawn","detail":{"id":1048587,"name":"npc.quartermaster"},"atNs":"254598581583852"}
+{"client":"B2","type":"spawn","detail":{"id":7,"name":"qa-t4-a2"},"atNs":"254598590833325"}
+{"client":"B2","type":"spawn","detail":{"id":8,"name":"qa-t4-b2"},"atNs":"254598599186738"}
+{"client":"A2","type":"despawn","detail":{"id":8},"atNs":"254608613500034"}
+{"client":"B2","type":"close","detail":{"reason":"TCP closed","atNs":"1788360239583000000"},"atNs":null}
+{"client":"A2","type":"close","detail":{"reason":"close frame","code":1000,"atNs":"254608927695731"},"atNs":null}

@@ -4,8 +4,9 @@
  *
  * Method — two experiments against the live cluster, one per mechanism:
  *
- * (a) HARD KILL (the criterion's scenario): A via ws://127.0.0.1:3000/ws
- *     (nginx), B via ws://127.0.0.1:18080/ws (direct). Both joined and
+ * (a) HARD KILL (the criterion's scenario): A and B both via
+ *     ws://127.0.0.1:18080/ws (the NodePort path — nginx retired with the
+ *     browser client, ROADMAP U18). Both joined and
  *     seeing each other. B's last byte is one final input; 200 ms later B
  *     does a hard TCP kill (test/lib/ws.mjs kill() — NO close frame). A
  *     records kill -> DESPAWN(B.id) received; must be ≤10 s. A also records
@@ -52,8 +53,8 @@ const EVENTS = new URL('./out/t4-despawn-events.jsonl', import.meta.url)
 const EVIDENCE = new URL('./out/t4-despawn.json', import.meta.url)
 
 const HOST = '127.0.0.1'
-const A_PORT = 3000 // nginx /ws path
-const B_PORT = 18080 // direct WS path
+const A_PORT = 18080 // NodePort /ws — the only path since U18 retired nginx
+const B_PORT = 18080
 const DESPAWN_MAX_MS = 10_000 // criterion bound (phase a)
 const SILENT_EXPECT_MS = 10_000 // PROTOCOL heartbeat timeout (phase b)
 const SILENT_TOL_MS = 500 // +/- acceptance around 10 s

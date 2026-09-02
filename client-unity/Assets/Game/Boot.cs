@@ -83,6 +83,13 @@ namespace SpaceAdventure.Game
         private Structures _structures;
         private Rocks _rocks;
         private SnapshotTimeline _timeline;
+
+        // C46 frame-budget evidence: every 5 s, log the window's average fps
+        // and worst frame to the player log, where `unity run` and the C46
+        // measurement pass can read them. One compare and one add per frame.
+        private float _statWindowStart;
+        private int _statFrames;
+        private float _statWorstDt;
         private Hud _hud;
         private CombatFx _fx;
         private ViewModel _viewModel;
@@ -125,6 +132,14 @@ namespace SpaceAdventure.Game
         private void Start()
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
+
+            // No vsync, capped at 120. Vsync waits on whatever refresh the OS
+            // reports, and a virtual or remote display can report ~4 Hz — the
+            // C46 measurement found the player pinned at 6 fps by exactly
+            // that, with the actual frame cost at 2 ms. The cap keeps an
+            // uncapped loop (3000+ fps measured) from burning the GPU.
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = 120;
 
             _material = new Material(RequireShader("SpaceAdventure/TerrainVertexColor", "Standard"));
 
@@ -316,6 +331,19 @@ namespace SpaceAdventure.Game
                              TerrainMesh.ToUnity(now.Facing));
             _viewModel.Tick(_fps.LookDelta, (float)now.Vel.Length, Time.deltaTime);
             _fx.Tick();
+
+            _statFrames++;
+            if (Time.unscaledDeltaTime > _statWorstDt) _statWorstDt = Time.unscaledDeltaTime;
+            if (Time.unscaledTime - _statWindowStart >= 5f)
+            {
+                // The first window is skipped: it contains scene build and
+                // model loads, which are startup cost, not frame budget.
+                if (_statWindowStart > 0f)
+                    Debug.Log($"framestats: {_statFrames / (Time.unscaledTime - _statWindowStart):F1} fps avg, worst frame {_statWorstDt * 1000f:F1} ms, {_views.Count} entities");
+                _statWindowStart = Time.unscaledTime;
+                _statFrames = 0;
+                _statWorstDt = 0f;
+            }
         }
 
         private ushort NextCmdSeq() => ++_cmdSeq;

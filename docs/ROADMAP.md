@@ -18,7 +18,7 @@ inserted 2026-08-26 before Phase 4, because Phase 4/5 is where client work
 explodes and the Phase 1–3 client is the cheapest version of that port that
 will ever exist. Browser delivery is dropped.
 
-### Where Phase 3.5 stands (2026-08-29)
+### Where Phase 3.5 stands (2026-09-02)
 
 The Unity client renders real art, and `client/` is gone.
 
@@ -32,27 +32,20 @@ mount nodes, retargets animation clips). 18 assets, all Kenney CC0, recorded in
 dressed from zone data over a new `props` message (0x0013). U18 retired the
 TypeScript client, with its harnesses ported to C# first.
 
-**Verified.** `make unity-build` + `make unity-run` against the deployed
-cluster; server 7 packages; art 18/18; `unity-gate`, `unity-test`,
-`unity-codec`, `unity-typecheck`, C40 conformance, `t3`, `t6`, `t13`.
+**Verified.** All eight acceptance criteria, C40–C47, are PASS as of the C43
+gate run on 2026-09-02 — `docs/QA-STATUS.md` has the per-criterion numbers and
+what the run surfaced (harness rot on the retired nginx path, a vsync-pinned
+frame rate misread as a frame budget problem, and U13's missing C#-path
+verification, all fixed). CI (`.github/workflows/ci.yml`) runs the
+editor-free gates on every commit.
 
-**Open, in rough order.**
+**Open for Phase 4, not blocking 3.5.**
 
-1. **C43 is the phase gate and has not been run.** C1–C25 re-run against the
-   Unity client on the deployed stack. `docs/QA-STATUS.md` defines what each
-   criterion asserts; a third of that surface was never executed.
-2. **U13 `interp_delay` — implemented, never verified.** The client side
-   exists: `Assets/Game/Entities.cs` (`SnapshotTimeline`) estimates the server
-   clock, renders at `serverNow − interp_delay`, and extrapolates past the
-   window, per the contract the C14 lag-comp fix demands. But no harness has
-   ever driven the C# path — `t21` drives the `.mjs` harness only — so the
-   correctness debt stands until the C43 run exercises it. Until then, treat
-   `InterpDelaySeconds` as load-bearing: changing it alone silently breaks hit
-   registration for this client (see the warning at its definition).
-3. **C46 frame budget** — 60 fps with the camp live has not been measured.
-4. Ship and vehicle entities render as a loot crate: `EntityType.Ship` and
+1. Ship and vehicle entities render as a loot crate: `EntityType.Ship` and
    `Vehicle` have no entity def, which is correct until Phase 4/5 creates one.
-5. `vehicle.rover.v1` does not exist. Kenney's `rover` is already vendored.
+2. `vehicle.rover.v1` does not exist. Kenney's `rover` is already vendored.
+3. `t18` failed 1 of 7 once between harness runs sharing a live server, then
+   passed 5 straight; unreproduced. Watch it on the next sweep.
 
 **Two things to know before touching this.** The Unity Editor takes the
 project lock, so `unity compile` and `unity build` fail while it is open —

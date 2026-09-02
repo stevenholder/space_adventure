@@ -21,7 +21,7 @@
   "id": "C22",
   "name": "player dies and respawns at the spawn point with full health",
   "ok": true,
-  "detail": "died=true respawned=true after 4.9 s, 0.00 m from spawn"
+  "detail": "died=true respawned=true after 5.0 s, 0.00 m from spawn"
  },
  {
   "id": "C19b",
@@ -39,12 +39,12 @@
   "id": "C25a",
   "name": "per-client snapshot bandwidth under 100 KB/s",
   "ok": true,
-  "detail": "13.9 KB/s over 5.0 s, 18 entities (interest culling NOT wired)"
+  "detail": "14.0 KB/s over 5.0 s, 18 entities (interest culling NOT wired)"
  },
  {
   "id": "C25b",
   "name": "server holds 20 Hz with the camp live",
   "ok": true,
-  "detail": "20.00 Hz"
+  "detail": "20.20 Hz"
  }
 ]

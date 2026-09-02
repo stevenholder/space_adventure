@@ -6,8 +6,9 @@
  *   floating or sunk in it.
  *
  * Method (QA-STATUS resume item 4):
- *   A connects via ws://127.0.0.1:3000/ws (nginx same-origin path).
- *   B connects 500 ms later via ws://127.0.0.1:18080/ws (direct WS) so both
+ *   A connects via ws://127.0.0.1:18080/ws (the NodePort path — the nginx
+ *   same-origin path retired with the browser client, ROADMAP U18).
+ *   B connects 500 ms later via the same path so both
  *   wire paths are exercised. All measurements use the ns timestamps from
  *   test/lib/ws.mjs (one test process, one clock).
  *
@@ -47,8 +48,8 @@ const EVENTS = new URL('./out/t2-two-client-events.jsonl', import.meta.url)
 const EVIDENCE = new URL('./out/t2-two-client.json', import.meta.url)
 
 const HOST = '127.0.0.1'
-const A_PORT = 3000 // nginx /ws path
-const B_PORT = 18080 // direct WS path
+const A_PORT = 18080 // NodePort /ws — the only path since U18 retired nginx
+const B_PORT = 18080
 const B_DELAY_MS = 500
 const SEE_MS = 1000 // "within 1 s"
 const ON_SURFACE_EPS = 0.05 // m

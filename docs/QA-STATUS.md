@@ -237,14 +237,47 @@ client rendering the wrong thing indefinitely:
 | C25a | Per-client snapshot bandwidth | 13.9 KB/s of 100 KB/s, 21 entities |
 | C25b | Server holds 20 Hz with the camp live | 20.00 Hz |
 
-## Phase 3.5 — C40 closed 2026-08-26
+## Phase 3.5 — C40 closed 2026-08-26, C43 gate run 2026-09-02
 
 | # | Asserts | Measured | Verdict |
 |---|---|---|---|
 | C40 | The C# sim matches Go on the C5 route, headless | **max dPos 0.000e+0 m** over 1993 ticks; max dVel 5.088e-16 m/s; 0 grounded mismatches | **PASS** (`t20`) |
-| C44 | `Sim` builds and its checks run with no Unity Editor | `make unity-test`, 13 checks | **PASS** |
-| C47 | No agent-authored scenes or prefabs | `make unity-gate` | **PASS** |
 | C41 | Codec parity, C# against Go and Node | byte-for-byte against Go vectors, both directions | **PASS** (`t22`, `make unity-codec`) |
+| C42 | Prediction: replay reconciliation from `ack_seq`, never blending | `t3` snapDist 0.000e+0 m, correction lands in 50.4 ms (budget 100); `t6` scenario checks green | **PASS** |
+| C43 | C1–C25 re-run against the Unity client on the deployed stack | full sweep 2026-09-02, details below | **PASS** |
+| C44 | `Sim` and `Net` build and test with no Unity Editor, in CI | `make unity-test` (18 checks incl. U13 timeline), `unity-codec`, `unity-conformance`, wired into `.github/workflows/ci.yml` | **PASS** |
+| C45 | Cold start: packaged build joins the deployed server | fresh `make unity-build` → `unity-run`: world ready, 44 entities, RTT 2 ms | **PASS** |
+| C46 | 60 fps with the camp live | **120.0 fps** (deliberate cap), worst frame 8.7 ms; uncapped probe 3276 fps, worst 6.1 ms | **PASS** |
+| C47 | No agent-authored scenes or prefabs | `make unity-gate` | **PASS** |
+
+### The C43 run, 2026-09-02
+
+Full harness sweep against a freshly deployed stack (`make up`,
+`check-server` build-matched): `t2`–`t4`, `t6`, `t7`, `t9`, `t13`–`t22` all
+PASS. What it surfaced, which was the point of running it:
+
+- **`t2` and `t4` were still driving the retired nginx `:3000` path** and
+  failed on connect — client A now joins over the NodePort like everything
+  else. A third of the C1–C25 surface had never run since the browser client
+  was retired, and the first thing it found was its own harness rot.
+- **C46's 6 fps was vsync, not rendering.** The player was pinned at ~4 Hz by
+  vsync against a display reporting a degenerate refresh; actual frame cost
+  was ~2 ms (RTX 5090, both D3D11 and D3D12, any resolution). The client now
+  runs `vSyncCount = 0` with `targetFrameRate = 120` (Boot.cs says why), and
+  logs `framestats` every 5 s as standing evidence.
+- **U13 is verified on the C# path**: `SnapshotTimeline` moved to
+  `Game/Core/Timeline.cs` (engine-free — the caller supplies the clock), and
+  `SimDump --selftest` now proves the render point sits exactly
+  `interp_delay` behind the estimated server clock, interpolates the bracket,
+  and clamps past the newest snapshot. `t21` covers the same contract at the
+  wire level and passes 3/3 (its old "red on the criterion, by design" note
+  predates the C14 rewind fix).
+- **`t18` failed 1 of 7 once** immediately after the t14–t17 chain and passed
+  5 consecutive runs after; unreproduced, likely world-state interference
+  between harnesses sharing a live server. Worth an eye on the next sweep.
+- Views drawn at measurement time were 16 of ~54 world entities (camp NPCs
+  were mid-respawn after the harness kills); with frame cost at 8.7 ms worst
+  under a 16.7 ms budget, entity count is not the margin that matters.
 
 **Positions are bit-identical**, not merely inside the 1e-10 m bar — four
 orders tighter than C5's 0.01125 m, and six orders better than the bar it was
@@ -286,7 +319,8 @@ headless client that makes the port safe.
   and shoot), `t15` (persistence), `t16` (camp fight), `t17` (Phase 3 QA),
   `t18` (currency authority, hit registration under latency, snapshot budget),
   `t19` (remote fidelity — weapon, pitch and shot ordering, all green),
-  `t21` (C14 against a moving NPC — red on the criterion, by design).
+  `t21` (C14 against a moving NPC — passing since the C14 rewind fix landed;
+  its earlier red-by-design note is history).
 - **Captured world:** `test/out/world-seed1337.json`, wire-field sha256_16
   **`74f45a52c2998dcf`** (re-confirmed live on both WS paths, 2026-08-26).
   Terrain determinism across restarts is proven against it. The M1 value was
