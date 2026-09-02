@@ -12,4 +12,3 @@ resources:
   - 15-backup.yaml
   - 20-server.yaml
   - 25-ingress.yaml
-  - 30-networkpolicy.yaml

@@ -732,6 +732,28 @@ ship is a moving-reference-frame problem, and it is not part of this phase.
 
 # Phase 6 — host it for real
 
+### Where Phase 6 stands (2026-09-02, evening)
+
+Live. The pandas cluster serves the game through Traefik on every node IP
+(`ws://192.168.1.163/ws`), build-identity verified; CNPG runs Postgres 18
+with two instances; the packaged client joins and plays; t3/t7/t15/t24/t26
+all pass against it (20 Hz exact, one-way p95 6.3 ms). C50 is DRILLED:
+primary killed → failover in ~60 s, zero row loss; backup restored and
+counted. C49, C51, C53 hold. C48 fires on the first merge to main.
+
+Two things the drills caught, both on the record in the RUNBOOK: the
+backup CronJob's pg_dump was silently producing empty files (image major
+below the server's Postgres 18, the refusal eaten by a pipe — now bash
+with pipefail, a size assertion, and the matching major), and this
+cluster's k3s NetworkPolicy enforcement is broken for cross-node traffic
+(even allow-all blocked; the policy was a landmine that would have severed
+the server from Postgres on its next pod restart). C52's NetworkPolicy
+clause is therefore WAIVED with that probe as evidence — the fence wants a
+CNI repair, not a manifest — while its other clauses (origin allowlist,
+per-IP cap, join rate limit, generated credentials) are implemented and
+tested. The operator's API proxy is enabled; the workflows are written and
+take their first live run at the merge.
+
 **Playable proof.** Push to `main`. CI goes green, and with no further human
 step the pandas cluster (k3s, 4 nodes, on the tailnet) is running that exact
 build — `/version` says so. A packaged client on the LAN connects through

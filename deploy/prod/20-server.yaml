@@ -22,6 +22,12 @@ spec:
         app.kubernetes.io/name: server
         app.kubernetes.io/part-of: space-adventure
     spec:
+      # ghcr-pull is created BY HAND, once, from a classic PAT scoped to
+      # read:packages only (RUNBOOK "CD plumbing") — the package is
+      # private and the token never enters git or CI. Rotate by recreating
+      # the secret; nothing else references it.
+      imagePullSecrets:
+        - name: ghcr-pull
       securityContext:
         runAsNonRoot: true
       containers:

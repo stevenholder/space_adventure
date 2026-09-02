@@ -17,6 +17,10 @@ metadata:
     app.kubernetes.io/part-of: space-adventure
 spec:
   instances: 2
+  # The postgres superuser secret (space-db-superuser) exists for the
+  # runbook's restore drill and future migrations — the app user can't
+  # CREATE DATABASE, and a drill that can't run isn't a drill.
+  enableSuperuserAccess: true
   storage:
     size: 2Gi
     storageClass: local-path

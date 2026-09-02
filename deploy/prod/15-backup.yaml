@@ -50,15 +50,26 @@ spec:
             kubernetes.io/hostname: panda2
           containers:
             - name: dump
-              image: ghcr.io/cloudnative-pg/postgresql:17
-              command: ["/bin/sh", "-c"]
+              # Image major MUST track the cluster's Postgres major (CNPG
+              # 1.27 provisions PG 18): pg_dump refuses a newer server, and
+              # the first drill found exactly that refusal eaten by the
+              # pipe — hence bash with pipefail and the size assertion. An
+              # empty backup that reports success is worse than no backup.
+              image: ghcr.io/cloudnative-pg/postgresql:18
+              command: ["/bin/bash", "-c"]
               args:
                 - |
-                  set -eu
+                  set -euo pipefail
                   ts=$(date -u +%Y%m%dT%H%M%S)
-                  pg_dump "$DATABASE_URL" | gzip > /backups/space-db-$ts.sql.gz
+                  out=/backups/space-db-$ts.sql.gz
+                  pg_dump "$DATABASE_URL" | gzip > "$out"
+                  size=$(stat -c%s "$out")
+                  if [ "$size" -lt 1024 ]; then
+                    echo "backup suspiciously small ($size B) — refusing to count it" >&2
+                    exit 1
+                  fi
                   ls -t /backups/space-db-*.sql.gz | tail -n +15 | xargs -r rm --
-                  echo "backup done: space-db-$ts.sql.gz ($(ls -t /backups | head -1))"
+                  echo "backup done: space-db-$ts.sql.gz ($size B)"
               env:
                 - name: DATABASE_URL
                   valueFrom:

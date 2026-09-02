@@ -60,19 +60,50 @@ panda2), keeping 14. The drill — run it for real (C50), not on paper:
 kubectl --context default -n space-adventure create job --from=cronjob/db-backup drill-backup
 kubectl --context default -n space-adventure wait --for=condition=complete job/drill-backup --timeout=120s
 
-# 2. Restore into a scratch database and count rows
-kubectl --context default -n space-adventure run drill-restore --rm -i --restart=Never \
-  --image=ghcr.io/cloudnative-pg/postgresql:17 --overrides='{"spec":{"nodeSelector":{"kubernetes.io/hostname":"panda2"},"containers":[{"name":"drill-restore","image":"ghcr.io/cloudnative-pg/postgresql:17","stdin":true,"command":["/bin/sh"],"volumeMounts":[{"name":"b","mountPath":"/backups"}],"env":[{"name":"URI","valueFrom":{"secretKeyRef":{"name":"space-db-app","key":"uri"}}}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"db-backups"}}]}' <<'EOF'
+# 2. Restore into a scratch database and count rows. Notes hard-won by the
+#    first drill: the image major must match the cluster's Postgres major
+#    (pg_dump refuses newer servers); creating a database needs the
+#    SUPERUSER secret (the app user cannot); and drop/create must be two
+#    separate -c calls (one -c is one transaction, and DROP DATABASE
+#    refuses to run in one).
+kubectl --context default -n space-adventure run drill-restore -i --restart=Never \
+  --image=ghcr.io/cloudnative-pg/postgresql:18 --overrides='{"apiVersion":"v1","spec":{"nodeSelector":{"kubernetes.io/hostname":"panda2"},"containers":[{"name":"drill-restore","image":"ghcr.io/cloudnative-pg/postgresql:18","stdin":true,"command":["/bin/sh"],"volumeMounts":[{"name":"b","mountPath":"/backups"}],"env":[{"name":"SU","valueFrom":{"secretKeyRef":{"name":"space-db-superuser","key":"uri"}}}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"db-backups"}}]}}' <<'EOF'
 set -eu
 latest=$(ls -t /backups/space-db-*.sql.gz | head -1)
 echo "restoring $latest"
-base=${URI%/*}
-psql "$base/postgres" -c 'drop database if exists drill; create database drill;'
-gunzip -c "$latest" | psql "$base/drill" >/dev/null
-psql "$base/drill" -c 'select count(*) as players from player;'
-psql "$base/postgres" -c 'drop database drill;'
+base=${SU%/*}
+psql -q "$base/postgres" -c 'drop database if exists drill;'
+psql -q "$base/postgres" -c 'create database drill;'
+gunzip -c "$latest" | psql -q "$base/drill" >/dev/null
+echo "players in restored backup: $(psql "$base/drill" -tAc 'select count(*) from player;')"
+psql -q "$base/postgres" -c 'drop database drill;'
 EOF
+kubectl --context default -n space-adventure logs drill-restore | tail -3
+kubectl --context default -n space-adventure delete pod drill-restore
 ```
+
+Drilled 2026-09-02: failover in ~60 s with zero row loss; restore counted
+the live row count out of the backup.
+
+To rotate the superuser password: patch the `password` key of
+`space-db-superuser` — CNPG applies it to the database and regenerates the
+`uri` keys within seconds. (Done 2026-09-02 after debug output echoed the
+old one into container logs.)
+
+## Why there is no NetworkPolicy
+
+There was one (Postgres reachable only from the server, its replicas and
+the backup job). This cluster's k3s network-policy enforcement is broken
+for CROSS-NODE pod traffic: with the policy in place, even an
+allow-all-pods rule blocked any cross-node connection (same-node passed;
+probed 2026-09-02 with labeled busybox pods on pinned nodes). The trap it
+set: the game server kept working on connections pooled from before
+enforcement and would have lost Postgres on its next restart. A fence
+that blocks legitimate traffic depending on pod placement is worse than
+no fence, so the policy is gone; in-cluster Postgres exposure is guarded
+by scram auth with generated credentials and by not being on the
+ingress. If the fence is ever wanted, fix the CNI first (flannel/netpol
+cross-node — a cluster-level repair, not a manifest) and re-probe.
 
 A node-death drill: `kubectl delete pod space-db-1` (or cordon+drain its
 node) and watch the PRIMARY column move with no server restart needed.
@@ -94,3 +125,12 @@ kubectl --context default -n space-adventure logs jobs/db-backup --tail=20   # l
   `deploy/prod/05-rbac.yaml` is that group's entire authority.
 - Secrets: `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` in the repo
   (Tailscale OAuth client, writable `auth_keys`, tag `tag:ci`).
+- Image pulls: the GHCR package is private; the namespace holds a
+  hand-created `ghcr-pull` docker-registry secret from a classic PAT
+  scoped to read:packages ONLY. Rotate by recreating:
+
+  ```sh
+  kubectl --context default -n space-adventure create secret docker-registry ghcr-pull \
+    --docker-server=ghcr.io --docker-username=stevenholder --docker-password=<PAT> \
+    --dry-run=client -o yaml | kubectl --context default apply -f -
+  ```
