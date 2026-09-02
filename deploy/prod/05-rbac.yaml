@@ -35,6 +35,13 @@ rules:
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["clusters", "scheduledbackups", "backups"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # apply -k includes this very file, so CD must be able to read and
+  # update the Role/RoleBinding. Kubernetes' escalation check keeps this
+  # from being a ladder: an actor may only write Roles whose permissions
+  # are a subset of its own.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
