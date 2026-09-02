@@ -25,6 +25,7 @@ const (
 	SteerRate      = 1.2                  // steer_rate, rad/s
 	Grip           = 6.0                  // grip, 1/s — lateral half-life ~0.12 s
 	DampDrive      = 0.8                  // damp_drive, 1/s — coast half-life ~0.87 s
+	HoldSpeed      = 0.1                  // hold_speed, m/s — parked is parked
 	DriveSlopeMax  = 40.0 * math.Pi / 180 // drive_slope_max
 	RoverSpawnDist = 20.0                 // rover_spawn_dist, m
 )
@@ -82,6 +83,12 @@ func StepRover(e *Ent, dt float64, ctx StepCtx) {
 		vlat = vlat.Scale(math.Exp(-Grip * dt))
 		if throttle == 0 {
 			vf *= math.Exp(-DampDrive * dt)
+			// Static friction: exponential decay never reaches zero, and a
+			// parked rover on any grade would creep downhill forever.
+			if vf*vf+vlat.Dot(vlat) < HoldSpeed*HoldSpeed {
+				vf = 0
+				vlat = Vec{}
+			}
 		}
 		vel = up.Scale(vr).Add(h.Scale(vf)).Add(vlat)
 	}

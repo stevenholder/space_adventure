@@ -17,7 +17,13 @@ export const MSG = {
   PING: 0x0008,
   PONG: 0x0009,
   TERRAIN: 0x000a,
+  BOARD: 0x000b,
+  DISEMBARK: 0x000c,
+  SEAT_RESULT: 0x000d,
 }
+
+// seat_result codes (docs/PROTOCOL.md "Constants").
+export const SEAT = { GRANTED: 0, OCCUPIED: 1, OUT_OF_RANGE: 2, INVALID: 3 }
 
 // Must track the server: it closes 1002 on any other client_ver
 // (docs/PROTOCOL.md "Versioning"). The harness still sends a token-less hello
@@ -59,6 +65,25 @@ export function encodeInput(moveX, moveY, lookDir, actionMask, seq, mode = 0) {
 }
 
 /** Wrap payload into a game frame. */
+/** board: u32 vehicle_id | u16 seat (docs/PROTOCOL.md 0x000B). */
+export function encodeBoard(vehicleId, seat) {
+  const out = Buffer.alloc(6)
+  out.writeUInt32LE(vehicleId >>> 0, 0)
+  out.writeUInt16LE(seat & 0xffff, 4)
+  return out
+}
+
+/** disembark: no payload (0x000C). */
+export function encodeDisembark() {
+  return Buffer.alloc(0)
+}
+
+/** seat_result: u32 entity_id | u16 seat | u8 result (0x000D). */
+export function decodeSeatResult(p) {
+  if (p.length !== 7) throw new Error(`seat_result: ${p.length} bytes, want 7`)
+  return { entityId: p.readUInt32LE(0), seat: p.readUInt16LE(4), result: p.readUInt8(6) }
+}
+
 export function frame(type, payload) {
   const out = Buffer.alloc(2 + payload.length)
   out.writeUInt16LE(type, 0)

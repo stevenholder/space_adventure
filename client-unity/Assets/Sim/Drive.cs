@@ -18,6 +18,7 @@ namespace SpaceAdventure.Sim
         public const double SteerRate = 1.2;
         public const double Grip = 6.0;
         public const double DampDrive = 0.8;
+        public const double HoldSpeed = 0.1;
         public const double DriveSlopeMax = 40.0 * Math.PI / 180.0;
     }
 
@@ -73,7 +74,16 @@ namespace SpaceAdventure.Sim
                 double vf = Vec3.Dot(vt0, h);
                 Vec3 vlat = vt0 - h * vf;
                 vlat *= Math.Exp(-DriveRules.Grip * dt);
-                if (throttle == 0) vf *= Math.Exp(-DriveRules.DampDrive * dt);
+                if (throttle == 0)
+                {
+                    vf *= Math.Exp(-DriveRules.DampDrive * dt);
+                    // Static friction, mirroring drive.go: parked is parked.
+                    if (vf * vf + Vec3.Dot(vlat, vlat) < DriveRules.HoldSpeed * DriveRules.HoldSpeed)
+                    {
+                        vf = 0;
+                        vlat = Vec3.Zero;
+                    }
+                }
                 vel = up * vr0 + h * vf + vlat;
             }
 
