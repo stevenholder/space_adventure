@@ -301,6 +301,25 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 6 — C48–C53, closed 2026-09-02
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C48 | Push to main → deployed, no human step; failed smoke rolls back | run 33693371037: green CI → tailnet → apply → smoke `/version` == main's server hash (5ff5703 == 5ff5703). The rollback path is PROVEN — a smoke string bug fired it against a correct deploy first | **PASS** |
+| C49 | Packaged client plays the full loop on the LAN URL | joined `ws://192.168.1.163/ws`; t3/t7/t15/t24/t26 all green; 20 Hz exact, one-way p95 6.3 ms | **PASS** |
+| C50 | Node-death and restore, DRILLED | primary killed → failover ~60 s, 6/6 rows; backup restored to scratch DB, row-counted | **PASS** |
+| C51 | Server churn: reconnect on token, persistence holds | server pod deleted; fresh-connection t15 green | **PASS** |
+| C52 | Hardening holds | origin allowlist + per-IP cap + join rate unit-tested and live; creds CNPG-generated; **NetworkPolicy clause WAIVED**: this k3s enforces cross-node netpol wrongly (allow-all still blocks — probed with pinned pods); a fence that fails by pod placement is worse than none. CNI repair is the reopen trigger | **PASS (netpol waived)** |
+| C53 | The kind dev path untouched | full local sweep green throughout | **PASS** |
+
+**What C48's six failed runs taught, each one a future outage pre-paid:**
+bootstrapped GHCR packages aren't repo-linked (grant Actions access);
+the operator's first ts.net TLS cert minting outlives a 20 s handshake;
+the tailnet impersonation grant is app-capability, never covered by
+allow-all IP; a CD Role that applies its own manifest needs rbac verbs;
+a mid-apply Role downgrade lobotomizes the applier; and a smoke check
+must not read kubectl's chatter as data.
+
 ## Phase 4 — C26–C32, run 2026-09-02
 
 All against the deployed stack, two wire-level clients (`t24-rover.mjs`),
