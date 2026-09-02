@@ -1,6 +1,11 @@
 # Phase 6 — the real cluster (pandas, k3s). Same namespace name as kind on
 # purpose: one mental model, and the label every manifest carries scopes
 # pruning exactly as it does locally.
+#
+# NOT in the kustomization: the namespace is cluster-scoped and CD's Role
+# is deliberately namespace-scoped (05-rbac.yaml), so CI cannot — and
+# should not — touch it. Applied by hand, once:
+#   kubectl --context default apply -f deploy/prod/00-namespace.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
