@@ -969,8 +969,12 @@ is a 2D mouse, so M2 pins the mapping (PROTOCOL v2, mode 1):
 - mouse X per second since the last input frame · `k_rate` → `yaw_rate`
   target; sign: rightward drag (dx > 0) → negative rate (positive is a left
   turn — right-hand rule about local +Y)
-- mouse Y per second · `k_rate` → `pitch_rate` target; sign: upward drag
-  (dy < 0) → positive rate (nose up about local +X)
+- mouse Y per second · `k_rate` → `pitch_rate` target; sign (corrected at
+  Phase 5 implementation): a POSITIVE rate about local +X is nose DOWN by
+  the right-hand rule (+Y rotates toward +Z), so upward drag (dy < 0) →
+  **negative** rate. The draft claimed the opposite and the first flight
+  script "climbed" by pitching 200° through the ground and out the far
+  side of vertical
 - A/D → `roll` ∈ {+1, 0, −1} (A = roll left, D = roll right); the server's
   target is `roll · angvel_max_roll`
 - Shift → `action_mask` bit `0x0004` boost (scales thrust, not speed — the

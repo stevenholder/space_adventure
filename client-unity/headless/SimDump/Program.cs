@@ -39,6 +39,7 @@ internal static class Program
         if (dumpAt >= 0) return Dump(Arg(args, "--dump"), Arg(args, "--world"));
         if (Array.IndexOf(args, "--selftest") >= 0) return SelfTest();
         if (Array.IndexOf(args, "--drive") >= 0) return DriveDump(Arg(args, "--drive"), Arg(args, "--world"));
+        if (Array.IndexOf(args, "--flight") >= 0) return FlightDump(Arg(args, "--flight"), Arg(args, "--world"));
         if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
         if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
@@ -54,6 +55,7 @@ internal static class Program
         Console.Error.WriteLine("usage: SimDump --selftest");
         Console.Error.WriteLine("       SimDump --dump <script.jsonl> --world <world.json>");
         Console.Error.WriteLine("       SimDump --drive <script> --world <world>  C30 drive dump");
+        Console.Error.WriteLine("       SimDump --flight <script> --world <world> C34 flight dump");
         Console.Error.WriteLine("       SimDump --codec-decode <go.hex>   decode Go's S->C frames");
         Console.Error.WriteLine("       SimDump --codec-encode <out.hex>  write C->S frames for Go");
         Console.Error.WriteLine("       SimDump --join <ws-url>           join a live server, report what arrives");
@@ -1407,6 +1409,67 @@ internal static class Program
         }
         Console.Out.Write(outBuf.ToString());
         Console.Error.WriteLine($"simdump: {tick} drive ticks");
+        return 0;
+    }
+
+    /// <summary>
+    /// The C# half of the C34 flight-conformance diff: replays a pilot
+    /// input script through Flight.Apply on the quantised wire field, from
+    /// the same mirrored start `server flight` uses.
+    /// </summary>
+    private static int FlightDump(string scriptPath, string worldPath)
+    {
+        using var wdoc = JsonDocument.Parse(File.ReadAllBytes(worldPath));
+        var w = wdoc.RootElement;
+        var codesEl = w.GetProperty("radii");
+        var codes = new ushort[codesEl.GetArrayLength()];
+        for (int i = 0; i < codes.Length; i++) codes[i] = (ushort)codesEl[i].GetUInt32();
+        var field = TerrainField.FromWire(codes,
+            w.GetProperty("radius_min").GetDouble(),
+            w.GetProperty("radius_max").GetDouble());
+
+        var start = Step.SpawnState(field);
+        Vec3 up = start.Pos.Normalized();
+        var s = new ShipSimState
+        {
+            Pos = start.Pos,
+            Vel = Vec3.Zero,
+            Quat = Quat.FromBasis(Vec3.Cross(up, start.Facing), up, start.Facing),
+            Omega = Vec3.Zero,
+            Grounded = true,
+        };
+
+        int tick = 0;
+        var outBuf = new StringBuilder();
+        foreach (string line in File.ReadLines(scriptPath))
+        {
+            string t = line.Trim();
+            if (t.Length == 0) continue;
+            using var doc = JsonDocument.Parse(t);
+            if (!doc.RootElement.TryGetProperty("input", out var ie)) continue;
+
+            var inp = new FlightInput
+            {
+                Thrust = ie.GetProperty("thrust").GetDouble(),
+                Roll = ie.GetProperty("roll").GetDouble(),
+                YawRate = ie.GetProperty("yaw_rate").GetDouble(),
+                PitchRate = ie.GetProperty("pitch_rate").GetDouble(),
+                Boost = ie.GetProperty("boost").GetBoolean(),
+            };
+            Flight.Apply(ref s, inp, field, Rules.DT);
+
+            outBuf.Append("{\"tick\":").Append(tick)
+                  .Append(",\"pos\":[").Append(F(s.Pos.X)).Append(',').Append(F(s.Pos.Y)).Append(',').Append(F(s.Pos.Z))
+                  .Append("],\"vel\":[").Append(F(s.Vel.X)).Append(',').Append(F(s.Vel.Y)).Append(',').Append(F(s.Vel.Z))
+                  .Append("],\"quat\":[").Append(F(s.Quat.X)).Append(',').Append(F(s.Quat.Y)).Append(',').Append(F(s.Quat.Z)).Append(',').Append(F(s.Quat.W))
+                  .Append("],\"omega\":[").Append(F(s.Omega.X)).Append(',').Append(F(s.Omega.Y)).Append(',').Append(F(s.Omega.Z))
+                  .Append("],\"grounded\":").Append(s.Grounded ? "true" : "false")
+                  .Append(",\"space\":").Append(s.Space ? "true" : "false")
+                  .Append("}\n");
+            tick++;
+        }
+        Console.Out.Write(outBuf.ToString());
+        Console.Error.WriteLine($"simdump: {tick} flight ticks");
         return 0;
     }
 

@@ -37,8 +37,9 @@ func TestShipClimbsToSpace(t *testing.T) {
 	e := newShip(f)
 	s := e.Data.(*ShipState)
 
-	// Nose up: pitch positive is nose-up about local +X (GDD input map).
-	flyTicks(e, f, 30, 1, 0, 0, 3.0, false)
+	// Nose up: NEGATIVE pitch about local +X (GDD input map, as corrected —
+	// positive is nose down by the right-hand rule).
+	flyTicks(e, f, 30, 1, 0, 0, -3.0, false)
 	flyTicks(e, f, 30, 1, 0, 0, 0, false)
 	if s.Grounded {
 		t.Fatal("still grounded after 3 s of nose-up thrust")
