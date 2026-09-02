@@ -1073,7 +1073,73 @@ Edge cases already settled: backward thrust is `accel · 0.5` under the same
 speed); the same fixed-step semi-implicit integrator and replay reconciliation
 apply, with orientation normalized every step.
 
-## Phase 4 — ground drive model
+## Phase 5 — space regime, landing, ownership
+
+The flight model above is used as written ("The flight model — M2 context"
+pins the step, the input mapping and the camera; the phase number moved, the
+rules did not). This section adds the three things Phase 5's criteria need
+that no earlier phase specified: where space begins, what a landing is, and
+who owns a ship. Same contract status: every number is in a rule table,
+every rule is a formula or a named reference to one.
+
+### Rule table
+
+| name | value | unit | justification |
+|------|-------|------|---------------|
+| `space_radius` | 260 | m | the regime boundary, by RADIUS, not altitude — terrain tops out at 190 m, so the boundary clears every peak by ≥ 70 m and "altitude above ground" never flickers the regime over a mountain |
+| `space_hyst` | 10 | m | hysteresis band: ENTER space at ‖pos‖ ≥ `space_radius + space_hyst/2` (265), LEAVE at ‖pos‖ ≤ `space_radius − space_hyst/2` (255). A hover exactly at the threshold changes regime at most once (C35) |
+| `land_speed_max` | 8 | m/s | max inward radial speed at contact that settles; ~vmax/5 — a deliberate flare, not a formality |
+| `bounce_k` | 0.3 | — | a hard landing reflects the radial velocity at this restitution instead of settling: the penalty is the bounce, tunnelling stays impossible either way (the origin-point clamp runs regardless) |
+| `land_grip` | 3 | 1/s | tangential decay while grounded — a landed ship slides to a stop |
+| `pad_dist` | 25 | m | the landing pad: `pad_dist` from spawn along the spawn bearing rotated −90° about up (the rover parks along +bearing; perpendicular keeps them apart), walkable-retry k = 1..7 at +10 m, exactly the rover's spawn scan |
+| `ship_price` | 600 | cr | above the rifle (250) + typical camp loot: buying the ship is Phase 5's goal, not its opening move |
+| `crew_size_ship` | 3 | — | pilot + 2 passengers, the "Seats and occupancy" table as written |
+
+### Space regime
+
+Carried state (`space bool`), like `grounded` — hysteresis needs memory, and
+it is mirrored onto the wire as the `0x10` flags bit so the client renders
+the regime it predicts. In space:
+
+- **gravity off, drag off**: step 3's gravity term and step 2's
+  `damp`-when-unthrottled both skip. An unthrottled ship in space coasts —
+  Newton, not a half-life; stopping is reverse thrust.
+- **everything else unchanged**: rotation model, thrust, the `vmax`/boost
+  clamps (the clamp is what makes C36's "no drift off the world" cheap — a
+  bounded speed cannot run away), the origin-point collision (vacuously, the
+  terrain is 70 m below the boundary).
+
+The transition changes NO state but the flag: position, velocity, attitude
+and ω all carry through untouched, which is C35's "no discontinuity" by
+construction rather than by tuning.
+
+### Landing
+
+At origin-point contact (step 4) with inward radial speed `vr`:
+
+- `|vr| ≤ land_speed_max`: settle — kill the inward radial component
+  (already the base rule), `grounded ← true`.
+- `|vr| > land_speed_max`: bounce — `v ← v − dir·vr·(1 + bounce_k)`
+  (the reflected radial at `bounce_k` restitution), `grounded` stays false.
+- While grounded: tangential velocity decays `exp(−land_grip · dt)` and
+  zeroes under `hold_speed` (the Phase 4 row, reused) — parked is parked,
+  ships included. Thrust while grounded works (that is the takeoff).
+
+### Ownership
+
+A ship is an ITEM (`ship.v1`, kind `vehicle`, stack 1) sold by the
+quartermaster at `ship_price`, so purchase, refusal codes, inventory and
+persistence are all the Phase 2 machinery unchanged — ownership IS having
+the item, and it survives reconnects because inventory already does.
+
+- **On purchase**: the server spawns the buyer's ship on the pad
+  (pad scan above; a slot within 6 m of an existing ship is skipped, so a
+  second buyer's ship lands on the next walkable slot).
+- **On join**: a player whose inventory holds `ship.v1` and whose ship is
+  not in the world gets it spawned the same way. One ship per owner.
+- The ship is a world entity like the rover: it persists for the server
+  run, coasts unpiloted (zero-input step), and is never destroyed —
+  `damageable: false`, same reasoning as the rover's def.
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules:
 every number is in the rule table; every rule is a formula or a named

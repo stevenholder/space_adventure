@@ -109,7 +109,10 @@ Constants:
 - `health`: current hit points, `0` = dead. Maximum comes from the entity's
   def in `defs`, not the wire. An entity with no health concept (loot, a
   projectile) sends `0` and sets no `dead` flag.
-- `flags` bits: `0x01` grounded, `0x02` sprinting, `0x04` dead, `0x08` firing
+- `flags` bits: `0x01` grounded, `0x02` sprinting, `0x04` dead, `0x08` firing,
+  `0x10` space (Phase 5: the entity — a ship — is in the space regime, GDD
+  "Space regime"; carried state mirrored onto the wire the same way a
+  vehicle's grounded is, so the client renders the regime it will predict)
   (set on the tick a shot is resolved). `0x10`–`0x80` reserved, sent as 0.
 - `pitch_q`: the entity's view pitch quantised as
   `round(pitch / (π/2) · 127)`, clamped to `[−127, 127]` — about 0.7° of
