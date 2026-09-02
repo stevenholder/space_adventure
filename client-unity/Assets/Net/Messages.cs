@@ -67,6 +67,7 @@ namespace SpaceAdventure.Net
         public const byte Sprinting = 0x02;
         public const byte Dead = 0x04;
         public const byte Firing = 0x08;
+        public const byte Space = 0x10; // Phase 5: ship in the space regime
     }
 
     /// <summary>cmd opcodes.</summary>
@@ -233,6 +234,7 @@ namespace SpaceAdventure.Net
         public bool Sprinting => (Flags & EntityFlags.Sprinting) != 0;
         public bool Dead => (Flags & EntityFlags.Dead) != 0;
         public bool Firing => (Flags & EntityFlags.Firing) != 0;
+        public bool Space => (Flags & EntityFlags.Space) != 0;
 
         /// <summary>
         /// View pitch in radians, un-quantising PROTOCOL's i8. Visual only —

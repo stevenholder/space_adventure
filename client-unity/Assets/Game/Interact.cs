@@ -94,7 +94,7 @@ namespace SpaceAdventure.Game
             {
                 if (v.Root == null || !v.Root.activeSelf) continue;
                 if (v.Type != EntityType.Npc && v.Type != EntityType.Loot &&
-                    v.Type != EntityType.Vehicle) continue;
+                    v.Type != EntityType.Vehicle && v.Type != EntityType.Ship) continue;
 
                 // A corpse is not a conversation. This used to be implied by
                 // activeSelf -- a dead body was switched off, so it fell out of
@@ -114,7 +114,8 @@ namespace SpaceAdventure.Game
                 float d = to.magnitude;
                 // A vehicle is boarded from board_dist (GDD, 8 m), not
                 // conversation range — the server measures the same 8 m.
-                float maxDist = v.Type == EntityType.Vehicle ? BoardDist : InteractDist;
+                float maxDist = v.Type == EntityType.Vehicle || v.Type == EntityType.Ship
+                    ? BoardDist : InteractDist;
                 if (d > maxDist || d < 1e-4f) continue;
 
                 float dot = Vector3.Dot(look, to / d);
@@ -127,6 +128,7 @@ namespace SpaceAdventure.Game
                 {
                     EntityType.Loot => "E  ·  pick up",
                     EntityType.Vehicle => "E  ·  drive",
+                    EntityType.Ship => "E  ·  fly",
                     _ => $"E  ·  talk to {Nice(v.Label)}",
                 };
             }
