@@ -172,6 +172,20 @@ namespace SpaceAdventure.Net
         public static byte[] Ping(uint tsMs)
             => new WireWriter(6).U16(Msg.Ping).U32(tsMs).ToArray();
 
+        /// <summary>
+        /// `board`: u32 vehicle_id | u16 seat. An event, not command state:
+        /// sent once per request, answered by a unicast `seat_result`
+        /// (PROTOCOL "board / disembark").
+        /// </summary>
+        public static byte[] Board(uint vehicleId, ushort seat)
+            => new WireWriter(8)
+                .U16(Msg.Board).U32(vehicleId).U16(seat)
+                .ToArray();
+
+        /// <summary>`disembark`: no payload — the server knows the seat.</summary>
+        public static byte[] Disembark()
+            => new WireWriter(2).U16(Msg.Disembark).ToArray();
+
         /// <summary>`cmd`: u16 seq | u16 opcode | u32 data_len | UTF-8 JSON body.</summary>
         public static byte[] Cmd(ushort seq, ushort opcode, string json)
             => new WireWriter(32)
@@ -270,6 +284,25 @@ namespace SpaceAdventure.Net
         public byte StatusCode;
         public string Body; // UTF-8 JSON
         public bool Ok => StatusCode == Status.Ok;
+    }
+
+    /// <summary>
+    /// `seat_result` (Phase 4): the unicast answer to one board or disembark
+    /// request. EntityId is the vehicle for board, the requester's own body
+    /// for disembark. The authoritative occupancy change is what the next
+    /// snapshot's parent_id/seat say — this only explains the refusal.
+    /// </summary>
+    public struct SeatResult
+    {
+        public const byte Granted = 0;
+        public const byte Occupied = 1;
+        public const byte OutOfRange = 2;
+        public const byte Invalid = 3;
+
+        public uint EntityId;
+        public ushort Seat;
+        public byte Result;
+        public bool Ok => Result == Granted;
     }
 
     /// <summary>
@@ -431,6 +464,18 @@ namespace SpaceAdventure.Net
             string json = r.ReadLengthPrefixedUtf8("defs data");
             r.ExpectEnd("defs");
             return SpaceAdventure.Net.Defs.Parse(json);
+        }
+
+        public static SeatResult SeatResult(WireReader r)
+        {
+            var s = new SeatResult
+            {
+                EntityId = r.ReadU32("seat_result entity_id"),
+                Seat = r.ReadU16("seat_result seat"),
+                Result = r.ReadU8("seat_result result"),
+            };
+            r.ExpectEnd("seat_result");
+            return s;
         }
 
         /// <summary>

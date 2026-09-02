@@ -1299,6 +1299,10 @@ internal static class Program
                               $" scale={G(p.Scale)}");
         }
 
+        Expect("seat_result", Msg.SeatResult, out var r5);
+        var sr = Decode.SeatResult(r5);
+        Console.WriteLine($"seat_result entity={sr.EntityId} seat={sr.Seat} result={sr.Result}");
+
         return 0;
     }
 
@@ -1309,6 +1313,8 @@ internal static class Program
         sb.Append("cmd ").Append(Hex(Encode.Cmd(4097, Op.ShopBuy,
             "{\"npc\":7,\"item\":\"weapon.pulse\",\"qty\":1}"))).Append('\n');
         sb.Append("fire ").Append(Hex(Encode.Fire(513, 0, 0, 1))).Append('\n');
+        sb.Append("board ").Append(Hex(Encode.Board(0x0A0B0C0D, 2))).Append('\n');
+        sb.Append("disembark ").Append(Hex(Encode.Disembark())).Append('\n');
         File.WriteAllText(path, sb.ToString());
         return 0;
     }
