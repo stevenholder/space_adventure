@@ -29,6 +29,11 @@ namespace SpaceAdventure.Game
         public Vec3 Facing;
         public ushort Health;
         public bool Dead;
+
+        // Phase 4 occupancy, carried through so the renderer can apply the
+        // GDD rule "a seated body is not rendered" without a second lookup.
+        public uint ParentId;
+        public ushort Seat;
     }
 
     /// <summary>
@@ -70,6 +75,8 @@ namespace SpaceAdventure.Game
                     Facing = FacingOf(e),
                     Health = e.Health,
                     Dead = e.Dead,
+                    ParentId = e.ParentId,
+                    Seat = e.Seat,
                 };
             }
             _buf.Add((snap.Tick, atTime, poses));

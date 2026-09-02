@@ -188,6 +188,23 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 		}
 	}
 
+	// Phase 4: one rover, parked deterministically near spawn (GDD "Ground
+	// drive model", "Deterministic spawn"). A world entity like any other —
+	// its step is registered by Kind, its def carries the asset.
+	worldID++
+	roverPos, roverQuat := sim.SpawnRover(t)
+	rover := &sim.Ent{
+		ID:     worldID,
+		Kind:   sim.EntityKind(protocol.EntityTypeVehicle),
+		Pos:    [3]float64(roverPos),
+		Quat:   [4]float64(roverQuat),
+		Health: reg.Entities["vehicle"].MaxHealth,
+		Def:    "vehicle",
+		Data:   &sim.VehicleState{Grounded: true},
+	}
+	world.Add(rover)
+	worldEnts = append(worldEnts, rover)
+
 	s := &Server{
 		terrain: t,
 		seed:    seed,
@@ -253,6 +270,8 @@ func entityDefKind(k sim.EntityKind) string {
 		return "npc"
 	case protocol.EntityTypeTarget:
 		return "target"
+	case protocol.EntityTypeVehicle:
+		return "vehicle"
 	default:
 		return "player"
 	}
@@ -321,10 +340,32 @@ func (s *Server) tick() {
 	s.tickNo++
 	tick := s.tickNo
 	s.list = s.list[:0]
+	// Vehicle inputs are zero unless a seated driver writes them below —
+	// which is the whole of driver-disconnect handling: no driver, zero
+	// input, the same step coasts the rover to a stop (GDD "Control
+	// handoff").
+	for _, e := range s.worldEnts {
+		if v, ok := e.Data.(*sim.VehicleState); ok {
+			v.Throttle, v.Steer = 0, 0
+		}
+	}
 	for _, c := range s.clients {
-		c.step(s.terrain, s.colliders)
+		switch {
+		case c.seat == 0:
+			c.step(s.terrain, s.colliders)
+			s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
+		case c.seat == 1:
+			// The driver's input drives the vehicle; the body itself is
+			// attached, not co-simulated (GDD "Seats and occupancy"). Mode
+			// is a declaration, not authority: occupancy decides these are
+			// throttle/steer (PROTOCOL "input").
+			if _, v := s.vehicleByID(c.seatVehicle); v != nil {
+				if w := c.input.Load(); w != nil {
+					v.Throttle, v.Steer = float64(w.MoveX), float64(w.MoveY)
+				}
+			}
+		}
 		c.recordCmdTick(tick)
-		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		s.list = append(s.list, c)
 	}
 	s.stepNPCs(tick)
@@ -340,6 +381,20 @@ func (s *Server) tick() {
 	})
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
+	}
+	// Seated bodies compose from the POST-step vehicle transform, so the
+	// snapshot's seat position and the vehicle it rides never disagree by a
+	// tick. Their lag-comp history records the composed position.
+	for _, c := range s.list {
+		if c.seat == 0 {
+			continue
+		}
+		if ent, v := s.vehicleByID(c.seatVehicle); v != nil {
+			c.entity.State.Pos = sim.ComposeSeat(sim.Vec(ent.Pos), sim.Quat(ent.Quat), c.seat)
+			c.entity.State.Vel = sim.Vec(ent.Vel)
+			c.entity.State.Grounded = v.Grounded
+		}
+		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 	}
 	// Announce anything created or destroyed this tick before encoding, so a
 	// client never receives a snapshot row for an entity it has not been told
@@ -384,15 +439,24 @@ func (s *Server) encodeSnapshot(tick uint32) []byte {
 	b = protocol.AppendSnapshotHeader(b, tick, 0, uint16(n))
 	for _, c := range s.list {
 		q := c.entity.State.OrientationQuat()
+		if c.seat != 0 {
+			// A seated body's quat is the vehicle's (GDD composition rule);
+			// pos/vel were composed after the world stepped.
+			if ent, _ := s.vehicleByID(c.seatVehicle); ent != nil {
+				q = sim.Quat(ent.Quat)
+			}
+		}
 		p, v := c.entity.State.Pos, c.entity.State.Vel
 		b = protocol.AppendEntity(b, protocol.Entity{
-			ID:     c.entity.ID,
-			Pos:    v3f32(p),
-			Quat:   v4f32([4]float64(q)),
-			Vel:    v3f32(v),
-			Health: healthU16(c.entity.Health),
-			Flags:  c.flags(tick),
-			PitchQ: c.pitchQ(),
+			ID:       c.entity.ID,
+			Pos:      v3f32(p),
+			Quat:     v4f32([4]float64(q)),
+			Vel:      v3f32(v),
+			ParentID: c.seatVehicle,
+			Seat:     c.seat,
+			Health:   healthU16(c.entity.Health),
+			Flags:    c.flags(tick),
+			PitchQ:   c.pitchQ(),
 		})
 	}
 	for _, e := range s.worldEnts {
@@ -533,6 +597,7 @@ func (s *Server) leave(c *client) {
 		return
 	}
 	id := c.entity.ID
+	s.freeSeat(c)
 	delete(s.clients, id)
 	s.history.Forget(id)
 	s.mu.Unlock()

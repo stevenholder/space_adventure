@@ -67,6 +67,11 @@ func codecEmit(path string) error {
 		{Asset: "prop.barrel", Pos: [3]float32{12, 1.25, 6}, Quat: [4]float32{0, 0, 0, 1}, Scale: 1},
 		{Asset: "prop.dish", Pos: [3]float32{-8, 0.5, 4}, Quat: [4]float32{0.5, -0.5, 0.5, 0.5}, Scale: 1.5},
 	}}))
+	// Phase 4: asymmetric values again — id and seat that cannot swap
+	// silently, a result code that is not zero.
+	put("seat_result", protocol.EncodeSeatResult(protocol.SeatResult{
+		EntityID: 0x0A0B0C0D, Seat: 2, Result: protocol.SeatOutOfRange,
+	}))
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
@@ -111,6 +116,23 @@ func codecParse(path string) error {
 				return fmt.Errorf("ParseFire: %w", err)
 			}
 			fmt.Printf("fire seq=%d dir=%g,%g,%g\n", fr.Seq, fr.Dir[0], fr.Dir[1], fr.Dir[2])
+		case "board":
+			if typ != protocol.MsgBoard {
+				return fmt.Errorf("board: frame type %#04x, want %#04x (encoder did not frame?)", typ, protocol.MsgBoard)
+			}
+			bd, err := protocol.DecodeBoard(payload)
+			if err != nil {
+				return fmt.Errorf("DecodeBoard: %w", err)
+			}
+			fmt.Printf("board vehicle=%d seat=%d\n", bd.VehicleID, bd.Seat)
+		case "disembark":
+			if typ != protocol.MsgDisembark {
+				return fmt.Errorf("disembark: frame type %#04x, want %#04x (encoder did not frame?)", typ, protocol.MsgDisembark)
+			}
+			if err := protocol.DecodeDisembark(payload); err != nil {
+				return fmt.Errorf("DecodeDisembark: %w", err)
+			}
+			fmt.Printf("disembark\n")
 		default:
 			return fmt.Errorf("unknown message name %q", f[0])
 		}

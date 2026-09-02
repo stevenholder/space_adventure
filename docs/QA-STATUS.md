@@ -301,6 +301,28 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 4 — C26–C32, run 2026-09-02
+
+All against the deployed stack, two wire-level clients (`t24-rover.mjs`),
+plus the cross-sim gate (`t23`, in CI).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C26 | Occupancy visible to the other client ≤ 1 s; composed seat position < 1e-2 m | visible; deviation **1.68e-6 m** | **PASS** |
+| C27 | The rover is never below the surface | min clearance −7.6e-6 m over 31 m of driving (independent field sampler) | **PASS**, as the property — there is deliberately no dev-override to force it under |
+| C28 | Seat race: exactly one gets result 0 | first granted, second refused 1 (sequential race — exactly-one, not simultaneity) | **PASS** |
+| C29 | Refusals: far board → 2, unseated disembark → 3, bad seat → 3 | 2 / 3 / 3 | **PASS** |
+| C30 | Drive conformance ≤ 1e-6 over ≥ 1000 ticks + GDD table within 5% | max dPos **9.6e-9 m**, dVel 4.2e-9, dQuat 3.8e-10 over 1200 ticks; peak 16.09 of vmax 16 | **PASS** (`t23`) |
+| C31 | Passenger input leaves the rover invariant | moved 0.00e+0 m through 1 s of full movement input; body stays composed | **PASS** |
+| C32 | Disembark at any speed lands on terrain ≤ 1 s, ≤ 10 m, never inside geometry | at speed: 2.00 m from the rover, 2.8e-6 m off the surface | **PASS** |
+
+**What the run caught:** C31 failed honestly on the first pass — not
+passenger input, but the rover still coasting 0.7 m through the window.
+Exponential damping never reaches zero, so a parked rover on any grade
+creeps downhill forever. `hold_speed` (0.1 m/s, GDD) now zeroes the
+tangential velocity outright when unthrottled; parked residual measured
+1.25e-16 m/s. Both sims, conformance re-verified.
+
 ## Harnesses, for the C43 re-run
 
 All under `test/`. These speak the wire protocol directly and carry their own

@@ -47,6 +47,9 @@ namespace SpaceAdventure.Game
         /// <summary>When this body was first seen dead, for the death fade.</summary>
         public float DiedAt = -1f;
 
+        /// <summary>Occupancy from the snapshot; nonzero = seated, not drawn.</summary>
+        public uint ParentId;
+
         /// <summary>
         /// Where this body was drawn last frame, and how fast it is therefore
         /// moving. Speed comes from the drawn positions rather than from the
@@ -243,6 +246,17 @@ namespace SpaceAdventure.Game
                     _views[id] = view;
                 }
 
+                // GDD "Seats and occupancy", binding client rule: a seated
+                // body is not rendered — a standing character at a seat clips
+                // the hull, and a seated pose is post-M2 art. The composed
+                // transform stays authoritative data; we just draw nothing.
+                view.ParentId = kv.Value.ParentId;
+                if (kv.Value.ParentId != 0)
+                {
+                    view.Root.SetActive(false);
+                    continue;
+                }
+
                 view.Health = kv.Value.Health;
                 if (kv.Value.Health > view.MaxHealth) view.MaxHealth = kv.Value.Health;
                 view.Dead = kv.Value.Dead;
@@ -366,6 +380,7 @@ namespace SpaceAdventure.Game
             EntityType.Player => Defs.EntityAsset("player"),
             EntityType.Target => Defs.EntityAsset("target"),
             EntityType.Npc => Fallback(Defs.NpcAsset(def), Defs.EntityAsset("npc")),
+            EntityType.Vehicle => Defs.EntityAsset("vehicle"),
 
             // Loot is the one id named here rather than by the server, and it
             // is not an exception being smuggled in. The server has an

@@ -51,6 +51,16 @@
       "description": "Hero scout ship for M2 (built early so M2 does not wait on art). -Z forward, origin at ground level. Carries the seat contract: seat.pilot plus seat.passenger.0/1 empty nodes at the eye point. Walk-in cockpit with open canopy, glass (alphaMode BLEND), floor, dash, lit console panel and seats; hull is double-sided so the interior renders from the pilot seat."
     },
     {
+      "id": "vehicle.rover.v1",
+      "file": "vehicles/rover.v1.glb",
+      "tris": 172,
+      "license": "CC0",
+      "source": "recipes/vehicle.rover.v1.json",
+      "description": "Phase 4 ground rover. -Z forward, origin at ground level, 1.4 m tall. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
       "id": "weapon.pulse",
       "file": "weapons/pulse.glb",
       "tris": 106,

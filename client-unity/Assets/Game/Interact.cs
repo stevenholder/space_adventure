@@ -56,6 +56,18 @@ namespace SpaceAdventure.Game
         /// <summary>The entity the player is looking at, or 0.</summary>
         public uint Target { get; private set; }
 
+        /// <summary>The current target's EntityType, 0 when none.</summary>
+        public ushort TargetType { get; private set; }
+
+        /// <summary>
+        /// Overrides the cone prompt when set (seated exit hint, seat_result
+        /// refusals). Owned by Boot; cleared by Boot when it stops applying.
+        /// </summary>
+        public string Notice = "";
+
+        /// <summary>board_dist (GDD "Seats and occupancy").</summary>
+        private const float BoardDist = 8f;
+
         /// <summary>What the prompt should say, or empty when there is nothing to say.</summary>
         public string Prompt { get; private set; } = "";
 
@@ -77,10 +89,12 @@ namespace SpaceAdventure.Game
             Prompt = "";
             float best = ConeCosMin;
 
+            TargetType = 0;
             foreach (EntityView v in _views.All)
             {
                 if (v.Root == null || !v.Root.activeSelf) continue;
-                if (v.Type != EntityType.Npc && v.Type != EntityType.Loot) continue;
+                if (v.Type != EntityType.Npc && v.Type != EntityType.Loot &&
+                    v.Type != EntityType.Vehicle) continue;
 
                 // A corpse is not a conversation. This used to be implied by
                 // activeSelf -- a dead body was switched off, so it fell out of
@@ -98,16 +112,23 @@ namespace SpaceAdventure.Game
                 Vector3 targetEye = targetPos + targetPos.normalized * EyeHeight;
                 Vector3 to = targetEye - eye;
                 float d = to.magnitude;
-                if (d > InteractDist || d < 1e-4f) continue;
+                // A vehicle is boarded from board_dist (GDD, 8 m), not
+                // conversation range — the server measures the same 8 m.
+                float maxDist = v.Type == EntityType.Vehicle ? BoardDist : InteractDist;
+                if (d > maxDist || d < 1e-4f) continue;
 
                 float dot = Vector3.Dot(look, to / d);
                 if (dot < best) continue;
 
                 best = dot;
                 Target = v.Id;
-                Prompt = v.Type == EntityType.Loot
-                    ? "E  ·  pick up"
-                    : $"E  ·  talk to {Nice(v.Label)}";
+                TargetType = v.Type;
+                Prompt = v.Type switch
+                {
+                    EntityType.Loot => "E  ·  pick up",
+                    EntityType.Vehicle => "E  ·  drive",
+                    _ => $"E  ·  talk to {Nice(v.Label)}",
+                };
             }
         }
 
@@ -209,12 +230,16 @@ namespace SpaceAdventure.Game
 
             if (!ShopOpen)
             {
-                if (string.IsNullOrEmpty(Prompt)) return null;
-                var size = _style.CalcSize(new GUIContent(Prompt));
+                // Notice outranks the cone prompt: it is either the seated
+                // "E · exit rover" hint or a seat_result refusal, both set by
+                // Boot, both more current than what the cone test saw.
+                string text = string.IsNullOrEmpty(Notice) ? Prompt : Notice;
+                if (string.IsNullOrEmpty(text)) return null;
+                var size = _style.CalcSize(new GUIContent(text));
                 float w = size.x + 24, h = 26;
                 var at = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.62f, w, h);
                 GUI.DrawTexture(at, _panel);
-                GUI.Label(new Rect(at.x + 12, at.y + 4, w, h), Prompt, _style);
+                GUI.Label(new Rect(at.x + 12, at.y + 4, w, h), text, _style);
                 return null;
             }
 

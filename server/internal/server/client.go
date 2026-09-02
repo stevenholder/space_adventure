@@ -68,6 +68,12 @@ type client struct {
 	input  atomic.Pointer[protocol.Input] // latest command state (latest wins)
 	ackSeq atomic.Uint32                  // seq of the input last applied
 
+	// seatVehicle/seat are this body's occupancy (0 = on foot). Guarded by
+	// srv.mu: written by board/disembark/freeSeat, read by the tick loop
+	// and encodeSnapshot, all under the same lock.
+	seatVehicle uint32
+	seat        uint16
+
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the
 	// trigger was pulled (PROTOCOL.md "fire"), and this turns that name into
@@ -339,6 +345,27 @@ func (c *client) reader() {
 			}
 			res := c.srv.doCmd(c, req)
 			c.send(msg{data: protocol.EncodeCmdResult(res)})
+		case protocol.MsgBoard:
+			if c.entity == nil {
+				c.closeCode(websocket.CloseProtocolError) // board before hello
+				return
+			}
+			b, err := protocol.DecodeBoard(payload)
+			if err != nil {
+				c.closeCode(websocket.CloseProtocolError)
+				return
+			}
+			c.srv.board(c, b)
+		case protocol.MsgDisembark:
+			if c.entity == nil {
+				c.closeCode(websocket.CloseProtocolError) // disembark before hello
+				return
+			}
+			if err := protocol.DecodeDisembark(payload); err != nil {
+				c.closeCode(websocket.CloseProtocolError)
+				return
+			}
+			c.srv.disembark(c)
 		case protocol.MsgPing:
 			p, err := protocol.DecodePing(payload)
 			if err != nil {
