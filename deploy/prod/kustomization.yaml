@@ -1,0 +1,15 @@
+# The real cluster (pandas). `kubectl apply -k deploy/prod` is the whole
+# deploy; CD pins the server image tag with `kustomize edit set image`
+# before applying, so the manifest in git stays tag-agnostic and the
+# cluster always runs an exact, named build.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: space-adventure
+resources:
+  - 00-namespace.yaml
+  - 05-rbac.yaml
+  - 10-postgres.yaml
+  - 15-backup.yaml
+  - 20-server.yaml
+  - 25-ingress.yaml
+  - 30-networkpolicy.yaml

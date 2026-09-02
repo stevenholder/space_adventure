@@ -1,0 +1,9 @@
+# Phase 6 — the real cluster (pandas, k3s). Same namespace name as kind on
+# purpose: one mental model, and the label every manifest carries scopes
+# pruning exactly as it does locally.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure

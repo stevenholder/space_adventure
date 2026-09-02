@@ -1,0 +1,74 @@
+# Nightly logical backup. Replication (10-postgres.yaml) survives a node
+# dying; THIS survives everything else — a bad migration, a fat-fingered
+# delete, both replicas' disks. CNPG's own scheduled backups want an
+# object store or volume snapshots and this cluster has neither, so the
+# lazy correct thing is pg_dump to a PVC pinned on a different node than
+# the primary usually sits (the drill in the runbook proves it restores —
+# C50 says drilled, not assumed).
+#
+# ponytail: local-path PVC on one named node; move to an object store the
+# day one exists on this cluster.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-backups
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  schedule: "17 9 * * *" # 09:17 UTC, ~3am local: quiet hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: db-backup
+            app.kubernetes.io/part-of: space-adventure
+        spec:
+          restartPolicy: Never
+          # Pin to panda2 so the local-path PV lands (and stays) there;
+          # the primary prefers other nodes only by CNPG's spreading, so
+          # the runbook's restore drill checks both facts.
+          nodeSelector:
+            kubernetes.io/hostname: panda2
+          containers:
+            - name: dump
+              image: ghcr.io/cloudnative-pg/postgresql:17
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  ts=$(date -u +%Y%m%dT%H%M%S)
+                  pg_dump "$DATABASE_URL" | gzip > /backups/space-db-$ts.sql.gz
+                  ls -t /backups/space-db-*.sql.gz | tail -n +15 | xargs -r rm --
+                  echo "backup done: space-db-$ts.sql.gz ($(ls -t /backups | head -1))"
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: space-db-app
+                      key: uri
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: db-backups

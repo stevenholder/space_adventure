@@ -1,1 +1,1 @@
-{"criterion":"C39","harness":"SimDump --pilot","samples":393,"p50":5.528495421819538E-06,"p95":1.7590409118529838E-05,"snapbacks":0}
+{"criterion":"C39","harness":"SimDump --pilot","samples":395,"p50":5.627146825055482E-06,"p95":4.28828256613911E-05,"snapbacks":0}
