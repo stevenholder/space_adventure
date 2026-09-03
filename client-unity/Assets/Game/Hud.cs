@@ -122,9 +122,18 @@ namespace SpaceAdventure.Game
             }
         }
 
+        /// <summary>
+        /// Phase 8: the status block is a DEBUG overlay now (F3). Health,
+        /// ammo and credits live on the UI Toolkit HUD; what remains here is
+        /// diagnostics (link, rtt, prediction) and the controls reference —
+        /// genre-standard behind a key, invisible by default.
+        /// </summary>
+        public bool DebugOpen;
+
         public void Draw(NetClient net, Predictor predictor, Character character)
         {
             EnsureStyles();
+            if (!DebugOpen) { DrawLogAndToasts(net); return; }
 
             GUI.DrawTexture(new Rect(8, 8, 330, 136), _panel);
             GUILayout.BeginArea(new Rect(16, 12, 320, 132));
@@ -138,9 +147,15 @@ namespace SpaceAdventure.Game
                             $"last correction: {predictor.LastCorrection:F3} m", _style);
             if (!string.IsNullOrEmpty(net.LastError)) GUILayout.Label($"last error: {net.LastError}", _style);
             GUILayout.Label("WASD move · shift sprint · space jump · LMB fire", _style);
-            GUILayout.Label("R reload · E talk/shop · B bags · C character · M map · esc", _style);
+            GUILayout.Label("R reload · E talk/shop · B bags · C character · M map · esc · F3 hide", _style);
             GUILayout.EndArea();
 
+            DrawLogAndToasts(net);
+        }
+
+        /// <summary>The always-on remainder: event log and the crosshair.</summary>
+        private void DrawLogAndToasts(NetClient net)
+        {
             if (_log.Count > 0)
             {
                 GUI.DrawTexture(new Rect(8, 152, 330, 18 * _log.Count + 8), _panel);

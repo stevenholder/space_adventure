@@ -102,6 +102,7 @@ namespace SpaceAdventure.Game
         // Phase 8 — the UI Toolkit layer.
         private SpaceAdventure.Game.UI.UiRoot _ui;
         private SpaceAdventure.Game.UI.HudView _hudView;
+        private SpaceAdventure.Game.UI.CombatFeed _combatFeed;
 
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
@@ -188,6 +189,7 @@ namespace SpaceAdventure.Game
             _ui = new SpaceAdventure.Game.UI.UiRoot();
             StartCoroutine(_ui.Verify(this));
             _hudView = new SpaceAdventure.Game.UI.HudView(_ui.Root);
+            _combatFeed = new SpaceAdventure.Game.UI.CombatFeed(_ui.Root);
 
             // -uiShot <path>: save a screenshot after the world settles, the
             // review artifact for C60 (test/out/ui/).
@@ -323,6 +325,7 @@ namespace SpaceAdventure.Game
                 Cursor.lockState = _cursorFreed ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = _cursorFreed;
             }
+            if (keys?.f3Key.wasPressedThisFrame == true) _hud.DebugOpen = !_hud.DebugOpen;
             if (keys?.f1Key.wasPressedThisFrame == true)
             {
                 _accountOpen = !_accountOpen;
@@ -433,6 +436,7 @@ namespace SpaceAdventure.Game
             _fx.Tick();
 
             UpdateHudView();
+            _combatFeed?.Tick(_camera);
 
             _statFrames++;
             if (Time.unscaledDeltaTime > _statWorstDt) _statWorstDt = Time.unscaledDeltaTime;
@@ -639,6 +643,33 @@ namespace SpaceAdventure.Game
             _seatVehicle = 0;
             _net = new NetClient();
             _net.Connect(ResolveServerUrl(), SystemInfo.deviceName ?? "player", token);
+        }
+
+        /// <summary>
+        /// Feeds the combat feed from a hit event (same wire layout
+        /// Combat.OnHit reads: shooter u32 | pos f32[3] | damage u16 |
+        /// health_after u16). Numbers for every hit; the marker only for
+        /// YOURS; the incoming arc only when the victim is you.
+        /// </summary>
+        private void OnHitFeedback(EventMsg ev)
+        {
+            if (_combatFeed == null || ev.Data.Length < 20) return;
+            var r = new WireReader(ev.Data);
+            uint shooter = r.ReadU32();
+            var simPoint = new Vec3(r.ReadF32(), r.ReadF32(), r.ReadF32());
+            int damage = r.ReadU16();
+            int healthAfter = r.ReadU16();
+            Vector3 point = TerrainMesh.ToUnity(simPoint);
+
+            _combatFeed.Damage(point, damage, healthAfter == 0);
+            if (shooter == _net.EntityId) _combatFeed.HitMarker(healthAfter == 0);
+            if (ev.EntityId == _net.EntityId && _views.TryGet(shooter, out var sv) && sv.Root != null)
+            {
+                Vector3 sp = sv.Root.transform.position;
+                var target = new Vec3(sp.x, sp.y, -sp.z);
+                var me = _predictor.State;
+                _combatFeed.Incoming(Bearing.To(me.Pos, me.Facing, target));
+            }
         }
 
         /// <summary>Saves the C60 review screenshot once the scene settles.</summary>
@@ -900,7 +931,10 @@ namespace SpaceAdventure.Game
                                 ? _viewModel.Muzzle.position
                                 : (Vector3?)null);
                             break;
-                        case EventId.Hit: _fx.OnHit(ev, _net.EntityId); break;
+                        case EventId.Hit:
+                            _fx.OnHit(ev, _net.EntityId);
+                            OnHitFeedback(ev);
+                            break;
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
