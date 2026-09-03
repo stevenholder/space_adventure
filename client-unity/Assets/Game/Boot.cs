@@ -62,6 +62,14 @@ namespace SpaceAdventure.Game
         /// </summary>
         private static string ResolveToken()
         {
+            // -token <t> overrides (C45 config-over-compiled; the screenshot
+            // rig uses it to join as a player whose saved position is where
+            // the picture needs taking).
+            string[] argv = Environment.GetCommandLineArgs();
+            for (int i = 0; i < argv.Length - 1; i++)
+            {
+                if (argv[i] == "-token") return argv[i + 1];
+            }
             const string key = "sa.token";
             string token = PlayerPrefs.GetString(key, "");
             if (string.IsNullOrEmpty(token))
@@ -92,12 +100,30 @@ namespace SpaceAdventure.Game
         private readonly RoverPredictor _rover = new RoverPredictor();
         private readonly ShipPredictor _ship = new ShipPredictor();
 
+
+        // Phase 8 — the UI Toolkit layer.
+        private SpaceAdventure.Game.UI.UiRoot _ui;
+        private SpaceAdventure.Game.UI.HudView _hudView;
+        private SpaceAdventure.Game.UI.CombatFeed _combatFeed;
+        private SpaceAdventure.Game.UI.ShopView _shopView;
+        private SpaceAdventure.Game.UI.BagsView _bagsView;
+        private SpaceAdventure.Game.UI.SheetView _sheetView;
+        private SpaceAdventure.Game.UI.PromptView _promptView;
+
         // Phase 7 — the account link panel (F1): type a code minted on the
         // account site, redeem it for this account's game token, reconnect
-        // as that player. IMGUI like everything else.
-        private bool _accountOpen;
-        private string _accountCode = "";
-        private string _accountStatus = "";
+        // as that player.
+        private SpaceAdventure.Game.UI.AccountView _accountView;
+
+        /// <summary>Screenshot rig (-uiApproach): inject forward+sprint.</summary>
+        private bool _rigWalk;
+        private bool _rigJump;
+        private bool _rigFire;
+        private float _detourSign = 1f;
+
+        private bool ModalOpen =>
+            (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
+            (_sheetView?.Open ?? false) || (_accountView?.Open ?? false);
 
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
@@ -179,6 +205,19 @@ namespace SpaceAdventure.Game
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
+            // Phase 8: the UI Toolkit root. The spike's self-check stays until
+            // every screen is ported (it logs the toolkit/text verdicts).
+            _ui = new SpaceAdventure.Game.UI.UiRoot();
+            _hudView = new SpaceAdventure.Game.UI.HudView(_ui.Root);
+            _combatFeed = new SpaceAdventure.Game.UI.CombatFeed(_ui.Root);
+
+            // -uiShot <path>: save a screenshot after the world settles, the
+            // review artifact for C60 (test/out/ui/).
+            string[] argvUi = Environment.GetCommandLineArgs();
+            int shotAt = Array.IndexOf(argvUi, "-uiShot");
+            if (shotAt >= 0 && shotAt + 1 < argvUi.Length)
+                StartCoroutine(SaveUiShot(argvUi[shotAt + 1]));
+
             // No vsync, capped at 120. Vsync waits on whatever refresh the OS
             // reports, and a virtual or remote display can report ~4 Hz — the
             // C46 measurement found the player pinned at 6 fps by exactly
@@ -255,9 +294,16 @@ namespace SpaceAdventure.Game
             _viewModel = new ViewModel(cam, _material, vmLayer, transform, _assets);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
-            _map = new MapView();
+            _map = new MapView(_ui.Root);
             _character = new Character();
             _interact = new Interaction(_views, _character);
+            _shopView = new SpaceAdventure.Game.UI.ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
+            _bagsView = new SpaceAdventure.Game.UI.BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
+            _sheetView = new SpaceAdventure.Game.UI.SheetView(_ui.Root, _character);
+            _promptView = new SpaceAdventure.Game.UI.PromptView(_ui.Root);
+            _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
+                code => { _accountView.SetStatus("redeeming…"); StartCoroutine(RedeemLinkCode(code)); },
+                () => _accountView.Show(false));
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -306,21 +352,22 @@ namespace SpaceAdventure.Game
                 Cursor.lockState = _cursorFreed ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = _cursorFreed;
             }
+            if (keys?.f3Key.wasPressedThisFrame == true) _hud.DebugOpen = !_hud.DebugOpen;
             if (keys?.f1Key.wasPressedThisFrame == true)
             {
-                _accountOpen = !_accountOpen;
-                _accountStatus = "";
+                _accountView.Show(!_accountView.Open);
+                _accountView.SetStatus("");
             }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
             if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
-            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleBags);
-            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleSheet);
+            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_bagsView, _sheetView);
+            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_sheetView, _bagsView);
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
             // The map and the shop both want the pointer. Movement keeps
             // working under either.
-            bool wantsCursor = _map.Open || _interact.ShopOpen || _character.AnyOpen || _accountOpen;
+            bool wantsCursor = _map.Open || ModalOpen;
             if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.None;
@@ -346,6 +393,13 @@ namespace SpaceAdventure.Game
             // is reset and its position stale.
             Vec3 upPos = _seat != 0 && _rover.Ready ? _rover.State.Pos : state.Pos;
             LocalInput li = _fps.Sample(upPos.Normalized(), state.Facing);
+            if (_rigWalk)
+            {
+                li.MoveY = 1;
+                li.ActionMask |= Net.Action.Sprint;
+                if (_rigJump) li.ActionMask |= Net.Action.Jump;
+            }
+            if (_rigFire) li.FirePressed = true;
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
             // rate would put several inputs in one tick, and the server keeps
@@ -367,14 +421,14 @@ namespace SpaceAdventure.Game
             }
             if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "E  ·  exit ship" : "E  ·  exit rover";
             else if (Time.time > _noticeUntil) _interact.Notice = "";
-            if (li.InteractPressed && !_map.Open && !_character.AnyOpen)
+            if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open))
             {
                 if (_seat != 0)
                 {
                     // Always available, at any speed (GDD; C32).
                     _net.Send(Encode.Disembark());
                 }
-                else if (_interact.ShopOpen) _interact.CloseShop();
+                else if (_interact.ShopOpen) { _interact.CloseShop(); _shopView.Show(false); }
                 else if ((_interact.TargetType == EntityType.Vehicle ||
                           _interact.TargetType == EntityType.Ship) && _interact.Target != 0)
                 {
@@ -415,6 +469,9 @@ namespace SpaceAdventure.Game
             _viewModel.Tick(_fps.LookDelta, (float)now.Vel.Length, Time.deltaTime);
             _fx.Tick();
 
+            UpdateHudView();
+            _combatFeed?.Tick(_camera);
+
             _statFrames++;
             if (Time.unscaledDeltaTime > _statWorstDt) _statWorstDt = Time.unscaledDeltaTime;
             if (Time.unscaledTime - _statWindowStart >= 5f)
@@ -430,6 +487,57 @@ namespace SpaceAdventure.Game
         }
 
         private ushort NextCmdSeq() => ++_cmdSeq;
+
+        /// <summary>
+        /// Feeds the Phase 8 HUD from the same sources the IMGUI one reads,
+        /// plus compass markers by egocentric bearing (Bearing.To).
+        /// </summary>
+        private void UpdateHudView()
+        {
+            if (_hudView == null) return;
+            _hudView.SetVitals(_hud.Health, 100);
+            _hudView.SetAmmo(_character.Magazine, _character.Reserve,
+                _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
+            _hudView.SetCredits(_character.Credits);
+
+            var me = _predictor.State;
+            var markers = new List<(string, double)>();
+            foreach (var v in _views.All)
+            {
+                if (v.Root == null || !v.Root.activeSelf) continue;
+                string name = v.Type switch
+                {
+                    EntityType.Npc when v.Label == "npc.quartermaster" => "SHOP",
+                    EntityType.Vehicle => "ROVER",
+                    EntityType.Ship => "SHIP",
+                    _ => null,
+                };
+                if (name == null) continue;
+                Vector3 p = v.Root.transform.position;
+                var target = new Vec3(p.x, p.y, -p.z); // Unity → sim
+                markers.Add((name, Bearing.To(me.Pos, me.Facing, target)));
+            }
+            _hudView.SetMarkers(markers);
+
+            // The shop view mirrors Interaction's state: stock arriving opens
+            // it, CloseShop (or a despawned NPC) closes it.
+            if (_interact.ShopOpen && !_shopView.Open) _shopView.Show(true);
+            if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
+
+            _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
+
+            UpdateFlightReadout();
+
+            _hudView.SetLog(_hud.Lines);
+            _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
+            _hudView.UpdateHealthBars(_camera, _views, !_map.Open);
+
+            State ms = _predictor.State;
+            _map.Draw(_terrain,
+                      TerrainMesh.ToUnity(ms.Pos),
+                      TerrainMesh.ToUnity(ms.Facing),
+                      MapMarkers());
+        }
 
         /// <summary>
         /// Camera at the seat eye point (GDD "Rover seats" seat_eye, sim
@@ -481,8 +589,9 @@ namespace SpaceAdventure.Game
         /// terrain under the ship, regime, role. IMGUI like everything else
         /// — no assets, C47 holds.
         /// </summary>
-        private void DrawFlightHud()
+        private void UpdateFlightReadout()
         {
+            if (SeatKind != EntityType.Ship) { _hudView.SetFlight(null); return; }
             bool pilot = Piloting;
             ShipSimState s = _ship.Ready ? _ship.State : default;
             Vec3 p;
@@ -499,37 +608,13 @@ namespace SpaceAdventure.Game
                 v = Vec3.Zero;
                 space = p.Length >= FlightRules.SpaceRadius;
             }
-            else return;
+            else { _hudView.SetFlight(null); return; }
 
             Vec3 dir = p.Normalized();
             double alt = p.Length - _terrain.SampleRadius(dir);
-            string line = pilot
+            _hudView.SetFlight(pilot
                 ? $"{v.Length,6:F1} m/s   alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PILOT"
-                : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER";
-            GUI.Label(new Rect(Screen.width * 0.5f - 180, 18, 360, 24), line);
-        }
-
-        /// <summary>
-        /// The F1 account panel: redeem a link code from the account site
-        /// (docs/ROADMAP.md Phase 7) and reconnect as that account's player.
-        /// </summary>
-        private void DrawAccountPanel()
-        {
-            float w = 360, h = 170;
-            var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.35f, w, h);
-            GUI.Box(rect, "ACCOUNT LINK");
-            GUI.Label(new Rect(rect.x + 16, rect.y + 28, w - 32, 40),
-                "Mint a code on the account site, type it here.");
-            _accountCode = GUI.TextField(new Rect(rect.x + 16, rect.y + 66, w - 32, 26),
-                _accountCode, 8).ToUpperInvariant();
-            if (GUI.Button(new Rect(rect.x + 16, rect.y + 100, 120, 28), "Link"))
-            {
-                _accountStatus = "redeeming…";
-                StartCoroutine(RedeemLinkCode(_accountCode));
-            }
-            if (GUI.Button(new Rect(rect.x + 144, rect.y + 100, 90, 28), "Close"))
-                _accountOpen = false;
-            GUI.Label(new Rect(rect.x + 16, rect.y + 136, w - 32, 26), _accountStatus);
+                : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER");
         }
 
         /// <summary>
@@ -554,20 +639,20 @@ namespace SpaceAdventure.Game
 
             if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
             {
-                _accountStatus = req.responseCode == 401
+                _accountView.SetStatus(req.responseCode == 401
                     ? "unknown or expired code"
-                    : $"failed: {req.error}";
+                    : $"failed: {req.error}");
                 yield break;
             }
             string text = req.downloadHandler.text;
             int i = text.IndexOf("\"token\":\"", StringComparison.Ordinal);
-            if (i < 0) { _accountStatus = "bad response"; yield break; }
+            if (i < 0) { _accountView.SetStatus("bad response"); yield break; }
             i += 9;
             string token = text.Substring(i, text.IndexOf('"', i) - i);
 
             PlayerPrefs.SetString("sa.token", token);
             PlayerPrefs.Save();
-            _accountStatus = "linked — reconnecting…";
+            _accountView.SetStatus("linked — reconnecting…");
             Reconnect(token);
         }
 
@@ -590,6 +675,258 @@ namespace SpaceAdventure.Game
             _net.Connect(ResolveServerUrl(), SystemInfo.deviceName ?? "player", token);
         }
 
+        /// <summary>
+        /// Feeds the combat feed from a hit event (same wire layout
+        /// Combat.OnHit reads: shooter u32 | pos f32[3] | damage u16 |
+        /// health_after u16). Numbers for every hit; the marker only for
+        /// YOURS; the incoming arc only when the victim is you.
+        /// </summary>
+        private void OnHitFeedback(EventMsg ev)
+        {
+            if (_combatFeed == null || ev.Data.Length < 20) return;
+            var r = new WireReader(ev.Data);
+            uint shooter = r.ReadU32();
+            var simPoint = new Vec3(r.ReadF32(), r.ReadF32(), r.ReadF32());
+            int damage = r.ReadU16();
+            int healthAfter = r.ReadU16();
+            Vector3 point = TerrainMesh.ToUnity(simPoint);
+
+            _combatFeed.Damage(point, damage, healthAfter == 0);
+            if (shooter == _net.EntityId) _combatFeed.HitMarker(healthAfter == 0);
+            if (ev.EntityId == _net.EntityId && _views.TryGet(shooter, out var sv) && sv.Root != null)
+            {
+                Vector3 sp = sv.Root.transform.position;
+                var target = new Vec3(sp.x, sp.y, -sp.z);
+                var me = _predictor.State;
+                _combatFeed.Incoming(Bearing.To(me.Pos, me.Facing, target));
+            }
+        }
+
+        /// <summary>Saves the C60 review screenshot once the scene settles.</summary>
+        private System.Collections.IEnumerator SaveUiShot(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            // -uiPanel bags|sheet: open that panel first, so the C60 gallery
+            // can capture the modals without simulated key presses. Shop is
+            // excluded — it only opens off a live NPC interaction.
+            string[] argv = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(argv, "-uiPanel");
+            if (at >= 0 && at + 1 < argv.Length)
+            {
+                if (argv[at + 1] == "bags") OpenPanel(_bagsView, _sheetView);
+                if (argv[at + 1] == "sheet") OpenPanel(_sheetView, _bagsView);
+                if (argv[at + 1] == "map") _map.Toggle();
+                if (argv[at + 1] == "account") _accountView.Show(true);
+                yield return new WaitForSeconds(1f); // refresh round trip
+            }
+            // -uiDemo: stage the combat-feedback showcase right here — two
+            // local grunt bodies on the terrain ahead (same Create path as a
+            // live spawn, so the same health-bar rules apply) and the same
+            // CombatFeed calls the live hit event drives. The live path is
+            // separately proven by the event log; this exists so the LOOK is
+            // photographable on demand, near spawn, in daylight.
+            if (Array.IndexOf(argv, "-uiDemo") >= 0)
+            {
+                Vector3 eyeD = _camera.transform.position;
+                Vector3 upD = eyeD.normalized;
+                Vector3 fwdD = Vector3.ProjectOnPlane(_camera.transform.forward, upD).normalized;
+
+                EntityView PlaceGrunt(uint id, float dist, float sideDeg, ushort health)
+                {
+                    Vector3 dir = Quaternion.AngleAxis(sideDeg, upD) * fwdD;
+                    Vector3 spot = eyeD + dir * dist;
+                    Vector3 sd = spot.normalized;
+                    var simDir = new Vec3(sd.x, sd.y, -sd.z);
+                    float r = (float)_terrain.SampleRadius(simDir);
+                    Vector3 pos = sd * r;
+                    var v = _views.SpawnLocalDemo(id, EntityType.Npc, "npc.grunt", pos, -dir);
+                    v.MaxHealth = 60;
+                    v.Health = health;
+                    return v;
+                }
+
+                var g1 = PlaceGrunt(0x000F0001, 9f, -8f, 38);
+                var g2 = PlaceGrunt(0x000F0002, 13f, 14f, 12);
+                yield return new WaitForSeconds(0.4f); // let the models land
+                _fps.FaceToward(_camera.transform.position,
+                    (g1.Root.transform.position + g2.Root.transform.position) * 0.5f + upD * 1.2f);
+                yield return new WaitForSeconds(0.15f);
+
+                Vector3 up1 = g1.Root.transform.position.normalized;
+                Vector3 up2 = g2.Root.transform.position.normalized;
+                _combatFeed.Damage(g2.Root.transform.position + up2 * 1.5f, 47, true);
+                _combatFeed.Incoming(2.6);
+                yield return new WaitForSeconds(0.25f);
+                _combatFeed.Damage(g1.Root.transform.position + up1 * 1.55f, 20, false);
+                _combatFeed.HitMarker(false);
+                yield return new WaitForSeconds(0.12f);
+            }
+
+            // -uiFace target|npc|wounded: aim the camera at the nearest such
+            // entity, so a combat-feedback shot has something in frame.
+            int faceAt = Array.IndexOf(argv, "-uiFace");
+            if (faceAt >= 0 && faceAt + 1 < argv.Length)
+            {
+                string wantArg = argv[faceAt + 1];
+                ushort want = wantArg == "npc" || wantArg == "hostile" ? EntityType.Npc
+                    : wantArg == "player" ? EntityType.Player
+                    : EntityType.Target;
+                bool Match (EntityView v, string arg, ushort type) => arg switch
+                {
+                    "wounded" => v.ShowHealthBar,
+                    "hostile" => v.Type == EntityType.Npc && v.Label != "npc.quartermaster",
+                    _ => v.Type == type,
+                };
+                Vector3 eye = _camera.transform.position;
+                EntityView best = null;
+                float bestD = float.MaxValue;
+                // "wounded" can flicker out (a kill respawns the target at
+                // full health), so poll for one instead of sampling once.
+                for (float waited = 0; best == null && waited < 12f; waited += 0.25f)
+                {
+                    foreach (EntityView v in _views.All)
+                    {
+                        if (v.Root == null || v.Id == _net.EntityId) continue;
+                        if (!Match(v, wantArg, want)) continue;
+                        float d = (v.Root.transform.position - eye).sqrMagnitude;
+                        if (d < bestD) { bestD = d; best = v; }
+                    }
+                    if (best == null) yield return new WaitForSeconds(0.25f);
+                }
+                if (best != null)
+                {
+                    // The goal is a FIXED copy: a kill-and-respawn cycle can
+                    // move or recycle the live Root mid-walk, and a walk
+                    // toward a ghost climbs the wrong hill.
+                    Vector3 goal = best.Root.transform.position;
+                    _fps.FaceToward(eye, goal);
+                    Debug.Log($"ui: facing {wantArg} {best.Id} at {Mathf.Sqrt(bestD):F0} m");
+
+                    // -uiApproach <m>: walk toward the faced spot until within
+                    // that many metres (the planet's horizon from eye height
+                    // is ~23 m, so anything worth photographing has to be
+                    // closed to arm's reach first).
+                    int appAt = Array.IndexOf(argv, "-uiApproach");
+                    if (appAt >= 0 && appAt + 1 < argv.Length &&
+                        float.TryParse(argv[appAt + 1], out float closeTo))
+                    {
+                        float deadline = Time.time + 150f;
+                        _rigWalk = true;
+                        Vector3 lastEye = _camera.transform.position;
+                        float lastMoveAt = Time.time;
+                        float detourUntil = 0f;
+                        while (Time.time < deadline)
+                        {
+                            Vector3 eyeNow = _camera.transform.position;
+                            Vector3 to = goal - eyeNow;
+                            if (to.magnitude <= closeTo) break;
+                            // Wedged (the quartermaster stands on this exact
+                            // bearing)? Sidestep: aim 40 degrees off a moment.
+                            if ((eyeNow - lastEye).magnitude > 0.3f) { lastEye = eyeNow; lastMoveAt = Time.time; }
+                            else if (Time.time - lastMoveAt > 0.8f && Time.time > detourUntil)
+                            {
+                                detourUntil = Time.time + 3f;
+                                lastMoveAt = Time.time;
+                                _detourSign = -_detourSign; // alternate sides around obstacles
+                            }
+                            // Jump at whatever we are wedged on — a scarp
+                            // under max_slope yields to it (the t29 walker's
+                            // trick, ported).
+                            _rigJump = Time.time - lastMoveAt > 0.6f || Time.time < detourUntil;
+                            Vector3 aimPoint = goal;
+                            if (Time.time < detourUntil)
+                            {
+                                Vector3 up = eyeNow.normalized;
+                                aimPoint = eyeNow + Quaternion.AngleAxis(_detourSign * 40f, up) * to;
+                            }
+                            _fps.FaceToward(eyeNow, aimPoint);
+                            yield return new WaitForSeconds(0.2f);
+                        }
+                        _rigWalk = false;
+                        _rigJump = false;
+                        Debug.Log($"ui: approached to {(goal - _camera.transform.position).magnitude:F0} m");
+
+                        // Re-pick at arrival: the thing wounded NOW may be a
+                        // different entity than the one that led us here —
+                        // and -uiReface <kind> can retarget entirely (walk to
+                        // the gunner, then photograph what it is shooting).
+                        int refAt = Array.IndexOf(argv, "-uiReface");
+                        string refaceArg = refAt >= 0 && refAt + 1 < argv.Length ? argv[refAt + 1] : wantArg;
+                        ushort refaceWant = refaceArg == "npc" ? EntityType.Npc
+                            : refaceArg == "player" ? EntityType.Player
+                            : EntityType.Target;
+                        EntityView again = null;
+                        float againScore = float.MaxValue;
+                        for (float waited = 0; again == null && waited < 12f; waited += 0.25f)
+                        {
+                            foreach (EntityView v in _views.All)
+                            {
+                                if (v.Root == null || v.Id == _net.EntityId) continue;
+                                if (!Match(v, refaceArg, refaceWant)) continue;
+                                // Hostiles rank by REMAINING HEALTH: a burst
+                                // aimed at a 12 hp leftover ends before the
+                                // camera fires; a full grunt keeps popping.
+                                float d = refaceArg == "hostile"
+                                    ? -v.Health
+                                    : (v.Root.transform.position - _camera.transform.position).sqrMagnitude;
+                                if (d < againScore) { againScore = d; again = v; }
+                            }
+                            if (again == null) yield return new WaitForSeconds(0.25f);
+                        }
+                        if (again != null && again.Root != null)
+                        {
+                            _fps.FaceToward(_camera.transform.position, again.Root.transform.position);
+                            Debug.Log($"ui: refaced {again.Id} health {again.Health}");
+
+                            // -uiFire <secs>: reload, then hold the trigger on
+                            // the refaced entity. Our own shots put damage
+                            // numbers, hit markers and a draining health bar
+                            // on screen — the C61 picture, from our own gun.
+                            int fireAt2 = Array.IndexOf(argv, "-uiFire");
+                            if (fireAt2 >= 0 && fireAt2 + 1 < argv.Length &&
+                                float.TryParse(argv[fireAt2 + 1], out float fireSecs))
+                            {
+                                _net.Send(Character.ReloadCmd(NextCmdSeq()));
+                                yield return new WaitForSeconds(0.6f);
+                                _rigFire = true;
+                                // Burn the burst RETARGETING the healthiest
+                                // living hostile — one grunt dies in three
+                                // hits and a burst aimed at a corpse takes a
+                                // photo of nothing. Falls through to capture
+                                // still firing.
+                                float stopAt = Time.time + fireSecs;
+                                while (Time.time < stopAt)
+                                {
+                                    EntityView tgt = null;
+                                    foreach (EntityView v in _views.All)
+                                    {
+                                        if (v.Root == null || v.Id == _net.EntityId) continue;
+                                        if (!Match(v, refaceArg, refaceWant)) continue;
+                                        if (tgt == null || v.Health > tgt.Health) tgt = v;
+                                    }
+                                    if (tgt != null)
+                                    {
+                                        Vector3 up2 = _camera.transform.position.normalized;
+                                        _fps.FaceToward(_camera.transform.position,
+                                            tgt.Root.transform.position + up2 * 0.9f);
+                                    }
+                                    yield return new WaitForSeconds(0.1f);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!_rigFire) yield return new WaitForSeconds(1.5f); // let a popup land
+            }
+            yield return new WaitForEndOfFrame();
+            var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+            tex.Apply();
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToPNG(tex));
+            Destroy(tex);
+            Debug.Log($"ui: screenshot saved to {path}");
+        }
+
         private static Quaternion RotFrom(Quat q)
         {
             Vector3 fwd = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 0, 1)));
@@ -604,10 +941,15 @@ namespace SpaceAdventure.Game
         /// whatever was last seen — a bag that still lists a rifle you sold on
         /// another client is worse than a bag that takes a round trip.
         /// </summary>
-        private void OpenPanel(System.Action toggle)
+        private void OpenPanel(SpaceAdventure.Game.UI.ModalView view, SpaceAdventure.Game.UI.ModalView other)
         {
-            toggle();
-            if (_character.AnyOpen) _net.Send(Character.RefreshCmd(NextCmdSeq()));
+            bool open = !view.Open;
+            view.Show(open);
+            if (open)
+            {
+                other.Show(false);
+                _net.Send(Character.RefreshCmd(NextCmdSeq()));
+            }
         }
 
         private void SendTick(LocalInput li)
@@ -836,7 +1178,10 @@ namespace SpaceAdventure.Game
                                 ? _viewModel.Muzzle.position
                                 : (Vector3?)null);
                             break;
-                        case EventId.Hit: _fx.OnHit(ev, _net.EntityId); break;
+                        case EventId.Hit:
+                            _fx.OnHit(ev, _net.EntityId);
+                            OnHitFeedback(ev);
+                            break;
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
@@ -884,6 +1229,9 @@ namespace SpaceAdventure.Game
                     if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
+                    if (_shopView.Open) _shopView.Rebuild();
+                    if (_bagsView.Open) _bagsView.Rebuild();
+                    if (_sheetView.Open) _sheetView.Rebuild();
                     break;
                 }
             }
@@ -931,28 +1279,7 @@ namespace SpaceAdventure.Game
                       $"tickHz={_net.TickHz} spawn={_predictor.State.Pos.Length:F1} m from centre");
         }
 
-        private void OnGUI()
-        {
-            if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
-            if (_worldBuilt && SeatKind == EntityType.Ship) DrawFlightHud();
-            if (_accountOpen) DrawAccountPanel();
-            _hud?.Draw(_net, _predictor, _character);
-            if (_map == null || !_worldBuilt) return;
 
-            if (!_map.Open)
-            {
-                byte[] cmd = _character.AnyOpen
-                    ? _character.Draw(NextCmdSeq)
-                    : _interact.Draw(NextCmdSeq);
-                if (cmd != null) _net.Send(cmd);
-            }
-
-            State s = _predictor.State;
-            _map.Draw(_terrain,
-                      TerrainMesh.ToUnity(s.Pos),
-                      TerrainMesh.ToUnity(s.Facing),
-                      MapMarkers());
-        }
 
         /// <summary>
         /// Everything on the map: the live entities, plus the spawn point.

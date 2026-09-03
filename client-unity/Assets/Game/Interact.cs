@@ -38,14 +38,24 @@ namespace SpaceAdventure.Game
 
         private readonly EntityViews _views;
 
-        private GUIStyle _style, _heading;
-        private Texture2D _panel;
-
         private readonly Character _character;
 
         private uint _shopNpc;
         private StockEntry[] _stock;
         private string _status = "";
+
+        // Phase 8: the UI Toolkit shop view reads state from here and builds
+        // the SAME cmd bytes the IMGUI panel did (t14 stays byte-identical).
+        internal StockEntry[] Stock => _stock;
+        public string Status => _status;
+
+        public byte[] BuyCmd(ushort seq, string item, int price)
+        {
+            _lastBought = item;
+            _status = "buying...";
+            return Encode.Cmd(seq, Op.ShopBuy,
+                $"{{\"npc\":{_shopNpc},\"item\":\"{item}\",\"qty\":1}}");
+        }
 
         public Interaction(EntityViews views, Character character)
         {
@@ -224,91 +234,5 @@ namespace SpaceAdventure.Game
             _ => body,
         };
 
-        /// <summary>Draws the prompt and, when open, the shop. Returns a cmd to send, or null.</summary>
-        public byte[] Draw(Func<ushort> nextSeq)
-        {
-            EnsureStyles();
-            int credits = _character.Credits;
-
-            if (!ShopOpen)
-            {
-                // Notice outranks the cone prompt: it is either the seated
-                // "E · exit rover" hint or a seat_result refusal, both set by
-                // Boot, both more current than what the cone test saw.
-                string text = string.IsNullOrEmpty(Notice) ? Prompt : Notice;
-                if (string.IsNullOrEmpty(text)) return null;
-                var size = _style.CalcSize(new GUIContent(text));
-                float w = size.x + 24, h = 26;
-                var at = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.62f, w, h);
-                GUI.DrawTexture(at, _panel);
-                GUI.Label(new Rect(at.x + 12, at.y + 4, w, h), text, _style);
-                return null;
-            }
-
-            byte[] send = null;
-            ItemStack[] inventory = _character.Inventory;
-            int carried = _character.UsedSlots;
-            float panelW = 400;
-            float panelH = 84 + _stock.Length * 26 + 26 + carried * 20 + 46;
-            var rect = new Rect((Screen.width - panelW) * 0.5f, (Screen.height - panelH) * 0.5f, panelW, panelH);
-            GUI.DrawTexture(rect, _panel);
-
-            float y = rect.y + 10;
-            GUI.Label(new Rect(rect.x + 16, y, panelW, 22), "QUARTERMASTER VEX", _heading);
-            y += 24;
-            GUI.Label(new Rect(rect.x + 16, y, panelW, 20),
-                credits >= 0 ? $"credits: {credits}" : "credits: —", _style);
-            y += 26;
-
-            for (int i = 0; i < _stock.Length; i++)
-            {
-                StockEntry e = _stock[i];
-                var row = new Rect(rect.x + 16, y, panelW - 32, 22);
-                GUI.enabled = credits < 0 || credits >= e.price;
-                if (GUI.Button(row, $"{_character.Defs.ItemName(e.item)}   —   {e.price} cr"))
-                {
-                    _lastBought = e.item;
-                    _status = "buying...";
-                    send = Encode.Cmd(nextSeq(), Op.ShopBuy,
-                        $"{{\"npc\":{_shopNpc},\"item\":\"{e.item}\",\"qty\":1}}");
-                }
-                GUI.enabled = true;
-                y += 26;
-            }
-
-            // What you are carrying, and how full the pack is. Without this a
-            // refusal for "no space" is a mystery: nothing on screen ever said
-            // how many of the twenty slots were gone, or that a second rifle
-            // costs a whole slot because it does not stack.
-            y += 6;
-            GUI.Label(new Rect(rect.x + 16, y, panelW - 32, 20),
-                $"carrying  ({carried}/{Character.InventorySlots} slots)   ·   B for bags", _style);
-            y += 20;
-            if (inventory != null)
-            {
-                foreach (ItemStack it in inventory)
-                {
-                    GUI.Label(new Rect(rect.x + 26, y, panelW - 42, 18),
-                        $"{_character.Defs.ItemName(it.item)}  x{it.qty}", _style);
-                    y += 20;
-                }
-            }
-
-            GUI.Label(new Rect(rect.x + 16, rect.yMax - 42, panelW - 32, 20), _status, _style);
-            if (GUI.Button(new Rect(rect.xMax - 90, rect.yMax - 32, 74, 24), "close")) CloseShop();
-            return send;
-        }
-
-        private void EnsureStyles()
-        {
-            if (_panel != null) return;
-            _panel = new Texture2D(1, 1);
-            _panel.SetPixel(0, 0, new Color(0.03f, 0.04f, 0.06f, 0.88f));
-            _panel.Apply();
-            _style = new GUIStyle(GUI.skin.label) { fontSize = 14 };
-            _style.normal.textColor = new Color(0.92f, 0.94f, 1f);
-            _heading = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
-            _heading.normal.textColor = new Color(0.95f, 0.86f, 0.55f);
-        }
     }
 }

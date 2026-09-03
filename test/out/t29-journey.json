@@ -1,0 +1,99 @@
+{
+ "when": "2026-09-03T17:24:19.663Z",
+ "drivenOut": 119.2,
+ "parkedOff": 10,
+ "minClearance": -0.000011756007438634697,
+ "standoff": 10.4,
+ "myHits": 2,
+ "hitsOnMe": 3,
+ "kills": 1,
+ "lootEvents": 1,
+ "lootSpawned": 1,
+ "died": false,
+ "checks": [
+  {
+   "n": "quartermaster exists",
+   "ok": true
+  },
+  {
+   "n": "shop_list returned stock",
+   "ok": true
+  },
+  {
+   "n": "bought the rifle (1000 -> 750)",
+   "ok": true
+  },
+  {
+   "n": "bought a cell (750 -> 749)",
+   "ok": true
+  },
+  {
+   "n": "equipped the rifle",
+   "ok": true
+  },
+  {
+   "n": "reload accepted",
+   "ok": true
+  },
+  {
+   "n": "a rover exists",
+   "ok": true
+  },
+  {
+   "n": "driver seat granted",
+   "ok": true
+  },
+  {
+   "n": "rover covered real ground out (> 40 m)",
+   "ok": true
+  },
+  {
+   "n": "rover drove back near its start (< 25 m)",
+   "ok": true
+  },
+  {
+   "n": "rover never below the surface",
+   "ok": true
+  },
+  {
+   "n": "disembark granted",
+   "ok": true
+  },
+  {
+   "n": "on foot, on the terrain",
+   "ok": true
+  },
+  {
+   "n": "the camp has hostiles",
+   "ok": true
+  },
+  {
+   "n": "reached the camp (<= 30 m)",
+   "ok": true
+  },
+  {
+   "n": "our shots registered on the hostile",
+   "ok": true
+  },
+  {
+   "n": "a hostile died to us",
+   "ok": true
+  },
+  {
+   "n": "the kill dropped loot (event + spawn)",
+   "ok": true
+  },
+  {
+   "n": "the camp fought back",
+   "ok": true
+  },
+  {
+   "n": "inventory answers after the fight",
+   "ok": true
+  },
+  {
+   "n": "still owns the rifle",
+   "ok": true
+  }
+ ]
+}

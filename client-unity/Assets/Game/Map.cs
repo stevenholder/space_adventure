@@ -28,9 +28,11 @@
 // map cannot disagree with the ground about where a hill is.
 
 using System.Collections.Generic;
+using SpaceAdventure.Game.UI;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace SpaceAdventure.Game
 {
@@ -70,8 +72,6 @@ namespace SpaceAdventure.Game
         private const float MapExtent = 300f;
 
         private Texture2D _terrainImage;
-        private Texture2D _dot;
-        private GUIStyle _label, _title;
 
         private Vector3 _builtAt = Vector3.positiveInfinity;
         private Vector3 _builtFacing;
@@ -79,22 +79,63 @@ namespace SpaceAdventure.Game
         /// <summary>Label rectangles already used this frame, to keep them apart.</summary>
         private readonly List<Rect> _labelled = new List<Rect>();
 
-        public bool Open { get; private set; }
+        // Phase 8: the map draws through UI Toolkit. The panel and the image
+        // are built once; the marker layer is cleared and refilled per frame
+        // while the map is open. ponytail: per-frame rebuild allocates; pool
+        // the dots if the profiler ever names this.
+        private readonly VisualElement _panel;
+        private readonly Image _image;
+        private readonly VisualElement _markerLayer;
 
-        public void Toggle() => Open = !Open;
-        public void Close() => Open = false;
+        public MapView(VisualElement root)
+        {
+            _panel = Styles.Panel(Styles.SkewNone);
+            _panel.style.position = Position.Absolute;
+            _panel.style.top = Length.Percent(6);
+            _panel.style.left = Length.Percent(50);
+            _panel.style.translate = new Translate(Length.Percent(-50), 0);
+            _panel.style.display = DisplayStyle.None;
+
+            _panel.Add(Styles.Header($"Map — facing up, {MapExtent:F0} m in every direction"));
+
+            var frame = new VisualElement();
+            Styles.SetBorder(frame, Styles.Ink, 2);
+            _image = new Image { scaleMode = ScaleMode.StretchToFill };
+            _markerLayer = new VisualElement();
+            _markerLayer.style.position = Position.Absolute;
+            _markerLayer.style.left = 0;
+            _markerLayer.style.top = 0;
+            _markerLayer.style.right = 0;
+            _markerLayer.style.bottom = 0;
+            frame.Add(_image);
+            frame.Add(_markerLayer);
+            _panel.Add(frame);
+
+            var legend = Styles.Display_(
+                "M closes · rings every 100 m · white spawn · red hostile · yellow target · green loot · blue player",
+                11, Styles.Dust);
+            legend.style.marginTop = 6;
+            _panel.Add(legend);
+            root.Add(_panel);
+        }
+
+        public bool Open => _panel.style.display == DisplayStyle.Flex;
+
+        public void Toggle() => _panel.style.display = Open ? DisplayStyle.None : DisplayStyle.Flex;
+        public void Close() => _panel.style.display = DisplayStyle.None;
 
         /// <summary>
-        /// Draws the map. Called from OnGUI; does nothing while closed.
+        /// Updates the map. Called from Update; does nothing while closed.
         /// </summary>
         public void Draw(TerrainField terrain, Vector3 playerPos, Vector3 playerFacing,
                          IEnumerable<MapMarker> markers)
         {
             if (!Open || terrain == null) return;
-            EnsureStyles();
 
-            float size = Mathf.Min(Screen.width, Screen.height) * 0.82f;
-            var rect = new Rect((Screen.width - size) * 0.5f, (Screen.height - size) * 0.5f, size, size);
+            float size = Mathf.Min(Screen.width, Screen.height) * 0.62f;
+            _image.style.width = size;
+            _image.style.height = size;
+            var rect = new Rect(0, 0, size, size);
 
             Vector3 up = playerPos.normalized;
             Vector3 fwd = Vector3.ProjectOnPlane(playerFacing, up);
@@ -116,9 +157,10 @@ namespace SpaceAdventure.Game
                 _builtFacing = fwd;
             }
 
-            GUI.DrawTexture(rect, _terrainImage, ScaleMode.StretchToFill);
+            _image.image = _terrainImage;
 
             Vector2 centre = rect.center;
+            _markerLayer.Clear();
             DrawRangeRings(centre, pixelsPerMetre, size);
 
             _labelled.Clear();
@@ -128,26 +170,29 @@ namespace SpaceAdventure.Game
                 Vector2 at = centre + new Vector2(offset.x, -offset.y) * pixelsPerMetre;
                 if (!rect.Contains(at)) continue;
 
-                Color colour = ColourFor(m.Type);
                 float r = m.Type == EntityType.Player ? 5f : 4f;
-                GUI.color = colour;
-                GUI.DrawTexture(new Rect(at.x - r, at.y - r, r * 2, r * 2), _dot);
-                GUI.color = Color.white;
+                Dot(at.x - r, at.y - r, r * 2, r * 2, ColourFor(m.Type));
 
                 if (!string.IsNullOrEmpty(m.Label)) PlaceLabel(at, m.Label);
             }
 
             // You, at the centre, pointing up the screen by construction.
-            GUI.color = new Color(0.95f, 0.95f, 1f);
-            GUI.DrawTexture(new Rect(centre.x - 2, centre.y - 9, 4, 14), _dot);
-            GUI.DrawTexture(new Rect(centre.x - 5, centre.y - 2, 10, 4), _dot);
-            GUI.color = Color.white;
+            var you = new Color(0.95f, 0.95f, 1f);
+            Dot(centre.x - 2, centre.y - 9, 4, 14, you);
+            Dot(centre.x - 5, centre.y - 2, 10, 4, you);
+        }
 
-            GUI.Label(new Rect(rect.x, rect.y - 26, size, 24),
-                $"MAP — facing up, {MapExtent:F0} m in every direction", _title);
-            GUI.Label(new Rect(rect.x, rect.yMax + 4, size, 22),
-                "M closes · rings every 100 m · white spawn · red hostile · yellow target · green loot · blue player",
-                _label);
+        private void Dot(float x, float y, float w, float h, Color c)
+        {
+            var e = new VisualElement();
+            e.style.position = Position.Absolute;
+            e.style.left = x;
+            e.style.top = y;
+            e.style.width = w;
+            e.style.height = h;
+            e.style.backgroundColor = c;
+            e.pickingMode = PickingMode.Ignore;
+            _markerLayer.Add(e);
         }
 
         /// <summary>
@@ -172,7 +217,11 @@ namespace SpaceAdventure.Game
                 if (clear)
                 {
                     _labelled.Add(candidate);
-                    GUI.Label(candidate, text, _label);
+                    var l = Styles.Display_(text, 12, Styles.Cream);
+                    l.style.position = Position.Absolute;
+                    l.style.left = candidate.x;
+                    l.style.top = candidate.y;
+                    _markerLayer.Add(l);
                     return;
                 }
                 candidate.y += 15;
@@ -181,19 +230,27 @@ namespace SpaceAdventure.Game
 
         private void DrawRangeRings(Vector2 centre, float pixelsPerMetre, float size)
         {
-            GUI.color = new Color(1f, 1f, 1f, 0.13f);
+            // UI Toolkit has a circle primitive after all: a square with 50%
+            // corner radius and a border is a true ring, which IMGUI's tick
+            // marks only gestured at.
             for (int metres = 100; metres <= (int)MapExtent; metres += 100)
             {
                 float r = metres * pixelsPerMetre;
                 if (r > size * 0.5f) break;
-                // Four ticks per ring rather than a full circle: IMGUI has no
-                // circle primitive, and a ring of dots costs more than it says.
-                GUI.DrawTexture(new Rect(centre.x - r, centre.y - 1, 6, 2), _dot);
-                GUI.DrawTexture(new Rect(centre.x + r - 6, centre.y - 1, 6, 2), _dot);
-                GUI.DrawTexture(new Rect(centre.x - 1, centre.y - r, 2, 6), _dot);
-                GUI.DrawTexture(new Rect(centre.x - 1, centre.y + r - 6, 2, 6), _dot);
+                var ring = new VisualElement();
+                ring.style.position = Position.Absolute;
+                ring.style.left = centre.x - r;
+                ring.style.top = centre.y - r;
+                ring.style.width = r * 2;
+                ring.style.height = r * 2;
+                ring.style.borderTopLeftRadius = r;
+                ring.style.borderTopRightRadius = r;
+                ring.style.borderBottomLeftRadius = r;
+                ring.style.borderBottomRightRadius = r;
+                Styles.SetBorder(ring, new Color(1f, 1f, 1f, 0.13f), 1);
+                ring.pickingMode = PickingMode.Ignore;
+                _markerLayer.Add(ring);
             }
-            GUI.color = Color.white;
         }
 
         /// <summary>
@@ -291,14 +348,5 @@ namespace SpaceAdventure.Game
             _ => Color.gray,
         };
 
-        private void EnsureStyles()
-        {
-            if (_dot != null) return;
-            _dot = Texture2D.whiteTexture;
-            _label = new GUIStyle(GUI.skin.label) { fontSize = 12 };
-            _label.normal.textColor = new Color(0.92f, 0.94f, 1f);
-            _title = new GUIStyle(GUI.skin.label) { fontSize = 14, alignment = TextAnchor.MiddleCenter };
-            _title.normal.textColor = new Color(0.92f, 0.94f, 1f);
-        }
     }
 }

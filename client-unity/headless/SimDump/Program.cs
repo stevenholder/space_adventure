@@ -210,6 +210,7 @@ internal static class Program
         RockScatterChecks();
         TimelineChecks();
         RoverPredictionChecks();
+        BearingChecks();
 
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
@@ -326,6 +327,32 @@ internal static class Program
         foreach (var kv in poses)
             if (kv.Key == id) return kv.Value.Pos.X;
         return double.NaN;
+    }
+
+    // ---- compass bearings (C63) --------------------------------------------
+
+    private static void BearingChecks()
+    {
+        // Standing at (0, 150, 0): up = +Y, facing +Z. In THIS game's
+        // frame, right = Cross(facing, up) = −X (Step.cs's own convention,
+        // sign-bug comment and all) — so −X is 90° RIGHT (positive), +X is
+        // left, behind is ±π.
+        var pos = new Vec3(0, 150, 0);
+        var fwd = new Vec3(0, 0, 1);
+        double ahead = Bearing.To(pos, fwd, new Vec3(0, 150, 10));
+        double right = Bearing.To(pos, fwd, new Vec3(-10, 150, 0));
+        double left = Bearing.To(pos, fwd, new Vec3(10, 150, 0));
+        double behind = Bearing.To(pos, fwd, new Vec3(0, 150, -10));
+        Check("bearing dead ahead is zero", Math.Abs(ahead) < 1e-12, F(ahead));
+        Check("bearing to the right is +90°", Math.Abs(right - Math.PI / 2) < 1e-12, F(right));
+        Check("bearing to the left is −90°", Math.Abs(left + Math.PI / 2) < 1e-12, F(left));
+        Check("bearing behind is ±180°", Math.Abs(Math.Abs(behind) - Math.PI) < 1e-12, F(behind));
+        // The radial component is ignored: a target 40 m overhead at the
+        // same tangent point still reads dead ahead.
+        double lofted = Bearing.To(pos, fwd, new Vec3(0, 190, 10));
+        Check("bearing ignores altitude", Math.Abs(lofted) < 1e-12, F(lofted));
+        // Degenerate → NaN, never a lie.
+        Check("bearing overhead is NaN", double.IsNaN(Bearing.To(pos, fwd, new Vec3(0, 190, 0))));
     }
 
     // ---- rover prediction --------------------------------------------------
