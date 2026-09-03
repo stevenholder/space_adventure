@@ -126,6 +126,9 @@ namespace SpaceAdventure.Net
         /// <summary>The equipment slot an item declares, or "" if it declares none.</summary>
         public string SlotOf(string id) => TryItem(id, out ItemDef it) ? it.Slot ?? "" : "";
 
+        /// <summary>Phase 8: the item's rarity tier, "" (=common) when unknown.</summary>
+        public string ItemRarity(string id) => TryItem(id, out ItemDef it) ? it.Rarity ?? "" : "";
+
         /// <summary>True when the item declares an equipment slot at all.</summary>
         public bool IsEquippable(string id) => !string.IsNullOrEmpty(SlotOf(id));
 

@@ -103,6 +103,13 @@ namespace SpaceAdventure.Game
         private SpaceAdventure.Game.UI.UiRoot _ui;
         private SpaceAdventure.Game.UI.HudView _hudView;
         private SpaceAdventure.Game.UI.CombatFeed _combatFeed;
+        private SpaceAdventure.Game.UI.ShopView _shopView;
+        private SpaceAdventure.Game.UI.BagsView _bagsView;
+        private SpaceAdventure.Game.UI.SheetView _sheetView;
+        private SpaceAdventure.Game.UI.PromptView _promptView;
+
+        private bool ModalOpen =>
+            (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) || (_sheetView?.Open ?? false);
 
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
@@ -277,6 +284,10 @@ namespace SpaceAdventure.Game
             _map = new MapView();
             _character = new Character();
             _interact = new Interaction(_views, _character);
+            _shopView = new SpaceAdventure.Game.UI.ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
+            _bagsView = new SpaceAdventure.Game.UI.BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
+            _sheetView = new SpaceAdventure.Game.UI.SheetView(_ui.Root, _character);
+            _promptView = new SpaceAdventure.Game.UI.PromptView(_ui.Root);
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -333,14 +344,14 @@ namespace SpaceAdventure.Game
             }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
             if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
-            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleBags);
-            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleSheet);
+            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_bagsView, _sheetView);
+            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_sheetView, _bagsView);
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
             // The map and the shop both want the pointer. Movement keeps
             // working under either.
-            bool wantsCursor = _map.Open || _interact.ShopOpen || _character.AnyOpen || _accountOpen;
+            bool wantsCursor = _map.Open || ModalOpen || _accountOpen;
             if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.None;
@@ -387,14 +398,14 @@ namespace SpaceAdventure.Game
             }
             if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "E  ·  exit ship" : "E  ·  exit rover";
             else if (Time.time > _noticeUntil) _interact.Notice = "";
-            if (li.InteractPressed && !_map.Open && !_character.AnyOpen)
+            if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open))
             {
                 if (_seat != 0)
                 {
                     // Always available, at any speed (GDD; C32).
                     _net.Send(Encode.Disembark());
                 }
-                else if (_interact.ShopOpen) _interact.CloseShop();
+                else if (_interact.ShopOpen) { _interact.CloseShop(); _shopView.Show(false); }
                 else if ((_interact.TargetType == EntityType.Vehicle ||
                           _interact.TargetType == EntityType.Ship) && _interact.Target != 0)
                 {
@@ -484,6 +495,13 @@ namespace SpaceAdventure.Game
                 markers.Add((name, Bearing.To(me.Pos, me.Facing, target)));
             }
             _hudView.SetMarkers(markers);
+
+            // The shop view mirrors Interaction's state: stock arriving opens
+            // it, CloseShop (or a despawned NPC) closes it.
+            if (_interact.ShopOpen && !_shopView.Open) _shopView.Show(true);
+            if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
+
+            _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
         }
 
         /// <summary>
@@ -676,6 +694,17 @@ namespace SpaceAdventure.Game
         private System.Collections.IEnumerator SaveUiShot(string path)
         {
             yield return new WaitForSeconds(8f);
+            // -uiPanel bags|sheet: open that panel first, so the C60 gallery
+            // can capture the modals without simulated key presses. Shop is
+            // excluded — it only opens off a live NPC interaction.
+            string[] argv = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(argv, "-uiPanel");
+            if (at >= 0 && at + 1 < argv.Length)
+            {
+                if (argv[at + 1] == "bags") OpenPanel(_bagsView, _sheetView);
+                if (argv[at + 1] == "sheet") OpenPanel(_sheetView, _bagsView);
+                yield return new WaitForSeconds(1f); // refresh round trip
+            }
             yield return new WaitForEndOfFrame();
             var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
             tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
@@ -699,10 +728,15 @@ namespace SpaceAdventure.Game
         /// whatever was last seen — a bag that still lists a rifle you sold on
         /// another client is worse than a bag that takes a round trip.
         /// </summary>
-        private void OpenPanel(System.Action toggle)
+        private void OpenPanel(SpaceAdventure.Game.UI.ModalView view, SpaceAdventure.Game.UI.ModalView other)
         {
-            toggle();
-            if (_character.AnyOpen) _net.Send(Character.RefreshCmd(NextCmdSeq()));
+            bool open = !view.Open;
+            view.Show(open);
+            if (open)
+            {
+                other.Show(false);
+                _net.Send(Character.RefreshCmd(NextCmdSeq()));
+            }
         }
 
         private void SendTick(LocalInput li)
@@ -982,6 +1016,9 @@ namespace SpaceAdventure.Game
                     if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
+                    if (_shopView.Open) _shopView.Rebuild();
+                    if (_bagsView.Open) _bagsView.Rebuild();
+                    if (_sheetView.Open) _sheetView.Rebuild();
                     break;
                 }
             }
@@ -1037,13 +1074,6 @@ namespace SpaceAdventure.Game
             _hud?.Draw(_net, _predictor, _character);
             if (_map == null || !_worldBuilt) return;
 
-            if (!_map.Open)
-            {
-                byte[] cmd = _character.AnyOpen
-                    ? _character.Draw(NextCmdSeq)
-                    : _interact.Draw(NextCmdSeq);
-                if (cmd != null) _net.Send(cmd);
-            }
 
             State s = _predictor.State;
             _map.Draw(_terrain,

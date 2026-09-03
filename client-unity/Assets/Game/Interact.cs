@@ -47,6 +47,19 @@ namespace SpaceAdventure.Game
         private StockEntry[] _stock;
         private string _status = "";
 
+        // Phase 8: the UI Toolkit shop view reads state from here and builds
+        // the SAME cmd bytes the IMGUI panel did (t14 stays byte-identical).
+        internal StockEntry[] Stock => _stock;
+        public string Status => _status;
+
+        public byte[] BuyCmd(ushort seq, string item, int price)
+        {
+            _lastBought = item;
+            _status = "buying...";
+            return Encode.Cmd(seq, Op.ShopBuy,
+                $"{{\"npc\":{_shopNpc},\"item\":\"{item}\",\"qty\":1}}");
+        }
+
         public Interaction(EntityViews views, Character character)
         {
             _views = views;
