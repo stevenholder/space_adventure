@@ -1264,6 +1264,74 @@ def `vehicle`, asset `vehicle.rover.v1`.
   grip walks it back down without spinning.
 - Lifting throttle at `vmax_drive` coasts to under 2 m/s in ~3 s.
 
+## UI style guide — Scrapyard Comic (Phase 8)
+
+The interface is a device the character also sees (the Borderlands rule),
+drawn with comic-ink conviction over a scavenger world. Every screen is
+reviewed against THIS section; a screen that needs a color or rule not
+listed here adds it here first.
+
+### Palette
+
+| token | hex | used for |
+|---|---|---|
+| `ink` | `#10131A` | outlines, text on light, the notch cut |
+| `slate` | `#1B2029` | panel background (at 92% opacity over the world) |
+| `steel` | `#2A3140` | raised elements, input fields, bar troughs |
+| `cream` | `#E8E2D0` | primary text |
+| `dust` | `#9AA08E` | secondary text, disabled |
+| `amber` | `#FFAE19` | THE accent: credits, highlights, active edges, crits |
+| `danger` | `#FF4A3D` | health, damage numbers, destructive buttons |
+| `shield` | `#3FC1FF` | shield/energy, info |
+| `good` | `#7FD18A` | confirmations, gains |
+
+Rarity ramp (border band on item cards, name tint in lists):
+`common #B8B8A8` → `uncommon #4FD15C` → `rare #3FA9FF` →
+`epic #B45CFF` → `legendary #FF9B1A`. Unknown rarity renders as common.
+
+### Panel construction
+
+- Background `slate` @ 92%, border **3 px `ink`**, and when the panel is
+  active/focused an inner **1 px `amber`** edge.
+- One corner (top-right by default) carries a **12 px notch cut** — the
+  silhouette that says "this game" at a glance.
+- Panels and the HUD cluster sit at a **−2° skew** (the comic tilt);
+  text inside stays unskewed past ±4° reading sizes.
+- Section headers: ALL CAPS, +8% letterspacing, `dust`, over a 2 px
+  `ink` rule.
+
+### Typography
+
+Display face: one vendored OFL font (condensed, chunky — headers, big
+numbers, damage popups). Body: the engine default sans. Sizes: body 14,
+header 16, HUD numerals 22, damage numbers 18 (crit 26).
+
+### Combat feedback
+
+- **Damage numbers**: spawn at the hit's world point, drift up 0.8 m
+  over 0.6 s while fading; `cream` normal, `amber` + size 26 crits;
+  stacking hits offset horizontally so volleys read as counts.
+- **Incoming damage**: a 500 ms `danger` arc at the screen edge in the
+  attacker's direction (eight sectors is enough).
+- **Hit marker**: a 120 ms four-tick cross at the reticle on a landed
+  shot; `amber` when the target dies.
+
+### HUD layout (the permanent cluster)
+
+Bottom-left: health bar (trough `steel`, fill `danger`, numeral inside)
+with the shield bar (`shield`) above it. Bottom-right: ammo as
+mag/reserve split — mag in display type at 22, reserve smaller in
+`dust` — with credits (`amber`) above. Top-center: the compass strip —
+a bearing tape with `ink`-outlined markers (shop, rover, own ship, camp,
+spawn). Prompts ("E · talk", notices) stay bottom-center. The flight
+readout replaces the ammo cluster while seated in a ship.
+
+### Motion
+
+Panels: 120 ms slide+fade in, none out (closing is instant — snappy
+beats smooth). Damage numbers as above. Nothing else animates; restraint
+IS the budget (C65).
+
 ## Phase 2 — items, weapons, combat, interaction
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules

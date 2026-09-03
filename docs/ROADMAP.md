@@ -922,6 +922,71 @@ that progress. Strict accounts-only join is deferred until abuse appears.
   unchanged (anonymous tokens live); an imported legacy token's progress
   appears under the account.
 
+# Phase 8 — the interface earns its looter stripes
+
+**Playable proof.** The game LOOKS like a looter shooter: shots land with
+damage numbers and crits that pop, a hit from behind points behind you, a
+compass strip names where the shop and your ship are, the bags are a slot
+grid of item cards with rarity color bands, and every panel — HUD, shop,
+bags, sheet, map, flight, account — speaks one visual language: Scrapyard
+Comic. Nothing about the wire or the sim changes; t2–t28 pass untouched.
+
+**Style: Scrapyard Comic** (GDD "UI style guide" pins the tokens). The
+Borderlands school — the HUD as a device the character also sees, angled
+panels, thick ink outlines, chunky display type, damage feedback as
+spectacle — sized to this game's chunky low-poly world; the extraction
+school contributes the grid inventory's utilitarian bones. Research trail
+in the phase PR.
+
+### Wave 0 — contracts
+
+- `docs/GDD.md` "UI style guide": the palette (ink/slate/cream/amber +
+  the five-tier rarity ramp), typography, the panel construction rules
+  (skew, outline, notch), damage-number behavior. The style guide is the
+  contract every screen is reviewed against.
+- `server/data/items.json`: every item gains `rarity` (common → legendary);
+  the defs payload carries it through (additive JSON — old clients ignore
+  it, no wire change).
+- Tech: Unity UI Toolkit constructed ENTIRELY from C# — no UXML, no USS
+  assets, PanelSettings created at runtime; C47's gate stays green. One
+  vendored OFL display font (a font file is not a scene asset; license
+  text ships beside it). **Spike first**: task 1 proves runtime-only UI
+  Toolkit in the packaged player before anything is ported; if Unity's
+  asset expectations block it, the recorded fallback is styled IMGUI with
+  GUI.matrix skews, and the phase proceeds unchanged above the seam.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | SPIKE: runtime-only UI Toolkit (PanelSettings from code) in the packaged player | `client-unity/Assets/Game/UI/UiRoot.cs` | build + run log line |
+| 2 | Style guide in GDD + `Ui.Styles` (tokens as code: colors, spacing, panel factory) | GDD, `UI/Styles.cs` | review + typecheck |
+| 3 | Vendored OFL display font + runtime FontAsset | `client-unity/Assets/Game/Resources/Fonts/` | renders in player |
+| 4 | HUD port: health/shield bar, ammo mag/reserve split, credits | `UI/Hud*.cs` | screenshots + t-fleet |
+| 5 | Damage numbers + crit styling + directional hit indicator | `UI/Combat*.cs` | live camp fight |
+| 6 | Compass strip with entity markers (shop, rover, own ship, camp) | `UI/Compass.cs` | bearing unit test + live |
+| 7 | Rarity in defs → item cards (color band, icon, hover stats) | data + `UI/Items.cs` | t28/t14 pass + visual |
+| 8 | Grid inventory + shop port (buy/equip flows byte-identical on the wire) | `UI/Bags.cs`, `UI/Shop.cs` | t14 unchanged |
+| 9 | Map, flight HUD, account panel, interact prompt ports | `UI/` | visual + live |
+| 10 | Screenshot gallery per screen (the C60 review artifact) | `test/out/ui/` | files exist |
+| 11 | Frame budget re-measured with the new UI | framestats | C65 |
+
+### Acceptance criteria
+
+- **C60 One language.** Every screen conforms to the style guide; the
+  gallery in `test/out/ui/` is the review artifact.
+- **C61 Combat feedback.** Damage numbers appear on hits with crit
+  styling; a directional indicator shows incoming damage; verified in a
+  live camp fight.
+- **C62 Nothing broke.** The full harness fleet (t2–t28) passes
+  unchanged — the refresh is client-side presentation only.
+- **C63 The compass tells the truth.** Marker bearings match entity
+  positions (unit-tested math, live-checked markers).
+- **C64 Rarity end-to-end.** defs carry rarity; shop, bags and loot
+  prompts show the band; unknown rarity degrades to common, never breaks.
+- **C65 Budget holds.** 120 fps capped, worst frame under 16.7 ms with
+  the new UI live (framestats).
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
