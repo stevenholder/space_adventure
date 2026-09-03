@@ -54,6 +54,11 @@ type Server struct {
 	terrainF   []byte // pre-encoded terrain frame, sent on every join
 	defsF      []byte // pre-encoded defs frame, built once at startup
 	collidersF []byte // pre-encoded colliders frame, built once at startup
+	// Events raised outside world.Step (the NPC loot roll runs in stepNPCs,
+	// before the step allocates its event list) queue here and join the
+	// tick's stream. Without this, DropLoot's LootDropped event went to a
+	// nil ctx.Events and no client ever saw one.
+	pendingEvents []protocol.Event
 	propsF     []byte // pre-encoded props frame, built once at startup
 	colliders  []protocol.Collider
 
@@ -410,7 +415,8 @@ func (s *Server) tick() {
 	s.stepNPCs(tick)
 	s.stepPlayerVitals()
 
-	var events []protocol.Event
+	events := s.pendingEvents
+	s.pendingEvents = nil
 	s.world.Step(sim.DT, sim.StepCtx{
 		Events:    &events,
 		World:     s.world,

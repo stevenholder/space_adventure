@@ -310,7 +310,7 @@ func (s *Server) dropNPCLoot(n *npcAI) {
 	}
 	n.dropped = true
 	sim.DropLoot(s.world, s.reg, n.arch.Loot, n.ent.Pos, s.nextWorldID, s.rng,
-		sim.StepCtx{World: s.world})
+		sim.StepCtx{World: s.world, Events: &s.pendingEvents})
 	// Newly created drops have to reach worldEnts too, or they are simulated
 	// but never appear in a snapshot — the same shape as the Phase 2 bug where
 	// NPCs existed server-side and no client could see them.
