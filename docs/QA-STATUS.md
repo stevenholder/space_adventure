@@ -301,6 +301,26 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 8 — C60–C65, run 2026-09-03 (kind)
+
+The UI refresh: everything IMGUI moved to code-built UI Toolkit in the
+Scrapyard Comic language (GDD "UI style guide"). Presentation only — the
+wire and the sim are untouched, which is what C62 exists to prove.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C60 | One language; gallery in `test/out/ui/` | hud-final, hud-skew, panel-bags, panel-sheet, panel-map, panel-account — every screen on the style guide's tokens, captured from the packaged player via `-uiShot`/`-uiPanel` | **PASS** (shop screen shares ItemCard/panel construction with bags; a live shop screenshot needs an NPC interaction and comes from the playtest) |
+| C61 | Damage numbers, crit styling, directional incoming indicator | implemented (`UI/CombatFeed.cs`), wire decode of the hit event verified against PROTOCOL; **live camp-fight eyeball still owed** — headless can drive the fight (t16) but not see the popups | **PARTIAL — needs the playtest** |
+| C62 | Full harness fleet t2–t28 passes unchanged | all green against the deployed kind stack, byte-identical buy/equip cmds (t14 6/6, t28 25/25; t18/t21 flaky under fleet load, clean solo) | **PASS** |
+| C63 | Compass bearings match entity positions | `Bearing.To` unit-tested in the headless harness (6 cases, incl. the right=−X frame); markers live on the strip in every gallery shot | **PASS** |
+| C64 | Rarity end-to-end, unknown degrades to common | rarity in items.json → defs → `Defs.ItemRarity` → card band; unknown/absent → "" → common by the `Styles.Rarity` default arm | **PASS** |
+| C65 | 120 fps capped, worst frame < 16.7 ms with the new UI | framestats: **120.0 fps avg, worst 8.6 ms**, 12 entities, packaged player against kind | **PASS** |
+
+Known unverifiable-headless: UI Toolkit **button clicks** in the packaged
+player (buy, equip, account link). Everything up to the click is proven —
+the views build byte-identical cmds and the harness sends them — but a
+human has to click once. That plus C61's eyeball are the playtest items.
+
 ## Phase 7 — C54–C59, run 2026-09-03 (kind AND production)
 
 25 live checks (`t28-accounts.mjs`), run twice: against the deployed kind

@@ -924,6 +924,18 @@ that progress. Strict accounts-only join is deferred until abuse appears.
 
 # Phase 8 — the interface earns its looter stripes
 
+### Where Phase 8 stands (2026-09-03)
+
+Built and green on kind: all eleven tasks landed, C60/C62–C65 PASS and
+C61 PARTIAL (`docs/QA-STATUS.md` "Phase 8"). The entire interface is
+code-built UI Toolkit — IMGUI is retired, `grep OnGUI Assets/Game` finds
+nothing — with the gallery in `test/out/ui/` as the C60 artifact and
+framestats at 120 fps / worst 8.6 ms for C65. Two things only a human
+can do remain: eyeball the damage numbers in a live camp fight (C61),
+and click a UI Toolkit button (buy / equip / account link) in the
+packaged player once — the cmd bytes those clicks send are already
+proven byte-identical by t14.
+
 **Playable proof.** The game LOOKS like a looter shooter: shots land with
 damage numbers and crits that pop, a hit from behind points behind you, a
 compass strip names where the shop and your ship are, the bags are a slot
