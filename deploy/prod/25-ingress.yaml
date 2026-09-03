@@ -20,25 +20,14 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
+    # The whole origin: game (/ws), account site (/, /api/*) — Phase 7
+    # widened this from three exact paths to the root prefix, because the
+    # server binary now serves the site too.
     - host: game.stevenholder.info
       http:
         paths:
-          - path: /ws
-            pathType: Exact
-            backend:
-              service:
-                name: server
-                port:
-                  name: http
-          - path: /healthz
-            pathType: Exact
-            backend:
-              service:
-                name: server
-                port:
-                  name: http
-          - path: /version
-            pathType: Exact
+          - path: /
+            pathType: Prefix
             backend:
               service:
                 name: server
