@@ -44,3 +44,4 @@ test/out/t10-sim-result-prefix.json
 
 # QA evidence logs (referenced from docs/QA-STATUS.md)
 !test/out/*.log
+client-unity/Assets/Game/Resources/ui/

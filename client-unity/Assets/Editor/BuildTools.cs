@@ -135,11 +135,39 @@ namespace SpaceAdventure.EditorTools
             AssetDatabase.SaveAssets();
         }
 
+        // Phase 8: UI Toolkit's Advanced Text Generator (default-on in
+        // 6000.5) needs ICU data that ONLY ships when the build contains a
+        // PanelSettings asset — Unity's own runtime warning says so
+        // verbatim. The repo carries no assets (C47), so this asset is
+        // GENERATED for the build and deleted after, exactly like the boot
+        // scene: the editor auto-assigns the ICU data on creation, the
+        // runtime loads it from Resources, and in-Editor play falls back to
+        // the runtime-created PanelSettings (the Editor has ICU anyway).
+        private const string PanelDir = "Assets/Game/Resources/ui";
+        private const string PanelPath = PanelDir + "/panel-settings.asset";
+
+        private static void GeneratePanelSettings()
+        {
+            if (!Directory.Exists(PanelDir)) Directory.CreateDirectory(PanelDir);
+            var settings = ScriptableObject.CreateInstance<UnityEngine.UIElements.PanelSettings>();
+            settings.scaleMode = UnityEngine.UIElements.PanelScaleMode.ConstantPixelSize;
+            settings.scale = 1f;
+            AssetDatabase.CreateAsset(settings, PanelPath);
+            AssetDatabase.SaveAssets();
+        }
+
+        private static void RemovePanelSettings()
+        {
+            AssetDatabase.DeleteAsset(PanelPath);
+            AssetDatabase.SaveAssets();
+        }
+
         [MenuItem("Space Adventure/Build Standalone")]
         public static void BuildStandalone()
         {
             EnsureShaders();
             EnsureLayers();
+            GeneratePanelSettings();
             if (!File.Exists(ScenePath)) GenerateBootScene();
 
             // Honour -buildOutput from the command line so CI and a local run
@@ -162,6 +190,7 @@ namespace SpaceAdventure.EditorTools
             };
 
             var report = BuildPipeline.BuildPlayer(options);
+            RemovePanelSettings(); // transient: the repo never carries it
             var summary = report.summary;
             Debug.Log($"build {summary.result}: {summary.totalSize} bytes, " +
                       $"{summary.totalErrors} errors, output {summary.outputPath}");

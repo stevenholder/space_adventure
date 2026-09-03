@@ -29,16 +29,25 @@ namespace SpaceAdventure.Game.UI
             Object.DontDestroyOnLoad(_go);
             var doc = _go.AddComponent<UIDocument>();
 
-            var settings = ScriptableObject.CreateInstance<PanelSettings>();
-            settings.name = "runtime-panel-settings";
-            settings.scaleMode = PanelScaleMode.ConstantPixelSize;
-            settings.scale = 1f;
-            // An EMPTY theme, created at runtime: a PanelSettings with a null
-            // themeStyleSheet never attaches its panel (the spike's first run
-            // proved it — probe pixel came back sky), while an empty one
-            // attaches fine and simply provides no default styles, which is
-            // the deal we wanted anyway: every element styles itself.
-            settings.themeStyleSheet = ScriptableObject.CreateInstance<ThemeStyleSheet>();
+            // Prefer the BUILD-GENERATED PanelSettings (BuildTools makes it
+            // for the build and deletes it after): it carries the ICU data
+            // the Advanced Text Generator needs, which a runtime-created one
+            // cannot (Unity's warning names this exact constraint). The
+            // runtime-created fallback covers in-Editor play, where ICU is
+            // available anyway. Either way, the theme is an EMPTY runtime
+            // ThemeStyleSheet: a null theme never attaches the panel (spike
+            // run 1 — probe pixel came back sky), an empty one attaches and
+            // provides no default styles, so every element styles itself.
+            var settings = Resources.Load<PanelSettings>("ui/panel-settings");
+            if (settings == null)
+            {
+                settings = ScriptableObject.CreateInstance<PanelSettings>();
+                settings.name = "runtime-panel-settings";
+                settings.scaleMode = PanelScaleMode.ConstantPixelSize;
+                settings.scale = 1f;
+            }
+            if (settings.themeStyleSheet == null)
+                settings.themeStyleSheet = ScriptableObject.CreateInstance<ThemeStyleSheet>();
             doc.panelSettings = settings;
             doc.sortingOrder = 100;
 
@@ -67,11 +76,17 @@ namespace SpaceAdventure.Game.UI
             probe.style.backgroundColor = new Color(1f, 0.682f, 0.098f); // amber
             Root.Add(probe);
 
-            // No label in the spike: the first run's log showed the text-
-            // shaping job (ATGTextJobSystem.ShapeText) throwing on an OS-font
-            // FontDefinition and taking the whole panel down with it. Text
-            // arrives with task 3's vendored font as a real FontAsset; the
-            // spike proves the PANEL.
+            // Text through the VENDORED FontAsset only — the OS-font path
+            // crashed the text shaper and took the panel with it (run 1).
+            Label label = null;
+            if (Styles.Display != null)
+            {
+                label = Styles.Display_("SCRAPYARD", 20, Color.white);
+                label.style.position = Position.Absolute;
+                label.style.left = 70;
+                label.style.top = 24;
+                Root.Add(label);
+            }
 
             yield return new WaitForEndOfFrame();
             yield return new WaitForEndOfFrame();
@@ -91,6 +106,19 @@ namespace SpaceAdventure.Game.UI
             Debug.Log(amber
                 ? $"ui: toolkit ready (probe pixel {got})"
                 : $"ui: toolkit MISSING (probe pixel {got}) — styled-IMGUI fallback per ROADMAP");
+            if (label != null)
+            {
+                // Text proof: the shaper laid it out (nonzero width) and the
+                // panel survived (the amber check above still passed).
+                Debug.Log(label.resolvedStyle.width > 1f
+                    ? $"ui: text ready (label width {label.resolvedStyle.width:F0}px)"
+                    : "ui: text MISSING (label never laid out)");
+                Root.Remove(label);
+            }
+            else
+            {
+                Debug.Log("ui: text MISSING (vendored font did not load)");
+            }
 
             Root.Remove(probe);
         }
