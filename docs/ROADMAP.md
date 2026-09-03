@@ -841,6 +841,75 @@ stays "players other than us"), wss/TLS on the LAN (an internal CA every
 client must trust buys little on a private LAN — revisit if the LAN stops
 being trusted), sharding, and everything else in the table below.
 
+# Phase 7 — accounts, and the site that manages them
+
+**Playable proof.** Visit `https://game.stevenholder.info/`: a landing page
+with live stats and how to get the client. Register with email + password.
+Your account page mints a link code; type it into the game and you are
+playing as your account's player. Change your password, see your credits
+and ships on the web, delete the account and everything yours is gone.
+
+**Trigger.** The Deferred table's "real accounts (players other than us)"
+armed the moment the public door opened. This lands the minimum: accounts
+that ISSUE game identity, not decorate it — the account mints the token.
+
+**Coexistence rule, load-bearing.** Anonymous tokens keep working exactly
+as today (join with any fresh token = a guest). Every e2e harness and all
+current progress rides them; an account can IMPORT a legacy token to adopt
+that progress. Strict accounts-only join is deferred until abuse appears.
+
+### Wave 0 — contracts
+
+- Schema (`002_accounts.sql`): `account` (id, email UNIQUE, argon2id
+  `pw_hash`, created), `web_session` (id, account_id, expires),
+  `link_code` (code, account_id, expires), `player.account_id` nullable.
+  One player per account per world: redeeming a code returns the
+  account's existing player token when there is one.
+- HTTP API under `/api/` in the game server binary (embedded site via
+  go:embed, no build toolchain — the site is plain HTML/CSS/JS, C47's
+  spirit applied to the web): register, login, logout, me, link-code,
+  redeem (the game client's exchange), import-token, password, delete,
+  stats (public). Sessions: HttpOnly SameSite=Strict cookie backed by
+  `web_session`; mutating routes require the `X-Requested-With` header
+  (CSRF); login/register ride the gatekeeper's per-IP buckets.
+- Ingress: the public host rule widens to PathPrefix `/`; the hostless
+  LAN rule keeps its three exact paths.
+- Unity: an account panel (IMGUI, like everything) that takes a link
+  code, redeems it over HTTPS derived from the server URL, stores the
+  token in PlayerPrefs and reconnects.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | Migration 002 + store methods (accounts, sessions, codes, import, delete cascade) | `server/internal/store/` | store suite, both engines |
+| 2 | Auth: argon2id hashing, session mint/check, login rate limit | `server/internal/web/` | unit |
+| 3 | API handlers + embedded site (landing/login/account pages) | `server/internal/web/`, `site/` | `t28` |
+| 4 | Token redeem: code → account player token; hello path unchanged | `server/internal/web/`, `server.go` | `t28` |
+| 5 | Ingress PathPrefix + landing stats | `deploy/prod/25-ingress.yaml` | live |
+| 6 | Unity account panel: enter code, redeem, store, reconnect | `client-unity/Assets/Game/` | typecheck + live |
+| 7 | e2e harness against C54–C59 | `test/t28-accounts.mjs` | `node test/t28-accounts.mjs` |
+
+### Acceptance criteria
+
+- **C54 Register/login.** Email+password registers (argon2id at rest, never
+  logged), logs in, sessions survive server restarts (DB-backed), a wrong
+  password is refused, login is rate-limited per IP.
+- **C55 Account-issued identity.** A link code minted on the site, redeemed
+  by the client, joins the game as the account's player; redeeming twice
+  yields the same player; codes expire and are single-use.
+- **C56 The account page tells the truth.** Credits, inventory and
+  ownership shown match a live t15-style probe of the same player.
+- **C57 Lifecycle.** Password change invalidates other sessions; account
+  delete removes account, sessions, codes and owned players — and the
+  issued game token is refused afterward.
+- **C58 The front door.** The landing page serves publicly with live
+  player counts and client instructions; no authenticated data leaks to
+  anonymous visitors.
+- **C59 Coexistence.** The full existing harness fleet still passes
+  unchanged (anonymous tokens live); an imported legacy token's progress
+  appears under the account.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
