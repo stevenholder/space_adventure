@@ -9,6 +9,7 @@
       "id": "weapon.pulse",
       "name": "Pulse Rifle",
       "kind": "weapon",
+      "rarity": "rare",
       "slot": "primary",
       "asset": "weapon.pulse",
       "stack_max": 1,
@@ -32,6 +33,7 @@
       "id": "ammo.cell",
       "name": "Energy Cell",
       "kind": "ammo",
+      "rarity": "common",
       "stack_max": 300
     },
     {
@@ -39,6 +41,7 @@
       "id": "ship.v1",
       "name": "Scout Ship",
       "kind": "vehicle",
+      "rarity": "epic",
       "asset": "ship.v1",
       "stack_max": 1
     }
