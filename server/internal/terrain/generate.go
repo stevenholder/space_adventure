@@ -678,6 +678,9 @@ func Generate(seed uint64) *Field {
 	for i := range lm {
 		f.Landmarks = append(f.Landmarks, LandmarkPos{Name: lm[i].name, Dir: lm[i].dir})
 	}
+	for i := range craters {
+		f.Craters = append(f.Craters, CraterPos{Dir: craters[i].dir, Radius: craters[i].rimRad * PlanetRadius})
+	}
 	discAng := spawnFlatRadius / PlanetRadius
 	bandAng := (spawnFlatRadius + spawnFlatBlend) / PlanetRadius
 	for face := range NumFaces {

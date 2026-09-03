@@ -32,6 +32,7 @@
 //   footprint is centred in XZ. A future structure that is NOT symmetric
 //   about its local X would need the mirror handled rather than absorbed.
 
+using System.Collections.Generic;
 using UnityEngine;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
@@ -89,11 +90,19 @@ namespace SpaceAdventure.Game
         ///
         /// No collider of their own. Walk straight through a barrel.
         /// </summary>
+        /// <summary>
+        /// POI masts, harvested from the props (asset struct.mast.*): world
+        /// position + whether the builder was Scrapyard. The compass gates
+        /// discovery on these (GDD "Silhouette and the 23 m horizon").
+        /// </summary>
+        public readonly List<(Vector3 pos, bool scrap)> Masts = new List<(Vector3, bool)>();
+
         public void BuildProps(Prop[] props)
         {
             if (_propRoot != null) Object.Destroy(_propRoot);
             _propRoot = new GameObject("props");
             _propRoot.transform.SetParent(_parent, false);
+            Masts.Clear();
             if (props == null) return;
 
             foreach (Prop p in props)
@@ -119,6 +128,9 @@ namespace SpaceAdventure.Game
                 // there yet, and a grey cube standing in for it would be more
                 // distracting than the gap.
                 _assets.Attach(p.Asset, go.transform, null);
+
+                if (p.Asset.StartsWith("struct.mast."))
+                    Masts.Add((go.transform.position, p.Asset.EndsWith(".scrap")));
             }
             // Logged like the colliders beside them, so a headless run says
             // whether the zone dressing arrived at all.

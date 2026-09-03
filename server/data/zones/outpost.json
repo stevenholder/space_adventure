@@ -1,0 +1,195 @@
+{
+ "$comment": "Scrapyard loot pocket (Phase 9 task 8). SITE FROM THE SOLVER: `server poi --seed 1337 --count 2` site 2 \u2014 clearance 21.0 m beyond the 46 m reach against all 20 world features, mean slope 10.9\u00b0, and the solver re-verifies this in the defs audit test (C69). The loot core is the guards: grunt/gunner kills roll their tables (chance 1.0) and the drop is a walk-over pickup. 16 m square, one gate, fight geometry inside.",
+ "version": 1,
+ "id": "outpost",
+ "origin_dir": [
+  -0.5472025,
+  -0.1453573,
+  -0.8242819
+ ],
+ "flatten_radius": 26.0,
+ "flatten_falloff": 10.0,
+ "colliders": [],
+ "layout": {
+  "faction": "scrap",
+  "pieces": [
+   {
+    "$note": "perimeter, north (4 modules)",
+    "kind": "wall_run",
+    "from": [
+     -8.0,
+     0.0,
+     8.0
+    ],
+    "to": [
+     8.0,
+     0.0,
+     8.0
+    ]
+   },
+   {
+    "$note": "perimeter, south \u2014 module 2 is the gate, facing the open ground",
+    "kind": "wall_run",
+    "from": [
+     -8.0,
+     0.0,
+     -8.0
+    ],
+    "to": [
+     8.0,
+     0.0,
+     -8.0
+    ],
+    "gate_at": 2
+   },
+   {
+    "$note": "perimeter, east",
+    "kind": "wall_run",
+    "from": [
+     8.0,
+     0.0,
+     -8.0
+    ],
+    "to": [
+     8.0,
+     0.0,
+     8.0
+    ]
+   },
+   {
+    "$note": "perimeter, west",
+    "kind": "wall_run",
+    "from": [
+     -8.0,
+     0.0,
+     -8.0
+    ],
+    "to": [
+     -8.0,
+     0.0,
+     8.0
+    ]
+   },
+   {
+    "$note": "the landmark (C68)",
+    "kind": "mast",
+    "pos": [
+     3.0,
+     0.0,
+     4.0
+    ],
+    "yaw": -20.0
+   },
+   {
+    "$note": "cover between the gate and the core",
+    "kind": "cover4",
+    "pos": [
+     -3.0,
+     0.0,
+     -2.0
+    ],
+    "yaw": 40.0
+   },
+   {
+    "$note": "cover, second ring",
+    "kind": "cover4",
+    "pos": [
+     4.0,
+     0.0,
+     -3.0
+    ],
+    "yaw": -15.0
+   },
+   {
+    "$note": "the shack the loot lives behind",
+    "kind": "shack",
+    "pos": [
+     -2.0,
+     0.0,
+     4.0
+    ],
+    "yaw": 170.0
+   }
+  ]
+ },
+ "entities": [
+  {
+   "$note": "the guards ARE the loot core",
+   "type": "npc",
+   "def": "npc.grunt",
+   "pos": [
+    -3.0,
+    0.0,
+    1.0
+   ],
+   "yaw": 180.0
+  },
+  {
+   "type": "npc",
+   "def": "npc.grunt",
+   "pos": [
+    4.0,
+    0.0,
+    -1.0
+   ],
+   "yaw": 180.0
+  },
+  {
+   "type": "npc",
+   "def": "npc.gunner",
+   "pos": [
+    1.0,
+    0.0,
+    6.0
+   ],
+   "yaw": 180.0
+  }
+ ],
+ "props": [
+  {
+   "asset": "prop.loot.crate",
+   "pos": [
+    -1.0,
+    0.0,
+    5.8
+   ],
+   "yaw": 25.0
+  },
+  {
+   "asset": "prop.loot.crate",
+   "pos": [
+    0.4,
+    0.0,
+    6.2
+   ],
+   "yaw": -50.0
+  },
+  {
+   "asset": "prop.barrels",
+   "pos": [
+    6.5,
+    0.0,
+    6.0
+   ],
+   "yaw": 30.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    -6.8,
+    0.0,
+    6.4
+   ],
+   "yaw": -75.0
+  },
+  {
+   "asset": "prop.bones",
+   "pos": [
+    -1.0,
+    0.0,
+    -5.5
+   ],
+   "yaw": 110.0
+  }
+ ]
+}

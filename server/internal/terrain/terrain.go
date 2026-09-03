@@ -48,9 +48,18 @@ type Field struct {
 	// Landmarks records where the six placed landmarks landed (for the
 	// separation constraint check and debugging).
 	Landmarks []LandmarkPos
+	// Craters records where the craters landed and their radii in metres
+	// (Phase 9: the POI placement solver's avoid set).
+	Craters []CraterPos
 	// Clamped is the number of samples clamped to [RadiusMin, RadiusMax]
 	// during generation.
 	Clamped int
+}
+
+// CraterPos is one crater's centre direction and half-diameter in metres.
+type CraterPos struct {
+	Dir    Vec
+	Radius float64
 }
 
 // Face indices in wire order.

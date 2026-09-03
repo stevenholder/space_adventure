@@ -551,6 +551,24 @@ namespace SpaceAdventure.Game
                 var target = new Vec3(p.x, p.y, -p.z); // Unity → sim
                 markers.Add((name, Bearing.To(me.Pos, me.Facing, target)));
             }
+
+            // POI markers, gated by mast visibility (C68): a site joins the
+            // compass when its mast tip would clear the horizon —
+            // visible ≈ 22.6 + √(300·h) m for eye height 1.7 on r=150
+            // (GDD "Silhouette and the 23 m horizon"); 12.6 m masts → 84 m.
+            // Discovery matches sight, not omniscience.
+            const float mastDiscovery = 84f;
+            Vector3 myUnity = TerrainMesh.ToUnity(me.Pos);
+            foreach (var (pos, scrap) in _structures.Masts)
+            {
+                float chord = (pos - myUnity).magnitude;
+                // Surface distance from the chord on r≈150.
+                float surface = 2f * 150f * Mathf.Asin(Mathf.Clamp(chord / (2f * 150f), 0f, 1f));
+                if (surface > mastDiscovery) continue;
+                var target = new Vec3(pos.x, pos.y, -pos.z);
+                markers.Add((scrap ? "OUTPOST" : "RELAY",
+                    Bearing.To(me.Pos, me.Facing, target)));
+            }
             _hudView.SetMarkers(markers);
 
             // The shop view mirrors Interaction's state: stock arriving opens

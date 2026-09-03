@@ -1001,6 +1001,16 @@ in the phase PR.
 
 # Phase 9 — a world worth walking to
 
+### Where Phase 9 stands (2026-09-03)
+
+Built and green on kind: C66–C71 PASS (docs/QA-STATUS.md "Phase 9").
+The kit tiles, the camp and range are rebuilt on layouts, the solver
+placed the outpost and the relay, and the audit test holds every site
+to the clearance rules. Gallery: poi-range-colony.png,
+poi-camp-scrap.png. Owed to a human: eyeballing the two new POIs in a
+live walk (no solved routes reach them yet — routes are a natural next
+task alongside more POI templates).
+
 **Playable proof.** Stand anywhere and the horizon tells you where to go:
 one glowing mast per point of interest, each a different silhouette. Walk
 to one and it was BUILT, not stretched — walls tile from a modular kit,
