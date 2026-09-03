@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"space-adventure/server/internal/server"
+	"space-adventure/server/internal/sim"
 	"space-adventure/server/internal/terrain"
+	"space-adventure/server/internal/web"
 )
 
 // buildID identifies the binary. Set at link time:
@@ -91,8 +93,10 @@ func runServer(args []string) error {
 	// look identical to working, right up until players noticed their
 	// progress was never saved. An unset DATABASE_URL is a deliberate
 	// choice (every session ephemeral); a set-but-broken one is a mistake.
+	var st *store.Store
 	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		st, err := store.Open(dsn)
+		var err error
+		st, err = store.Open(dsn)
 		if err != nil {
 			return fmt.Errorf("opening store: %w", err)
 		}
@@ -111,6 +115,23 @@ func runServer(args []string) error {
 	}
 
 	mux := http.NewServeMux()
+
+	// Phase 7: the account site lives in this binary. It needs the store —
+	// without persistence there is nothing an account could manage, so a
+	// storeless run simply has no site (the game endpoints stand alone).
+	if st != nil {
+		reg := world.Registry()
+		spawn := [3]float64(sim.SpawnState(field).Pos)
+		site := &web.Handler{
+			Store: st,
+			NewPlayer: func(token, name string) store.Player {
+				return server.NewDefaultPlayer(reg, token, name, spawn)
+			},
+			Online: world.OnlineCount,
+		}
+		site.Mount(mux)
+		log.Printf("account site: enabled")
+	}
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "ok")

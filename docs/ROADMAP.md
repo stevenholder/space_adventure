@@ -843,6 +843,18 @@ being trusted), sharding, and everything else in the table below.
 
 # Phase 7 — accounts, and the site that manages them
 
+### Where Phase 7 stands (2026-09-03)
+
+Built and green on kind: all seven tasks landed, C54–C59 PASS (25 checks,
+`docs/QA-STATUS.md` "Phase 7"), the packaged client carries the F1 link
+panel, and the site ships inside the server binary. Prod re-verification
+rides the merge (CD deploys it; run `t28` against the public URL after).
+The run's one catch — argon2's 64 MiB first-choice parameters OOM-killing
+a 128Mi pod on the first registration — is fixed and recorded. Still
+deliberately absent: password reset email (no SMTP exists; a locked-out
+account is admin-fixable via the store) and strict accounts-only join
+(coexistence rule stands).
+
 **Playable proof.** Visit `https://game.stevenholder.info/`: a landing page
 with live stats and how to get the client. Register with email + password.
 Your account page mints a link code; type it into the game and you are

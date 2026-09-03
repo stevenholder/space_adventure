@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Space Adventure</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <h1><a href="/">SPACE ADVENTURE</a></h1>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Sign in</h2>
+    <label for="li-email">Email</label>
+    <input id="li-email" type="email" autocomplete="username">
+    <label for="li-pw">Password</label>
+    <input id="li-pw" type="password" autocomplete="current-password">
+    <button id="li-go">Sign in</button>
+    <div class="error" id="li-err"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">New here? Register</h2>
+    <label for="re-email">Email</label>
+    <input id="re-email" type="email" autocomplete="username">
+    <label for="re-pw">Password (8+ characters)</label>
+    <input id="re-pw" type="password" autocomplete="new-password">
+    <button id="re-go">Create account</button>
+    <div class="error" id="re-err"></div>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+wire('li-go', 'li-err', () => api('/api/login', {
+  email: val('li-email'), password: val('li-pw'),
+}).then(() => location.href = '/account.html'))
+wire('re-go', 're-err', () => api('/api/register', {
+  email: val('re-email'), password: val('re-pw'),
+}).then(() => location.href = '/account.html'))
+</script>
+</body>
+</html>

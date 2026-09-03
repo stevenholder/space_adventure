@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account — Space Adventure</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <h1><a href="/">SPACE ADVENTURE</a></h1>
+  <nav><span class="dim" id="who"></span> <a href="#" id="logout">sign out</a></nav>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Play as this account</h2>
+    <p class="dim">Mint a code, then in the game press <b>F1</b> and type it
+    in. The code lives ten minutes and works once.</p>
+    <button id="mint">Mint link code</button>
+    <code class="big" id="code" hidden></code>
+    <div class="error" id="mint-err"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Your pilots</h2>
+    <table id="players"><tbody></tbody></table>
+    <p class="dim" id="no-players" hidden>No pilot yet — mint a code and
+    enter the world, or import an existing game token below.</p>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Import an existing game token</h2>
+    <p class="dim">Played before registering? Paste the token from the old
+    client (PlayerPrefs <code>sa.token</code>) to adopt that progress.</p>
+    <label for="imp-token">Game token</label>
+    <input id="imp-token" autocomplete="off">
+    <button id="imp-go" class="quiet">Import</button>
+    <div class="error" id="imp-err"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Change password</h2>
+    <label for="pw-old">Current password</label>
+    <input id="pw-old" type="password" autocomplete="current-password">
+    <label for="pw-new">New password (8+)</label>
+    <input id="pw-new" type="password" autocomplete="new-password">
+    <button id="pw-go" class="quiet">Change password</button>
+    <div class="error" id="pw-err"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Delete account</h2>
+    <p class="dim">Removes the account and every pilot it owns — credits,
+    inventory, ships. There is no undo.</p>
+    <label for="del-pw">Password to confirm</label>
+    <input id="del-pw" type="password" autocomplete="current-password">
+    <button id="del-go" class="danger">Delete everything</button>
+    <div class="error" id="del-err"></div>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+function refresh () {
+  fetch('/api/me').then((r) => {
+    if (r.status === 401) { location.href = '/login.html'; return null }
+    return r.json()
+  }).then((me) => {
+    if (!me) return
+    document.getElementById('who').textContent = me.email
+    const tbody = document.querySelector('#players tbody')
+    tbody.innerHTML = ''
+    document.getElementById('no-players').hidden = me.players.length > 0
+    for (const p of me.players) {
+      const items = (p.inventory || []).map((s) => s.qty > 1 ? `${s.item}×${s.qty}` : s.item).join(', ')
+      const seen = p.last_seen_ms ? new Date(p.last_seen_ms).toLocaleString() : '—'
+      const tr = document.createElement('tr')
+      for (const text of [p.name, p.credits + ' cr', items || '—', seen]) {
+        const td = document.createElement('td')
+        td.textContent = text
+        tr.appendChild(td)
+      }
+      tbody.appendChild(tr)
+    }
+  }).catch(() => {})
+}
+refresh()
+
+wire('mint', 'mint-err', () => api('/api/link-code').then((r) => {
+  const el = document.getElementById('code')
+  el.textContent = r.code
+  el.hidden = false
+}))
+wire('imp-go', 'imp-err', () => api('/api/import-token', { token: val('imp-token') }).then(() => {
+  document.getElementById('imp-err').classList.add('ok')
+  document.getElementById('imp-err').textContent = 'imported'
+  refresh()
+}))
+wire('pw-go', 'pw-err', () => api('/api/password', { old: val('pw-old'), new: val('pw-new') }).then(() => {
+  const el = document.getElementById('pw-err')
+  el.classList.add('ok'); el.textContent = 'changed — other sessions signed out'
+}))
+wire('del-go', 'del-err', () => api('/api/delete', { password: val('del-pw') }).then(() => {
+  location.href = '/'
+}))
+document.getElementById('logout').addEventListener('click', (e) => {
+  e.preventDefault()
+  api('/api/logout').then(() => location.href = '/')
+})
+</script>
+</body>
+</html>

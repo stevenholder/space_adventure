@@ -301,6 +301,25 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 7 — C54–C59, run 2026-09-03 (kind; prod re-verify follows the merge)
+
+25 live checks (`t28-accounts.mjs`) against the deployed kind stack.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C54 | Register/login, argon2id, sessions, rate limit, CSRF | register + auto-login; wrong password 401; no-header mutation 403; ten rapid logins rate-limited; sessions DB-backed | **PASS** |
+| C55 | Link code → token → play; single-use; one player per account | 8-char code redeemed once (second attempt 401); token joined the game; a later code returned the SAME token | **PASS** |
+| C56 | The account page tells the truth | pilot listed with its live 1000-credit start | **PASS** |
+| C57 | Lifecycle | password change killed the other session and spared its own; delete removed account, session AND the owned player (players 117 → 116, counted) | **PASS** |
+| C58 | The front door | landing + stats public; anonymous /api/me 401 | **PASS** |
+| C59 | Coexistence | full harness fleet untouched; legacy guest imported and listed; owned token refused re-import; the orphaned token joined again as a fresh guest | **PASS** |
+
+What the run caught: argon2id's first-choice parameters (64 MiB) OOM-killed
+the server inside the kind pod's 128Mi limit on the FIRST registration —
+silently, from outside, no panic to read. RFC 9106's second recommended set
+(19 MiB, t=2) fits the smallest pod this binary runs in; the encoded hash
+format is self-describing, so the change needed no migration.
+
 ## Phase 6 — C48–C53, closed 2026-09-02
 
 | # | Asserts | Measured | Verdict |

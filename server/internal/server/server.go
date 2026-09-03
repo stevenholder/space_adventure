@@ -217,7 +217,7 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 			// its trigger is "players other than us", not "a LAN exists".
 			CheckOrigin: checkOrigin,
 		},
-		gate: newGatekeeper(),
+		gate:      newGatekeeper(),
 		clients:   make(map[uint32]*client),
 		reg:       reg,
 		world:     world,
@@ -304,6 +304,17 @@ func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadDeadline(time.Now().Add(silentTimeout))
 	go c.writer()
 	c.reader() // blocks until the connection dies
+}
+
+// Registry exposes the content registry for the account site's player
+// minting (Phase 7) — read-only after New.
+func (s *Server) Registry() *defs.Registry { return s.reg }
+
+// OnlineCount is the landing page's live-connection statistic (Phase 7).
+func (s *Server) OnlineCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.clients)
 }
 
 // Run starts the fixed-tick loop and stops it when ctx is done.

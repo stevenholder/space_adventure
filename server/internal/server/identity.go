@@ -73,6 +73,13 @@ func joinIdentity(ctx context.Context, st *store.Store, reg *defs.Registry, toke
 
 // defaultPlayer builds the starting row for a brand-new or ephemeral
 // player: start credits, start items, and the given spawn position.
+// NewDefaultPlayer is defaultPlayer for callers outside the gateway — the
+// web package mints account players with exactly a joining guest's start
+// (Phase 7): one definition of "a new player", not two.
+func NewDefaultPlayer(reg *defs.Registry, token, name string, spawn [3]float64) store.Player {
+	return defaultPlayer(reg, token, name, spawn)
+}
+
 func defaultPlayer(reg *defs.Registry, token, name string, spawn [3]float64) store.Player {
 	p := store.Player{
 		Token:    token,

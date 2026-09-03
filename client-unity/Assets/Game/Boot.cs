@@ -92,6 +92,13 @@ namespace SpaceAdventure.Game
         private readonly RoverPredictor _rover = new RoverPredictor();
         private readonly ShipPredictor _ship = new ShipPredictor();
 
+        // Phase 7 — the account link panel (F1): type a code minted on the
+        // account site, redeem it for this account's game token, reconnect
+        // as that player. IMGUI like everything else.
+        private bool _accountOpen;
+        private string _accountCode = "";
+        private string _accountStatus = "";
+
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
         // the motion (the drive-phase gotcha, avoided this time).
@@ -299,6 +306,11 @@ namespace SpaceAdventure.Game
                 Cursor.lockState = _cursorFreed ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = _cursorFreed;
             }
+            if (keys?.f1Key.wasPressedThisFrame == true)
+            {
+                _accountOpen = !_accountOpen;
+                _accountStatus = "";
+            }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
             if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
             if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleBags);
@@ -308,7 +320,7 @@ namespace SpaceAdventure.Game
             // you can read a bearing off it and walk without closing it.
             // The map and the shop both want the pointer. Movement keeps
             // working under either.
-            bool wantsCursor = _map.Open || _interact.ShopOpen || _character.AnyOpen;
+            bool wantsCursor = _map.Open || _interact.ShopOpen || _character.AnyOpen || _accountOpen;
             if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.None;
@@ -495,6 +507,87 @@ namespace SpaceAdventure.Game
                 ? $"{v.Length,6:F1} m/s   alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PILOT"
                 : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER";
             GUI.Label(new Rect(Screen.width * 0.5f - 180, 18, 360, 24), line);
+        }
+
+        /// <summary>
+        /// The F1 account panel: redeem a link code from the account site
+        /// (docs/ROADMAP.md Phase 7) and reconnect as that account's player.
+        /// </summary>
+        private void DrawAccountPanel()
+        {
+            float w = 360, h = 170;
+            var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.35f, w, h);
+            GUI.Box(rect, "ACCOUNT LINK");
+            GUI.Label(new Rect(rect.x + 16, rect.y + 28, w - 32, 40),
+                "Mint a code on the account site, type it here.");
+            _accountCode = GUI.TextField(new Rect(rect.x + 16, rect.y + 66, w - 32, 26),
+                _accountCode, 8).ToUpperInvariant();
+            if (GUI.Button(new Rect(rect.x + 16, rect.y + 100, 120, 28), "Link"))
+            {
+                _accountStatus = "redeeming…";
+                StartCoroutine(RedeemLinkCode(_accountCode));
+            }
+            if (GUI.Button(new Rect(rect.x + 144, rect.y + 100, 90, 28), "Close"))
+                _accountOpen = false;
+            GUI.Label(new Rect(rect.x + 16, rect.y + 136, w - 32, 26), _accountStatus);
+        }
+
+        /// <summary>
+        /// POST /api/redeem on the server the game is already talking to
+        /// (ws→http on the same origin), store the token, reconnect.
+        /// </summary>
+        private System.Collections.IEnumerator RedeemLinkCode(string code)
+        {
+            string wsUrl = ResolveServerUrl();
+            string apiUrl = wsUrl.Replace("wss://", "https://").Replace("ws://", "http://");
+            int slash = apiUrl.LastIndexOf("/ws", StringComparison.Ordinal);
+            if (slash >= 0) apiUrl = apiUrl.Substring(0, slash);
+            apiUrl += "/api/redeem";
+
+            byte[] body = System.Text.Encoding.UTF8.GetBytes("{\"code\":\"" + code + "\"}");
+            using var req = new UnityEngine.Networking.UnityWebRequest(apiUrl, "POST");
+            req.uploadHandler = new UnityEngine.Networking.UploadHandlerRaw(body);
+            req.downloadHandler = new UnityEngine.Networking.DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("X-Requested-With", "sa-client");
+            yield return req.SendWebRequest();
+
+            if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
+            {
+                _accountStatus = req.responseCode == 401
+                    ? "unknown or expired code"
+                    : $"failed: {req.error}";
+                yield break;
+            }
+            string text = req.downloadHandler.text;
+            int i = text.IndexOf("\"token\":\"", StringComparison.Ordinal);
+            if (i < 0) { _accountStatus = "bad response"; yield break; }
+            i += 9;
+            string token = text.Substring(i, text.IndexOf('"', i) - i);
+
+            PlayerPrefs.SetString("sa.token", token);
+            PlayerPrefs.Save();
+            _accountStatus = "linked — reconnecting…";
+            Reconnect(token);
+        }
+
+        /// <summary>
+        /// Tears down the connection and rejoins with a new token. The world
+        /// itself stands (same terrain, same entities — their views are keyed
+        /// by id and simply update); everything derived from OUR identity
+        /// resets: predictors, the timeline, seat state.
+        /// </summary>
+        private void Reconnect(string token)
+        {
+            _net.Dispose();
+            _predictor.Reset();
+            _rover.Reset();
+            _ship.Reset();
+            _timeline.Clear();
+            _seat = 0;
+            _seatVehicle = 0;
+            _net = new NetClient();
+            _net.Connect(ResolveServerUrl(), SystemInfo.deviceName ?? "player", token);
         }
 
         private static Quaternion RotFrom(Quat q)
@@ -842,6 +935,7 @@ namespace SpaceAdventure.Game
         {
             if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
             if (_worldBuilt && SeatKind == EntityType.Ship) DrawFlightHud();
+            if (_accountOpen) DrawAccountPanel();
             _hud?.Draw(_net, _predictor, _character);
             if (_map == null || !_worldBuilt) return;
 
