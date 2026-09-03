@@ -99,6 +99,10 @@ namespace SpaceAdventure.Game
         private string _accountCode = "";
         private string _accountStatus = "";
 
+        // Phase 8 — the UI Toolkit layer.
+        private SpaceAdventure.Game.UI.UiRoot _ui;
+        private SpaceAdventure.Game.UI.HudView _hudView;
+
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
         // the motion (the drive-phase gotcha, avoided this time).
@@ -179,10 +183,18 @@ namespace SpaceAdventure.Game
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
-            // Phase 8 task 1 spike: prove runtime-only UI Toolkit in the
-            // packaged player (UiRoot.Verify logs the verdict).
-            var uiRoot = new SpaceAdventure.Game.UI.UiRoot();
-            StartCoroutine(uiRoot.Verify(this));
+            // Phase 8: the UI Toolkit root. The spike's self-check stays until
+            // every screen is ported (it logs the toolkit/text verdicts).
+            _ui = new SpaceAdventure.Game.UI.UiRoot();
+            StartCoroutine(_ui.Verify(this));
+            _hudView = new SpaceAdventure.Game.UI.HudView(_ui.Root);
+
+            // -uiShot <path>: save a screenshot after the world settles, the
+            // review artifact for C60 (test/out/ui/).
+            string[] argvUi = Environment.GetCommandLineArgs();
+            int shotAt = Array.IndexOf(argvUi, "-uiShot");
+            if (shotAt >= 0 && shotAt + 1 < argvUi.Length)
+                StartCoroutine(SaveUiShot(argvUi[shotAt + 1]));
 
             // No vsync, capped at 120. Vsync waits on whatever refresh the OS
             // reports, and a virtual or remote display can report ~4 Hz — the
@@ -420,6 +432,8 @@ namespace SpaceAdventure.Game
             _viewModel.Tick(_fps.LookDelta, (float)now.Vel.Length, Time.deltaTime);
             _fx.Tick();
 
+            UpdateHudView();
+
             _statFrames++;
             if (Time.unscaledDeltaTime > _statWorstDt) _statWorstDt = Time.unscaledDeltaTime;
             if (Time.unscaledTime - _statWindowStart >= 5f)
@@ -435,6 +449,38 @@ namespace SpaceAdventure.Game
         }
 
         private ushort NextCmdSeq() => ++_cmdSeq;
+
+        /// <summary>
+        /// Feeds the Phase 8 HUD from the same sources the IMGUI one reads,
+        /// plus compass markers by egocentric bearing (Bearing.To).
+        /// </summary>
+        private void UpdateHudView()
+        {
+            if (_hudView == null) return;
+            _hudView.SetVitals(_hud.Health, 100);
+            _hudView.SetAmmo(_character.Magazine, _character.Reserve,
+                _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
+            _hudView.SetCredits(_character.Credits);
+
+            var me = _predictor.State;
+            var markers = new List<(string, double)>();
+            foreach (var v in _views.All)
+            {
+                if (v.Root == null || !v.Root.activeSelf) continue;
+                string name = v.Type switch
+                {
+                    EntityType.Npc when v.Label == "npc.quartermaster" => "SHOP",
+                    EntityType.Vehicle => "ROVER",
+                    EntityType.Ship => "SHIP",
+                    _ => null,
+                };
+                if (name == null) continue;
+                Vector3 p = v.Root.transform.position;
+                var target = new Vec3(p.x, p.y, -p.z); // Unity → sim
+                markers.Add((name, Bearing.To(me.Pos, me.Facing, target)));
+            }
+            _hudView.SetMarkers(markers);
+        }
 
         /// <summary>
         /// Camera at the seat eye point (GDD "Rover seats" seat_eye, sim
@@ -593,6 +639,19 @@ namespace SpaceAdventure.Game
             _seatVehicle = 0;
             _net = new NetClient();
             _net.Connect(ResolveServerUrl(), SystemInfo.deviceName ?? "player", token);
+        }
+
+        /// <summary>Saves the C60 review screenshot once the scene settles.</summary>
+        private System.Collections.IEnumerator SaveUiShot(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            yield return new WaitForEndOfFrame();
+            var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+            tex.Apply();
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToPNG(tex));
+            Destroy(tex);
+            Debug.Log($"ui: screenshot saved to {path}");
         }
 
         private static Quaternion RotFrom(Quat q)
