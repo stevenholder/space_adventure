@@ -301,9 +301,11 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
-## Phase 7 — C54–C59, run 2026-09-03 (kind; prod re-verify follows the merge)
+## Phase 7 — C54–C59, run 2026-09-03 (kind AND production)
 
-25 live checks (`t28-accounts.mjs`) against the deployed kind stack.
+25 live checks (`t28-accounts.mjs`), run twice: against the deployed kind
+stack, and — post-merge, post-CD — against the public
+`https://game.stevenholder.info` over the real internet (25/25 both).
 
 | # | Asserts | Measured | Verdict |
 |---|---|---|---|
