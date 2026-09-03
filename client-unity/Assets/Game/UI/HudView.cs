@@ -24,7 +24,7 @@ namespace SpaceAdventure.Game.UI
         public HudView(VisualElement root)
         {
             // ---- bottom-left: health + shield --------------------------------
-            var vitals = Styles.Panel();
+            var vitals = Styles.Panel(Styles.SkewLeft);
             vitals.style.position = Position.Absolute;
             vitals.style.left = 24;
             vitals.style.bottom = 24;
@@ -46,7 +46,7 @@ namespace SpaceAdventure.Game.UI
             root.Add(vitals);
 
             // ---- bottom-right: ammo + credits --------------------------------
-            var supply = Styles.Panel();
+            var supply = Styles.Panel(Styles.SkewRight);
             supply.style.position = Position.Absolute;
             supply.style.right = 24;
             supply.style.bottom = 24;
@@ -68,7 +68,7 @@ namespace SpaceAdventure.Game.UI
             root.Add(supply);
 
             // ---- top-center: the compass strip -------------------------------
-            _compass = Styles.Panel();
+            _compass = Styles.Panel(Styles.SkewNone);
             _compass.style.position = Position.Absolute;
             _compass.style.top = 16;
             _compass.style.left = Length.Percent(50);

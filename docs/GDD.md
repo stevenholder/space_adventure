@@ -1295,8 +1295,9 @@ Rarity ramp (border band on item cards, name tint in lists):
   active/focused an inner **1 px `amber`** edge.
 - One corner (top-right by default) carries a **12 px notch cut** — the
   silhouette that says "this game" at a glance.
-- Panels and the HUD cluster sit at a **−2° skew** (the comic tilt);
-  text inside stays unskewed past ±4° reading sizes.
+- Panels tilt TOWARD their screen edge (the comic lean): **−2° on the
+  left side, +2° on the right, 0° for centered elements** like the
+  compass strip. Text inside stays unskewed past ±4° reading sizes.
 - Section headers: ALL CAPS, +8% letterspacing, `dust`, over a 2 px
   `ink` rule.
 

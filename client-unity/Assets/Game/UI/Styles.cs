@@ -33,7 +33,14 @@ namespace SpaceAdventure.Game.UI
         };
 
         public const float PanelOpacity = 0.92f;
-        public const float SkewDeg = -2f;
+
+        /// <summary>
+        /// The comic lean follows the screen side (GDD): left-anchored
+        /// panels tilt −2°, right-anchored +2°, centered ones sit straight.
+        /// </summary>
+        public const float SkewLeft = -2f;
+        public const float SkewRight = 2f;
+        public const float SkewNone = 0f;
 
         // ---- the display font ----------------------------------------------
         //
@@ -62,14 +69,14 @@ namespace SpaceAdventure.Game.UI
         /// top-right notch (faked with a rotated ink square until vector API
         /// needs arise), −2° skew.
         /// </summary>
-        public static VisualElement Panel()
+        public static VisualElement Panel(float skewDeg = SkewLeft)
         {
             var p = new VisualElement();
             var bg = Slate;
             bg.a = PanelOpacity;
             p.style.backgroundColor = bg;
             SetBorder(p, Ink, 3);
-            p.style.rotate = new Rotate(new Angle(SkewDeg, AngleUnit.Degree));
+            p.style.rotate = new Rotate(new Angle(skewDeg, AngleUnit.Degree));
             p.style.paddingLeft = 14;
             p.style.paddingRight = 14;
             p.style.paddingTop = 10;
