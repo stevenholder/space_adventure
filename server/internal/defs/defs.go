@@ -128,6 +128,10 @@ type Zone struct {
 	Colliders      []ZoneCollider `json:"colliders"`
 	Entities       []ZoneEntity   `json:"entities"`
 	Props          []ZoneProp     `json:"props"`
+	// Layout (Phase 9): kit placements on the 4 m module grid, expanded at
+	// load into DERIVED colliders and props (layout.go) — one source for
+	// what you see and what you hit.
+	Layout *ZoneLayout `json:"layout,omitempty"`
 }
 
 // LootEntry is one row of a loot table in server/data/loot.json: an item, how
@@ -242,6 +246,9 @@ func Load() (*Registry, error) {
 		var z Zone
 		if err := json.Unmarshal(raw, &z); err != nil {
 			return nil, fmt.Errorf("defs: parse %s: %w", zf, err)
+		}
+		if err := ExpandLayout(&z); err != nil {
+			return nil, fmt.Errorf("defs: %s: %w", zf, err)
 		}
 		reg.Zones[z.ID] = z
 	}

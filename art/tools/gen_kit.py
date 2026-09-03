@@ -200,7 +200,29 @@ def shack_scrap():
     return t
 
 
+# ---- cover4: 1 cell, 2.1 m barricade -- the fight geometry piece ----------
+
+def cover4_colony():
+    t = []
+    skirt(t, 4.3, 4.3)
+    t += box(0, 0.9, 0, 3.8, 1.4, 3.8, PANEL)
+    t += box(0, 1.85, 0, 3.9, 0.5, 3.9, HULL)
+    t += box(0, 2.2, 0, 4.0, 0.2, 4.0, TRIM)
+    return t
+
+
+def cover4_scrap():
+    t = []
+    skirt(t, 4.3, 4.3)
+    t += box(-0.15, 0.85, 0.1, 3.6, 1.3, 3.5, SCORCH, angle=0.08)
+    t += box(0.2, 1.8, -0.1, 3.4, 0.6, 3.2, RUST, angle=-0.06)
+    t += box(0, 2.15, 0, 3.7, 0.25, 3.5, HAZARD, angle=0.08)
+    return t
+
+
 PIECES = {
+    "structs/cover4.colony.glb": ("struct.cover4.colony", cover4_colony),
+    "structs/cover4.scrap.glb": ("struct.cover4.scrap", cover4_scrap),
     "structs/wall4.colony.glb": ("struct.wall4.colony", wall4_colony),
     "structs/wall4.scrap.glb": ("struct.wall4.scrap", wall4_scrap),
     "structs/corner.colony.glb": ("struct.corner.colony", corner_colony),

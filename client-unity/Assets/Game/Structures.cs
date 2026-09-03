@@ -64,10 +64,15 @@ namespace SpaceAdventure.Game
             _root.transform.SetParent(_parent, false);
             if (colliders == null) return;
 
+            // Phase 9: BOX colliders no longer get a visual here — zone
+            // layouts derive both the colliders and the kit-piece props from
+            // one source (server defs/layout.go), so the props message
+            // carries every wall's real model and the stretched-unit-box era
+            // is over. Spheres (cover posts) keep their path: no kit piece
+            // replaces them yet.
             foreach (Sim.Collider c in colliders)
             {
                 if (c.Kind == Sim.ColliderKind.Sphere) AddSphere(c);
-                else AddBox(c);
             }
         }
 
@@ -129,18 +134,6 @@ namespace SpaceAdventure.Game
         /// on a sphere world every wall has a different idea of which way is
         /// down.
         /// </summary>
-        private void AddBox(Sim.Collider c)
-        {
-            Vector3 up = TerrainMesh.ToUnity(Quat.Rotate(c.Rot, new Vec3(0, 1, 0)));
-            Vector3 fwd = TerrainMesh.ToUnity(Quat.Rotate(c.Rot, new Vec3(0, 0, 1)));
-
-            GameObject go = Mount("struct.wall", c);
-            go.transform.rotation = Quaternion.LookRotation(fwd, up);
-            go.transform.position = TerrainMesh.ToUnity(c.Center) - up * (float)c.Half.Y;
-            go.transform.localScale = new Vector3(
-                (float)c.Half.X * 2f, (float)c.Half.Y * 2f, (float)c.Half.Z * 2f);
-        }
-
         /// <summary>
         /// struct.post is a unit-RADIUS sphere centred on the origin, so it
         /// takes the collider's centre directly and a uniform scale. Only

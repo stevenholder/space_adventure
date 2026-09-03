@@ -262,6 +262,32 @@
    "description": "Phase 9 kit shack, Scrapyard only: 2\u00d72 cells, the leaning hut. Scrapyard skin: one thing is always crooked."
   },
   {
+   "id": "struct.cover4.scrap",
+   "file": "structs/cover4.scrap.glb",
+   "tris": 48,
+   "cell": [
+    1,
+    1
+   ],
+   "height": 2.5,
+   "license": "CC0",
+   "source": "tools/gen_kit.py",
+   "description": "Phase 9 kit barricade, 1 cell, 2.1 m \u2014 the cover-ring piece and the camp inner block. Scrapyard skin."
+  },
+  {
+   "id": "struct.cover4.colony",
+   "file": "structs/cover4.colony.glb",
+   "tris": 48,
+   "cell": [
+    1,
+    1
+   ],
+   "height": 2.5,
+   "license": "CC0",
+   "source": "tools/gen_kit.py",
+   "description": "Phase 9 kit barricade, 1 cell, 2.1 m \u2014 the cover-ring piece and the camp inner block. Colony skin."
+  },
+  {
    "id": "npc.grunt",
    "file": "chars/grunt.glb",
    "tris": 292,

@@ -119,6 +119,40 @@ namespace SpaceAdventure.Game
         private bool _rigWalk;
         private bool _rigJump;
         private bool _rigFire;
+        private bool _rigLamp;
+
+        /// <summary>
+        /// Pulls the waypoint triples out of a route JSON by hand —
+        /// JsonUtility has no nested-array support and this is rig-only.
+        /// </summary>
+        private static List<float[]> ParseWaypoints(string json)
+        {
+            var result = new List<float[]>();
+            int at = json.IndexOf("\"waypoints\"", StringComparison.Ordinal);
+            if (at < 0) return result;
+            int i = json.IndexOf('[', at) + 1;
+            while (i < json.Length)
+            {
+                int open = json.IndexOf('[', i);
+                int close = open < 0 ? -1 : json.IndexOf(']', open);
+                if (open < 0 || close < 0) break;
+                // The outer array's own closer comes before any next inner open.
+                int outerClose = json.IndexOf(']', i);
+                if (outerClose < open) break;
+                string[] parts = json.Substring(open + 1, close - open - 1).Split(',');
+                if (parts.Length == 3)
+                {
+                    result.Add(new[]
+                    {
+                        float.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture),
+                        float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
+                        float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture),
+                    });
+                }
+                i = close + 1;
+            }
+            return result;
+        }
         private float _detourSign = 1f;
 
         private bool ModalOpen =>
@@ -706,6 +740,11 @@ namespace SpaceAdventure.Game
         private System.Collections.IEnumerator SaveUiShot(string path)
         {
             yield return new WaitForSeconds(8f);
+            // -uiLamp: swing the sun onto whatever the camera ends up
+            // looking at, so geometry on the planet's night side can be
+            // reviewed (the Lambert shader answers only to the directional
+            // light — ambient tweaks do nothing). Screenshot rig only.
+            _rigLamp = Array.IndexOf(Environment.GetCommandLineArgs(), "-uiLamp") >= 0;
             // -uiPanel bags|sheet: open that panel first, so the C60 gallery
             // can capture the modals without simulated key presses. Shop is
             // excluded — it only opens off a live NPC interaction.
@@ -719,6 +758,39 @@ namespace SpaceAdventure.Game
                 if (argv[at + 1] == "account") _accountView.Show(true);
                 yield return new WaitForSeconds(1f); // refresh round trip
             }
+            // -uiRoute <path>: walk a solved route (test/out/route-*.json)
+            // before facing anything — straight lines on this planet wedge
+            // on scarps (the t16 lesson), and the camp is 271 m of scarp
+            // country away. Same walker as -uiApproach: sprint, jump when
+            // stuck.
+            int routeAt = Array.IndexOf(argv, "-uiRoute");
+            if (routeAt >= 0 && routeAt + 1 < argv.Length)
+            {
+                string json = System.IO.File.ReadAllText(argv[routeAt + 1]);
+                List<float[]> waypoints = ParseWaypoints(json);
+                Debug.Log($"ui: route has {waypoints.Count} waypoints");
+                _rigWalk = true;
+                foreach (var wp in waypoints)
+                {
+                    Vector3 goal = new Vector3(wp[0], wp[1], -wp[2]); // sim -> Unity
+                    float legEnd = Time.time + 22f;
+                    Vector3 lastEye2 = _camera.transform.position;
+                    float lastMove2 = Time.time;
+                    while (Time.time < legEnd)
+                    {
+                        Vector3 eyeN = _camera.transform.position;
+                        if ((goal - eyeN).magnitude < 6f) break;
+                        if ((eyeN - lastEye2).magnitude > 0.3f) { lastEye2 = eyeN; lastMove2 = Time.time; }
+                        _rigJump = Time.time - lastMove2 > 0.7f;
+                        _fps.FaceToward(eyeN, goal);
+                        yield return new WaitForSeconds(0.2f);
+                    }
+                }
+                _rigWalk = false;
+                _rigJump = false;
+                Debug.Log("ui: route walked");
+            }
+
             // -uiDemo: stage the combat-feedback showcase right here — two
             // local grunt bodies on the terrain ahead (same Create path as a
             // live spawn, so the same health-bar rules apply) and the same
@@ -919,6 +991,15 @@ namespace SpaceAdventure.Game
                 if (!_rigFire) yield return new WaitForSeconds(1.5f); // let a popup land
             }
             yield return new WaitForEndOfFrame();
+            if (_rigLamp)
+            {
+                var sunGo = GameObject.Find("Sun");
+                if (sunGo != null)
+                {
+                    sunGo.transform.rotation = Quaternion.LookRotation(_camera.transform.forward);
+                    yield return new WaitForEndOfFrame();
+                }
+            }
             var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
             tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
             tex.Apply();
