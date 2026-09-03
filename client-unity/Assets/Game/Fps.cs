@@ -76,6 +76,29 @@ namespace SpaceAdventure.Game
         public float PitchRadians => _pitchDegrees * Mathf.Deg2Rad;
 
         /// <summary>
+        /// Points the view at a world position (the -uiFace screenshot rig;
+        /// headless has no mouse). Sets the owned heading and pitch the same
+        /// way mouse look would have.
+        /// </summary>
+        public void FaceToward(Vector3 eye, Vector3 worldPoint)
+        {
+            Vector3 up = eye.normalized;
+            Vector3 to = worldPoint - eye;
+            float rise = Vector3.Dot(to, up);
+            // The RAW horizontal component, not Tangent() — that helper
+            // normalises, and atan2(rise, 1) pinned the pitch at the clamp
+            // (a camera staring at its own feet, and a look direction whose
+            // tangent projection walked the player anywhere but forward).
+            Vector3 horizontal = to - up * rise;
+            if (horizontal.sqrMagnitude < 1e-8f) return;
+            _heading = horizontal.normalized;
+            _headingSet = true;
+            _pitchDegrees = Mathf.Clamp(
+                -Mathf.Atan2(rise, horizontal.magnitude) * Mathf.Rad2Deg,
+                -PitchLimitDegrees, PitchLimitDegrees);
+        }
+
+        /// <summary>
         /// Samples input and rebuilds the look direction against `up`.
         /// </summary>
         public LocalInput Sample(Vec3 simUp, Vec3 simFacing)

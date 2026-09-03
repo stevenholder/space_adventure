@@ -62,6 +62,14 @@ namespace SpaceAdventure.Game
         /// </summary>
         private static string ResolveToken()
         {
+            // -token <t> overrides (C45 config-over-compiled; the screenshot
+            // rig uses it to join as a player whose saved position is where
+            // the picture needs taking).
+            string[] argv = Environment.GetCommandLineArgs();
+            for (int i = 0; i < argv.Length - 1; i++)
+            {
+                if (argv[i] == "-token") return argv[i + 1];
+            }
             const string key = "sa.token";
             string token = PlayerPrefs.GetString(key, "");
             if (string.IsNullOrEmpty(token))
@@ -106,6 +114,12 @@ namespace SpaceAdventure.Game
         // account site, redeem it for this account's game token, reconnect
         // as that player.
         private SpaceAdventure.Game.UI.AccountView _accountView;
+
+        /// <summary>Screenshot rig (-uiApproach): inject forward+sprint.</summary>
+        private bool _rigWalk;
+        private bool _rigJump;
+        private bool _rigFire;
+        private float _detourSign = 1f;
 
         private bool ModalOpen =>
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
@@ -379,6 +393,13 @@ namespace SpaceAdventure.Game
             // is reset and its position stale.
             Vec3 upPos = _seat != 0 && _rover.Ready ? _rover.State.Pos : state.Pos;
             LocalInput li = _fps.Sample(upPos.Normalized(), state.Facing);
+            if (_rigWalk)
+            {
+                li.MoveY = 1;
+                li.ActionMask |= Net.Action.Sprint;
+                if (_rigJump) li.ActionMask |= Net.Action.Jump;
+            }
+            if (_rigFire) li.FirePressed = true;
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
             // rate would put several inputs in one tick, and the server keeps
@@ -697,6 +718,205 @@ namespace SpaceAdventure.Game
                 if (argv[at + 1] == "map") _map.Toggle();
                 if (argv[at + 1] == "account") _accountView.Show(true);
                 yield return new WaitForSeconds(1f); // refresh round trip
+            }
+            // -uiDemo: stage the combat-feedback showcase right here — two
+            // local grunt bodies on the terrain ahead (same Create path as a
+            // live spawn, so the same health-bar rules apply) and the same
+            // CombatFeed calls the live hit event drives. The live path is
+            // separately proven by the event log; this exists so the LOOK is
+            // photographable on demand, near spawn, in daylight.
+            if (Array.IndexOf(argv, "-uiDemo") >= 0)
+            {
+                Vector3 eyeD = _camera.transform.position;
+                Vector3 upD = eyeD.normalized;
+                Vector3 fwdD = Vector3.ProjectOnPlane(_camera.transform.forward, upD).normalized;
+
+                EntityView PlaceGrunt(uint id, float dist, float sideDeg, ushort health)
+                {
+                    Vector3 dir = Quaternion.AngleAxis(sideDeg, upD) * fwdD;
+                    Vector3 spot = eyeD + dir * dist;
+                    Vector3 sd = spot.normalized;
+                    var simDir = new Vec3(sd.x, sd.y, -sd.z);
+                    float r = (float)_terrain.SampleRadius(simDir);
+                    Vector3 pos = sd * r;
+                    var v = _views.SpawnLocalDemo(id, EntityType.Npc, "npc.grunt", pos, -dir);
+                    v.MaxHealth = 60;
+                    v.Health = health;
+                    return v;
+                }
+
+                var g1 = PlaceGrunt(0x000F0001, 9f, -8f, 38);
+                var g2 = PlaceGrunt(0x000F0002, 13f, 14f, 12);
+                yield return new WaitForSeconds(0.4f); // let the models land
+                _fps.FaceToward(_camera.transform.position,
+                    (g1.Root.transform.position + g2.Root.transform.position) * 0.5f + upD * 1.2f);
+                yield return new WaitForSeconds(0.15f);
+
+                Vector3 up1 = g1.Root.transform.position.normalized;
+                Vector3 up2 = g2.Root.transform.position.normalized;
+                _combatFeed.Damage(g2.Root.transform.position + up2 * 1.5f, 47, true);
+                _combatFeed.Incoming(2.6);
+                yield return new WaitForSeconds(0.25f);
+                _combatFeed.Damage(g1.Root.transform.position + up1 * 1.55f, 20, false);
+                _combatFeed.HitMarker(false);
+                yield return new WaitForSeconds(0.12f);
+            }
+
+            // -uiFace target|npc|wounded: aim the camera at the nearest such
+            // entity, so a combat-feedback shot has something in frame.
+            int faceAt = Array.IndexOf(argv, "-uiFace");
+            if (faceAt >= 0 && faceAt + 1 < argv.Length)
+            {
+                string wantArg = argv[faceAt + 1];
+                ushort want = wantArg == "npc" || wantArg == "hostile" ? EntityType.Npc
+                    : wantArg == "player" ? EntityType.Player
+                    : EntityType.Target;
+                bool Match (EntityView v, string arg, ushort type) => arg switch
+                {
+                    "wounded" => v.ShowHealthBar,
+                    "hostile" => v.Type == EntityType.Npc && v.Label != "npc.quartermaster",
+                    _ => v.Type == type,
+                };
+                Vector3 eye = _camera.transform.position;
+                EntityView best = null;
+                float bestD = float.MaxValue;
+                // "wounded" can flicker out (a kill respawns the target at
+                // full health), so poll for one instead of sampling once.
+                for (float waited = 0; best == null && waited < 12f; waited += 0.25f)
+                {
+                    foreach (EntityView v in _views.All)
+                    {
+                        if (v.Root == null || v.Id == _net.EntityId) continue;
+                        if (!Match(v, wantArg, want)) continue;
+                        float d = (v.Root.transform.position - eye).sqrMagnitude;
+                        if (d < bestD) { bestD = d; best = v; }
+                    }
+                    if (best == null) yield return new WaitForSeconds(0.25f);
+                }
+                if (best != null)
+                {
+                    // The goal is a FIXED copy: a kill-and-respawn cycle can
+                    // move or recycle the live Root mid-walk, and a walk
+                    // toward a ghost climbs the wrong hill.
+                    Vector3 goal = best.Root.transform.position;
+                    _fps.FaceToward(eye, goal);
+                    Debug.Log($"ui: facing {wantArg} {best.Id} at {Mathf.Sqrt(bestD):F0} m");
+
+                    // -uiApproach <m>: walk toward the faced spot until within
+                    // that many metres (the planet's horizon from eye height
+                    // is ~23 m, so anything worth photographing has to be
+                    // closed to arm's reach first).
+                    int appAt = Array.IndexOf(argv, "-uiApproach");
+                    if (appAt >= 0 && appAt + 1 < argv.Length &&
+                        float.TryParse(argv[appAt + 1], out float closeTo))
+                    {
+                        float deadline = Time.time + 150f;
+                        _rigWalk = true;
+                        Vector3 lastEye = _camera.transform.position;
+                        float lastMoveAt = Time.time;
+                        float detourUntil = 0f;
+                        while (Time.time < deadline)
+                        {
+                            Vector3 eyeNow = _camera.transform.position;
+                            Vector3 to = goal - eyeNow;
+                            if (to.magnitude <= closeTo) break;
+                            // Wedged (the quartermaster stands on this exact
+                            // bearing)? Sidestep: aim 40 degrees off a moment.
+                            if ((eyeNow - lastEye).magnitude > 0.3f) { lastEye = eyeNow; lastMoveAt = Time.time; }
+                            else if (Time.time - lastMoveAt > 0.8f && Time.time > detourUntil)
+                            {
+                                detourUntil = Time.time + 3f;
+                                lastMoveAt = Time.time;
+                                _detourSign = -_detourSign; // alternate sides around obstacles
+                            }
+                            // Jump at whatever we are wedged on — a scarp
+                            // under max_slope yields to it (the t29 walker's
+                            // trick, ported).
+                            _rigJump = Time.time - lastMoveAt > 0.6f || Time.time < detourUntil;
+                            Vector3 aimPoint = goal;
+                            if (Time.time < detourUntil)
+                            {
+                                Vector3 up = eyeNow.normalized;
+                                aimPoint = eyeNow + Quaternion.AngleAxis(_detourSign * 40f, up) * to;
+                            }
+                            _fps.FaceToward(eyeNow, aimPoint);
+                            yield return new WaitForSeconds(0.2f);
+                        }
+                        _rigWalk = false;
+                        _rigJump = false;
+                        Debug.Log($"ui: approached to {(goal - _camera.transform.position).magnitude:F0} m");
+
+                        // Re-pick at arrival: the thing wounded NOW may be a
+                        // different entity than the one that led us here —
+                        // and -uiReface <kind> can retarget entirely (walk to
+                        // the gunner, then photograph what it is shooting).
+                        int refAt = Array.IndexOf(argv, "-uiReface");
+                        string refaceArg = refAt >= 0 && refAt + 1 < argv.Length ? argv[refAt + 1] : wantArg;
+                        ushort refaceWant = refaceArg == "npc" ? EntityType.Npc
+                            : refaceArg == "player" ? EntityType.Player
+                            : EntityType.Target;
+                        EntityView again = null;
+                        float againScore = float.MaxValue;
+                        for (float waited = 0; again == null && waited < 12f; waited += 0.25f)
+                        {
+                            foreach (EntityView v in _views.All)
+                            {
+                                if (v.Root == null || v.Id == _net.EntityId) continue;
+                                if (!Match(v, refaceArg, refaceWant)) continue;
+                                // Hostiles rank by REMAINING HEALTH: a burst
+                                // aimed at a 12 hp leftover ends before the
+                                // camera fires; a full grunt keeps popping.
+                                float d = refaceArg == "hostile"
+                                    ? -v.Health
+                                    : (v.Root.transform.position - _camera.transform.position).sqrMagnitude;
+                                if (d < againScore) { againScore = d; again = v; }
+                            }
+                            if (again == null) yield return new WaitForSeconds(0.25f);
+                        }
+                        if (again != null && again.Root != null)
+                        {
+                            _fps.FaceToward(_camera.transform.position, again.Root.transform.position);
+                            Debug.Log($"ui: refaced {again.Id} health {again.Health}");
+
+                            // -uiFire <secs>: reload, then hold the trigger on
+                            // the refaced entity. Our own shots put damage
+                            // numbers, hit markers and a draining health bar
+                            // on screen — the C61 picture, from our own gun.
+                            int fireAt2 = Array.IndexOf(argv, "-uiFire");
+                            if (fireAt2 >= 0 && fireAt2 + 1 < argv.Length &&
+                                float.TryParse(argv[fireAt2 + 1], out float fireSecs))
+                            {
+                                _net.Send(Character.ReloadCmd(NextCmdSeq()));
+                                yield return new WaitForSeconds(0.6f);
+                                _rigFire = true;
+                                // Burn the burst RETARGETING the healthiest
+                                // living hostile — one grunt dies in three
+                                // hits and a burst aimed at a corpse takes a
+                                // photo of nothing. Falls through to capture
+                                // still firing.
+                                float stopAt = Time.time + fireSecs;
+                                while (Time.time < stopAt)
+                                {
+                                    EntityView tgt = null;
+                                    foreach (EntityView v in _views.All)
+                                    {
+                                        if (v.Root == null || v.Id == _net.EntityId) continue;
+                                        if (!Match(v, refaceArg, refaceWant)) continue;
+                                        if (tgt == null || v.Health > tgt.Health) tgt = v;
+                                    }
+                                    if (tgt != null)
+                                    {
+                                        Vector3 up2 = _camera.transform.position.normalized;
+                                        _fps.FaceToward(_camera.transform.position,
+                                            tgt.Root.transform.position + up2 * 0.9f);
+                                    }
+                                    yield return new WaitForSeconds(0.1f);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!_rigFire) yield return new WaitForSeconds(1.5f); // let a popup land
             }
             yield return new WaitForEndOfFrame();
             var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);

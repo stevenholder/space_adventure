@@ -304,6 +304,24 @@ namespace SpaceAdventure.Game
             }
         }
 
+        /// <summary>
+        /// Screenshot rig only: a purely LOCAL body, never present in any
+        /// snapshot, so Render never touches it. Same Create path as a real
+        /// spawn — same model, same health-bar rules.
+        /// </summary>
+        public EntityView SpawnLocalDemo(uint id, ushort type, string label, Vector3 pos, Vector3 fwd)
+        {
+            OnSpawn(new Spawn { EntityId = id, EntityType = type, Data = WireReader.Utf8.GetBytes(label) });
+            var view = Create(id);
+            _views[id] = view;
+            Vector3 up = pos.normalized;
+            view.Root.transform.position = pos;
+            if (fwd.sqrMagnitude > 1e-8f)
+                view.Root.transform.rotation = Quaternion.LookRotation(
+                    Vector3.ProjectOnPlane(fwd, up).normalized, up);
+            return view;
+        }
+
         private EntityView Create(uint id)
         {
             _pendingTypes.TryGetValue(id, out ushort type);
