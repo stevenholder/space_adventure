@@ -1333,6 +1333,112 @@ Panels: 120 ms slide+fade in, none out (closing is instant — snappy
 beats smooth). Damage numbers as above. Nothing else animates; restraint
 IS the budget (C65).
 
+## World art style guide — structures and points of interest (Phase 9)
+
+Buildings tell you who built them before you read a single label. Every
+structure kit piece and every POI layout is reviewed against THIS
+section; a piece that needs a color, module or rule not listed here adds
+it here first — the UI style guide's contract, extended to the world.
+
+### The two builders
+
+Everything standing on the planet was built by one of two hands, and the
+difference must read at silhouette range:
+
+| | **Scrapyard** (hostile) | **Colony** (civilised) |
+|---|---|---|
+| who | raiders, squatters, the camp | the quartermaster, spawn, future vendors |
+| shapes | leaning, asymmetric, welded-on | level, modular, repeated |
+| edges | jagged toplines, exposed frames | clean copings, closed corners |
+| color | rust `#8C4A2F`, scorch `#3A2E28`, hazard `#D9A013` stripes | hull `#B8BDC4`, panel `#5E6A75`, trim `#2F6E8C` |
+| light | flame-amber `#FFAE19` point glows | cool white `#CFE8F2` strips |
+| tell | one thing is always CROOKED | one thing is always SYMMETRIC |
+
+Shared planet palette stays beneath both: terrain greens/greys as
+generated, `ink #10131A` outlines on everything (the comic line weight
+the UI already committed to). Flat-shaded, vertex colors only, no
+textures — color changes happen at polygon edges, which is what keeps
+tri budgets honest.
+
+### Silhouette and the 23 m horizon
+
+Eye height on a 150 m planet sees the ground vanish at ~23 m. A POI
+that cannot be seen over the curve does not exist as gameplay. So:
+
+- **Every POI carries exactly one mast** — its tallest element, a
+  distinct silhouette per POI kind (dish, chimney, antenna cluster,
+  watchtower). Height sets discovery range:
+  `visible ≈ 22.6 m + √(300·h)` → 6 m mast ≈ 65 m, 12 m ≈ 83 m,
+  20 m ≈ 100 m. Standard POI mast: **10–14 m**. Nothing else at the
+  POI exceeds half the mast — one skyline spike per site, so two POIs
+  are never confused on the horizon.
+- Masts glow: a 1-triangle emissive-colored tip in the faction light
+  color. At night (most of the planet, most of the time) the tip IS the
+  landmark.
+- The compass strip names POIs the moment their mast would be visible,
+  not before — discovery matches sight.
+
+### The kit of parts (no more stretched boxes)
+
+The camp's walls today are ONE unit box scaled to 32 m — bands smear,
+corners interpenetrate, geometry clips. The kit replaces stretching
+with **tiling**:
+
+- **Module grid: 4 m.** Every kit piece occupies a whole number of 4 m
+  cells in plan. A 32 m wall is 8 wall modules, not one stretched box.
+- Pieces (per faction skin, same footprints): `wall4` (4×0.8×3 m),
+  `corner` (post, 1.2×1.2×3.6 m — corners belong to posts, walls BUTT
+  INTO them and never meet each other), `gate4` (wall with a 2.4 m
+  opening), `tower` (2×2 cell, 8 m), `mast` (1 cell, 10–14 m), `hab`
+  (2×2 cell closed hut, Colony), `shack` (2×2, leaning, Scrapyard),
+  plus the existing props (barrels, crates, generator, dish, bones).
+- **Ground skirt rule**: every piece's base extends 0.3 m below y=0 as
+  a plinth wider than the piece — the flatten disc is never perfectly
+  flat at the falloff band, and the skirt is what hides the seam. No
+  piece may show its underside from any standing viewpoint.
+- **Clipping rules**: pieces may only touch at grid faces; nothing
+  interpenetrates. Decorative lean (Scrapyard) happens INSIDE a piece's
+  own cell, never across a boundary. The verify gate checks kit GLBs
+  fit their declared cell bounds.
+- Budgets: wall/corner/gate ≤ 120 tris, tower/hab/shack ≤ 400, mast
+  ≤ 200. A whole POI including props stays under 6,000.
+
+Colliders remain the server's, authored per zone as today — the kit is
+VISUAL. The mapping rule inverts though: the zone names kit placements
+and the colliders are derived from the same layout data, so the wall
+you see and the wall you hit cannot drift apart.
+
+### POI anatomy (what the solver places)
+
+Every POI template declares, in its local frame:
+
+1. **The mast** (landmark, see above) — at the site's visual center.
+2. **An approach** — one obvious opening facing the likeliest arrival
+   bearing; the solver rotates the template so the gate faces the
+   nearest travel corridor (spawn, road, or neighbouring POI).
+3. **A cover ring** — waist-high (1.2 m) pieces between the opening and
+   the core, spaced 3–6 m, so the fight has geometry: no naked charge,
+   no safe snipe.
+4. **The core** — what you came for: loot crates, a vendor, an
+   objective marker. Never visible from outside the walls; the POI
+   must be ENTERED.
+5. **Dressing density**: 1 prop cluster per 8×8 m cell, minimum 3
+   clusters — an empty compound reads as unfinished, not abandoned.
+
+### Placement (the solver's contract)
+
+The manual site-sweeps in camp.json/range.json become code:
+
+- Clearance: a site must clear every world feature (spawn, zones,
+  landmarks, craters, other POIs) by `flatten_radius + flatten_falloff
+  + 10 m` — the camp.json lesson ("anything the terrain audit checks
+  for has to be in the avoid set") as an algorithm.
+- Slope: mean slope over the flatten disc under 12° before flattening.
+- Spacing: POI masts at least 120 m apart along the surface, so at most
+  one skyline spike per view.
+- Determinism: solver runs from the world seed; same seed, same world.
+  Output is committed zone JSON — reviewed, not runtime magic.
+
 ## Phase 2 — items, weapons, combat, interaction
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules
