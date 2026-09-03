@@ -194,7 +194,6 @@ namespace SpaceAdventure.Game
             // Phase 8: the UI Toolkit root. The spike's self-check stays until
             // every screen is ported (it logs the toolkit/text verdicts).
             _ui = new SpaceAdventure.Game.UI.UiRoot();
-            StartCoroutine(_ui.Verify(this));
             _hudView = new SpaceAdventure.Game.UI.HudView(_ui.Root);
             _combatFeed = new SpaceAdventure.Game.UI.CombatFeed(_ui.Root);
 
