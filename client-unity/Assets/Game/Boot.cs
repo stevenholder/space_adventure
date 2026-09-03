@@ -179,6 +179,11 @@ namespace SpaceAdventure.Game
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
+            // Phase 8 task 1 spike: prove runtime-only UI Toolkit in the
+            // packaged player (UiRoot.Verify logs the verdict).
+            var uiRoot = new SpaceAdventure.Game.UI.UiRoot();
+            StartCoroutine(uiRoot.Verify(this));
+
             // No vsync, capped at 120. Vsync waits on whatever refresh the OS
             // reports, and a virtual or remote display can report ~4 Hz — the
             // C46 measurement found the player pinned at 6 fps by exactly
