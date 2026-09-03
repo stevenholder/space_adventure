@@ -92,12 +92,6 @@ namespace SpaceAdventure.Game
         private readonly RoverPredictor _rover = new RoverPredictor();
         private readonly ShipPredictor _ship = new ShipPredictor();
 
-        // Phase 7 — the account link panel (F1): type a code minted on the
-        // account site, redeem it for this account's game token, reconnect
-        // as that player. IMGUI like everything else.
-        private bool _accountOpen;
-        private string _accountCode = "";
-        private string _accountStatus = "";
 
         // Phase 8 — the UI Toolkit layer.
         private SpaceAdventure.Game.UI.UiRoot _ui;
@@ -108,8 +102,14 @@ namespace SpaceAdventure.Game
         private SpaceAdventure.Game.UI.SheetView _sheetView;
         private SpaceAdventure.Game.UI.PromptView _promptView;
 
+        // Phase 7 — the account link panel (F1): type a code minted on the
+        // account site, redeem it for this account's game token, reconnect
+        // as that player.
+        private SpaceAdventure.Game.UI.AccountView _accountView;
+
         private bool ModalOpen =>
-            (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) || (_sheetView?.Open ?? false);
+            (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
+            (_sheetView?.Open ?? false) || (_accountView?.Open ?? false);
 
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
@@ -281,13 +281,16 @@ namespace SpaceAdventure.Game
             _viewModel = new ViewModel(cam, _material, vmLayer, transform, _assets);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
-            _map = new MapView();
+            _map = new MapView(_ui.Root);
             _character = new Character();
             _interact = new Interaction(_views, _character);
             _shopView = new SpaceAdventure.Game.UI.ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
             _bagsView = new SpaceAdventure.Game.UI.BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
             _sheetView = new SpaceAdventure.Game.UI.SheetView(_ui.Root, _character);
             _promptView = new SpaceAdventure.Game.UI.PromptView(_ui.Root);
+            _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
+                code => { _accountView.SetStatus("redeeming…"); StartCoroutine(RedeemLinkCode(code)); },
+                () => _accountView.Show(false));
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -339,8 +342,8 @@ namespace SpaceAdventure.Game
             if (keys?.f3Key.wasPressedThisFrame == true) _hud.DebugOpen = !_hud.DebugOpen;
             if (keys?.f1Key.wasPressedThisFrame == true)
             {
-                _accountOpen = !_accountOpen;
-                _accountStatus = "";
+                _accountView.Show(!_accountView.Open);
+                _accountView.SetStatus("");
             }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
             if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
@@ -351,7 +354,7 @@ namespace SpaceAdventure.Game
             // you can read a bearing off it and walk without closing it.
             // The map and the shop both want the pointer. Movement keeps
             // working under either.
-            bool wantsCursor = _map.Open || ModalOpen || _accountOpen;
+            bool wantsCursor = _map.Open || ModalOpen;
             if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.None;
@@ -502,6 +505,14 @@ namespace SpaceAdventure.Game
             if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
 
             _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
+
+            UpdateFlightReadout();
+
+            State ms = _predictor.State;
+            _map.Draw(_terrain,
+                      TerrainMesh.ToUnity(ms.Pos),
+                      TerrainMesh.ToUnity(ms.Facing),
+                      MapMarkers());
         }
 
         /// <summary>
@@ -554,8 +565,9 @@ namespace SpaceAdventure.Game
         /// terrain under the ship, regime, role. IMGUI like everything else
         /// — no assets, C47 holds.
         /// </summary>
-        private void DrawFlightHud()
+        private void UpdateFlightReadout()
         {
+            if (SeatKind != EntityType.Ship) { _hudView.SetFlight(null); return; }
             bool pilot = Piloting;
             ShipSimState s = _ship.Ready ? _ship.State : default;
             Vec3 p;
@@ -572,37 +584,13 @@ namespace SpaceAdventure.Game
                 v = Vec3.Zero;
                 space = p.Length >= FlightRules.SpaceRadius;
             }
-            else return;
+            else { _hudView.SetFlight(null); return; }
 
             Vec3 dir = p.Normalized();
             double alt = p.Length - _terrain.SampleRadius(dir);
-            string line = pilot
+            _hudView.SetFlight(pilot
                 ? $"{v.Length,6:F1} m/s   alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PILOT"
-                : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER";
-            GUI.Label(new Rect(Screen.width * 0.5f - 180, 18, 360, 24), line);
-        }
-
-        /// <summary>
-        /// The F1 account panel: redeem a link code from the account site
-        /// (docs/ROADMAP.md Phase 7) and reconnect as that account's player.
-        /// </summary>
-        private void DrawAccountPanel()
-        {
-            float w = 360, h = 170;
-            var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.35f, w, h);
-            GUI.Box(rect, "ACCOUNT LINK");
-            GUI.Label(new Rect(rect.x + 16, rect.y + 28, w - 32, 40),
-                "Mint a code on the account site, type it here.");
-            _accountCode = GUI.TextField(new Rect(rect.x + 16, rect.y + 66, w - 32, 26),
-                _accountCode, 8).ToUpperInvariant();
-            if (GUI.Button(new Rect(rect.x + 16, rect.y + 100, 120, 28), "Link"))
-            {
-                _accountStatus = "redeeming…";
-                StartCoroutine(RedeemLinkCode(_accountCode));
-            }
-            if (GUI.Button(new Rect(rect.x + 144, rect.y + 100, 90, 28), "Close"))
-                _accountOpen = false;
-            GUI.Label(new Rect(rect.x + 16, rect.y + 136, w - 32, 26), _accountStatus);
+                : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER");
         }
 
         /// <summary>
@@ -627,20 +615,20 @@ namespace SpaceAdventure.Game
 
             if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
             {
-                _accountStatus = req.responseCode == 401
+                _accountView.SetStatus(req.responseCode == 401
                     ? "unknown or expired code"
-                    : $"failed: {req.error}";
+                    : $"failed: {req.error}");
                 yield break;
             }
             string text = req.downloadHandler.text;
             int i = text.IndexOf("\"token\":\"", StringComparison.Ordinal);
-            if (i < 0) { _accountStatus = "bad response"; yield break; }
+            if (i < 0) { _accountView.SetStatus("bad response"); yield break; }
             i += 9;
             string token = text.Substring(i, text.IndexOf('"', i) - i);
 
             PlayerPrefs.SetString("sa.token", token);
             PlayerPrefs.Save();
-            _accountStatus = "linked — reconnecting…";
+            _accountView.SetStatus("linked — reconnecting…");
             Reconnect(token);
         }
 
@@ -703,6 +691,8 @@ namespace SpaceAdventure.Game
             {
                 if (argv[at + 1] == "bags") OpenPanel(_bagsView, _sheetView);
                 if (argv[at + 1] == "sheet") OpenPanel(_sheetView, _bagsView);
+                if (argv[at + 1] == "map") _map.Toggle();
+                if (argv[at + 1] == "account") _accountView.Show(true);
                 yield return new WaitForSeconds(1f); // refresh round trip
             }
             yield return new WaitForEndOfFrame();
@@ -1069,17 +1059,7 @@ namespace SpaceAdventure.Game
         private void OnGUI()
         {
             if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
-            if (_worldBuilt && SeatKind == EntityType.Ship) DrawFlightHud();
-            if (_accountOpen) DrawAccountPanel();
             _hud?.Draw(_net, _predictor, _character);
-            if (_map == null || !_worldBuilt) return;
-
-
-            State s = _predictor.State;
-            _map.Draw(_terrain,
-                      TerrainMesh.ToUnity(s.Pos),
-                      TerrainMesh.ToUnity(s.Facing),
-                      MapMarkers());
         }
 
         /// <summary>

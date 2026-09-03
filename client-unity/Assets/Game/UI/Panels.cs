@@ -236,6 +236,44 @@ namespace SpaceAdventure.Game.UI
         }
     }
 
+    /// <summary>
+    /// The F1 account panel: redeem a link code minted on the account site.
+    /// The redeem coroutine stays in Boot (it owns the network); this view
+    /// only collects the code and shows status.
+    /// </summary>
+    public sealed class AccountView : ModalView
+    {
+        private readonly TextField _code;
+        private readonly Label _status;
+
+        public AccountView(VisualElement root, Action<string> onLink, Action onClose)
+            : base(root, "Account link", 360)
+        {
+            _code = new TextField { maxLength = 8 };
+            _code.style.fontSize = 16;
+            _code.style.marginBottom = 8;
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            var link = new Button(() => onLink(_code.value.ToUpperInvariant())) { text = "LINK" };
+            ItemCard.StyleButton(link, false);
+            var close = new Button(onClose) { text = "CLOSE" };
+            ItemCard.StyleButton(close, true);
+            row.Add(link);
+            row.Add(close);
+            _status = Styles.Display_("", 13, Styles.Dust);
+            _status.style.marginTop = 8;
+
+            Box.Add(Styles.Display_("Mint a code on the account site, type it here.", 13, Styles.Dust));
+            Box.Add(_code);
+            Box.Add(row);
+            Box.Add(_status);
+        }
+
+        public void SetStatus(string text) => _status.text = text;
+
+        protected override void Fill(VisualElement body) { }
+    }
+
     /// <summary>The character sheet: read-only stats.</summary>
     public sealed class SheetView : ModalView
     {

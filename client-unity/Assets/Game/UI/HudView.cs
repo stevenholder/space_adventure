@@ -19,6 +19,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Label _ammoReserve;
         private readonly Label _credits;
         private readonly VisualElement _compass;
+        private readonly Label _flight;
         private readonly List<(Label label, double bearing)> _markers = new();
 
         public HudView(VisualElement root)
@@ -88,6 +89,15 @@ namespace SpaceAdventure.Game.UI
             tick.style.backgroundColor = Styles.Amber;
             _compass.Add(tick);
             root.Add(_compass);
+
+            // ---- flight readout, under the compass while seated --------------
+            _flight = Styles.Display_("", 14, Styles.Cream);
+            _flight.style.position = Position.Absolute;
+            _flight.style.top = 52;
+            _flight.style.left = Length.Percent(50);
+            _flight.style.translate = new Translate(Length.Percent(-50), 0);
+            _flight.style.display = DisplayStyle.None;
+            root.Add(_flight);
         }
 
         public void SetVitals(int health, int maxHealth)
@@ -104,6 +114,13 @@ namespace SpaceAdventure.Game.UI
         {
             _ammoMag.text = armed ? mag.ToString() : "--";
             _ammoReserve.text = armed ? $"/ {reserve}" : "";
+        }
+
+        /// <summary>Flight readout; null hides it (on foot).</summary>
+        public void SetFlight(string line)
+        {
+            _flight.style.display = string.IsNullOrEmpty(line) ? DisplayStyle.None : DisplayStyle.Flex;
+            _flight.text = line ?? "";
         }
 
         public void SetCredits(long credits) =>
