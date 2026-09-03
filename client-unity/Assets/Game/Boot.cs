@@ -508,6 +508,10 @@ namespace SpaceAdventure.Game
 
             UpdateFlightReadout();
 
+            _hudView.SetLog(_hud.Lines);
+            _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
+            _hudView.UpdateHealthBars(_camera, _views, !_map.Open);
+
             State ms = _predictor.State;
             _map.Draw(_terrain,
                       TerrainMesh.ToUnity(ms.Pos),
@@ -1056,11 +1060,7 @@ namespace SpaceAdventure.Game
                       $"tickHz={_net.TickHz} spawn={_predictor.State.Pos.Length:F1} m from centre");
         }
 
-        private void OnGUI()
-        {
-            if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
-            _hud?.Draw(_net, _predictor, _character);
-        }
+
 
         /// <summary>
         /// Everything on the map: the live entities, plus the spawn point.
