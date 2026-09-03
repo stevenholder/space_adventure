@@ -83,6 +83,7 @@ type Server struct {
 	store *store.Store
 
 	upgrader websocket.Upgrader
+	gate     *gatekeeper
 
 	mu       sync.Mutex
 	nextID   uint32
@@ -188,19 +189,35 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 		}
 	}
 
+	// Phase 4: one rover, parked deterministically near spawn (GDD "Ground
+	// drive model", "Deterministic spawn"). A world entity like any other —
+	// its step is registered by Kind, its def carries the asset.
+	worldID++
+	roverPos, roverQuat := sim.SpawnRover(t)
+	rover := &sim.Ent{
+		ID:     worldID,
+		Kind:   sim.EntityKind(protocol.EntityTypeVehicle),
+		Pos:    [3]float64(roverPos),
+		Quat:   [4]float64(roverQuat),
+		Health: reg.Entities["vehicle"].MaxHealth,
+		Def:    "vehicle",
+		Data:   sim.NewVehicleState(),
+	}
+	world.Add(rover)
+	worldEnts = append(worldEnts, rover)
+
 	s := &Server{
 		terrain: t,
 		seed:    seed,
 		tickHz:  sim.TickHz,
 		upgrader: websocket.Upgrader{
-			// Known deferral: any Origin is accepted. Fine while the only
-			// clients are the packaged build and the test harnesses against a
-			// kind-local cluster — and the same trust posture as the identity
-			// token (docs/PROTOCOL.md "Identity token": anyone who has it IS
-			// that player). Both must change together before any public
-			// exposure.
-			CheckOrigin: func(*http.Request) bool { return true },
+			// Phase 6: no Origin (native clients) passes; a browser origin
+			// must be on SA_ALLOWED_ORIGINS (gatekeeper.go). The identity
+			// token stays an unverified bearer per the Deferred table —
+			// its trigger is "players other than us", not "a LAN exists".
+			CheckOrigin: checkOrigin,
 		},
+		gate:      newGatekeeper(),
 		clients:   make(map[uint32]*client),
 		reg:       reg,
 		world:     world,
@@ -253,6 +270,10 @@ func entityDefKind(k sim.EntityKind) string {
 		return "npc"
 	case protocol.EntityTypeTarget:
 		return "target"
+	case protocol.EntityTypeVehicle:
+		return "vehicle"
+	case protocol.EntityTypeShip:
+		return "ship"
 	default:
 		return "player"
 	}
@@ -260,6 +281,17 @@ func entityDefKind(k sim.EntityKind) string {
 
 // HandleWS upgrades /ws and runs the connection's reader and writer.
 func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
+	// LAN exposure gate (Phase 6, C52): per-IP cap and join rate, refused
+	// before the upgrade so a flood costs one HTTP response per attempt.
+	// HandleWS blocks for the connection's whole life, so the deferred
+	// release fires exactly when the socket dies.
+	ip := clientIP(r)
+	if !s.gate.admit(ip, time.Now()) {
+		http.Error(w, "too many connections from this address", http.StatusTooManyRequests)
+		return
+	}
+	defer s.gate.release(ip)
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return // the upgrader already answered
@@ -272,6 +304,17 @@ func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadDeadline(time.Now().Add(silentTimeout))
 	go c.writer()
 	c.reader() // blocks until the connection dies
+}
+
+// Registry exposes the content registry for the account site's player
+// minting (Phase 7) — read-only after New.
+func (s *Server) Registry() *defs.Registry { return s.reg }
+
+// OnlineCount is the landing page's live-connection statistic (Phase 7).
+func (s *Server) OnlineCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.clients)
 }
 
 // Run starts the fixed-tick loop and stops it when ctx is done.
@@ -321,10 +364,47 @@ func (s *Server) tick() {
 	s.tickNo++
 	tick := s.tickNo
 	s.list = s.list[:0]
+	// Vehicle inputs are zero unless a seated driver writes them below —
+	// which is the whole of driver-disconnect handling: no driver, zero
+	// input, the same step coasts the rover to a stop (GDD "Control
+	// handoff").
+	for _, e := range s.worldEnts {
+		switch v := e.Data.(type) {
+		case *sim.VehicleState:
+			v.Throttle, v.Steer = 0, 0
+		case *sim.ShipState:
+			v.Thrust, v.Roll, v.YawRate, v.PitchRate, v.Boost = 0, 0, 0, 0, false
+		}
+	}
 	for _, c := range s.clients {
-		c.step(s.terrain, s.colliders)
+		switch {
+		case c.seat == 0:
+			c.step(s.terrain, s.colliders)
+			s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
+		case c.seat == 1:
+			// The control seat's input drives the vehicle; the body itself
+			// is attached, not co-simulated (GDD "Seats and occupancy").
+			// Mode is a declaration, not authority: occupancy AND the
+			// vehicle's kind decide the interpretation (PROTOCOL "input") —
+			// a rover driver's v[0..1] are throttle/steer, a ship pilot's
+			// v[0..3] are thrust/roll/yaw_rate/pitch_rate plus the boost
+			// bit.
+			if ent, _ := s.vehicleByID(c.seatVehicle); ent != nil {
+				if w := c.input.Load(); w != nil {
+					switch v := ent.Data.(type) {
+					case *sim.VehicleState:
+						v.Throttle, v.Steer = float64(w.MoveX), float64(w.MoveY)
+					case *sim.ShipState:
+						v.Thrust = float64(w.MoveX)
+						v.Roll = float64(w.MoveY)
+						v.YawRate = float64(w.LookDir[0])
+						v.PitchRate = float64(w.LookDir[1])
+						v.Boost = w.ActionMask&protocol.ActionBoost != 0
+					}
+				}
+			}
+		}
 		c.recordCmdTick(tick)
-		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		s.list = append(s.list, c)
 	}
 	s.stepNPCs(tick)
@@ -340,6 +420,20 @@ func (s *Server) tick() {
 	})
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
+	}
+	// Seated bodies compose from the POST-step vehicle transform, so the
+	// snapshot's seat position and the vehicle it rides never disagree by a
+	// tick. Their lag-comp history records the composed position.
+	for _, c := range s.list {
+		if c.seat == 0 {
+			continue
+		}
+		if ent, bank := s.vehicleByID(c.seatVehicle); bank != nil {
+			c.entity.State.Pos = sim.ComposeSeat(ent.Kind, sim.Vec(ent.Pos), sim.Quat(ent.Quat), c.seat)
+			c.entity.State.Vel = sim.Vec(ent.Vel)
+			c.entity.State.Grounded = ent.Flags&protocol.FlagGrounded != 0
+		}
+		s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 	}
 	// Announce anything created or destroyed this tick before encoding, so a
 	// client never receives a snapshot row for an entity it has not been told
@@ -384,15 +478,24 @@ func (s *Server) encodeSnapshot(tick uint32) []byte {
 	b = protocol.AppendSnapshotHeader(b, tick, 0, uint16(n))
 	for _, c := range s.list {
 		q := c.entity.State.OrientationQuat()
+		if c.seat != 0 {
+			// A seated body's quat is the vehicle's (GDD composition rule);
+			// pos/vel were composed after the world stepped.
+			if ent, _ := s.vehicleByID(c.seatVehicle); ent != nil {
+				q = sim.Quat(ent.Quat)
+			}
+		}
 		p, v := c.entity.State.Pos, c.entity.State.Vel
 		b = protocol.AppendEntity(b, protocol.Entity{
-			ID:     c.entity.ID,
-			Pos:    v3f32(p),
-			Quat:   v4f32([4]float64(q)),
-			Vel:    v3f32(v),
-			Health: healthU16(c.entity.Health),
-			Flags:  c.flags(tick),
-			PitchQ: c.pitchQ(),
+			ID:       c.entity.ID,
+			Pos:      v3f32(p),
+			Quat:     v4f32([4]float64(q)),
+			Vel:      v3f32(v),
+			ParentID: c.seatVehicle,
+			Seat:     c.seat,
+			Health:   healthU16(c.entity.Health),
+			Flags:    c.flags(tick),
+			PitchQ:   c.pitchQ(),
 		})
 	}
 	for _, e := range s.worldEnts {
@@ -523,6 +626,11 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	// After publishing, so every client that must hear the joiner's weapon
 	// is already in s.clients.
 	s.syncEquipped(c)
+
+	// An owner's ship follows them across reconnects (GDD "Ownership":
+	// spawn on join). After publishing, so the spawn broadcast lands on a
+	// registered client.
+	s.syncOwnedShip(c)
 }
 
 // leave removes c's entity from the world and tells the remaining clients.
@@ -533,6 +641,7 @@ func (s *Server) leave(c *client) {
 		return
 	}
 	id := c.entity.ID
+	s.freeSeat(c)
 	delete(s.clients, id)
 	s.history.Forget(id)
 	s.mu.Unlock()
@@ -581,6 +690,11 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		s.mu.Lock()
 		s.broadcast(f)
 		s.mu.Unlock()
+	}
+	// A successful buy may have put a ship in the inventory; make the world
+	// agree (GDD "Ownership": spawn on purchase). Idempotent.
+	if req.Opcode == protocol.OpShopBuy && result.Status == protocol.StatusOK {
+		s.syncOwnedShip(c)
 	}
 	return result
 }

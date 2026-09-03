@@ -166,7 +166,9 @@ case "$cmd" in
       # ScriptAssemblies. Newtonsoft is one, and Assets/Net/Defs.cs needs it.
       while IFS= read -r f; do echo "-r:\"$f\""; done < <(
         find "$here/Library/PackageCache" -name 'Newtonsoft.Json.dll' 2>/dev/null | head -1)
-      for f in "$here"/Assets/Game/*.cs "$here"/Assets/Game/Core/*.cs; do echo "\"$f\""; done
+      # Recursive: Game/ grows subfolders (Core/, UI/) and a glob that
+      # names them one by one silently un-typechecks every new one.
+      while IFS= read -r f; do echo "\"$f\""; done < <(find "$here/Assets/Game" -name '*.cs' | sort)
     } > "$rsp"
 
     set +e

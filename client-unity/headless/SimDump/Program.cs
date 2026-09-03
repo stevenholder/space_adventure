@@ -38,6 +38,11 @@ internal static class Program
         int dumpAt = Array.IndexOf(args, "--dump");
         if (dumpAt >= 0) return Dump(Arg(args, "--dump"), Arg(args, "--world"));
         if (Array.IndexOf(args, "--selftest") >= 0) return SelfTest();
+        if (Array.IndexOf(args, "--drive") >= 0) return DriveDump(Arg(args, "--drive"), Arg(args, "--world"));
+        if (Array.IndexOf(args, "--flight") >= 0) return FlightDump(Arg(args, "--flight"), Arg(args, "--world"));
+        if (Array.IndexOf(args, "--pilot") >= 0)
+            return Pilot(Arg(args, "--pilot"), uint.Parse(Arg(args, "--ship")),
+                         Arg(args, "--token"), Arg(args, "--evidence"));
         if (Array.IndexOf(args, "--codec-decode") >= 0) return CodecDecode(Arg(args, "--codec-decode"));
         if (Array.IndexOf(args, "--codec-encode") >= 0) return CodecEncode(Arg(args, "--codec-encode"));
         if (Array.IndexOf(args, "--join") >= 0) return Join(Arg(args, "--join"));
@@ -52,6 +57,9 @@ internal static class Program
 
         Console.Error.WriteLine("usage: SimDump --selftest");
         Console.Error.WriteLine("       SimDump --dump <script.jsonl> --world <world.json>");
+        Console.Error.WriteLine("       SimDump --drive <script> --world <world>  C30 drive dump");
+        Console.Error.WriteLine("       SimDump --flight <script> --world <world> C34 flight dump");
+        Console.Error.WriteLine("       SimDump --pilot <ws> --ship <id> --token <t> --evidence <out>  C39");
         Console.Error.WriteLine("       SimDump --codec-decode <go.hex>   decode Go's S->C frames");
         Console.Error.WriteLine("       SimDump --codec-encode <out.hex>  write C->S frames for Go");
         Console.Error.WriteLine("       SimDump --join <ws-url>           join a live server, report what arrives");
@@ -201,6 +209,8 @@ internal static class Program
         PredictionChecks();
         RockScatterChecks();
         TimelineChecks();
+        RoverPredictionChecks();
+        BearingChecks();
 
         Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
         return _failed == 0 ? 0 : 1;
@@ -317,6 +327,79 @@ internal static class Program
         foreach (var kv in poses)
             if (kv.Key == id) return kv.Value.Pos.X;
         return double.NaN;
+    }
+
+    // ---- compass bearings (C63) --------------------------------------------
+
+    private static void BearingChecks()
+    {
+        // Standing at (0, 150, 0): up = +Y, facing +Z. In THIS game's
+        // frame, right = Cross(facing, up) = −X (Step.cs's own convention,
+        // sign-bug comment and all) — so −X is 90° RIGHT (positive), +X is
+        // left, behind is ±π.
+        var pos = new Vec3(0, 150, 0);
+        var fwd = new Vec3(0, 0, 1);
+        double ahead = Bearing.To(pos, fwd, new Vec3(0, 150, 10));
+        double right = Bearing.To(pos, fwd, new Vec3(-10, 150, 0));
+        double left = Bearing.To(pos, fwd, new Vec3(10, 150, 0));
+        double behind = Bearing.To(pos, fwd, new Vec3(0, 150, -10));
+        Check("bearing dead ahead is zero", Math.Abs(ahead) < 1e-12, F(ahead));
+        Check("bearing to the right is +90°", Math.Abs(right - Math.PI / 2) < 1e-12, F(right));
+        Check("bearing to the left is −90°", Math.Abs(left + Math.PI / 2) < 1e-12, F(left));
+        Check("bearing behind is ±180°", Math.Abs(Math.Abs(behind) - Math.PI) < 1e-12, F(behind));
+        // The radial component is ignored: a target 40 m overhead at the
+        // same tangent point still reads dead ahead.
+        double lofted = Bearing.To(pos, fwd, new Vec3(0, 190, 10));
+        Check("bearing ignores altitude", Math.Abs(lofted) < 1e-12, F(lofted));
+        // Degenerate → NaN, never a lie.
+        Check("bearing overhead is NaN", double.IsNaN(Bearing.To(pos, fwd, new Vec3(0, 190, 0))));
+    }
+
+    // ---- rover prediction --------------------------------------------------
+    //
+    // Snap-then-replay must be a no-op when nothing new happened: predicting
+    // N inputs and then reconciling against the state the server reached
+    // after K < N of them must land exactly where continuous prediction did,
+    // because the replay runs the same arithmetic over the same inputs.
+
+    private static void RoverPredictionChecks()
+    {
+        // A uniform 150 m sphere: min == max makes every u16 code decode to
+        // the same radius, so terrain contributes nothing but the contact.
+        var field = TerrainField.FromWire(
+            new ushort[6 * TerrainField.FaceGrid * TerrainField.FaceGrid], 150, 150);
+
+        var start = new RoverState
+        {
+            Pos = new Vec3(0, 150, 0),
+            Vel = Vec3.Zero,
+            Quat = Quat.FromBasis(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)),
+            Grounded = true,
+        };
+
+        var a = new RoverPredictor();
+        a.Seed(field);
+        a.Reconcile(start.Pos, start.Vel, start.Quat, true, 0);
+        for (ushort seq = 1; seq <= 10; seq++) a.Apply(seq, 1, 0.3);
+        RoverState continuous = a.State;
+
+        // The server's own view after the first 4 inputs.
+        var server = start;
+        for (int i = 0; i < 4; i++) Drive.Apply(ref server, 1, 0.3, field, Rules.DT);
+
+        var b = new RoverPredictor();
+        b.Seed(field);
+        b.Reconcile(start.Pos, start.Vel, start.Quat, true, 0);
+        for (ushort seq = 1; seq <= 10; seq++) b.Apply(seq, 1, 0.3);
+        b.Reconcile(server.Pos, server.Vel, server.Quat, server.Grounded, 4);
+
+        Check("rover reconcile+replay matches continuous prediction exactly",
+            (b.State.Pos - continuous.Pos).Length == 0 &&
+            (b.State.Vel - continuous.Vel).Length == 0,
+            $"dPos {F((b.State.Pos - continuous.Pos).Length)}");
+        Check("rover predictor moved at all", (continuous.Pos - start.Pos).Length > 0.1);
+        Check("a stale ack is ignored",
+            !b.Reconcile(start.Pos, start.Vel, start.Quat, true, 2));
     }
 
     private static void TimelineChecks()
@@ -1299,6 +1382,289 @@ internal static class Program
                               $" scale={G(p.Scale)}");
         }
 
+        Expect("seat_result", Msg.SeatResult, out var r5);
+        var sr = Decode.SeatResult(r5);
+        Console.WriteLine($"seat_result entity={sr.EntityId} seat={sr.Seat} result={sr.Result}");
+
+        return 0;
+    }
+
+    /// <summary>
+    /// The C# half of the C30 drive-conformance diff: replays a
+    /// {"input":{"throttle","steer"}} JSONL script through Drive.Apply on the
+    /// quantised wire field, from the same mirrored start `server drive`
+    /// uses (spawn point, facing the spawn bearing, grounded).
+    /// </summary>
+    private static int DriveDump(string scriptPath, string worldPath)
+    {
+        using var wdoc = JsonDocument.Parse(File.ReadAllBytes(worldPath));
+        var w = wdoc.RootElement;
+        var codesEl = w.GetProperty("radii");
+        var codes = new ushort[codesEl.GetArrayLength()];
+        for (int i = 0; i < codes.Length; i++) codes[i] = (ushort)codesEl[i].GetUInt32();
+        var field = TerrainField.FromWire(codes,
+            w.GetProperty("radius_min").GetDouble(),
+            w.GetProperty("radius_max").GetDouble());
+
+        var start = Step.SpawnState(field);
+        Vec3 up = start.Pos.Normalized();
+        var s = new RoverState
+        {
+            Pos = start.Pos,
+            Vel = Vec3.Zero,
+            Quat = Quat.FromBasis(Vec3.Cross(up, start.Facing), up, start.Facing),
+            Grounded = true,
+        };
+
+        int tick = 0;
+        var outBuf = new StringBuilder();
+        foreach (string line in File.ReadLines(scriptPath))
+        {
+            string t = line.Trim();
+            if (t.Length == 0) continue;
+            using var doc = JsonDocument.Parse(t);
+            if (!doc.RootElement.TryGetProperty("input", out var ie)) continue;
+
+            Drive.Apply(ref s,
+                ie.GetProperty("throttle").GetDouble(),
+                ie.GetProperty("steer").GetDouble(),
+                field, Rules.DT);
+
+            outBuf.Append("{\"tick\":").Append(tick)
+                  .Append(",\"pos\":[").Append(F(s.Pos.X)).Append(',').Append(F(s.Pos.Y)).Append(',').Append(F(s.Pos.Z))
+                  .Append("],\"vel\":[").Append(F(s.Vel.X)).Append(',').Append(F(s.Vel.Y)).Append(',').Append(F(s.Vel.Z))
+                  .Append("],\"quat\":[").Append(F(s.Quat.X)).Append(',').Append(F(s.Quat.Y)).Append(',').Append(F(s.Quat.Z)).Append(',').Append(F(s.Quat.W))
+                  .Append("],\"grounded\":").Append(s.Grounded ? "true" : "false")
+                  .Append("}\n");
+            tick++;
+        }
+        Console.Out.Write(outBuf.ToString());
+        Console.Error.WriteLine($"simdump: {tick} drive ticks");
+        return 0;
+    }
+
+    // ---- C39: pilot prediction error under latency ------------------------
+    //
+    // The same instrument as Predict (C6), retargeted at the ship: join
+    // through the latency proxy, walk to the owned ship, take seat 1, fly a
+    // scripted run predicting with ShipPredictor, and pair each
+    // post-reconcile belief against the FUTURE snapshot that describes the
+    // same instant (by replay depth — Predict's comment has the full
+    // argument; a constant M+1 measures cross-instant artifacts at any RTT
+    // other than the one it was written for).
+
+    private static int Pilot(string url, uint shipId, string token, string evidencePath)
+    {
+        using var net = new NetClient();
+        net.Connect(url, "c39-pilot", token);
+
+        TerrainField terrain = null;
+        var rows = new System.Collections.Generic.Dictionary<uint, EntityRow>();
+        ushort myAck = 0;
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (terrain == null && DateTime.UtcNow < deadline)
+        {
+            while (net.Poll(out var f))
+            {
+                if (f.Type != Msg.Terrain) continue;
+                var t = Decode.Terrain(f.Reader);
+                terrain = TerrainField.FromWire(t.Radii, t.RadiusMin, t.RadiusMax);
+            }
+            System.Threading.Thread.Sleep(5);
+        }
+        if (terrain == null) { Console.Error.WriteLine("c39: no terrain"); return 1; }
+
+        void Drain()
+        {
+            while (net.Poll(out var f))
+            {
+                if (f.Type != Msg.Snapshot) continue;
+                Snapshot snap = Decode.Snapshot(f.Reader);
+                myAck = snap.AckSeq;
+                foreach (EntityRow row in snap.Entities) rows[row.Id] = row;
+            }
+        }
+
+        // Walk to the ship: greedy wish toward it, server-authoritative.
+        ushort seq = 0;
+        for (int i = 0; i < 600; i++)
+        {
+            Drain();
+            if (rows.TryGetValue(net.EntityId, out var me) && rows.TryGetValue(shipId, out var sh))
+            {
+                var mp = new Vec3(me.PosX, me.PosY, me.PosZ);
+                var sp = new Vec3(sh.PosX, sh.PosY, sh.PosZ);
+                if ((sp - mp).Length < 5) break;
+                Vec3 up = mp.Normalized();
+                Vec3 look = (sp - mp).RejectFrom(up);
+                if (look.Length > 1e-6) look = look.Normalized(); else look = new Vec3(1, 0, 0);
+                seq++;
+                net.Send(Encode.Input(0f, 1f, (float)look.X, (float)look.Y, (float)look.Z,
+                                      SpaceAdventure.Net.Action.Sprint, seq));
+            }
+            System.Threading.Thread.Sleep(50);
+        }
+
+        net.Send(Encode.Board(shipId, 1));
+        deadline = DateTime.UtcNow.AddSeconds(5);
+        bool seated = false;
+        while (!seated && DateTime.UtcNow < deadline)
+        {
+            Drain();
+            seated = rows.TryGetValue(net.EntityId, out var me) && me.ParentId == shipId && me.Seat == 1;
+            System.Threading.Thread.Sleep(20);
+        }
+        if (!seated) { Console.Error.WriteLine("c39: never seated"); return 1; }
+
+        // The flight: nose-up climb, then thrust with gentle turns — enough
+        // dynamics that a prediction bug shows, tame enough to stay stable.
+        const int FlyTicks = 400;
+        var predictor = new ShipPredictor();
+        predictor.Seed(terrain);
+        var snaps = new System.Collections.Generic.List<Snap>();
+        int k = 0;
+        var start = DateTime.UtcNow;
+        double Elapsed() => (DateTime.UtcNow - start).TotalMilliseconds;
+        double nextTickAt = 0;
+
+        while (k < FlyTicks || Elapsed() < FlyTicks * 50 + 1500)
+        {
+            while (net.Poll(out var f))
+            {
+                if (f.Type != Msg.Snapshot) continue;
+                Snapshot snap = Decode.Snapshot(f.Reader);
+                foreach (EntityRow row in snap.Entities)
+                {
+                    if (row.Id != shipId) continue;
+                    var rec = new Snap { T = snap.Tick, M = snap.AckSeq };
+                    rec.Auth = new Vec3(row.PosX, row.PosY, row.PosZ);
+                    rec.HasAuth = true;
+
+                    var st = predictor.State;
+                    if (st.Vel.Length > 0.3) { rec.Trk = st.Vel.Normalized(); rec.HasTrk = true; }
+
+                    predictor.Reconcile(rec.Auth,
+                        new Vec3(row.VelX, row.VelY, row.VelZ),
+                        new Quat(row.QuatX, row.QuatY, row.QuatZ, row.QuatW),
+                        row.Grounded, row.Space, snap.AckSeq);
+                    rec.Post = predictor.State.Pos;
+                    rec.Ahead = predictor.PendingCount;
+                    snaps.Add(rec);
+                    break;
+                }
+            }
+
+            if (k < FlyTicks && Elapsed() >= nextTickAt)
+            {
+                nextTickAt = Elapsed() + 50;
+                var inp = new FlightInput
+                {
+                    Thrust = k < 20 ? 1 : 1,
+                    PitchRate = k < 20 ? -1.2 : 0,
+                    YawRate = k >= 100 && k < 250 ? 0.6 : 0,
+                    Roll = 0,
+                    Boost = false,
+                };
+                seq++;
+                predictor.Apply(seq, inp);
+                net.Send(Encode.Input((float)inp.Thrust, 0,
+                    (float)inp.YawRate, (float)inp.PitchRate, 0, 0, seq, 1));
+                k++;
+            }
+            System.Threading.Thread.Sleep(2);
+        }
+
+        var errs = new System.Collections.Generic.List<double>();
+        int snapbacks = 0;
+        for (int i = 0; i < snaps.Count; i++)
+        {
+            Snap a = snaps[i];
+            if (a.Post.Length == 0 || a.M <= 0 || a.Ahead <= 0) continue;
+            Snap b = null;
+            for (int j = i + 1; j < snaps.Count; j++)
+            {
+                if (snaps[j].M != a.M + a.Ahead) continue;
+                if (snaps[j].HasAuth && snaps[j].T == a.T + (uint)a.Ahead) b = snaps[j];
+                break;
+            }
+            if (b == null) continue;
+            errs.Add((a.Post - b.Auth).Length);
+            if (a.HasTrk && Vec3.Dot(b.Auth - a.Post, a.Trk) < SnapbackM) snapbacks++;
+        }
+
+        errs.Sort();
+        double Pq(double q) => errs.Count == 0 ? double.NaN : errs[Math.Min(errs.Count - 1, (int)(q * errs.Count))];
+        double p50 = Pq(0.50), p95 = Pq(0.95);
+
+        Check("c39 measured enough paired samples", errs.Count >= 100, $"{errs.Count} samples");
+        Check("c39 p95 pilot prediction error under 0.5 m", p95 < 0.5, $"p95 {F(p95)} m");
+        Check("c39 no snap-backs", snapbacks == 0, $"{snapbacks}");
+
+        File.WriteAllText(evidencePath,
+            $"{{\"criterion\":\"C39\",\"harness\":\"SimDump --pilot\",\"samples\":{errs.Count}," +
+            $"\"p50\":{F(p50)},\"p95\":{F(p95)},\"snapbacks\":{snapbacks}}}\n");
+        Console.WriteLine(_failed == 0 ? "\nOVERALL: PASS" : $"\nOVERALL: FAIL ({_failed})");
+        return _failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The C# half of the C34 flight-conformance diff: replays a pilot
+    /// input script through Flight.Apply on the quantised wire field, from
+    /// the same mirrored start `server flight` uses.
+    /// </summary>
+    private static int FlightDump(string scriptPath, string worldPath)
+    {
+        using var wdoc = JsonDocument.Parse(File.ReadAllBytes(worldPath));
+        var w = wdoc.RootElement;
+        var codesEl = w.GetProperty("radii");
+        var codes = new ushort[codesEl.GetArrayLength()];
+        for (int i = 0; i < codes.Length; i++) codes[i] = (ushort)codesEl[i].GetUInt32();
+        var field = TerrainField.FromWire(codes,
+            w.GetProperty("radius_min").GetDouble(),
+            w.GetProperty("radius_max").GetDouble());
+
+        var start = Step.SpawnState(field);
+        Vec3 up = start.Pos.Normalized();
+        var s = new ShipSimState
+        {
+            Pos = start.Pos,
+            Vel = Vec3.Zero,
+            Quat = Quat.FromBasis(Vec3.Cross(up, start.Facing), up, start.Facing),
+            Omega = Vec3.Zero,
+            Grounded = true,
+        };
+
+        int tick = 0;
+        var outBuf = new StringBuilder();
+        foreach (string line in File.ReadLines(scriptPath))
+        {
+            string t = line.Trim();
+            if (t.Length == 0) continue;
+            using var doc = JsonDocument.Parse(t);
+            if (!doc.RootElement.TryGetProperty("input", out var ie)) continue;
+
+            var inp = new FlightInput
+            {
+                Thrust = ie.GetProperty("thrust").GetDouble(),
+                Roll = ie.GetProperty("roll").GetDouble(),
+                YawRate = ie.GetProperty("yaw_rate").GetDouble(),
+                PitchRate = ie.GetProperty("pitch_rate").GetDouble(),
+                Boost = ie.GetProperty("boost").GetBoolean(),
+            };
+            Flight.Apply(ref s, inp, field, Rules.DT);
+
+            outBuf.Append("{\"tick\":").Append(tick)
+                  .Append(",\"pos\":[").Append(F(s.Pos.X)).Append(',').Append(F(s.Pos.Y)).Append(',').Append(F(s.Pos.Z))
+                  .Append("],\"vel\":[").Append(F(s.Vel.X)).Append(',').Append(F(s.Vel.Y)).Append(',').Append(F(s.Vel.Z))
+                  .Append("],\"quat\":[").Append(F(s.Quat.X)).Append(',').Append(F(s.Quat.Y)).Append(',').Append(F(s.Quat.Z)).Append(',').Append(F(s.Quat.W))
+                  .Append("],\"omega\":[").Append(F(s.Omega.X)).Append(',').Append(F(s.Omega.Y)).Append(',').Append(F(s.Omega.Z))
+                  .Append("],\"grounded\":").Append(s.Grounded ? "true" : "false")
+                  .Append(",\"space\":").Append(s.Space ? "true" : "false")
+                  .Append("}\n");
+            tick++;
+        }
+        Console.Out.Write(outBuf.ToString());
+        Console.Error.WriteLine($"simdump: {tick} flight ticks");
         return 0;
     }
 
@@ -1309,6 +1675,8 @@ internal static class Program
         sb.Append("cmd ").Append(Hex(Encode.Cmd(4097, Op.ShopBuy,
             "{\"npc\":7,\"item\":\"weapon.pulse\",\"qty\":1}"))).Append('\n');
         sb.Append("fire ").Append(Hex(Encode.Fire(513, 0, 0, 1))).Append('\n');
+        sb.Append("board ").Append(Hex(Encode.Board(0x0A0B0C0D, 2))).Append('\n');
+        sb.Append("disembark ").Append(Hex(Encode.Disembark())).Append('\n');
         File.WriteAllText(path, sb.ToString());
         return 0;
     }

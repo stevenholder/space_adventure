@@ -34,6 +34,7 @@ test/t5/explore-err.txt
 # Raw QA captures / scans (regenerable — result and report JSONs are committed)
 test/out/dump-go.jsonl
 test/out/dump-csharp.jsonl
+test/out/t23-drive-script.jsonl
 test/out/t5-fieldmap.json
 test/out/t7-raw-*.jsonl
 test/out/t7-final-08-fps-raw.json
@@ -43,3 +44,4 @@ test/out/t10-sim-result-prefix.json
 
 # QA evidence logs (referenced from docs/QA-STATUS.md)
 !test/out/*.log
+client-unity/Assets/Game/Resources/ui/

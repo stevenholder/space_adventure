@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Space Adventure</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <h1><a href="/">SPACE ADVENTURE</a></h1>
+  <p class="dim">A small round world: walk it, fight for it, buy a rover,
+  buy a ship, fly out of the sky and back down again.</p>
+
+  <div class="panel">
+    <span class="stat" id="online">–</span> <span class="dim">pilots online now</span><br>
+    <span class="stat" id="players">–</span> <span class="dim">players have set foot on the planet</span>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Play</h2>
+    <p>The game is a Windows desktop build. Point it at this world:</p>
+    <p><code>SpaceAdventure.exe -serverUrl wss://game.stevenholder.info/ws</code></p>
+    <p class="dim">Ask Steve for the build. Then
+    <a href="/login.html">create an account</a>, mint a link code, and enter
+    it in-game to fly as yourself.</p>
+  </div>
+
+  <nav>
+    <a href="/login.html">Sign in / register</a>
+    <a href="/account.html">Your account</a>
+  </nav>
+</main>
+<script>
+fetch('/api/stats').then(r => r.json()).then(s => {
+  document.getElementById('online').textContent = s.online
+  document.getElementById('players').textContent = s.players
+}).catch(() => {})
+</script>
+</body>
+</html>

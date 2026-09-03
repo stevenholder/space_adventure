@@ -1,0 +1,81 @@
+# The game server on the real cluster. Same container as kind — one image
+# serves both paths — pulled from GHCR where the publish workflow puts it.
+# The image tag is pinned by CD to the exact build (kustomize edit set
+# image in deploy.yml), so "what is running" is always answerable; :latest
+# here is only the hand-apply fallback.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: server
+        app.kubernetes.io/part-of: space-adventure
+    spec:
+      # ghcr-pull is created BY HAND, once, from a classic PAT scoped to
+      # read:packages only (RUNBOOK "CD plumbing") — the package is
+      # private and the token never enters git or CI. Rotate by recreating
+      # the secret; nothing else references it.
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: server
+          image: ghcr.io/stevenholder/space_adventure/server:latest
+          imagePullPolicy: Always
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: space-db-app
+                  key: uri
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  selector:
+    app.kubernetes.io/name: server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

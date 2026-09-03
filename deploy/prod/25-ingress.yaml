@@ -1,0 +1,58 @@
+# Client exposure through the cluster's existing Traefik LoadBalancer,
+# two rules with the same three paths:
+#
+#   - game.stevenholder.info — the public door. Cloudflare-proxied DNS to
+#     the router; TLS terminates at Cloudflare, so public clients dial
+#     wss://game.stevenholder.info/ws and the origin still speaks plain
+#     HTTP behind it. Cloudflare proxies WebSockets natively.
+#   - hostless — the LAN door (ws://<node-ip>/ws) and the in-cluster
+#     smoke check; nothing local depends on public DNS resolving.
+#
+# Only the three paths the server serves are claimed, so Traefik's port 80
+# stays free for anything else this cluster hosts.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: server
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure
+spec:
+  ingressClassName: traefik
+  rules:
+    # The whole origin: game (/ws), account site (/, /api/*) — Phase 7
+    # widened this from three exact paths to the root prefix, because the
+    # server binary now serves the site too.
+    - host: game.stevenholder.info
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
+    - http:
+        paths:
+          - path: /ws
+            pathType: Exact
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
+          - path: /version
+            pathType: Exact
+            backend:
+              service:
+                name: server
+                port:
+                  name: http

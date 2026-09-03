@@ -84,6 +84,64 @@ namespace SpaceAdventure.Game
         private Rocks _rocks;
         private SnapshotTimeline _timeline;
 
+        // Phase 4 — seat occupancy, from our own snapshot row (the mode byte
+        // is a declaration; occupancy is what the server says). Seat 1 drives.
+        private uint _seatVehicle;
+        private ushort _seat;
+        private float _noticeUntil;
+        private readonly RoverPredictor _rover = new RoverPredictor();
+        private readonly ShipPredictor _ship = new ShipPredictor();
+
+
+        // Phase 8 — the UI Toolkit layer.
+        private SpaceAdventure.Game.UI.UiRoot _ui;
+        private SpaceAdventure.Game.UI.HudView _hudView;
+        private SpaceAdventure.Game.UI.CombatFeed _combatFeed;
+        private SpaceAdventure.Game.UI.ShopView _shopView;
+        private SpaceAdventure.Game.UI.BagsView _bagsView;
+        private SpaceAdventure.Game.UI.SheetView _sheetView;
+        private SpaceAdventure.Game.UI.PromptView _promptView;
+
+        // Phase 7 — the account link panel (F1): type a code minted on the
+        // account site, redeem it for this account's game token, reconnect
+        // as that player.
+        private SpaceAdventure.Game.UI.AccountView _accountView;
+
+        private bool ModalOpen =>
+            (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
+            (_sheetView?.Open ?? false) || (_accountView?.Open ?? false);
+
+        // Mouse delta accumulated ACROSS the frames within one tick while
+        // piloting — per-frame deltas consumed per-tick would drop most of
+        // the motion (the drive-phase gotcha, avoided this time).
+        private Vector2 _mouseAccum;
+
+        /// <summary>k_rate (GDD flight input map): mouse px/s → rad/s.</summary>
+        private const float KRate = 0.0022f;
+
+        // GDD "Rover seats" seat_eye column, sim frame, indexed by seat.
+        private static readonly Vec3[] RoverSeatEye =
+        {
+            default,
+            new Vec3(-0.35, 1.55, +0.10), // driver
+            new Vec3(+0.35, 1.55, -0.40), // passenger
+        };
+
+        // GDD "Seats and occupancy" ship seat_eye column, sim frame.
+        private static readonly Vec3[] ShipSeatEye =
+        {
+            default,
+            new Vec3(0.00, 2.21, +1.90), // pilot
+            new Vec3(+0.35, 2.21, +0.75),
+            new Vec3(-0.35, 2.21, +0.75),
+        };
+
+        /// <summary>The seated vehicle's EntityType, 0 when on foot.</summary>
+        private ushort SeatKind =>
+            _seat != 0 && _views.TryGet(_seatVehicle, out var v) ? v.Type : (ushort)0;
+
+        private bool Piloting => _seat == 1 && SeatKind == EntityType.Ship;
+
         // C46 frame-budget evidence: every 5 s, log the window's average fps
         // and worst frame to the player log, where `unity run` and the C46
         // measurement pass can read them. One compare and one add per frame.
@@ -133,6 +191,19 @@ namespace SpaceAdventure.Game
         {
             Application.runInBackground = true; // a windowed client that stops pumping gets dropped at 10 s
 
+            // Phase 8: the UI Toolkit root. The spike's self-check stays until
+            // every screen is ported (it logs the toolkit/text verdicts).
+            _ui = new SpaceAdventure.Game.UI.UiRoot();
+            _hudView = new SpaceAdventure.Game.UI.HudView(_ui.Root);
+            _combatFeed = new SpaceAdventure.Game.UI.CombatFeed(_ui.Root);
+
+            // -uiShot <path>: save a screenshot after the world settles, the
+            // review artifact for C60 (test/out/ui/).
+            string[] argvUi = Environment.GetCommandLineArgs();
+            int shotAt = Array.IndexOf(argvUi, "-uiShot");
+            if (shotAt >= 0 && shotAt + 1 < argvUi.Length)
+                StartCoroutine(SaveUiShot(argvUi[shotAt + 1]));
+
             // No vsync, capped at 120. Vsync waits on whatever refresh the OS
             // reports, and a virtual or remote display can report ~4 Hz — the
             // C46 measurement found the player pinned at 6 fps by exactly
@@ -155,7 +226,10 @@ namespace SpaceAdventure.Game
             var camGo = new GameObject("Eye");
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.05f;
-            cam.farClipPlane = 2000f;
+            // Far enough that the whole planet reads as a planet from any
+            // altitude a flight reaches (C36) — the world is ~380 m across
+            // and the scripted orbits sit within ~1500 m.
+            cam.farClipPlane = 6000f;
             cam.fieldOfView = 60f; // ~90 degrees horizontal at 16:9, the FPS norm
             cam.cullingMask = ~(1 << vmLayer); // the world, minus the rig
 
@@ -206,9 +280,16 @@ namespace SpaceAdventure.Game
             _viewModel = new ViewModel(cam, _material, vmLayer, transform, _assets);
             _viewModel.WeaponVisible = false; // until the server says we are holding one
             _hud = new Hud();
-            _map = new MapView();
+            _map = new MapView(_ui.Root);
             _character = new Character();
             _interact = new Interaction(_views, _character);
+            _shopView = new SpaceAdventure.Game.UI.ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
+            _bagsView = new SpaceAdventure.Game.UI.BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
+            _sheetView = new SpaceAdventure.Game.UI.SheetView(_ui.Root, _character);
+            _promptView = new SpaceAdventure.Game.UI.PromptView(_ui.Root);
+            _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
+                code => { _accountView.SetStatus("redeeming…"); StartCoroutine(RedeemLinkCode(code)); },
+                () => _accountView.Show(false));
             _fx = new CombatFx(transform);
 
             _net = new NetClient();
@@ -257,16 +338,22 @@ namespace SpaceAdventure.Game
                 Cursor.lockState = _cursorFreed ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = _cursorFreed;
             }
+            if (keys?.f3Key.wasPressedThisFrame == true) _hud.DebugOpen = !_hud.DebugOpen;
+            if (keys?.f1Key.wasPressedThisFrame == true)
+            {
+                _accountView.Show(!_accountView.Open);
+                _accountView.SetStatus("");
+            }
             if (keys?.mKey.wasPressedThisFrame == true) _map.Toggle();
             if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
-            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleBags);
-            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_character.ToggleSheet);
+            if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_bagsView, _sheetView);
+            if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_sheetView, _bagsView);
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
             // The map and the shop both want the pointer. Movement keeps
             // working under either.
-            bool wantsCursor = _map.Open || _interact.ShopOpen || _character.AnyOpen;
+            bool wantsCursor = _map.Open || ModalOpen;
             if (wantsCursor && Cursor.lockState == CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.None;
@@ -277,10 +364,21 @@ namespace SpaceAdventure.Game
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
             }
-            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked;
+            // The pilot's mouse steers the ship, never the view (GDD:
+            // hull-fixed camera). Accumulate the raw delta for SendTick.
+            bool piloting = Piloting;
+            _fps.MouseLookEnabled = Cursor.lockState == CursorLockMode.Locked && !piloting;
+            if (piloting && Cursor.lockState == CursorLockMode.Locked)
+            {
+                var m = UnityEngine.InputSystem.Mouse.current;
+                if (m != null) _mouseAccum += m.delta.ReadValue();
+            }
 
             var state = _predictor.State;
-            LocalInput li = _fps.Sample(state.Pos.Normalized(), state.Facing);
+            // Seated, the local up comes from the rover — the body predictor
+            // is reset and its position stale.
+            Vec3 upPos = _seat != 0 && _rover.Ready ? _rover.State.Pos : state.Pos;
+            LocalInput li = _fps.Sample(upPos.Normalized(), state.Facing);
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
             // rate would put several inputs in one tick, and the server keeps
@@ -294,12 +392,29 @@ namespace SpaceAdventure.Game
 
             // Look-at targeting, then E. The shop swallows E so closing it
             // does not immediately reopen it on the same key press.
-            Vector3 eye = TerrainMesh.ToUnity(state.Pos);
-            eye += eye.normalized * FpsController.EyeHeight;
-            _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
-            if (li.InteractPressed && !_map.Open && !_character.AnyOpen)
+            if (_seat == 0)
             {
-                if (_interact.ShopOpen) _interact.CloseShop();
+                Vector3 eye = TerrainMesh.ToUnity(state.Pos);
+                eye += eye.normalized * FpsController.EyeHeight;
+                _interact.Update(eye, TerrainMesh.ToUnity(li.Look));
+            }
+            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "E  ·  exit ship" : "E  ·  exit rover";
+            else if (Time.time > _noticeUntil) _interact.Notice = "";
+            if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open))
+            {
+                if (_seat != 0)
+                {
+                    // Always available, at any speed (GDD; C32).
+                    _net.Send(Encode.Disembark());
+                }
+                else if (_interact.ShopOpen) { _interact.CloseShop(); _shopView.Show(false); }
+                else if ((_interact.TargetType == EntityType.Vehicle ||
+                          _interact.TargetType == EntityType.Ship) && _interact.Target != 0)
+                {
+                    // Ask for the control seat; on "occupied" the seat_result
+                    // handler walks down the passenger seats.
+                    _net.Send(Encode.Board(_interact.Target, 1));
+                }
                 else
                 {
                     byte[] cmd = _interact.OpenShop(NextCmdSeq());
@@ -314,14 +429,15 @@ namespace SpaceAdventure.Game
             // The rig follows the character sheet, which is the one place
             // that knows what is equipped — whether it learned from the
             // broadcast event or from an accepted equip.
-            _viewModel.WeaponVisible = !string.IsNullOrEmpty(_character.Primary);
+            _viewModel.WeaponVisible = _seat == 0 && !string.IsNullOrEmpty(_character.Primary);
 
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
             // Instanced, so this is a submit rather than a scene walk: three
             // draw calls for four hundred rocks and no GameObjects to cull.
             _rocks.Render();
-            _fps.PlaceCamera(_predictor.State.Pos);
+            if (_seat != 0) PlaceSeatCamera();
+            else _fps.PlaceCamera(_predictor.State.Pos);
 
             // The body stands where the simulation puts it, and the rig sways
             // against the real speed rather than the input.
@@ -331,6 +447,9 @@ namespace SpaceAdventure.Game
                              TerrainMesh.ToUnity(now.Facing));
             _viewModel.Tick(_fps.LookDelta, (float)now.Vel.Length, Time.deltaTime);
             _fx.Tick();
+
+            UpdateHudView();
+            _combatFeed?.Tick(_camera);
 
             _statFrames++;
             if (Time.unscaledDeltaTime > _statWorstDt) _statWorstDt = Time.unscaledDeltaTime;
@@ -349,20 +468,319 @@ namespace SpaceAdventure.Game
         private ushort NextCmdSeq() => ++_cmdSeq;
 
         /// <summary>
+        /// Feeds the Phase 8 HUD from the same sources the IMGUI one reads,
+        /// plus compass markers by egocentric bearing (Bearing.To).
+        /// </summary>
+        private void UpdateHudView()
+        {
+            if (_hudView == null) return;
+            _hudView.SetVitals(_hud.Health, 100);
+            _hudView.SetAmmo(_character.Magazine, _character.Reserve,
+                _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
+            _hudView.SetCredits(_character.Credits);
+
+            var me = _predictor.State;
+            var markers = new List<(string, double)>();
+            foreach (var v in _views.All)
+            {
+                if (v.Root == null || !v.Root.activeSelf) continue;
+                string name = v.Type switch
+                {
+                    EntityType.Npc when v.Label == "npc.quartermaster" => "SHOP",
+                    EntityType.Vehicle => "ROVER",
+                    EntityType.Ship => "SHIP",
+                    _ => null,
+                };
+                if (name == null) continue;
+                Vector3 p = v.Root.transform.position;
+                var target = new Vec3(p.x, p.y, -p.z); // Unity → sim
+                markers.Add((name, Bearing.To(me.Pos, me.Facing, target)));
+            }
+            _hudView.SetMarkers(markers);
+
+            // The shop view mirrors Interaction's state: stock arriving opens
+            // it, CloseShop (or a despawned NPC) closes it.
+            if (_interact.ShopOpen && !_shopView.Open) _shopView.Show(true);
+            if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
+
+            _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
+
+            UpdateFlightReadout();
+
+            _hudView.SetLog(_hud.Lines);
+            _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
+            _hudView.UpdateHealthBars(_camera, _views, !_map.Open);
+
+            State ms = _predictor.State;
+            _map.Draw(_terrain,
+                      TerrainMesh.ToUnity(ms.Pos),
+                      TerrainMesh.ToUnity(ms.Facing),
+                      MapMarkers());
+        }
+
+        /// <summary>
+        /// Camera at the seat eye point (GDD "Rover seats" seat_eye, sim
+        /// frame → Unity local is (x, y, −z)). The driver's rover draws at
+        /// the PREDICTED state — steering a vehicle that lags your own wheel
+        /// by a round trip is the exact bug prediction exists to kill; a
+        /// passenger rides the interpolated view like any remote entity.
+        /// Rotation stays the FpsController's: the camera never changes mode
+        /// (GDD), free look in every seat.
+        /// </summary>
+        private void PlaceSeatCamera()
+        {
+            bool ship = SeatKind == EntityType.Ship;
+            Vector3 pos;
+            Quaternion rot;
+            bool haveView = _views.TryGet(_seatVehicle, out var vv) && vv.Root != null;
+            if (_seat == 1 && (ship ? _ship.Ready : _rover.Ready))
+            {
+                // The control seat sees the PREDICTED vehicle; steering one
+                // that lags your own input by a round trip is the bug
+                // prediction exists to kill.
+                Vec3 p = ship ? _ship.State.Pos : _rover.State.Pos;
+                Quat q = ship ? _ship.State.Quat : _rover.State.Quat;
+                pos = TerrainMesh.ToUnity(p);
+                rot = RotFrom(q);
+                if (haveView) vv.Root.transform.SetPositionAndRotation(pos, rot);
+            }
+            else if (haveView)
+            {
+                pos = vv.Root.transform.position;
+                rot = vv.Root.transform.rotation;
+            }
+            else return; // no vehicle row seen yet; keep last camera pose
+
+            var table = ship ? ShipSeatEye : RoverSeatEye;
+            int seat = _seat < table.Length ? _seat : 1;
+            Vec3 eye = table[seat];
+            _camera.transform.position = pos + rot * new Vector3((float)eye.X, (float)eye.Y, (float)-eye.Z);
+
+            // The pilot's camera is hull-fixed: orientation IS the ship's
+            // attitude, the mouse steers the ship, not the view (GDD
+            // "Camera and rig"). Passengers keep the free look the
+            // FpsController already applied this frame.
+            if (ship && _seat == 1) _camera.transform.rotation = rot;
+        }
+
+        /// <summary>
+        /// The flight readout (ROADMAP task 12): speed, altitude above the
+        /// terrain under the ship, regime, role. IMGUI like everything else
+        /// — no assets, C47 holds.
+        /// </summary>
+        private void UpdateFlightReadout()
+        {
+            if (SeatKind != EntityType.Ship) { _hudView.SetFlight(null); return; }
+            bool pilot = Piloting;
+            ShipSimState s = _ship.Ready ? _ship.State : default;
+            Vec3 p;
+            Vec3 v;
+            bool space;
+            if (pilot && _ship.Ready)
+            {
+                p = s.Pos; v = s.Vel; space = s.Space;
+            }
+            else if (_views.TryGet(_seatVehicle, out var vv) && vv.Root != null)
+            {
+                Vector3 up0 = vv.Root.transform.position;
+                p = new Vec3(up0.x, up0.y, -up0.z);
+                v = Vec3.Zero;
+                space = p.Length >= FlightRules.SpaceRadius;
+            }
+            else { _hudView.SetFlight(null); return; }
+
+            Vec3 dir = p.Normalized();
+            double alt = p.Length - _terrain.SampleRadius(dir);
+            _hudView.SetFlight(pilot
+                ? $"{v.Length,6:F1} m/s   alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PILOT"
+                : $"alt {alt,5:F0} m   {(space ? "SPACE" : "ATMO ")}   PASSENGER");
+        }
+
+        /// <summary>
+        /// POST /api/redeem on the server the game is already talking to
+        /// (ws→http on the same origin), store the token, reconnect.
+        /// </summary>
+        private System.Collections.IEnumerator RedeemLinkCode(string code)
+        {
+            string wsUrl = ResolveServerUrl();
+            string apiUrl = wsUrl.Replace("wss://", "https://").Replace("ws://", "http://");
+            int slash = apiUrl.LastIndexOf("/ws", StringComparison.Ordinal);
+            if (slash >= 0) apiUrl = apiUrl.Substring(0, slash);
+            apiUrl += "/api/redeem";
+
+            byte[] body = System.Text.Encoding.UTF8.GetBytes("{\"code\":\"" + code + "\"}");
+            using var req = new UnityEngine.Networking.UnityWebRequest(apiUrl, "POST");
+            req.uploadHandler = new UnityEngine.Networking.UploadHandlerRaw(body);
+            req.downloadHandler = new UnityEngine.Networking.DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("X-Requested-With", "sa-client");
+            yield return req.SendWebRequest();
+
+            if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
+            {
+                _accountView.SetStatus(req.responseCode == 401
+                    ? "unknown or expired code"
+                    : $"failed: {req.error}");
+                yield break;
+            }
+            string text = req.downloadHandler.text;
+            int i = text.IndexOf("\"token\":\"", StringComparison.Ordinal);
+            if (i < 0) { _accountView.SetStatus("bad response"); yield break; }
+            i += 9;
+            string token = text.Substring(i, text.IndexOf('"', i) - i);
+
+            PlayerPrefs.SetString("sa.token", token);
+            PlayerPrefs.Save();
+            _accountView.SetStatus("linked — reconnecting…");
+            Reconnect(token);
+        }
+
+        /// <summary>
+        /// Tears down the connection and rejoins with a new token. The world
+        /// itself stands (same terrain, same entities — their views are keyed
+        /// by id and simply update); everything derived from OUR identity
+        /// resets: predictors, the timeline, seat state.
+        /// </summary>
+        private void Reconnect(string token)
+        {
+            _net.Dispose();
+            _predictor.Reset();
+            _rover.Reset();
+            _ship.Reset();
+            _timeline.Clear();
+            _seat = 0;
+            _seatVehicle = 0;
+            _net = new NetClient();
+            _net.Connect(ResolveServerUrl(), SystemInfo.deviceName ?? "player", token);
+        }
+
+        /// <summary>
+        /// Feeds the combat feed from a hit event (same wire layout
+        /// Combat.OnHit reads: shooter u32 | pos f32[3] | damage u16 |
+        /// health_after u16). Numbers for every hit; the marker only for
+        /// YOURS; the incoming arc only when the victim is you.
+        /// </summary>
+        private void OnHitFeedback(EventMsg ev)
+        {
+            if (_combatFeed == null || ev.Data.Length < 20) return;
+            var r = new WireReader(ev.Data);
+            uint shooter = r.ReadU32();
+            var simPoint = new Vec3(r.ReadF32(), r.ReadF32(), r.ReadF32());
+            int damage = r.ReadU16();
+            int healthAfter = r.ReadU16();
+            Vector3 point = TerrainMesh.ToUnity(simPoint);
+
+            _combatFeed.Damage(point, damage, healthAfter == 0);
+            if (shooter == _net.EntityId) _combatFeed.HitMarker(healthAfter == 0);
+            if (ev.EntityId == _net.EntityId && _views.TryGet(shooter, out var sv) && sv.Root != null)
+            {
+                Vector3 sp = sv.Root.transform.position;
+                var target = new Vec3(sp.x, sp.y, -sp.z);
+                var me = _predictor.State;
+                _combatFeed.Incoming(Bearing.To(me.Pos, me.Facing, target));
+            }
+        }
+
+        /// <summary>Saves the C60 review screenshot once the scene settles.</summary>
+        private System.Collections.IEnumerator SaveUiShot(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            // -uiPanel bags|sheet: open that panel first, so the C60 gallery
+            // can capture the modals without simulated key presses. Shop is
+            // excluded — it only opens off a live NPC interaction.
+            string[] argv = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(argv, "-uiPanel");
+            if (at >= 0 && at + 1 < argv.Length)
+            {
+                if (argv[at + 1] == "bags") OpenPanel(_bagsView, _sheetView);
+                if (argv[at + 1] == "sheet") OpenPanel(_sheetView, _bagsView);
+                if (argv[at + 1] == "map") _map.Toggle();
+                if (argv[at + 1] == "account") _accountView.Show(true);
+                yield return new WaitForSeconds(1f); // refresh round trip
+            }
+            yield return new WaitForEndOfFrame();
+            var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+            tex.Apply();
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToPNG(tex));
+            Destroy(tex);
+            Debug.Log($"ui: screenshot saved to {path}");
+        }
+
+        private static Quaternion RotFrom(Quat q)
+        {
+            Vector3 fwd = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 0, 1)));
+            Vector3 up = TerrainMesh.ToUnity(Quat.Rotate(q, new Vec3(0, 1, 0)));
+            if (fwd.sqrMagnitude < 1e-8f || up.sqrMagnitude < 1e-8f) return Quaternion.identity;
+            return Quaternion.LookRotation(fwd, up);
+        }
+
+        /// <summary>
         /// Toggles a panel and, if it just opened, asks the server for fresh
         /// credits and inventory. Panels show server truth rather than
         /// whatever was last seen — a bag that still lists a rifle you sold on
         /// another client is worse than a bag that takes a round trip.
         /// </summary>
-        private void OpenPanel(System.Action toggle)
+        private void OpenPanel(SpaceAdventure.Game.UI.ModalView view, SpaceAdventure.Game.UI.ModalView other)
         {
-            toggle();
-            if (_character.AnyOpen) _net.Send(Character.RefreshCmd(NextCmdSeq()));
+            bool open = !view.Open;
+            view.Show(open);
+            if (open)
+            {
+                other.Show(false);
+                _net.Send(Character.RefreshCmd(NextCmdSeq()));
+            }
         }
 
         private void SendTick(LocalInput li)
         {
             _seq++;
+
+            if (Piloting)
+            {
+                // Pilot: mode 1, v = [thrust, roll, yaw_rate, pitch_rate, 0]
+                // (GDD flight input map). Mouse deltas were accumulated per
+                // frame; convert to rad/s over the tick. Signs: rightward
+                // drag → negative yaw (left turn positive, RH rule about
+                // +Y); upward drag → negative pitch (nose up — the
+                // corrected convention).
+                double yaw = -_mouseAccum.x / Rules.DT * KRate;
+                double pitch = -_mouseAccum.y / Rules.DT * KRate; // Unity +y = up = nose up = negative
+                _mouseAccum = Vector2.zero;
+                var inp = new FlightInput
+                {
+                    Thrust = li.MoveY,
+                    Roll = -li.MoveX, // A (strafe −1) = roll left = +1
+                    YawRate = yaw,
+                    PitchRate = pitch,
+                    Boost = (li.ActionMask & SpaceAdventure.Net.Action.Sprint) != 0,
+                };
+                _ship.Apply(_seq, inp);
+                _net.Send(Encode.Input(
+                    (float)inp.Thrust, (float)inp.Roll,
+                    (float)inp.YawRate, (float)inp.PitchRate, 0,
+                    inp.Boost ? SpaceAdventure.Net.Action.Boost : (ushort)0, _seq, 1));
+                return;
+            }
+            if (_seat == 1)
+            {
+                // Driving: mode 2, v = [throttle, steer, 0, 0, 0]. Forward
+                // key is throttle, strafe keys steer (PROTOCOL "input").
+                double throttle = li.MoveY, steer = li.MoveX;
+                _rover.Apply(_seq, throttle, steer);
+                _net.Send(Encode.Input((float)throttle, (float)steer, 0, 0, 0, 0, _seq, 2));
+                return;
+            }
+            if (_seat != 0)
+            {
+                // Passenger: movement is ignored server-side (the body is
+                // composed from the vehicle), but look still flows for
+                // pitch_q. Send it zeroed so nothing depends on the mercy.
+                _net.Send(Encode.Input(0, 0,
+                    (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z, 0, _seq));
+                return;
+            }
+
             var input = new Sim.Input
             {
                 MoveX = li.MoveX,
@@ -483,15 +901,44 @@ namespace SpaceAdventure.Game
                     _timeline.Add(snap, Time.time);
                     foreach (var row in snap.Entities)
                     {
-                        if (row.Id != _net.EntityId) continue;
-                        _predictor.Reconcile(
-                            new Vec3(row.PosX, row.PosY, row.PosZ),
-                            new Vec3(row.VelX, row.VelY, row.VelZ),
-                            FacingFrom(row),
-                            row.Grounded,
-                            snap.AckSeq);
-                        _hud.Health = row.Health;
-                        _character.Health = row.Health;
+                        if (row.Id == _net.EntityId)
+                        {
+                            // Occupancy is whatever our row says. On a seat
+                            // change, drop the stale predictor: the on-foot
+                            // one on boarding, the rover one on leaving.
+                            if (row.ParentId != _seatVehicle || row.Seat != _seat)
+                            {
+                                _seatVehicle = row.ParentId;
+                                _seat = row.Seat;
+                                _rover.Reset();
+                                _ship.Reset();
+                                _mouseAccum = Vector2.zero;
+                                if (_seat != 0) _predictor.Reset();
+                            }
+                            if (_seat == 0)
+                            {
+                                _predictor.Reconcile(
+                                    new Vec3(row.PosX, row.PosY, row.PosZ),
+                                    new Vec3(row.VelX, row.VelY, row.VelZ),
+                                    FacingFrom(row),
+                                    row.Grounded,
+                                    snap.AckSeq);
+                            }
+                            _hud.Health = row.Health;
+                            _character.Health = row.Health;
+                        }
+                        else if (_seat != 0 && row.Id == _seatVehicle)
+                        {
+                            // Our row precedes world entities in the snapshot
+                            // (players first), so _seat is already current.
+                            var pos = new Vec3(row.PosX, row.PosY, row.PosZ);
+                            var vel = new Vec3(row.VelX, row.VelY, row.VelZ);
+                            var q = new Quat(row.QuatX, row.QuatY, row.QuatZ, row.QuatW);
+                            if (SeatKind == EntityType.Ship)
+                                _ship.Reconcile(pos, vel, q, row.Grounded, row.Space, snap.AckSeq);
+                            else
+                                _rover.Reconcile(pos, vel, q, row.Grounded, snap.AckSeq);
+                        }
                     }
                     break;
                 }
@@ -511,7 +958,10 @@ namespace SpaceAdventure.Game
                                 ? _viewModel.Muzzle.position
                                 : (Vector3?)null);
                             break;
-                        case EventId.Hit: _fx.OnHit(ev, _net.EntityId); break;
+                        case EventId.Hit:
+                            _fx.OnHit(ev, _net.EntityId);
+                            OnHitFeedback(ev);
+                            break;
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
@@ -526,6 +976,30 @@ namespace SpaceAdventure.Game
                     _hud.OnEvent(ev, _net.EntityId);
                     break;
                 }
+                case Msg.SeatResult:
+                {
+                    SeatResult sr = Decode.SeatResult(frame.Reader);
+                    ushort crew = _views.TryGet(sr.EntityId, out var sv) && sv.Type == EntityType.Ship
+                        ? (ushort)3 : (ushort)2;
+                    if (sr.Result == SeatResult.Occupied && sr.Seat < crew)
+                    {
+                        // That seat is taken — walk down the bench.
+                        _net.Send(Encode.Board(sr.EntityId, (ushort)(sr.Seat + 1)));
+                    }
+                    else if (!sr.Ok)
+                    {
+                        _interact.Notice = sr.Result switch
+                        {
+                            SeatResult.Occupied => "seat taken",
+                            SeatResult.OutOfRange => "too far away",
+                            _ => "can't do that",
+                        };
+                        _noticeUntil = Time.time + 2f;
+                    }
+                    // A grant needs no handling here: occupancy is whatever
+                    // our next snapshot row says (PROTOCOL "board/disembark").
+                    break;
+                }
                 case Msg.CmdResult:
                 {
                     CmdResult r = Decode.CmdResult(frame.Reader);
@@ -535,6 +1009,9 @@ namespace SpaceAdventure.Game
                     if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
+                    if (_shopView.Open) _shopView.Rebuild();
+                    if (_bagsView.Open) _bagsView.Rebuild();
+                    if (_sheetView.Open) _sheetView.Rebuild();
                     break;
                 }
             }
@@ -562,6 +1039,8 @@ namespace SpaceAdventure.Game
             if (_planet != null) Destroy(_planet);
             _planet = TerrainMesh.Build(_terrain, _material, transform);
             _predictor.Seed(_terrain, _colliders);
+            _rover.Seed(_terrain);
+            _ship.Seed(_terrain);
 
             // Scatter is pure in (terrain, world_seed), so it can only run
             // once the terrain has landed -- which is here, and not earlier.
@@ -580,26 +1059,7 @@ namespace SpaceAdventure.Game
                       $"tickHz={_net.TickHz} spawn={_predictor.State.Pos.Length:F1} m from centre");
         }
 
-        private void OnGUI()
-        {
-            if (_worldBuilt && !_map.Open) _hud.DrawHealthBars(_camera, _views);
-            _hud?.Draw(_net, _predictor, _character);
-            if (_map == null || !_worldBuilt) return;
 
-            if (!_map.Open)
-            {
-                byte[] cmd = _character.AnyOpen
-                    ? _character.Draw(NextCmdSeq)
-                    : _interact.Draw(NextCmdSeq);
-                if (cmd != null) _net.Send(cmd);
-            }
-
-            State s = _predictor.State;
-            _map.Draw(_terrain,
-                      TerrainMesh.ToUnity(s.Pos),
-                      TerrainMesh.ToUnity(s.Facing),
-                      MapMarkers());
-        }
 
         /// <summary>
         /// Everything on the map: the live entities, plus the spawn point.

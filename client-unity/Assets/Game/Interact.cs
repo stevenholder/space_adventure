@@ -38,14 +38,24 @@ namespace SpaceAdventure.Game
 
         private readonly EntityViews _views;
 
-        private GUIStyle _style, _heading;
-        private Texture2D _panel;
-
         private readonly Character _character;
 
         private uint _shopNpc;
         private StockEntry[] _stock;
         private string _status = "";
+
+        // Phase 8: the UI Toolkit shop view reads state from here and builds
+        // the SAME cmd bytes the IMGUI panel did (t14 stays byte-identical).
+        internal StockEntry[] Stock => _stock;
+        public string Status => _status;
+
+        public byte[] BuyCmd(ushort seq, string item, int price)
+        {
+            _lastBought = item;
+            _status = "buying...";
+            return Encode.Cmd(seq, Op.ShopBuy,
+                $"{{\"npc\":{_shopNpc},\"item\":\"{item}\",\"qty\":1}}");
+        }
 
         public Interaction(EntityViews views, Character character)
         {
@@ -55,6 +65,18 @@ namespace SpaceAdventure.Game
 
         /// <summary>The entity the player is looking at, or 0.</summary>
         public uint Target { get; private set; }
+
+        /// <summary>The current target's EntityType, 0 when none.</summary>
+        public ushort TargetType { get; private set; }
+
+        /// <summary>
+        /// Overrides the cone prompt when set (seated exit hint, seat_result
+        /// refusals). Owned by Boot; cleared by Boot when it stops applying.
+        /// </summary>
+        public string Notice = "";
+
+        /// <summary>board_dist (GDD "Seats and occupancy").</summary>
+        private const float BoardDist = 8f;
 
         /// <summary>What the prompt should say, or empty when there is nothing to say.</summary>
         public string Prompt { get; private set; } = "";
@@ -77,10 +99,12 @@ namespace SpaceAdventure.Game
             Prompt = "";
             float best = ConeCosMin;
 
+            TargetType = 0;
             foreach (EntityView v in _views.All)
             {
                 if (v.Root == null || !v.Root.activeSelf) continue;
-                if (v.Type != EntityType.Npc && v.Type != EntityType.Loot) continue;
+                if (v.Type != EntityType.Npc && v.Type != EntityType.Loot &&
+                    v.Type != EntityType.Vehicle && v.Type != EntityType.Ship) continue;
 
                 // A corpse is not a conversation. This used to be implied by
                 // activeSelf -- a dead body was switched off, so it fell out of
@@ -98,16 +122,25 @@ namespace SpaceAdventure.Game
                 Vector3 targetEye = targetPos + targetPos.normalized * EyeHeight;
                 Vector3 to = targetEye - eye;
                 float d = to.magnitude;
-                if (d > InteractDist || d < 1e-4f) continue;
+                // A vehicle is boarded from board_dist (GDD, 8 m), not
+                // conversation range — the server measures the same 8 m.
+                float maxDist = v.Type == EntityType.Vehicle || v.Type == EntityType.Ship
+                    ? BoardDist : InteractDist;
+                if (d > maxDist || d < 1e-4f) continue;
 
                 float dot = Vector3.Dot(look, to / d);
                 if (dot < best) continue;
 
                 best = dot;
                 Target = v.Id;
-                Prompt = v.Type == EntityType.Loot
-                    ? "E  ·  pick up"
-                    : $"E  ·  talk to {Nice(v.Label)}";
+                TargetType = v.Type;
+                Prompt = v.Type switch
+                {
+                    EntityType.Loot => "E  ·  pick up",
+                    EntityType.Vehicle => "E  ·  drive",
+                    EntityType.Ship => "E  ·  fly",
+                    _ => $"E  ·  talk to {Nice(v.Label)}",
+                };
             }
         }
 
@@ -201,87 +234,5 @@ namespace SpaceAdventure.Game
             _ => body,
         };
 
-        /// <summary>Draws the prompt and, when open, the shop. Returns a cmd to send, or null.</summary>
-        public byte[] Draw(Func<ushort> nextSeq)
-        {
-            EnsureStyles();
-            int credits = _character.Credits;
-
-            if (!ShopOpen)
-            {
-                if (string.IsNullOrEmpty(Prompt)) return null;
-                var size = _style.CalcSize(new GUIContent(Prompt));
-                float w = size.x + 24, h = 26;
-                var at = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.62f, w, h);
-                GUI.DrawTexture(at, _panel);
-                GUI.Label(new Rect(at.x + 12, at.y + 4, w, h), Prompt, _style);
-                return null;
-            }
-
-            byte[] send = null;
-            ItemStack[] inventory = _character.Inventory;
-            int carried = _character.UsedSlots;
-            float panelW = 400;
-            float panelH = 84 + _stock.Length * 26 + 26 + carried * 20 + 46;
-            var rect = new Rect((Screen.width - panelW) * 0.5f, (Screen.height - panelH) * 0.5f, panelW, panelH);
-            GUI.DrawTexture(rect, _panel);
-
-            float y = rect.y + 10;
-            GUI.Label(new Rect(rect.x + 16, y, panelW, 22), "QUARTERMASTER VEX", _heading);
-            y += 24;
-            GUI.Label(new Rect(rect.x + 16, y, panelW, 20),
-                credits >= 0 ? $"credits: {credits}" : "credits: —", _style);
-            y += 26;
-
-            for (int i = 0; i < _stock.Length; i++)
-            {
-                StockEntry e = _stock[i];
-                var row = new Rect(rect.x + 16, y, panelW - 32, 22);
-                GUI.enabled = credits < 0 || credits >= e.price;
-                if (GUI.Button(row, $"{_character.Defs.ItemName(e.item)}   —   {e.price} cr"))
-                {
-                    _lastBought = e.item;
-                    _status = "buying...";
-                    send = Encode.Cmd(nextSeq(), Op.ShopBuy,
-                        $"{{\"npc\":{_shopNpc},\"item\":\"{e.item}\",\"qty\":1}}");
-                }
-                GUI.enabled = true;
-                y += 26;
-            }
-
-            // What you are carrying, and how full the pack is. Without this a
-            // refusal for "no space" is a mystery: nothing on screen ever said
-            // how many of the twenty slots were gone, or that a second rifle
-            // costs a whole slot because it does not stack.
-            y += 6;
-            GUI.Label(new Rect(rect.x + 16, y, panelW - 32, 20),
-                $"carrying  ({carried}/{Character.InventorySlots} slots)   ·   B for bags", _style);
-            y += 20;
-            if (inventory != null)
-            {
-                foreach (ItemStack it in inventory)
-                {
-                    GUI.Label(new Rect(rect.x + 26, y, panelW - 42, 18),
-                        $"{_character.Defs.ItemName(it.item)}  x{it.qty}", _style);
-                    y += 20;
-                }
-            }
-
-            GUI.Label(new Rect(rect.x + 16, rect.yMax - 42, panelW - 32, 20), _status, _style);
-            if (GUI.Button(new Rect(rect.xMax - 90, rect.yMax - 32, 74, 24), "close")) CloseShop();
-            return send;
-        }
-
-        private void EnsureStyles()
-        {
-            if (_panel != null) return;
-            _panel = new Texture2D(1, 1);
-            _panel.SetPixel(0, 0, new Color(0.03f, 0.04f, 0.06f, 0.88f));
-            _panel.Apply();
-            _style = new GUIStyle(GUI.skin.label) { fontSize = 14 };
-            _style.normal.textColor = new Color(0.92f, 0.94f, 1f);
-            _heading = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
-            _heading.normal.textColor = new Color(0.95f, 0.86f, 0.55f);
-        }
     }
 }

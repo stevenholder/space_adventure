@@ -41,6 +41,9 @@ namespace SpaceAdventure.Net
         [JsonProperty("kind")] public string Kind { get; set; } = "";
         [JsonProperty("slot")] public string Slot { get; set; } = "";
         [JsonProperty("asset")] public string Asset { get; set; } = "";
+
+        /// <summary>Phase 8: absent reads as "" and renders common (C64).</summary>
+        [JsonProperty("rarity")] public string Rarity { get; set; } = "";
     }
 
     /// <summary>One entity type's render and hitbox def.</summary>
@@ -122,6 +125,9 @@ namespace SpaceAdventure.Net
 
         /// <summary>The equipment slot an item declares, or "" if it declares none.</summary>
         public string SlotOf(string id) => TryItem(id, out ItemDef it) ? it.Slot ?? "" : "";
+
+        /// <summary>Phase 8: the item's rarity tier, "" (=common) when unknown.</summary>
+        public string ItemRarity(string id) => TryItem(id, out ItemDef it) ? it.Rarity ?? "" : "";
 
         /// <summary>True when the item declares an equipment slot at all.</summary>
         public bool IsEquippable(string id) => !string.IsNullOrEmpty(SlotOf(id));

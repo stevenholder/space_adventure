@@ -82,6 +82,7 @@ const NODE_CONTRACTS = {
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
+  "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
   "weapon.pulse": { nodes: ["grip", "muzzle"] },
   "prop.target": { nodes: ["plate"] },
 };

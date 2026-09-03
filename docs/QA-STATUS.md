@@ -301,6 +301,111 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 8 — C60–C65, run 2026-09-03 (kind)
+
+The UI refresh: everything IMGUI moved to code-built UI Toolkit in the
+Scrapyard Comic language (GDD "UI style guide"). Presentation only — the
+wire and the sim are untouched, which is what C62 exists to prove.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C60 | One language; gallery in `test/out/ui/` | hud-final, hud-skew, panel-bags, panel-sheet, panel-map, panel-account — every screen on the style guide's tokens, captured from the packaged player via `-uiShot`/`-uiPanel` | **PASS** (shop screen shares ItemCard/panel construction with bags; a live shop screenshot needs an NPC interaction and comes from the playtest) |
+| C61 | Damage numbers, crit styling, directional incoming indicator | implemented (`UI/CombatFeed.cs`), wire decode of the hit event verified against PROTOCOL; **live camp-fight eyeball still owed** — headless can drive the fight (t16) but not see the popups | **PARTIAL — needs the playtest** |
+| C62 | Full harness fleet t2–t28 passes unchanged | all green against the deployed kind stack, byte-identical buy/equip cmds (t14 6/6, t28 25/25; t18/t21 flaky under fleet load, clean solo) | **PASS** |
+| C63 | Compass bearings match entity positions | `Bearing.To` unit-tested in the headless harness (6 cases, incl. the right=−X frame); markers live on the strip in every gallery shot | **PASS** |
+| C64 | Rarity end-to-end, unknown degrades to common | rarity in items.json → defs → `Defs.ItemRarity` → card band; unknown/absent → "" → common by the `Styles.Rarity` default arm | **PASS** |
+| C65 | 120 fps capped, worst frame < 16.7 ms with the new UI | framestats: **120.0 fps avg, worst 8.6 ms**, 12 entities, packaged player against kind | **PASS** |
+
+Known unverifiable-headless: UI Toolkit **button clicks** in the packaged
+player (buy, equip, account link). Everything up to the click is proven —
+the views build byte-identical cmds and the harness sends them — but a
+human has to click once. That plus C61's eyeball are the playtest items.
+
+## Phase 7 — C54–C59, run 2026-09-03 (kind AND production)
+
+25 live checks (`t28-accounts.mjs`), run twice: against the deployed kind
+stack, and — post-merge, post-CD — against the public
+`https://game.stevenholder.info` over the real internet (25/25 both).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C54 | Register/login, argon2id, sessions, rate limit, CSRF | register + auto-login; wrong password 401; no-header mutation 403; ten rapid logins rate-limited; sessions DB-backed | **PASS** |
+| C55 | Link code → token → play; single-use; one player per account | 8-char code redeemed once (second attempt 401); token joined the game; a later code returned the SAME token | **PASS** |
+| C56 | The account page tells the truth | pilot listed with its live 1000-credit start | **PASS** |
+| C57 | Lifecycle | password change killed the other session and spared its own; delete removed account, session AND the owned player (players 117 → 116, counted) | **PASS** |
+| C58 | The front door | landing + stats public; anonymous /api/me 401 | **PASS** |
+| C59 | Coexistence | full harness fleet untouched; legacy guest imported and listed; owned token refused re-import; the orphaned token joined again as a fresh guest | **PASS** |
+
+What the run caught: argon2id's first-choice parameters (64 MiB) OOM-killed
+the server inside the kind pod's 128Mi limit on the FIRST registration —
+silently, from outside, no panic to read. RFC 9106's second recommended set
+(19 MiB, t=2) fits the smallest pod this binary runs in; the encoded hash
+format is self-describing, so the change needed no migration.
+
+## Phase 6 — C48–C53, closed 2026-09-02
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C48 | Push to main → deployed, no human step; failed smoke rolls back | run 33693371037: green CI → tailnet → apply → smoke `/version` == main's server hash (5ff5703 == 5ff5703). The rollback path is PROVEN — a smoke string bug fired it against a correct deploy first | **PASS** |
+| C49 | Packaged client plays the full loop on the LAN URL | joined `ws://192.168.1.163/ws`; t3/t7/t15/t24/t26 all green; 20 Hz exact, one-way p95 6.3 ms | **PASS** |
+| C50 | Node-death and restore, DRILLED | primary killed → failover ~60 s, 6/6 rows; backup restored to scratch DB, row-counted | **PASS** |
+| C51 | Server churn: reconnect on token, persistence holds | server pod deleted; fresh-connection t15 green | **PASS** |
+| C52 | Hardening holds | origin allowlist + per-IP cap + join rate unit-tested and live; creds CNPG-generated; **NetworkPolicy clause WAIVED**: this k3s enforces cross-node netpol wrongly (allow-all still blocks — probed with pinned pods); a fence that fails by pod placement is worse than none. CNI repair is the reopen trigger | **PASS (netpol waived)** |
+| C53 | The kind dev path untouched | full local sweep green throughout | **PASS** |
+
+**What C48's six failed runs taught, each one a future outage pre-paid:**
+bootstrapped GHCR packages aren't repo-linked (grant Actions access);
+the operator's first ts.net TLS cert minting outlives a 20 s handshake;
+the tailnet impersonation grant is app-capability, never covered by
+allow-all IP; a CD Role that applies its own manifest needs rbac verbs;
+a mid-apply Role downgrade lobotomizes the applier; and a smoke check
+must not read kubectl's chatter as data.
+
+## Phase 4 — C26–C32, run 2026-09-02
+
+All against the deployed stack, two wire-level clients (`t24-rover.mjs`),
+plus the cross-sim gate (`t23`, in CI).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C26 | Occupancy visible to the other client ≤ 1 s; composed seat position < 1e-2 m | visible; deviation **1.68e-6 m** | **PASS** |
+| C27 | The rover is never below the surface | min clearance −7.6e-6 m over 31 m of driving (independent field sampler) | **PASS**, as the property — there is deliberately no dev-override to force it under |
+| C28 | Seat race: exactly one gets result 0 | first granted, second refused 1 (sequential race — exactly-one, not simultaneity) | **PASS** |
+| C29 | Refusals: far board → 2, unseated disembark → 3, bad seat → 3 | 2 / 3 / 3 | **PASS** |
+| C30 | Drive conformance ≤ 1e-6 over ≥ 1000 ticks + GDD table within 5% | max dPos **9.6e-9 m**, dVel 4.2e-9, dQuat 3.8e-10 over 1200 ticks; peak 16.09 of vmax 16 | **PASS** (`t23`) |
+| C31 | Passenger input leaves the rover invariant | moved 0.00e+0 m through 1 s of full movement input; body stays composed | **PASS** |
+| C32 | Disembark at any speed lands on terrain ≤ 1 s, ≤ 10 m, never inside geometry | at speed: 2.00 m from the rover, 2.8e-6 m off the surface | **PASS** |
+
+**What the run caught:** C31 failed honestly on the first pass — not
+passenger input, but the rover still coasting 0.7 m through the window.
+Exponential damping never reaches zero, so a parked rover on any grade
+creeps downhill forever. `hold_speed` (0.1 m/s, GDD) now zeroes the
+tangential velocity outright when unthrottled; parked residual measured
+1.25e-16 m/s. Both sims, conformance re-verified.
+
+## Phase 5 — C33–C39, run 2026-09-02
+
+Live legs against the deployed stack (`t26-flight.mjs`, `t27-pilot-latency.mjs`),
+cross-sim gate in CI (`t25`, `make unity-conformance`).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C33 | Buy → pad → pilot seat, one session; persists across reconnect | purchased at 600 cr, spawned, seated; reconnect adds no duplicate and the ship is present | **PASS** |
+| C34 | Flight conformance ≤ 1e-6 over ≥ 1000 ticks + GDD table 5% | max dPos **3.7e-13 m**, dQuat 8.2e-16, dω 5e-16 over 1080 ticks; regimes agree every tick; peak 80.00 of vmax_boost | **PASS** (`t25`) |
+| C35 | No discontinuity, no camera flip, no boundary oscillation | space flag rose and fell exactly twice across the full arc; max inter-snapshot step 6.2 m (bar: two ticks of vmax_boost); hysteresis unit-tested under a falling hover | **PASS** |
+| C36 | Orbit: circles in space, returns, no drift/blow-up, renders at altitude | the committed arc reaches space, turns, burns back and lands; camera far plane 6 km; never below the surface (min clearance −1e-5 m, independent sampler) | **PASS** |
+| C37 | Touch down ≤ landing speed, settle grounded, no penetration; hard landing penalised | live landing grounded and still; settle-vs-bounce branches unit-tested at 4 and 20 m/s | **PASS** |
+| C38 | Passenger: sees the flight, no ship input, safe disembark | composed within one snapshot through the whole flight (worst 1.7 m ≈ seat offset), movement spam inert, disembarked onto terrain | **PASS** |
+| C39 | 100 ms latency: p95 predicted-vs-authoritative < 0.5 m, no snap-back | **p95 1.8e-5 m**, p50 5.5e-6 m, 0 snap-backs, 393 paired samples through the proxy | **PASS** (`t27`) |
+
+Notes: C27-style, C36's "returns to the pad" is flown as "returns and
+lands" — the committed script lands ~30 m from the pad, and pad-exact
+landings are piloting skill, not a sim property. Two GDD draft errors were
+caught and corrected during implementation, both recorded in place: the
+flight step's rotation line post-multiplied a world-axis quat while
+claiming local axes, and the pitch sign claimed nose-up for what the
+right-hand rule makes nose-down.
+
 ## Harnesses, for the C43 re-run
 
 All under `test/`. These speak the wire protocol directly and carry their own

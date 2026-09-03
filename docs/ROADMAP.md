@@ -566,6 +566,20 @@ wasted otherwise.
 
 # Phase 4 — get in a rover and drive
 
+### Where Phase 4 stands (2026-09-02)
+
+Built and green end to end in one pass: tasks 1–14 and 16 landed, C26–C32
+all PASS against the deployed stack (`docs/QA-STATUS.md` "Phase 4" has the
+measured values; `node test/t24-rover.mjs` is the harness — the t13 name
+this table originally assigned was already taken by collide-parity). C30
+conformance runs in CI via `make unity-conformance` (t23). Task 15 (rover
+ownership/purchase) is **deferred to Phase 5 deliberately**: no Phase 4
+criterion touches ownership, the playable proof uses the parked world
+rover, and C33 builds purchase-persistence properly for ships — rover
+ownership should ride that machinery, not grow a parallel one. The e2e
+run added one rule the spec missed: `hold_speed` (GDD), because a parked
+rover with only exponential damping creeps downhill forever.
+
 **Playable proof.** A rover is parked near spawn. Walk up to it, press E, your
 body sits in the driver seat and the camera moves to the driver's eye point.
 Drive it over the terrain — up slopes, over crests, around the camp. A second
@@ -581,10 +595,8 @@ also have to solve flight. Phase 5 then reuses it.
 
 - `docs/PROTOCOL.md`: activate `board` / `disembark` / `seat_result` and start
   filling `parent_id`/`seat` in the entity row already shipped in Phase 2. The
-  input mode byte — **added in Phase 3.5**, server and harness only — gains
-  mode `2`, ground vehicle (`v = [throttle, steer, 0, 0, 0]`). The byte does
-  not exist in the shipped v2 `input` layout; Phase 3.5 introduces it so the
-  Unity client is built against it from the start.
+  input mode byte — shipped in Phase 3.5 as a trailing, optional byte — gains
+  mode `2`, ground vehicle (`v = [throttle, steer, 0, 0, 0]`).
 - `docs/GDD.md`: the existing "Seats and occupancy" applies as written; add a
   **ground drive model** rule table (accel, top speed, steer rate, grip, slope
   limit, terrain-following suspension) and the rover's seat table.
@@ -608,9 +620,9 @@ also have to solve flight. Phase 5 then reuses it.
 | 11 | `frontend` | Rover rendering + camera mount at the seat node | `client-unity/Assets/Game/Vehicle.cs` | `make unity-typecheck` |
 | 12 | `frontend` | Input mode switch driven by snapshot occupancy | `client-unity/Assets/Game/Boot.cs` | `make unity-typecheck` |
 | 13 | `frontend` | Rover prediction + replay | `client-unity/Assets/Game/Core/Prediction.cs` | `make unity-test` |
-| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client-unity/Assets/Game/Hud.cs`, `Interact.cs` | `make unity-typecheck` |
-| 15 | `netcode` | Rover ownership: purchase via `cmd`, persisted, spawn/despawn | `server/internal/sim/ownership.go` | `go test ./internal/sim` |
-| 16 | `qa` | e2e harness against C26–C32 | `test/t13-rover.mjs` | `node test/t13-rover.mjs` |
+| 14 | `frontend` | Board prompt, seat UI, passenger free-look | `client-unity/Assets/Game/Interact.cs`, `Boot.cs` | `make unity-typecheck` |
+| 15 | `netcode` | Rover ownership — **deferred to Phase 5** (see the status block: rides C33's purchase machinery) | — | — |
+| 16 | `qa` | e2e harness against C26–C32 | `test/t24-rover.mjs` | `node test/t24-rover.mjs` |
 
 ### Acceptance criteria
 
@@ -636,6 +648,20 @@ Structurally the old M2 criteria, retargeted at a ground vehicle:
 ---
 
 # Phase 5 — buy a ship, fly it in space
+
+### Where Phase 5 stands (2026-09-02)
+
+Built and green: tasks 1–12 and 14 landed, C33–C39 all PASS
+(`docs/QA-STATUS.md` "Phase 5" has the measured values; `t26`/`t27` are
+the live harnesses, `t25` the cross-sim gate in CI). The seat machinery
+generalised as designed — the ship reuses Phase 4's board/disembark/
+composition through a shared SeatBank, and ownership reuses Phase 2's
+shop and inventory persistence outright (ship.v1 is an item; possession
+IS ownership). Task 13 (cockpit polish) is deferred as the spec itself
+suggested ("polish the cockpit last"): ship.v1 already carries the
+walk-in cockpit and seat nodes, and polish has no criterion. Task 15 of
+Phase 4 (rover ownership) can now ride this machinery whenever a rover
+shop entry is wanted — one items.json row plus one spawn branch.
 
 **Playable proof.** Buy a ship from an NPC. It spawns on a pad. Walk up to it,
 walk in, take the pilot seat. Fly off the surface, out of the atmosphere, and
@@ -703,6 +729,275 @@ ship is a moving-reference-frame problem, and it is not part of this phase.
   |predicted − authoritative| position error under 0.5 m with no snap-back.
 
 ---
+
+# Phase 6 — host it for real
+
+### Where Phase 6 stands (2026-09-02, night: CLOSED)
+
+C48 went green on run 33693371037 after six instructive failures
+(`docs/QA-STATUS.md` "Phase 6" lists all six — each was a future outage
+pre-paid). Push to main now reaches the pandas with no human step, smoke
+compares `/version` to main's own server hash, and the rollback path is
+proven because a smoke bug once fired it against a correct deploy. All
+criteria C48–C53 PASS (C52's NetworkPolicy clause waived with probe
+evidence). The phase is closed; the game runs, for real, on real metal,
+continuously deployed.
+
+Live. The pandas cluster serves the game through Traefik on every node IP
+(`ws://192.168.1.163/ws`), build-identity verified; CNPG runs Postgres 18
+with two instances; the packaged client joins and plays; t3/t7/t15/t24/t26
+all pass against it (20 Hz exact, one-way p95 6.3 ms). C50 is DRILLED:
+primary killed → failover in ~60 s, zero row loss; backup restored and
+counted. C49, C51, C53 hold. C48 fires on the first merge to main.
+
+Two things the drills caught, both on the record in the RUNBOOK: the
+backup CronJob's pg_dump was silently producing empty files (image major
+below the server's Postgres 18, the refusal eaten by a pipe — now bash
+with pipefail, a size assertion, and the matching major), and this
+cluster's k3s NetworkPolicy enforcement is broken for cross-node traffic
+(even allow-all blocked; the policy was a landmine that would have severed
+the server from Postgres on its next pod restart). C52's NetworkPolicy
+clause is therefore WAIVED with that probe as evidence — the fence wants a
+CNI repair, not a manifest — while its other clauses (origin allowlist,
+per-IP cap, join rate limit, generated credentials) are implemented and
+tested. The operator's API proxy is enabled; the workflows are written and
+take their first live run at the merge.
+
+**Playable proof.** Push to `main`. CI goes green, and with no further human
+step the pandas cluster (k3s, 4 nodes, on the tailnet) is running that exact
+build — `/version` says so. A packaged client on the LAN connects through
+Traefik and plays the whole game: walk, fight, buy, drive, fly. A node dies
+mid-week and no player data is lost.
+
+This is the Deferred table's "deploying somewhere real" trigger firing, so
+the deferrals it gated come due: hosted Postgres with replication and
+backups, and the origin-check hardening the code has carried as a "before
+public exposure" note since Phase 2. What does NOT come due: real accounts
+(players are still us — the LAN is the household) and sharding (one process
+is nowhere near saturated). The kind stack stays exactly as it is — the
+local development path does not change.
+
+**Decisions taken at wave 0 (2026-09-02).** Client exposure through Traefik
+on the LAN (the cluster's existing LoadBalancer); GitHub Actions reaches the
+cluster by joining the tailnet as an ephemeral node (Tailscale GitHub
+Action + the operator's API-server proxy, currently disabled and to be
+enabled); Postgres via the CloudNativePG operator (replicated across nodes —
+local-path storage is node-local, so replication is what makes "a node dies"
+a non-event); images on GHCR pushed by the same workflow with the built-in
+token.
+
+### Wave 0 — contracts
+
+- `docs/ARCHITECTURE.md`: a "Production deployment" section — the pandas
+  topology, the request path (client → Traefik host rule → Service → pod),
+  the CD path (Actions → tailnet → operator API proxy → kubectl), and the
+  explicit statement that kind remains the dev path.
+- `deploy/` splits: the kind manifests stay put; `deploy/prod/` holds the
+  real-cluster kustomization. One server image serves both.
+- The server hostname (Traefik host rule) and the `SA_ALLOWED_ORIGINS`
+  contract for the origin check (below) are pinned before any manifest.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | GHCR publish workflow: build server image on `main`, tag `latest` + git SHA, BUILD_ID stamped | `.github/workflows/publish.yml` | image pullable, `/version` = SHA |
+| 2 | Enable the Tailscale operator's API-server proxy + tailnet ACL grants for a `tag:ci` principal | operator helm values (user's install) | `kubectl --server https://tailscale-operator.<tailnet>` works from a tailnet node |
+| 3 | Namespace, scoped ServiceAccount + Role for CD, imagePullSecret for GHCR | `deploy/prod/00-namespace.yaml` etc. | `kubectl auth can-i` matrix |
+| 4 | CNPG operator (pinned version) + `Cluster`: 2 instances on different nodes, scheduled backups + a RESTORE DRILL | `deploy/prod/postgres/` | kill the primary; C50 |
+| 5 | Server Deployment/Service/Ingress (Traefik, websocket), resources, probes, NetworkPolicies (server→pg only; pg accepts only server) | `deploy/prod/` | C49, C52 |
+| 6 | CD workflow: on CI-green `main` — tailscale join → kubectl apply -k → rollout status → smoke `/version == SHA` | `.github/workflows/deploy.yml` | C48 |
+| 7 | Origin check: `SA_ALLOWED_ORIGINS` allowlist — empty/absent Origin allowed (native clients send none), browser origins must match; the "must change together" note retired | `server/internal/server/server.go` | unit + C52 |
+| 8 | Join hardening for LAN exposure: per-IP connection cap and a hello rate limit | `server/internal/server/` | unit + C52 |
+| 9 | Non-default DB credentials via Secret, generated not committed; kind keeps its own | `deploy/prod/` | C52 |
+| 10 | e2e against prod: the existing harnesses honour `SA_SERVER_URL` — run t3/t14/t15/t24/t26 against the LAN URL | harness sweep | C49 |
+| 11 | Runbook: deploy, roll back (previous SHA tag), restore from backup, read logs | `docs/RUNBOOK.md` | review + the C50 drill follows it |
+
+### Acceptance criteria
+
+- **C48 Continuous deployment.** A push to `main` that passes CI reaches the
+  pandas cluster with no human step; `/version` equals the pushed SHA;
+  a failed smoke check leaves the previous build serving (rollout undo).
+- **C49 Real play.** A packaged client pointed at the LAN URL plays the full
+  loop — join, fight, buy, drive, fly, land — against the real cluster, with
+  the sustain harness holding 20 Hz and one-way p95 under 50 ms on the LAN.
+- **C50 A node dies.** Kill the Postgres primary's pod, then drain its node:
+  the cluster fails over with zero committed-write loss, and a restore from
+  the latest backup is DRILLED, not assumed, following the runbook.
+- **C51 Server churn.** Deleting the server pod mid-session: clients
+  reconnect on the same token and persistence holds (t15 against prod).
+- **C52 Hardening holds.** A browser-origin WS from an unlisted origin is
+  refused; Postgres is unreachable from anything but the server pods
+  (NetworkPolicy probed, not assumed); DB credentials are not the defaults
+  and not in git; the connection cap and hello rate limit refuse a
+  flood without disturbing seated players.
+- **C53 Dev path intact.** `make up` + the full local sweep still pass
+  untouched on kind — production hosting changed nothing local.
+
+### Explicitly still deferred
+
+Real accounts and token signing (players are the household; the trigger
+stays "players other than us"), wss/TLS on the LAN (an internal CA every
+client must trust buys little on a private LAN — revisit if the LAN stops
+being trusted), sharding, and everything else in the table below.
+
+# Phase 7 — accounts, and the site that manages them
+
+### Where Phase 7 stands (2026-09-03)
+
+Built and green on kind: all seven tasks landed, C54–C59 PASS (25 checks,
+`docs/QA-STATUS.md` "Phase 7"), the packaged client carries the F1 link
+panel, and the site ships inside the server binary. Prod re-verification
+rides the merge (CD deploys it; run `t28` against the public URL after).
+The run's one catch — argon2's 64 MiB first-choice parameters OOM-killing
+a 128Mi pod on the first registration — is fixed and recorded. Still
+deliberately absent: password reset email (no SMTP exists; a locked-out
+account is admin-fixable via the store) and strict accounts-only join
+(coexistence rule stands).
+
+**Playable proof.** Visit `https://game.stevenholder.info/`: a landing page
+with live stats and how to get the client. Register with email + password.
+Your account page mints a link code; type it into the game and you are
+playing as your account's player. Change your password, see your credits
+and ships on the web, delete the account and everything yours is gone.
+
+**Trigger.** The Deferred table's "real accounts (players other than us)"
+armed the moment the public door opened. This lands the minimum: accounts
+that ISSUE game identity, not decorate it — the account mints the token.
+
+**Coexistence rule, load-bearing.** Anonymous tokens keep working exactly
+as today (join with any fresh token = a guest). Every e2e harness and all
+current progress rides them; an account can IMPORT a legacy token to adopt
+that progress. Strict accounts-only join is deferred until abuse appears.
+
+### Wave 0 — contracts
+
+- Schema (`002_accounts.sql`): `account` (id, email UNIQUE, argon2id
+  `pw_hash`, created), `web_session` (id, account_id, expires),
+  `link_code` (code, account_id, expires), `player.account_id` nullable.
+  One player per account per world: redeeming a code returns the
+  account's existing player token when there is one.
+- HTTP API under `/api/` in the game server binary (embedded site via
+  go:embed, no build toolchain — the site is plain HTML/CSS/JS, C47's
+  spirit applied to the web): register, login, logout, me, link-code,
+  redeem (the game client's exchange), import-token, password, delete,
+  stats (public). Sessions: HttpOnly SameSite=Strict cookie backed by
+  `web_session`; mutating routes require the `X-Requested-With` header
+  (CSRF); login/register ride the gatekeeper's per-IP buckets.
+- Ingress: the public host rule widens to PathPrefix `/`; the hostless
+  LAN rule keeps its three exact paths.
+- Unity: an account panel (IMGUI, like everything) that takes a link
+  code, redeems it over HTTPS derived from the server URL, stores the
+  token in PlayerPrefs and reconnects.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | Migration 002 + store methods (accounts, sessions, codes, import, delete cascade) | `server/internal/store/` | store suite, both engines |
+| 2 | Auth: argon2id hashing, session mint/check, login rate limit | `server/internal/web/` | unit |
+| 3 | API handlers + embedded site (landing/login/account pages) | `server/internal/web/`, `site/` | `t28` |
+| 4 | Token redeem: code → account player token; hello path unchanged | `server/internal/web/`, `server.go` | `t28` |
+| 5 | Ingress PathPrefix + landing stats | `deploy/prod/25-ingress.yaml` | live |
+| 6 | Unity account panel: enter code, redeem, store, reconnect | `client-unity/Assets/Game/` | typecheck + live |
+| 7 | e2e harness against C54–C59 | `test/t28-accounts.mjs` | `node test/t28-accounts.mjs` |
+
+### Acceptance criteria
+
+- **C54 Register/login.** Email+password registers (argon2id at rest, never
+  logged), logs in, sessions survive server restarts (DB-backed), a wrong
+  password is refused, login is rate-limited per IP.
+- **C55 Account-issued identity.** A link code minted on the site, redeemed
+  by the client, joins the game as the account's player; redeeming twice
+  yields the same player; codes expire and are single-use.
+- **C56 The account page tells the truth.** Credits, inventory and
+  ownership shown match a live t15-style probe of the same player.
+- **C57 Lifecycle.** Password change invalidates other sessions; account
+  delete removes account, sessions, codes and owned players — and the
+  issued game token is refused afterward.
+- **C58 The front door.** The landing page serves publicly with live
+  player counts and client instructions; no authenticated data leaks to
+  anonymous visitors.
+- **C59 Coexistence.** The full existing harness fleet still passes
+  unchanged (anonymous tokens live); an imported legacy token's progress
+  appears under the account.
+
+# Phase 8 — the interface earns its looter stripes
+
+### Where Phase 8 stands (2026-09-03)
+
+Built and green on kind: all eleven tasks landed, C60/C62–C65 PASS and
+C61 PARTIAL (`docs/QA-STATUS.md` "Phase 8"). The entire interface is
+code-built UI Toolkit — IMGUI is retired, `grep OnGUI Assets/Game` finds
+nothing — with the gallery in `test/out/ui/` as the C60 artifact and
+framestats at 120 fps / worst 8.6 ms for C65. Two things only a human
+can do remain: eyeball the damage numbers in a live camp fight (C61),
+and click a UI Toolkit button (buy / equip / account link) in the
+packaged player once — the cmd bytes those clicks send are already
+proven byte-identical by t14.
+
+**Playable proof.** The game LOOKS like a looter shooter: shots land with
+damage numbers and crits that pop, a hit from behind points behind you, a
+compass strip names where the shop and your ship are, the bags are a slot
+grid of item cards with rarity color bands, and every panel — HUD, shop,
+bags, sheet, map, flight, account — speaks one visual language: Scrapyard
+Comic. Nothing about the wire or the sim changes; t2–t28 pass untouched.
+
+**Style: Scrapyard Comic** (GDD "UI style guide" pins the tokens). The
+Borderlands school — the HUD as a device the character also sees, angled
+panels, thick ink outlines, chunky display type, damage feedback as
+spectacle — sized to this game's chunky low-poly world; the extraction
+school contributes the grid inventory's utilitarian bones. Research trail
+in the phase PR.
+
+### Wave 0 — contracts
+
+- `docs/GDD.md` "UI style guide": the palette (ink/slate/cream/amber +
+  the five-tier rarity ramp), typography, the panel construction rules
+  (skew, outline, notch), damage-number behavior. The style guide is the
+  contract every screen is reviewed against.
+- `server/data/items.json`: every item gains `rarity` (common → legendary);
+  the defs payload carries it through (additive JSON — old clients ignore
+  it, no wire change).
+- Tech: Unity UI Toolkit constructed ENTIRELY from C# — no UXML, no USS
+  assets, PanelSettings created at runtime; C47's gate stays green. One
+  vendored OFL display font (a font file is not a scene asset; license
+  text ships beside it). **Spike first**: task 1 proves runtime-only UI
+  Toolkit in the packaged player before anything is ported; if Unity's
+  asset expectations block it, the recorded fallback is styled IMGUI with
+  GUI.matrix skews, and the phase proceeds unchanged above the seam.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | SPIKE: runtime-only UI Toolkit (PanelSettings from code) in the packaged player | `client-unity/Assets/Game/UI/UiRoot.cs` | build + run log line |
+| 2 | Style guide in GDD + `Ui.Styles` (tokens as code: colors, spacing, panel factory) | GDD, `UI/Styles.cs` | review + typecheck |
+| 3 | Vendored OFL display font + runtime FontAsset | `client-unity/Assets/Game/Resources/Fonts/` | renders in player |
+| 4 | HUD port: health/shield bar, ammo mag/reserve split, credits | `UI/Hud*.cs` | screenshots + t-fleet |
+| 5 | Damage numbers + crit styling + directional hit indicator | `UI/Combat*.cs` | live camp fight |
+| 6 | Compass strip with entity markers (shop, rover, own ship, camp) | `UI/Compass.cs` | bearing unit test + live |
+| 7 | Rarity in defs → item cards (color band, icon, hover stats) | data + `UI/Items.cs` | t28/t14 pass + visual |
+| 8 | Grid inventory + shop port (buy/equip flows byte-identical on the wire) | `UI/Bags.cs`, `UI/Shop.cs` | t14 unchanged |
+| 9 | Map, flight HUD, account panel, interact prompt ports | `UI/` | visual + live |
+| 10 | Screenshot gallery per screen (the C60 review artifact) | `test/out/ui/` | files exist |
+| 11 | Frame budget re-measured with the new UI | framestats | C65 |
+
+### Acceptance criteria
+
+- **C60 One language.** Every screen conforms to the style guide; the
+  gallery in `test/out/ui/` is the review artifact.
+- **C61 Combat feedback.** Damage numbers appear on hits with crit
+  styling; a directional indicator shows incoming damage; verified in a
+  live camp fight.
+- **C62 Nothing broke.** The full harness fleet (t2–t28) passes
+  unchanged — the refresh is client-side presentation only.
+- **C63 The compass tells the truth.** Marker bearings match entity
+  positions (unit-tested math, live-checked markers).
+- **C64 Rarity end-to-end.** defs carry rarity; shop, bags and loot
+  prompts show the band; unknown rarity degrades to common, never breaks.
+- **C65 Budget holds.** 120 fps capped, worst frame under 16.7 ms with
+  the new UI live (framestats).
 
 ## Deferred — and what would earn each one a place
 

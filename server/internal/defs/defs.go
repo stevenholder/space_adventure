@@ -39,6 +39,7 @@ type Item struct {
 	Kind     string  `json:"kind"`
 	Slot     string  `json:"slot,omitempty"`
 	Asset    string  `json:"asset,omitempty"`
+	Rarity   string  `json:"rarity,omitempty"` // Phase 8: common…legendary; absent reads as common
 	StackMax int     `json:"stack_max"`
 	Weapon   *Weapon `json:"weapon,omitempty"`
 }

@@ -59,12 +59,13 @@ const (
 	ActionBoost  uint16 = 0x0004 // Phase 5
 )
 
-// Entity.Flags bits (PROTOCOL.md constants). 0x10-0x80 reserved, sent as 0.
+// Entity.Flags bits (PROTOCOL.md constants). 0x20-0x80 reserved, sent as 0.
 const (
 	FlagGrounded  uint8 = 0x01
 	FlagSprinting uint8 = 0x02
 	FlagDead      uint8 = 0x04
 	FlagFiring    uint8 = 0x08
+	FlagSpace     uint8 = 0x10 // Phase 5: the ship is in the space regime
 )
 
 // cmd opcodes (PROTOCOL.md constants).

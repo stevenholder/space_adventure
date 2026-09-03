@@ -73,6 +73,8 @@ check('S->C props[0]', decoded[4],
   'prop asset=prop.barrel pos=12,1.25,6 quat=0,0,0,1 scale=1')
 check('S->C props[1]', decoded[5],
   'prop asset=prop.dish pos=-8,0.5,4 quat=0.5,-0.5,0.5,0.5 scale=1.5')
+check('S->C seat_result', decoded[6],
+  'seat_result entity=168496141 seat=2 result=2')
 
 // ---- C->S : C# encodes, Go must parse --------------------------------------
 cs('--codec-encode', csHex)
@@ -88,7 +90,9 @@ try {
 if (parsed.length) {
   check('C->S cmd', parsed[0], 'cmd seq=4097 opcode=2 data={"npc":7,"item":"weapon.pulse","qty":1}')
   check('C->S fire', parsed[1], 'fire seq=513 dir=0,0,1')
+  check('C->S board', parsed[2], 'board vehicle=168496141 seat=2')
+  check('C->S disembark', parsed[3], 'disembark')
 }
 
-console.log(fails.length ? `OVERALL: FAIL (${fails.join(', ')})` : `OVERALL: PASS (${4 + parsed.length} checks)`)
+console.log(fails.length ? `OVERALL: FAIL (${fails.join(', ')})` : `OVERALL: PASS (${5 + parsed.length} checks)`)
 process.exit(fails.length ? 1 : 0)

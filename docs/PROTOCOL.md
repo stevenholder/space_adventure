@@ -44,9 +44,9 @@ Max message size: 64 KiB. A message that exceeds it closes the connection
 | `0x0008` | `ping` | C→S | `u32 ts_ms` |
 | `0x0009` | `pong` | S→C | `u32 ts_ms` (echo of ping) |
 | `0x000A` | `terrain` | S→C | `u16 face_grid` \| `f32 radius_min` \| `f32 radius_max` \| `u16 radii[6 × face_grid × face_grid]` |
-| `0x000B` | `board` | C→S | `u32 vehicle_id` \| `u16 seat` — **Phase 4** |
-| `0x000C` | `disembark` | C→S | (no payload) — **Phase 4** |
-| `0x000D` | `seat_result` | S→C | `u32 entity_id` \| `u16 seat` \| `u8 result` — **Phase 4** |
+| `0x000B` | `board` | C→S | `u32 vehicle_id` \| `u16 seat` |
+| `0x000C` | `disembark` | C→S | (no payload) |
+| `0x000D` | `seat_result` | S→C | `u32 entity_id` \| `u16 seat` \| `u8 result` |
 | `0x000E` | `cmd` | C→S | `u16 seq` \| `u16 opcode` \| `u32 data_len` \| `bytes data` (UTF-8 JSON) |
 | `0x000F` | `cmd_result` | S→C | `u16 seq` \| `u16 opcode` \| `u8 status` \| `u32 data_len` \| `bytes data` (UTF-8 JSON) |
 | `0x0010` | `defs` | S→C | `u32 data_len` \| `bytes data` (UTF-8 JSON) |
@@ -92,20 +92,16 @@ Constants:
   (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3).
 - `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
   boost (mode 1, Phase 5). Other bits ignored.
-- **`input` has NO mode byte today.** It is the 24-byte on-foot layout above,
-  and both ends implement exactly that. This table previously documented a
-  leading `u8 mode` with a `f32 v[5]` union, which was written for Phase 4/5
-  and never built — following the doc instead of the code misaligns every
-  field by one byte, which is how it was found: a wire-level test wrote a
-  25-byte input, the server rejected it as malformed, and the connection went
-  silent.
-  - The mode byte lands with **Phase 4**, when there is a second control
-    scheme to select. At that point `input` becomes
-    `u8 mode | f32 v[5] | u16 action_mask | u16 seq`, with mode `0` on foot
-    (`v = [move_x, move_y, look_dir.x, look_dir.y, look_dir.z]`), `1` pilot
-    (Phase 5, `v = [thrust, roll, yaw_rate, pitch_rate, 0]`) and `2` ground
-    vehicle (`v = [throttle, steer, 0, 0, 0]`). It is a wire break on both
-    ends plus the harness, so it moves with a version bump, not quietly.
+- **`input`'s mode byte is trailing and optional** (landed in Phase 3.5;
+  earlier drafts described a *leading* byte that was never built — following
+  that draft misaligns every field by one). The 25-byte layout is the table
+  row above; a 24-byte payload is read as mode `0`, so a client that predates
+  the byte keeps working. Modes: `0` on foot
+  (`v = [move_x, move_y, look_dir.x, look_dir.y, look_dir.z]`), `1` pilot
+  (Phase 5, `v = [thrust, roll, yaw_rate, pitch_rate, 0]`), `2` ground
+  vehicle (Phase 4, `v = [throttle, steer, 0, 0, 0]` — `throttle` ∈ [−1, 1],
+  negative reverses; `steer` ∈ [−1, 1], positive turns toward the vehicle's
+  local +X (right); the last three floats are sent as zero and ignored).
 - `seat` (Phase 4): `0` not aboard; `1` driver/pilot; `2`–`3` passenger. The
   field is u16 — more seats later is a rule-table change, not a wire change.
 - `seat_result` `result` (Phase 4): `0` granted; `1` seat occupied; `2` out of
@@ -113,7 +109,10 @@ Constants:
 - `health`: current hit points, `0` = dead. Maximum comes from the entity's
   def in `defs`, not the wire. An entity with no health concept (loot, a
   projectile) sends `0` and sets no `dead` flag.
-- `flags` bits: `0x01` grounded, `0x02` sprinting, `0x04` dead, `0x08` firing
+- `flags` bits: `0x01` grounded, `0x02` sprinting, `0x04` dead, `0x08` firing,
+  `0x10` space (Phase 5: the entity — a ship — is in the space regime, GDD
+  "Space regime"; carried state mirrored onto the wire the same way a
+  vehicle's grounded is, so the client renders the regime it will predict)
   (set on the tick a shot is resolved). `0x10`–`0x80` reserved, sent as 0.
 - `pitch_q`: the entity's view pitch quantised as
   `round(pitch / (π/2) · 127)`, clamped to `[−127, 127]` — about 0.7° of
@@ -161,13 +160,17 @@ Constants:
   not angles, not rates. Mode `1` is the pilot layout: `thrust` ∈ [−1, 1],
   `roll` ∈ [−1, 1], `yaw_rate`/`pitch_rate` ∈ [−`angvel_max`,
   `angvel_max`] rad/s — sanitised (clamped, non-finite → 0) per the GDD
-  "Flight model" (Phase 5).
+  "Flight model" (Phase 5). Mode `2` is the ground-vehicle layout:
+  `throttle` ∈ [−1, 1] (negative reverses), `steer` ∈ [−1, 1] (positive turns
+  toward the vehicle's local +X), sanitised the same way per the GDD "Ground
+  drive model" (Phase 4); `v[2..4]` are sent as zero and ignored.
 - **The mode byte is a declaration, not authority.** The server interprets
-  the payload by its own occupancy: a seated pilot's input is read as pilot
-  fields; an on-foot or seated-passenger input is read as on-foot fields,
-  and a seated passenger's movement is ignored (the body is composed from
-  the ship). The client keeps the mode consistent with the occupancy it
-  reads from the snapshot (`parent_id`/`seat`).
+  the payload by its own occupancy: a seated driver's input is read as
+  ground-vehicle fields (a seated pilot's as pilot fields, Phase 5); an
+  on-foot or seated-passenger input is read as on-foot fields, and a seated
+  passenger's movement is ignored (the body is composed from the vehicle).
+  The client keeps the mode consistent with the occupancy it reads from the
+  snapshot (`parent_id`/`seat`).
 - `look_dir` is **client-authoritative**: the server takes it as given (after
   normalizing and clamping it away from local up/down per the GDD) rather than
   simulating it. Aim must be instant, so look is never predicted, never

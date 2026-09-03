@@ -969,8 +969,12 @@ is a 2D mouse, so M2 pins the mapping (PROTOCOL v2, mode 1):
 - mouse X per second since the last input frame · `k_rate` → `yaw_rate`
   target; sign: rightward drag (dx > 0) → negative rate (positive is a left
   turn — right-hand rule about local +Y)
-- mouse Y per second · `k_rate` → `pitch_rate` target; sign: upward drag
-  (dy < 0) → positive rate (nose up about local +X)
+- mouse Y per second · `k_rate` → `pitch_rate` target; sign (corrected at
+  Phase 5 implementation): a POSITIVE rate about local +X is nose DOWN by
+  the right-hand rule (+Y rotates toward +Z), so upward drag (dy < 0) →
+  **negative** rate. The draft claimed the opposite and the first flight
+  script "climbed" by pitching 200° through the ground and out the far
+  side of vertical
 - A/D → `roll` ∈ {+1, 0, −1} (A = roll left, D = roll right); the server's
   target is `roll · angvel_max_roll`
 - Shift → `action_mask` bit `0x0004` boost (scales thrust, not speed — the
@@ -989,7 +993,11 @@ stepShip(s, input, terrain, dt):     # input = (thrust, roll, yaw_rate, pitch_ra
   # 1. Rotation — first-order toward the target, ship frame
   ω_t  ← (pitch_rate, yaw_rate, roll · angvel_max_roll)      # about local +X, +Y, +Z
   ω    ← ω_t + (s.ω − ω_t) · e^(−dt / angvel_tau)
-  q    ← normalize(s.quat ⊗ axisAngle(rotate(s.quat, ω) · dt))   # post-multiply: rotate about local axes
+  q    ← normalize(s.quat ⊗ axisAngle(ω · dt))   # post-multiply: rotate about local axes
+       # (corrected at Phase 5 implementation: the draft wrapped ω in
+       #  rotate(s.quat, ·), a world-axis quat post-multiplied — which
+       #  contradicts "rotate about local axes"; ω's components ARE the
+       #  local axes' rates, so the local form is the one both sims build)
   # 2. Translation — thrust along ship forward (semi-implicit, base model)
   fwd  ← rotate(s.quat, (0, 0, 1))
   a    ← fwd · (boost ? accel_boost : accel) · (thrust > 0 ? thrust : 0.5 · thrust)
@@ -1072,6 +1080,258 @@ Edge cases already settled: backward thrust is `accel · 0.5` under the same
 `vmax` clamp; boost with no thrust input does nothing (boost scales thrust, not
 speed); the same fixed-step semi-implicit integrator and replay reconciliation
 apply, with orientation normalized every step.
+
+## Phase 5 — space regime, landing, ownership
+
+The flight model above is used as written ("The flight model — M2 context"
+pins the step, the input mapping and the camera; the phase number moved, the
+rules did not). This section adds the three things Phase 5's criteria need
+that no earlier phase specified: where space begins, what a landing is, and
+who owns a ship. Same contract status: every number is in a rule table,
+every rule is a formula or a named reference to one.
+
+### Rule table
+
+| name | value | unit | justification |
+|------|-------|------|---------------|
+| `space_radius` | 260 | m | the regime boundary, by RADIUS, not altitude — terrain tops out at 190 m, so the boundary clears every peak by ≥ 70 m and "altitude above ground" never flickers the regime over a mountain |
+| `space_hyst` | 10 | m | hysteresis band: ENTER space at ‖pos‖ ≥ `space_radius + space_hyst/2` (265), LEAVE at ‖pos‖ ≤ `space_radius − space_hyst/2` (255). A hover exactly at the threshold changes regime at most once (C35) |
+| `land_speed_max` | 8 | m/s | max inward radial speed at contact that settles; ~vmax/5 — a deliberate flare, not a formality |
+| `bounce_k` | 0.3 | — | a hard landing reflects the radial velocity at this restitution instead of settling: the penalty is the bounce, tunnelling stays impossible either way (the origin-point clamp runs regardless) |
+| `land_grip` | 3 | 1/s | tangential decay while grounded — a landed ship slides to a stop |
+| `pad_dist` | 25 | m | the landing pad: `pad_dist` from spawn along the spawn bearing rotated −90° about up (the rover parks along +bearing; perpendicular keeps them apart), walkable-retry k = 1..7 at +10 m, exactly the rover's spawn scan |
+| `ship_price` | 600 | cr | above the rifle (250) + typical camp loot: buying the ship is Phase 5's goal, not its opening move |
+| `crew_size_ship` | 3 | — | pilot + 2 passengers, the "Seats and occupancy" table as written |
+
+### Space regime
+
+Carried state (`space bool`), like `grounded` — hysteresis needs memory, and
+it is mirrored onto the wire as the `0x10` flags bit so the client renders
+the regime it predicts. In space:
+
+- **gravity off, drag off**: step 3's gravity term and step 2's
+  `damp`-when-unthrottled both skip. An unthrottled ship in space coasts —
+  Newton, not a half-life; stopping is reverse thrust.
+- **everything else unchanged**: rotation model, thrust, the `vmax`/boost
+  clamps (the clamp is what makes C36's "no drift off the world" cheap — a
+  bounded speed cannot run away), the origin-point collision (vacuously, the
+  terrain is 70 m below the boundary).
+
+The transition changes NO state but the flag: position, velocity, attitude
+and ω all carry through untouched, which is C35's "no discontinuity" by
+construction rather than by tuning.
+
+### Landing
+
+At origin-point contact (step 4) with inward radial speed `vr`:
+
+- `|vr| ≤ land_speed_max`: settle — kill the inward radial component
+  (already the base rule), `grounded ← true`.
+- `|vr| > land_speed_max`: bounce — `v ← v − dir·vr·(1 + bounce_k)`
+  (the reflected radial at `bounce_k` restitution), `grounded` stays false.
+- While grounded: tangential velocity decays `exp(−land_grip · dt)` and
+  zeroes under `hold_speed` (the Phase 4 row, reused) — parked is parked,
+  ships included. Thrust while grounded works (that is the takeoff).
+
+### Ownership
+
+A ship is an ITEM (`ship.v1`, kind `vehicle`, stack 1) sold by the
+quartermaster at `ship_price`, so purchase, refusal codes, inventory and
+persistence are all the Phase 2 machinery unchanged — ownership IS having
+the item, and it survives reconnects because inventory already does.
+
+- **On purchase**: the server spawns the buyer's ship on the pad
+  (pad scan above; a slot within 6 m of an existing ship is skipped, so a
+  second buyer's ship lands on the next walkable slot).
+- **On join**: a player whose inventory holds `ship.v1` and whose ship is
+  not in the world gets it spawned the same way. One ship per owner.
+- The ship is a world entity like the rover: it persists for the server
+  run, coasts unpiloted (zero-input step), and is never destroyed —
+  `damageable: false`, same reasoning as the rover's def.
+
+Spec for `netcode` + `frontend`, same contract status as the on-foot rules:
+every number is in the rule table; every rule is a formula or a named
+reference to one. There are no prose-only rules in this section. "Seats and
+occupancy" applies to the rover **as written** (board/disembark semantics,
+result codes, `board_dist`, composition, one control seat, handoff) — only
+the seat table and `disembark_local` below are rover-specific.
+
+The drive model is deliberately simpler than flight: no angular velocity
+state, no boost, no first-order steering response. Yaw is applied directly
+from the steer input, the wheels' job is done by a lateral-grip decay, and
+the terrain does the suspension — the rover's origin follows the surface the
+same way a body's foot point does. State is `pos/quat/vel` (f64) plus
+carried `grounded`; nothing beyond the wire triplet plus one bool.
+
+### Rule table
+
+| name | value | unit | justification |
+|------|-------|------|---------------|
+| `accel_drive` | 8 | m/s² | 0 → `vmax_drive` in 2 s; brisk without out-accelerating the 20 Hz correction loop |
+| `vmax_drive` | 16 | m/s | ~3× a sprint — walking should feel slow beside it, steering should still be possible at full speed (`steer_rate` gives a 13 m turn radius) |
+| `steer_rate` | 1.2 | rad/s | full-lock U-turn in ~2.6 s; skid-steer — a stationary rover can turn in place |
+| `grip` | 6 | 1/s | lateral velocity half-life ~0.12 s: a hard turn drifts for a beat, then bites |
+| `damp_drive` | 0.8 | 1/s | coast half-life ~0.87 s — lifting throttle is a brake, there is no brake input |
+| `hold_speed` | 0.1 | m/s | static friction: with no throttle, a tangential speed under this zeroes outright — parked is parked, an exponential decay alone never reaches zero and a parked rover would creep downhill forever |
+| `drive_slope_max` | 40 | deg | throttle authority cutoff; less capable than feet (`max_slope` 50), so the last stretch of a climb is on foot |
+| `rover_spawn_dist` | 20 | m | deterministic parked spawn along the spawn bearing (pseudocode below) |
+| `crew_size_rover` | 2 | — | 1 driver + 1 passenger; the wire `seat` field is u16, more later is a table change |
+
+Reused M1/M2 rows, by reference: `tick_hz`/`dt`, `gravity` (9.8, along local
+−up, always), `ground_snap` (0.15 m), `eps_degen`, `board_dist` (8 m), and
+the reverse rule from the flight model: negative throttle accelerates at
+`accel_drive · 0.5` under the same clamp.
+
+### `stepRover` (both sims, bit-for-bit intent — C30 diffs at ≤ 1e-6)
+
+Input is sanitised first: `throttle`/`steer` clamped to [−1, 1], non-finite
+→ 0. `up`, `h` (heading), `n` (ground normal) are unit vectors. Projection
+fallback: wherever a projection is degenerate (`‖·‖ < eps_degen`), fall back
+to `rotate(quat, +Y)` projected the same way, exactly as M1's spawn-facing
+fallback.
+
+```
+1  up ← normalize(pos)
+2  h  ← project rotate(quat, +Z) onto plane ⊥ up, normalized  (fallback above)
+3  if grounded and steer ≠ 0:
+       h ← rotate_about_axis(h, up, −steer · steer_rate · dt)
+       (positive steer turns toward local +X, i.e. right; the sign is the
+        right-hand rule about up)
+4  if grounded and slope(terrain, up) ≤ drive_slope_max and throttle ≠ 0:
+       a ← throttle > 0 ? accel_drive : accel_drive · 0.5
+       vel ← vel + h · (throttle · a · dt)
+5  vel ← vel − up · (gravity · dt)
+6  if grounded:                       # grip and coast, tangent-frame split
+       vr ← dot(vel, up);  vt ← vel − up·vr
+       vf ← dot(vt, h);    vlat ← vt − h·vf
+       vlat ← vlat · exp(−grip · dt)
+       if throttle = 0:
+           vf ← vf · exp(−damp_drive · dt)
+           if vf² + ‖vlat‖² < hold_speed²: vf ← 0; vlat ← 0   # parked is parked
+       vel ← up·vr + h·vf + vlat
+7  vt ← vel − up·dot(vel, up)
+   if ‖vt‖ > vmax_drive: vel ← vt · (vmax_drive/‖vt‖) + up·dot(vel, up)
+8  pos ← pos + vel · dt
+9  u' ← normalize(pos); R ← radius(terrain, u')
+   if ‖pos‖ ≤ R + ground_snap:
+       pos ← u' · R
+       vr ← dot(vel, u'); if vr < 0: vel ← vel − u'·vr
+       grounded ← true
+   else: grounded ← false
+10 n ← grounded ? surface_normal(terrain, u') : u'
+   h' ← project h onto plane ⊥ n, normalized (fallback above)
+   quat ← quat_from_basis(+X = n × h', +Y = n, +Z = h'), normalized
+```
+
+Steps 3, 4 and 6 are grounded-only: airborne, the rover is a ballistic
+brick — no steering, no throttle, no grip, which is what makes crests feel
+like crests. The one collision the rover has is step 9's origin point,
+exactly like a body's foot point ("Vehicles and crew": hull volume is
+visual-only, and there is no body-vs-vehicle collision).
+
+### Rover seats
+
+Rover local frame, +X right / +Y up / +Z forward, same conventions as the
+ship's seat table. The glb's `seat.driver` / `seat.passenger.0` nodes are
+these points in the art frame — the 180°-Y flip, (x, y, z) → (−x, y, −z).
+
+| seat | role | `seat_pos` (body origin / feet, m) | `seat_eye` (camera, m) |
+|------|------|------------------------------------|------------------------|
+| 1 | driver — the only control seat | (−0.35, 0.95, +0.10) | (−0.35, 1.55, +0.10) |
+| 2 | passenger | (+0.35, 0.95, −0.40) | (+0.35, 1.55, −0.40) |
+
+`disembark_local` **(+2.0, 0.0, 0.0)** m, rover frame — right side, 2 m from
+the origin: outside the hull, well inside `board_dist`, so a disembarked
+driver can re-board. Placement follows the "Seats and occupancy" disembark
+rule verbatim (radial projection onto the surface, `vel = 0`, facing = rover
+forward projected to the tangent plane).
+
+### Deterministic spawn
+
+The ship's deterministic-spawn pseudocode ("Vehicles and crew", M2 spec)
+applies with `rover_spawn_dist` in place of the ship's 15 m: a candidate
+point `rover_spawn_dist` from spawn along the spawn bearing, walkable-retry
+`k = 1..7` at +10 m steps, quat basis `+X = up × forward, +Y = up,
++Z = forward`. One rover, spawned at world build, entity type `0x0005`,
+def `vehicle`, asset `vehicle.rover.v1`.
+
+### Tuning targets (advisory — the rule table is the contract)
+
+- Flat ground, full throttle: ~2 s to `vmax_drive`, top speed pins at 16 m/s.
+- Full-speed full-lock: settles into a ~13 m-radius circle, drifting visibly
+  for the first ~0.3 s of the turn.
+- A 45° slope stalls the climb (throttle authority cut at 40°); gravity plus
+  grip walks it back down without spinning.
+- Lifting throttle at `vmax_drive` coasts to under 2 m/s in ~3 s.
+
+## UI style guide — Scrapyard Comic (Phase 8)
+
+The interface is a device the character also sees (the Borderlands rule),
+drawn with comic-ink conviction over a scavenger world. Every screen is
+reviewed against THIS section; a screen that needs a color or rule not
+listed here adds it here first.
+
+### Palette
+
+| token | hex | used for |
+|---|---|---|
+| `ink` | `#10131A` | outlines, text on light, the notch cut |
+| `slate` | `#1B2029` | panel background (at 92% opacity over the world) |
+| `steel` | `#2A3140` | raised elements, input fields, bar troughs |
+| `cream` | `#E8E2D0` | primary text |
+| `dust` | `#9AA08E` | secondary text, disabled |
+| `amber` | `#FFAE19` | THE accent: credits, highlights, active edges, crits |
+| `danger` | `#FF4A3D` | health, damage numbers, destructive buttons |
+| `shield` | `#3FC1FF` | shield/energy, info |
+| `good` | `#7FD18A` | confirmations, gains |
+
+Rarity ramp (border band on item cards, name tint in lists):
+`common #B8B8A8` → `uncommon #4FD15C` → `rare #3FA9FF` →
+`epic #B45CFF` → `legendary #FF9B1A`. Unknown rarity renders as common.
+
+### Panel construction
+
+- Background `slate` @ 92%, border **3 px `ink`**, and when the panel is
+  active/focused an inner **1 px `amber`** edge.
+- One corner (top-right by default) carries a **12 px notch cut** — the
+  silhouette that says "this game" at a glance.
+- Panels tilt TOWARD their screen edge (the comic lean): **−2° on the
+  left side, +2° on the right, 0° for centered elements** like the
+  compass strip. Text inside stays unskewed past ±4° reading sizes.
+- Section headers: ALL CAPS, +8% letterspacing, `dust`, over a 2 px
+  `ink` rule.
+
+### Typography
+
+Display face: one vendored OFL font (condensed, chunky — headers, big
+numbers, damage popups). Body: the engine default sans. Sizes: body 14,
+header 16, HUD numerals 22, damage numbers 18 (crit 26).
+
+### Combat feedback
+
+- **Damage numbers**: spawn at the hit's world point, drift up 0.8 m
+  over 0.6 s while fading; `cream` normal, `amber` + size 26 crits;
+  stacking hits offset horizontally so volleys read as counts.
+- **Incoming damage**: a 500 ms `danger` arc at the screen edge in the
+  attacker's direction (eight sectors is enough).
+- **Hit marker**: a 120 ms four-tick cross at the reticle on a landed
+  shot; `amber` when the target dies.
+
+### HUD layout (the permanent cluster)
+
+Bottom-left: health bar (trough `steel`, fill `danger`, numeral inside)
+with the shield bar (`shield`) above it. Bottom-right: ammo as
+mag/reserve split — mag in display type at 22, reserve smaller in
+`dust` — with credits (`amber`) above. Top-center: the compass strip —
+a bearing tape with `ink`-outlined markers (shop, rover, own ship, camp,
+spawn). Prompts ("E · talk", notices) stay bottom-center. The flight
+readout replaces the ammo cluster while seated in a ship.
+
+### Motion
+
+Panels: 120 ms slide+fade in, none out (closing is instant — snappy
+beats smooth). Damage numbers as above. Nothing else animates; restraint
+IS the budget (C65).
 
 ## Phase 2 — items, weapons, combat, interaction
 

@@ -1,0 +1,60 @@
+# CD's authority, and its ceiling. GitHub Actions reaches the cluster
+# through the Tailscale operator's API-server proxy; the tailnet ACL grant
+# maps tag:ci to the group `ci-deployers` (impersonation), and this Role is
+# everything that group can do — namespace-scoped, so a compromised
+# workflow can redeploy the game and nothing else on the cluster.
+#
+# The Role covers what `kubectl apply -k deploy/prod` touches, including
+# the CNPG Cluster resource. Namespace creation and the CNPG operator
+# install are deliberately NOT here: both are one-time, done by hand, and
+# cluster-scoped power CI has no business holding.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deploy
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources:
+      - deployments
+      - services
+      - secrets
+      - configmaps
+      - cronjobs
+      - persistentvolumeclaims
+      - networkpolicies
+      - ingresses
+      - pods
+      - pods/log
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters", "scheduledbackups", "backups"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # apply -k includes this very file, so CD must be able to read and
+  # update the Role/RoleBinding. Kubernetes' escalation check keeps this
+  # from being a ladder: an actor may only write Roles whose permissions
+  # are a subset of its own.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deploy
+  namespace: space-adventure
+  labels:
+    app.kubernetes.io/part-of: space-adventure
+subjects:
+  - kind: Group
+    name: ci-deployers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: ci-deploy
+  apiGroup: rbac.authorization.k8s.io
