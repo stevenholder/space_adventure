@@ -1,39 +1,39 @@
 {
   "criterion": "C2 (ROADMAP #2): two clients see each other <=1 s of spawn, on terrain",
   "run": {
-    "ts": "2026-09-03T15:02:34.768Z",
-    "world_sha256_16": "74f45a52c2998dcf",
+    "ts": "2026-09-03T20:21:41.973Z",
+    "world_sha256_16": "c53cdbbe57d5ead1",
     "world_seed": 1337
   },
   "clients": {
     "A": {
       "endpoint": "ws://127.0.0.1:18080/ws (nginx)",
       "name": "qa-t2-a",
-      "entity_id": 76,
-      "connect_start_ns": "342125774043022",
-      "open_ns": "342125777152853",
-      "hello_ns": "342125777328236",
-      "terrain_sha256_16": "74f45a52c2998dcf"
+      "entity_id": 5,
+      "connect_start_ns": "361274026063177",
+      "open_ns": "361274029428963",
+      "hello_ns": "361274029576853",
+      "terrain_sha256_16": "c53cdbbe57d5ead1"
     },
     "B": {
       "endpoint": "ws://127.0.0.1:18080/ws (direct)",
       "name": "qa-t2-b",
-      "entity_id": 77,
-      "connect_start_ns": "342126277070773",
-      "open_ns": "342126278340122",
-      "hello_ns": "342126278427239",
-      "connect_after_A_open_ms": 501.19,
-      "terrain_sha256_16": "74f45a52c2998dcf"
+      "entity_id": 6,
+      "connect_start_ns": "361274529950931",
+      "open_ns": "361274531257191",
+      "hello_ns": "361274531356917",
+      "connect_after_A_open_ms": 501.83,
+      "terrain_sha256_16": "c53cdbbe57d5ead1"
     }
   },
   "timing_ms": {
-    "a_handshake": 3.285,
-    "b_handshake": 1.356,
-    "b_burst_A_spawn_after_b_connect": 309.73,
-    "a_recv_b_spawn_after_b_connect": 73.43,
-    "b_recv_a_spawn_after_b_connect": 309.73,
-    "b_first_snapshot_with_a_after_b_connect": 325.27,
-    "a_first_snapshot_with_b_after_b_connect": 81.8
+    "a_handshake": 3.514,
+    "b_handshake": 1.406,
+    "b_burst_A_spawn_after_b_connect": 163.71,
+    "a_recv_b_spawn_after_b_connect": 1.79,
+    "b_recv_a_spawn_after_b_connect": 163.71,
+    "b_first_snapshot_with_a_after_b_connect": 179.95,
+    "a_first_snapshot_with_b_after_b_connect": 196.57
   },
   "on_surface": {
     "A": {
@@ -73,12 +73,12 @@
     {
       "id": "a: B burst contains A spawn OR A gets B spawn <=1 s",
       "pass": true,
-      "detail": "burst_contains_A=true (B recv 309.7 ms after B connect); A recv B spawn 73.4 ms after B connect (limit 1000)"
+      "detail": "burst_contains_A=true (B recv 163.7 ms after B connect); A recv B spawn 1.8 ms after B connect (limit 1000)"
     },
     {
       "id": "b: each client sees the other within 1 s",
       "pass": true,
-      "detail": "B sees A: spawn 309.7 ms, first snapshot row 325.3 ms (limit 1000); A sees B: spawn 73.4 ms, first snapshot row 81.8 ms (limit 1000)"
+      "detail": "B sees A: spawn 163.7 ms, first snapshot row 180.0 ms (limit 1000); A sees B: spawn 1.8 ms, first snapshot row 196.6 ms (limit 1000)"
     },
     {
       "id": "c: both spawn positions on terrain (|len - sampleRadius| <= 0.05 m)",
@@ -88,7 +88,7 @@
     {
       "id": "field: live terrain == captured world-seed1337.json (both paths), seed 1337, 20 Hz",
       "pass": true,
-      "detail": "A sha256_16=74f45a52c2998dcf B sha256_16=74f45a52c2998dcf world=74f45a52c2998dcf; seeds 1337/1337; tick_hz 20/20"
+      "detail": "A sha256_16=c53cdbbe57d5ead1 B sha256_16=c53cdbbe57d5ead1 world=c53cdbbe57d5ead1; seeds 1337/1337; tick_hz 20/20"
     }
   ]
 }

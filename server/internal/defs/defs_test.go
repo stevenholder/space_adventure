@@ -32,8 +32,10 @@ func TestLoad(t *testing.T) {
 	if !ok {
 		t.Fatal("range zone not found")
 	}
-	if len(rangeZone.Colliders) != 4 {
-		t.Errorf("range colliders = %d, want 4", len(rangeZone.Colliders))
+	// 1 hand-authored sphere + 4 derived from the layout (3 solid wall
+	// runs, 1 mast) — see layout.go.
+	if len(rangeZone.Colliders) != 5 {
+		t.Errorf("range colliders = %d, want 5", len(rangeZone.Colliders))
 	}
 	targetCount := 0
 	for _, e := range rangeZone.Entities {

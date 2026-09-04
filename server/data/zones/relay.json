@@ -1,0 +1,96 @@
+{
+ "$comment": "Colony relay (Phase 9 task 8). SITE FROM THE SOLVER: `server poi --seed 1337 --count 2` site 1 \u2014 clearance 24.0 m beyond the 46 m reach, mean slope 3.7\u00b0. Civilised and unguarded: a navigation landmark and a rest stop, the contrast that makes the scrapyard sites read as hostile before a shot is fired. No entities on purpose.",
+ "version": 1,
+ "id": "relay",
+ "origin_dir": [
+  0.0452195,
+  0.7557878,
+  -0.6532534
+ ],
+ "flatten_radius": 26.0,
+ "flatten_falloff": 10.0,
+ "colliders": [],
+ "layout": {
+  "faction": "colony",
+  "pieces": [
+   {
+    "$note": "the landmark (C68)",
+    "kind": "mast",
+    "pos": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "yaw": 0.0
+   },
+   {
+    "$note": "the habitat",
+    "kind": "hab",
+    "pos": [
+     -9.0,
+     0.0,
+     3.0
+    ],
+    "yaw": 25.0
+   },
+   {
+    "$note": "watchtower",
+    "kind": "tower",
+    "pos": [
+     9.0,
+     0.0,
+     -6.0
+    ],
+    "yaw": 0.0
+   },
+   {
+    "kind": "cover4",
+    "pos": [
+     3.0,
+     0.0,
+     7.0
+    ],
+    "yaw": 10.0
+   },
+   {
+    "kind": "cover4",
+    "pos": [
+     -4.0,
+     0.0,
+     -7.0
+    ],
+    "yaw": -30.0
+   }
+  ]
+ },
+ "entities": [],
+ "props": [
+  {
+   "asset": "prop.generator",
+   "pos": [
+    -4.0,
+    0.0,
+    4.5
+   ],
+   "yaw": 60.0
+  },
+  {
+   "asset": "prop.dish",
+   "pos": [
+    2.5,
+    0.0,
+    -3.0
+   ],
+   "yaw": -20.0
+  },
+  {
+   "asset": "prop.barrel",
+   "pos": [
+    -8.0,
+    0.0,
+    -2.5
+   ],
+   "yaw": 15.0
+  }
+ ]
+}

@@ -301,6 +301,24 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 9 — C66–C71, run 2026-09-03 (kind)
+
+The world rebuild: zone layouts on the 4 m kit grid, one source deriving
+both colliders and visuals; camp and range rebuilt; two solver-placed
+POIs live (outpost, relay).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C66 | Kit honest: cell bounds, skirts, budgets; no stretched boxes | 14 pieces pass the verify cell gate (36–144 tris each); the client's stretched-box collider visual is deleted — box colliders draw nothing, kit props ARE the walls | **PASS** |
+| C67 | Nothing clips; fleet green on the new colliders | corners belong to posts (walls butt in, dedupe-tested), pieces confined to their cells by the art gate; t13/t14/t16/t18/t29 green against the rebuilt world (21-check journey through the new 2.4 m gate) | **PASS** |
+| C68 | Landmarks: one mast per POI, discovery at visibility range | audit test: exactly one mast per layout, mast spacing ≥ 120 m; compass gates OUTPOST/RELAY markers at 84 m (12.6 m mast via visible ≈ 22.6 + √(300·h)) | **PASS** (marker gating verified by code + formula; live eyeball rides the playtest) |
+| C69 | Solver deterministic; every clearance holds in an audit | `server poi` byte-identical across runs; `TestZoneSiteClearance` audits every committed zone against spawn, 6 landmarks, 11 craters and every other zone (legacy camp/range at zero margin, solver sites at +10 m) | **PASS** |
+| C70 | Two POIs pay off | outpost live with 2 grunts + 1 gunner (kills roll chance-1.0 tables, walk-over pickup — the t29-proven loop); relay live as the safe Colony landmark; spawn census confirms both | **PASS** |
+| C71 | Budget holds with the new world | framestats 120.0 fps avg, worst 8.5 ms, colliders 11 → 28 | **PASS** |
+
+Terrain recaptured (two new flatten discs change the field):
+world-seed1337.json sha256_16 c53cdbbe57d5ead1; t2 re-verified against it.
+
 ## Phase 8 — C60–C65, run 2026-09-03 (kind)
 
 The UI refresh: everything IMGUI moved to code-built UI Toolkit in the

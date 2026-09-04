@@ -21,6 +21,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Box3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const artDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -38,6 +39,14 @@ const manifest = JSON.parse(readFileSync(path.join(artDir, "manifest.json"), "ut
 // They are still ENFORCED, and deliberately: the failure mode this guards is a
 // 50k-tri pack model landing unnoticed because nothing counted it. Raising a
 // budget is a decision; drifting past one is an accident.
+// Phase 9 kit pieces carry `cell` ([w, d] in 4 m module-grid cells) and
+// `height` in the manifest. The verify gate holds every such GLB inside its
+// declared cells (+0.45 m skirt margin) and under its height: a piece that
+// leaks past its cell WILL interpenetrate its neighbour when tiled, which is
+// the exact clipping this kit exists to end.
+const CELL = 4.0;
+const CELL_MARGIN = 0.45;
+
 const BUDGETS = [
   [/^char\./, 6000],
   [/^npc\./, 6000],
@@ -177,6 +186,22 @@ for (const asset of selected) {
     problems.push(`manifest tris ${asset.tris} != counted ${tris}`);
   if (tris > budget)
     problems.push(`${tris} tris exceeds budget ${budget}`);
+
+  // Cell bounds, for kit pieces (Phase 9). Bounding box computed from the
+  // actual geometry; the piece must sit centred on its cells and inside them.
+  if (asset.cell) {
+    const b = new Box3().setFromObject(gltf.scene);
+    const [cw, cd] = asset.cell;
+    const hx = (cw * CELL) / 2 + CELL_MARGIN;
+    const hz = (cd * CELL) / 2 + CELL_MARGIN;
+    if (b.min.x < -hx || b.max.x > hx || b.min.z < -hz || b.max.z > hz)
+      problems.push(
+        `leaks its ${cw}x${cd} cell: x [${b.min.x.toFixed(2)}, ${b.max.x.toFixed(2)}] ` +
+        `z [${b.min.z.toFixed(2)}, ${b.max.z.toFixed(2)}] vs ±${hx.toFixed(2)}/±${hz.toFixed(2)}`);
+    if (b.min.y < -0.35) problems.push(`skirt too deep: min y ${b.min.y.toFixed(2)}`);
+    if (asset.height && b.max.y > asset.height)
+      problems.push(`taller than declared: ${b.max.y.toFixed(2)} > ${asset.height}`);
+  }
   // Node names are checked against the original glTF JSON: three.js's
   // GLTFLoader sanitizes Object3D names on load (strips the dots in
   // arm.l / seat.pilot), but the .glb file is the contract.

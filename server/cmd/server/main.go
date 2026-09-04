@@ -65,6 +65,7 @@ func run(args []string) error {
 			"drive":   runDrive,
 			"flight":  runFlight,
 			"codec":   runCodec,
+			"poi":     runPOI,
 			"collide": runCollide,
 		}
 		if run, ok := sub[args[0]]; ok {
