@@ -1,61 +1,78 @@
 {
-  "$comment": "NPC archetypes. Contract: docs/GDD.md 'Shop NPCs' (Phase 2) and 'Phase 3 - NPC combat at an encampment'. Prices live on the NPC, not the item.",
-  "version": 1,
-  "npcs": [
+ "$comment": "NPC archetypes. Contract: docs/GDD.md 'Shop NPCs' (Phase 2) and 'Phase 3 - NPC combat at an encampment'. Prices live on the NPC, not the item.",
+ "version": 1,
+ "npcs": [
+  {
+   "id": "npc.quartermaster",
+   "name": "Quartermaster Vex",
+   "asset": "npc.shopkeeper",
+   "kind": "shop",
+   "verb": "Talk",
+   "greeting": "shop.quartermaster.greeting",
+   "stock": [
     {
-      "id": "npc.quartermaster",
-      "name": "Quartermaster Vex",
-      "asset": "npc.shopkeeper",
-      "kind": "shop",
-      "verb": "Talk",
-      "greeting": "shop.quartermaster.greeting",
-      "stock": [
-        {
-          "item": "weapon.pulse",
-          "price": 250
-        },
-        {
-          "item": "ammo.cell",
-          "price": 1
-        },
-        {
-          "item": "ship.v1",
-          "price": 600
-        }
-      ]
+     "item": "weapon.pulse",
+     "price": 250
     },
     {
-      "id": "npc.grunt",
-      "name": "Camp Grunt",
-      "asset": "npc.grunt",
-      "kind": "melee",
-      "max_health": 60,
-      "move_speed": 4.0,
-      "aggro_radius": 22.0,
-      "leash_radius": 45.0,
-      "attack_range": 2.0,
-      "attack_damage": 12,
-      "attack_interval": 1.2,
-      "attack_windup": 0.35,
-      "turn_rate": 360.0,
-      "loot": "loot.grunt"
+     "item": "ammo.cell",
+     "price": 1
     },
     {
-      "id": "npc.gunner",
-      "name": "Camp Gunner",
-      "asset": "npc.gunner",
-      "kind": "ranged",
-      "max_health": 40,
-      "move_speed": 3.0,
-      "aggro_radius": 30.0,
-      "leash_radius": 45.0,
-      "attack_range": 26.0,
-      "attack_damage": 8,
-      "attack_interval": 1.6,
-      "attack_windup": 0.25,
-      "projectile_speed": 45.0,
-      "turn_rate": 270.0,
-      "loot": "loot.gunner"
+     "item": "ship.v1",
+     "price": 600
     }
-  ]
+   ]
+  },
+  {
+   "id": "npc.grunt",
+   "name": "Camp Grunt",
+   "asset": "npc.grunt",
+   "kind": "melee",
+   "max_health": 60,
+   "move_speed": 4.0,
+   "aggro_radius": 22.0,
+   "leash_radius": 45.0,
+   "attack_range": 2.0,
+   "attack_damage": 12,
+   "attack_interval": 1.2,
+   "attack_windup": 0.35,
+   "turn_rate": 360.0,
+   "loot": "loot.grunt"
+  },
+  {
+   "id": "npc.gunner",
+   "name": "Camp Gunner",
+   "asset": "npc.gunner",
+   "kind": "ranged",
+   "max_health": 40,
+   "move_speed": 3.0,
+   "aggro_radius": 30.0,
+   "leash_radius": 45.0,
+   "attack_range": 26.0,
+   "attack_damage": 8,
+   "attack_interval": 1.6,
+   "attack_windup": 0.25,
+   "projectile_speed": 45.0,
+   "turn_rate": 270.0,
+   "loot": "loot.gunner"
+  },
+  {
+   "$comment": "Phase 10 bounty target. Spawned by the bounty scheduler at a solver-eligible POI, never by a zone. Tough enough to want a party, generous enough to be worth one.",
+   "id": "npc.warlord",
+   "name": "Warlord",
+   "asset": "npc.grunt",
+   "kind": "ranged",
+   "max_health": 300,
+   "move_speed": 4.5,
+   "aggro_radius": 40.0,
+   "leash_radius": 70.0,
+   "attack_range": 26.0,
+   "attack_damage": 14,
+   "attack_interval": 1.0,
+   "attack_windup": 0.25,
+   "turn_rate": 360.0,
+   "loot": "loot.warlord"
+  }
+ ]
 }

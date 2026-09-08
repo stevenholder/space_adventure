@@ -123,13 +123,36 @@ Constants:
   ignored). `_pad` is sent as 0 so the row stays 4-byte aligned for readers
   that care.
 - `cmd` `opcode`: `0x0001` `shop_list`; `0x0002` `shop_buy`; `0x0003` `equip`;
-  `0x0004` `inventory`; `0x0005` `reload`. `0x0006`–`0x000F` reserved for
-  Phase 3 (`pickup`, `drop`); `0x0010`+ reserved for Phase 4/5.
+  `0x0004` `inventory`; `0x0005` `reload`. Phase 10 (bodies are UTF-8 JSON,
+  like every cmd):
+  `0x0006` `party_invite` `{"target": <entity_id>}`;
+  `0x0007` `party_respond` `{"accept": true|false}` (answers the pending
+  invite — a player holds at most one at a time, newest wins);
+  `0x0008` `party_leave` `{}`;
+  `0x0009` `mission_list` `{"npc": <entity_id>}` (the board; result carries
+  the offered templates plus this player's active/completed state);
+  `0x000A` `mission_accept` `{"id": "<mission id>"}` (for a bounty this is
+  the CLAIM — first party wins, everyone else gets status 3 with reason
+  `"claimed"`; a priority offer is accepted from anywhere, board missions
+  within interact range of the board);
+  `0x000B` `mission_abandon` `{"id": "<mission id>"}`;
+  `0x000C` `mission_turnin` `{"npc": <entity_id>, "id": "<mission id>"}`
+  (fetch only — consumes the collected items at the board; kill/scout/bounty
+  complete on the spot). `0x0010`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
 - `event_id`: `0x0001` explosion (reserved); `0x0002` shot fired; `0x0003`
-  hit; `0x0004` death; `0x0005` loot dropped (Phase 3); `0x0006` `equipped`
+  hit; `0x0004` death; `0x0005` loot dropped (Phase 3); Phase 10 events carry
+  UTF-8 JSON in `data` and are UNICAST to the players they concern unless
+  noted: `0x0007` `mission_progress` `{"id","count","goal"}`;
+  `0x0008` `mission_complete` `{"id","credits"}`;
+  `0x0009` `party_update` `{"members":[{"id","name"}...]}` (sent to every
+  member on any roster change; an empty list means the party dissolved);
+  `0x000A` `priority_offer` `{"id","poi","expires_s"}` — BROADCAST when a
+  bounty posts, so every HUD can raise the toast;
+  `0x000B` `party_invited` `{"from","name"}` (to the invitee);
+  and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the player whose primary slot changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Broadcast when
   the slot changes, and sent once per already-armed player when a client
