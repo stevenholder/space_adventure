@@ -120,6 +120,7 @@ namespace SpaceAdventure.Game
         private readonly PartyState _partyState = new PartyState();
         private SpaceAdventure.Game.UI.JournalView _journalView;
         private SpaceAdventure.Game.UI.PartyView _partyView;
+        private SpaceAdventure.Game.UI.PartyFrames _partyFrames;
 
         /// <summary>Screenshot rig (-uiApproach): inject forward+sprint.</summary>
         private bool _rigWalk;
@@ -128,6 +129,8 @@ namespace SpaceAdventure.Game
         private bool _rigLamp;
         private bool _rigAutoParty; // screenshot rig: accept any party invite
         private bool _rigBack;      // screenshot rig: step backwards
+        private readonly System.Collections.Generic.List<(string, int, int, bool, bool)> _framesScratch =
+            new System.Collections.Generic.List<(string, int, int, bool, bool)>();
 
         /// <summary>
         /// Pulls the waypoint triples out of a route JSON by hand —
@@ -348,6 +351,7 @@ namespace SpaceAdventure.Game
                 _partyState, NearestBoard, NextCmdSeq, bts => _net.Send(bts));
             _partyView = new SpaceAdventure.Game.UI.PartyView(_ui.Root, _partyState,
                 NearbyPlayers, NextCmdSeq, bts => _net.Send(bts));
+            _partyFrames = new SpaceAdventure.Game.UI.PartyFrames(_ui.Root);
             _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); StartCoroutine(RedeemLinkCode(code)); },
                 () => _accountView.Show(false));
@@ -642,6 +646,29 @@ namespace SpaceAdventure.Game
                 _hudView.SetBanner(null, false);
 
             UpdateFlightReadout();
+
+            // Party frames, left edge: name + live health per member. Self
+            // reads from Character (no view exists for the local body);
+            // everyone else from their snapshot-fed view. A member whose
+            // entity has not arrived yet shows dimmed, not dead.
+            _framesScratch.Clear();
+            if (_partyState.InParty)
+            {
+                int playerMax = 100;
+                if (_character.Defs.Entities != null &&
+                    _character.Defs.Entities.TryGetValue("player", out var pd) && pd.MaxHealth > 0)
+                    playerMax = pd.MaxHealth;
+                foreach (var (mid, mname) in _partyState.Members)
+                {
+                    if (mid == _net.EntityId)
+                        _framesScratch.Add((mname, _character.Health, playerMax, true, true));
+                    else if (_views.TryGet(mid, out var mv))
+                        _framesScratch.Add((mname, mv.Health, playerMax, true, false));
+                    else
+                        _framesScratch.Add((mname, 0, playerMax, false, false));
+                }
+            }
+            _partyFrames.Update(_framesScratch);
 
             _hudView.SetLog(_hud.Lines);
             _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
