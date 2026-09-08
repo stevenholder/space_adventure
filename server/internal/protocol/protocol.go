@@ -75,6 +75,14 @@ const (
 	OpEquip     uint16 = 0x0003
 	OpInventory uint16 = 0x0004
 	OpReload    uint16 = 0x0005
+	// Phase 10 (PROTOCOL.md): parties and missions, JSON bodies.
+	OpPartyInvite    uint16 = 0x0006
+	OpPartyRespond   uint16 = 0x0007
+	OpPartyLeave     uint16 = 0x0008
+	OpMissionList    uint16 = 0x0009
+	OpMissionAccept  uint16 = 0x000A
+	OpMissionAbandon uint16 = 0x000B
+	OpMissionTurnin  uint16 = 0x000C
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -95,6 +103,12 @@ const (
 	EventDeath       uint16 = 0x0004
 	EventLootDropped uint16 = 0x0005
 	EventEquipped    uint16 = 0x0006 // Phase 3.5 (C16): data = item id, UTF-8
+	// Phase 10 (PROTOCOL.md): JSON data, unicast unless noted.
+	EventMissionProgress uint16 = 0x0007
+	EventMissionComplete uint16 = 0x0008
+	EventPartyUpdate     uint16 = 0x0009
+	EventPriorityOffer   uint16 = 0x000A // broadcast
+	EventPartyInvited    uint16 = 0x000B
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

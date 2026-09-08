@@ -648,6 +648,7 @@ func (s *Server) leave(c *client) {
 	}
 	id := c.entity.ID
 	s.freeSeat(c)
+	s.removeFromParty(c) // roster updates reach the survivors (GDD, Phase 10)
 	delete(s.clients, id)
 	s.history.Forget(id)
 	s.mu.Unlock()
@@ -671,6 +672,12 @@ func (s *Server) leave(c *client) {
 // writes any mutation back — the same read/mutate/write-back shape
 // identity.go's Mutate doc comment calls for.
 func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
+	// Party ops read and write OTHER clients, which cmdWorld's one-player
+	// view cannot; they take s.mu themselves and never touch the identity.
+	switch req.Opcode {
+	case protocol.OpPartyInvite, protocol.OpPartyRespond, protocol.OpPartyLeave:
+		return s.partyCmd(c, req)
+	}
 	var result protocol.CmdResult
 	var before, after string
 	c.ident.Mutate(func(p *store.Player) {

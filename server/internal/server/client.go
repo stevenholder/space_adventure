@@ -74,6 +74,12 @@ type client struct {
 	seatVehicle uint32
 	seat        uint16
 
+	// Phase 10 party state, guarded by srv.mu like the seat fields.
+	// pendingInvite is the entity id of the latest inviter (newest wins),
+	// 0 when none.
+	party         *party
+	pendingInvite uint32
+
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the
 	// trigger was pulled (PROTOCOL.md "fire"), and this turns that name into
