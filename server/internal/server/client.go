@@ -79,6 +79,10 @@ type client struct {
 	// 0 when none.
 	party         *party
 	pendingInvite uint32
+	// scoutTargets mirrors this player's active scout missions (mission id
+	// → zone origin dir) for the once-a-second sweep. Guarded by srv.mu;
+	// rebuilt by refreshScoutCache on every mission mutation.
+	scoutTargets map[string][3]float64
 
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the

@@ -25,6 +25,14 @@
    ]
   },
   {
+   "$comment": "Phase 10 mission board. Shop-shaped (no move_speed = non-combat), stands at the relay; mission_list/turnin validate against this archetype.",
+   "id": "npc.dispatcher",
+   "name": "Dispatcher Oru",
+   "asset": "npc.shopkeeper",
+   "kind": "shop",
+   "verb": "talk"
+  },
+  {
    "id": "npc.grunt",
    "name": "Camp Grunt",
    "asset": "npc.grunt",

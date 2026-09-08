@@ -326,6 +326,21 @@ func (s *Server) OnlineCount() int {
 func (s *Server) Run(ctx context.Context) {
 	t := time.NewTicker(time.Second / time.Duration(s.tickHz))
 	defer t.Stop()
+	// The scout sweep walks positions against POI discovery radii once a
+	// second — its own cadence, its own goroutine, no identity lock under
+	// s.mu (missions.go, "lock order").
+	scout := time.NewTicker(time.Second)
+	defer scout.Stop()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-scout.C:
+				s.scoutSweep()
+			}
+		}
+	}()
 	var lastLog time.Time
 	for {
 		select {
@@ -632,6 +647,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	// After publishing, so every client that must hear the joiner's weapon
 	// is already in s.clients.
 	s.syncEquipped(c)
+	s.refreshScoutCache(c) // a reconnect arrives with its missions already live
 
 	// An owner's ship follows them across reconnects (GDD "Ownership":
 	// spawn on join). After publishing, so the spawn broadcast lands on a
@@ -677,6 +693,9 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	switch req.Opcode {
 	case protocol.OpPartyInvite, protocol.OpPartyRespond, protocol.OpPartyLeave:
 		return s.partyCmd(c, req)
+	case protocol.OpMissionList, protocol.OpMissionAccept,
+		protocol.OpMissionAbandon, protocol.OpMissionTurnin:
+		return s.missionCmd(c, req)
 	}
 	var result protocol.CmdResult
 	var before, after string
@@ -818,6 +837,17 @@ func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
 // follows a tick later from sim.StepTarget's own health check, reused
 // rather than duplicated here).
 func (s *Server) fire(c *client, f protocol.Fire) {
+	members, victimArch, killed := s.fireLocked(c, f)
+	if killed {
+		// Identity locks are only safe with s.mu released (doCmd's order);
+		// the attribution was captured under the lock, the pay happens here.
+		s.missionKillCredit(members, victimArch)
+	}
+}
+
+// fireLocked is fire's original body: everything that needs s.mu. It reports
+// a kill's attribution so the mission credit can run after release.
+func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, victimArch string, killed bool) {
 	primary := c.ident.Snapshot().Equipped[slotPrimary]
 	wp, ok := s.weaponFor(primary)
 	if !ok {
@@ -916,7 +946,24 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 		for _, oc := range s.clients {
 			oc.send(msg{data: hitFrame})
 		}
+		if hit.HealthAfter == 0 {
+			killed = true
+			victimArch = s.npcArchetypeOf(hit.Victim)
+			members = append([]*client{}, s.partyMembers(c)...)
+		}
 	}
+	return members, victimArch, killed
+}
+
+// npcArchetypeOf maps a victim entity id to its archetype id ("npc.grunt"),
+// or "" for anything that is not an AI-run NPC. Caller holds s.mu.
+func (s *Server) npcArchetypeOf(id uint32) string {
+	for _, n := range s.npcAI {
+		if n.ent.ID == id {
+			return n.arch.ID
+		}
+	}
+	return ""
 }
 
 // entityDef is ResolveShot's defOf callback.
