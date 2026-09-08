@@ -126,6 +126,8 @@ namespace SpaceAdventure.Game
         private bool _rigJump;
         private bool _rigFire;
         private bool _rigLamp;
+        private bool _rigAutoParty; // screenshot rig: accept any party invite
+        private bool _rigBack;      // screenshot rig: step backwards
 
         /// <summary>
         /// Pulls the waypoint triples out of a route JSON by hand —
@@ -463,6 +465,7 @@ namespace SpaceAdventure.Game
                 if (_rigJump) li.ActionMask |= Net.Action.Jump;
             }
             if (_rigFire) li.FirePressed = true;
+            if (_rigBack) li.MoveY = -1;
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
             // rate would put several inputs in one tick, and the server keeps
@@ -1070,6 +1073,57 @@ namespace SpaceAdventure.Game
                 }
                 if (!_rigFire) yield return new WaitForSeconds(1.5f); // let a popup land
             }
+
+            // -uiQuest: stage the journal showcase — accept the starter
+            // mission at the board the approach just reached, ask for the
+            // offer list (names), and auto-accept the party invite a wire
+            // helper sends. Everything on screen is the server's real word;
+            // the rig only pushes the buttons a hand would.
+            if (Array.IndexOf(argv, "-uiQuest") >= 0)
+            {
+                _rigAutoParty = true;
+
+                // The approach overshoots into the NPC's face, where the
+                // server's cone test rightly refuses — back off to a polite
+                // 2.2 m, looking at the eye, before doing business.
+                uint board = 0;
+                for (float w = 0; w < 6f; w += 0.15f)
+                {
+                    board = NearestBoard();
+                    if (board == 0 || !_views.TryGet(board, out var bv) || bv.Root == null) break;
+                    Vector3 bp = bv.Root.transform.position;
+                    Vector3 bup = bp.normalized;
+                    _fps.FaceToward(_camera.transform.position, bp + bup * 1.5f);
+                    float d = (bp + bup * 1.7f - _camera.transform.position).magnitude;
+                    if (d >= 2.0f && d <= 2.8f) break;
+                    _rigBack = d < 2.0f;
+                    _rigWalk = d > 2.8f;
+                    yield return new WaitForSeconds(0.15f);
+                    _rigBack = false;
+                    _rigWalk = false;
+                }
+                _rigBack = false;
+                _rigWalk = false;
+
+                // Real cmds, retried until the server says yes — the row on
+                // screen must be the server's word, not staging.
+                if (board != 0)
+                {
+                    for (int tries = 0; tries < 4; tries++)
+                    {
+                        _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionList, $"{{\"npc\":{board}}}"));
+                        _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionAccept, "{\"id\":\"mission.cull\"}"));
+                        yield return new WaitForSeconds(0.8f);
+                        if (_missionLog.State.TryGetValue("mission.cull", out var st) && st.active) break;
+                    }
+                }
+                // Wait for the helper's invite to land and the roster to form.
+                for (float w = 0; w < 20f && !_partyState.InParty; w += 0.5f)
+                    yield return new WaitForSeconds(0.5f);
+                _journalView.Show(true);
+                yield return new WaitForSeconds(0.5f);
+            }
+
             yield return new WaitForEndOfFrame();
             if (_rigLamp)
             {
@@ -1392,6 +1446,8 @@ namespace SpaceAdventure.Game
                             break;
                         case EventId.PartyInvited:
                             _partyState.OnInvited(WireReader.Utf8.GetString(ev.Data));
+                            if (_rigAutoParty)
+                                _net.Send(Encode.Cmd(NextCmdSeq(), Op.PartyRespond, "{\"accept\":true}"));
                             if (_partyView.Open) _partyView.Rebuild();
                             break;
                         case EventId.Equipped:
