@@ -59,6 +59,10 @@ type Server struct {
 	// tick's stream. Without this, DropLoot's LootDropped event went to a
 	// nil ctx.Events and no client ever saw one.
 	pendingEvents []protocol.Event
+	// Phase 10 bounty machine (bounty.go), guarded by mu.
+	bounty         *bountyState
+	bountyRepostAt time.Time
+	bountyRotation int
 	propsF     []byte // pre-encoded props frame, built once at startup
 	colliders  []protocol.Collider
 
@@ -338,6 +342,7 @@ func (s *Server) Run(ctx context.Context) {
 				return
 			case <-scout.C:
 				s.scoutSweep()
+				s.bountyTick()
 			}
 		}
 	}()
@@ -648,6 +653,20 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	// is already in s.clients.
 	s.syncEquipped(c)
 	s.refreshScoutCache(c) // a reconnect arrives with its missions already live
+	// A live unclaimed bounty replays its offer to the joiner — the
+	// broadcast happened once, possibly before this client existed.
+	s.mu.Lock()
+	if b := s.bounty; b != nil && !b.claimed {
+		c.send(msg{data: protocol.EncodeEvent(protocol.Event{
+			EntityID: b.entityID,
+			EventID:  protocol.EventPriorityOffer,
+			Data: encodeJSON(map[string]any{
+				"id": b.mission.ID, "poi": b.poi,
+				"expires_s": b.mission.ClaimMinutes * 60,
+			}),
+		})})
+	}
+	s.mu.Unlock()
 
 	// An owner's ship follows them across reconnects (GDD "Ownership":
 	// spawn on join). After publishing, so the spawn broadcast lands on a
@@ -668,6 +687,11 @@ func (s *Server) leave(c *client) {
 	delete(s.clients, id)
 	s.history.Forget(id)
 	s.mu.Unlock()
+
+	// The bounty claim survives a member dropping only while ANY claimant
+	// remains online; the last disconnect releases it (GDD). Outside s.mu —
+	// it walks the claim under its own locking.
+	s.bountyClientGone(c)
 
 	if c.ident != nil {
 		c.ident.Close(context.Background())
@@ -837,17 +861,18 @@ func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
 // follows a tick later from sim.StepTarget's own health check, reused
 // rather than duplicated here).
 func (s *Server) fire(c *client, f protocol.Fire) {
-	members, victimArch, killed := s.fireLocked(c, f)
+	members, victimArch, victimID, killed := s.fireLocked(c, f)
 	if killed {
 		// Identity locks are only safe with s.mu released (doCmd's order);
 		// the attribution was captured under the lock, the pay happens here.
 		s.missionKillCredit(members, victimArch)
+		s.bountyResolveKill(c, victimID)
 	}
 }
 
 // fireLocked is fire's original body: everything that needs s.mu. It reports
 // a kill's attribution so the mission credit can run after release.
-func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, victimArch string, killed bool) {
+func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, victimArch string, victimID uint32, killed bool) {
 	primary := c.ident.Snapshot().Equipped[slotPrimary]
 	wp, ok := s.weaponFor(primary)
 	if !ok {
@@ -948,11 +973,12 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 		}
 		if hit.HealthAfter == 0 {
 			killed = true
+			victimID = hit.Victim
 			victimArch = s.npcArchetypeOf(hit.Victim)
 			members = append([]*client{}, s.partyMembers(c)...)
 		}
 	}
-	return members, victimArch, killed
+	return members, victimArch, victimID, killed
 }
 
 // npcArchetypeOf maps a victim entity id to its archetype id ("npc.grunt"),
