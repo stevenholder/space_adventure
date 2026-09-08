@@ -58,6 +58,24 @@ type EntityDef struct {
 	Respawn    float64 `json:"respawn,omitempty"`
 }
 
+// Mission is one template from server/data/missions.json (Phase 10,
+// docs/GDD.md "Missions and parties"). Types: kill, scout, fetch, bounty.
+type Mission struct {
+	ID            string `json:"id"`
+	Type          string `json:"type"`
+	Name          string `json:"name"`
+	Text          string `json:"text"`
+	Archetype     string `json:"archetype,omitempty"`
+	Count         int    `json:"count,omitempty"`
+	Item          string `json:"item,omitempty"`
+	Poi           string `json:"poi,omitempty"`
+	Reward        int64  `json:"reward"`
+	Board         bool   `json:"board,omitempty"`
+	Starter       bool   `json:"starter,omitempty"`
+	ClaimMinutes  int    `json:"claim_minutes,omitempty"`
+	RepostMinutes int    `json:"repost_minutes,omitempty"`
+}
+
 // NPC is one NPC archetype (server/data/npcs.json).
 type NPC struct {
 	ID    string `json:"id"`
@@ -155,6 +173,7 @@ type Registry struct {
 		Qty  int    `json:"qty"`
 	}
 	InvSlots int
+	Missions map[string]Mission
 	Items    map[string]Item
 	Entities map[string]EntityDef
 	NPCs     map[string]NPC
@@ -228,6 +247,18 @@ func Load() (*Registry, error) {
 		Entities:     make(map[string]EntityDef, len(itemsF.EntityDefs)),
 		NPCs:         make(map[string]NPC, len(npcsF.NPCs)),
 		Zones:        make(map[string]Zone, len(zoneFiles)),
+		Missions:     map[string]Mission{},
+	}
+	if raw, err := data.FS.ReadFile("missions.json"); err == nil {
+		var mf struct {
+			Missions []Mission `json:"missions"`
+		}
+		if err := json.Unmarshal(raw, &mf); err != nil {
+			return nil, fmt.Errorf("defs: parse missions.json: %w", err)
+		}
+		for _, m := range mf.Missions {
+			reg.Missions[m.ID] = m
+		}
 	}
 	for _, it := range itemsF.Items {
 		reg.Items[it.ID] = it

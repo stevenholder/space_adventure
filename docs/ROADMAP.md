@@ -1056,6 +1056,64 @@ POI anatomy, the solver's clearance rules.
 - **C71 Budget holds.** 120 fps capped, worst frame < 16.7 ms with the
   new world live.
 
+# Phase 10 — missions, parties, and the bounty
+
+### Where Phase 10 stands (2026-09-08)
+
+Built and green on kind: C72–C77 recorded (docs/QA-STATUS.md "Phase
+10"). Server: parties, the mission engine (kill/scout/fetch,
+party-wide credit, the dispatcher board at the relay), and the bounty
+machine (post → race → claim → expire/steal/abandon → re-post), all
+wire- or white-box-tested. Client: journal (J), party panel (P),
+look+E invites, priority banner, WARLORD compass marker. Owed to
+humans: a two-player live session — party up, share a camp fight,
+claim one warlord together.
+
+**Playable proof.** Walk to the relay and the dispatcher has work: kill
+missions, scout missions, fetch missions — take them alone or invite a
+friend (look + E, or the party panel) and every kill counts for both of
+you, full pay each. Then the HUD toast fires: a warlord has been sighted
+at a POI. First party to accept claims it; kill it together inside 15
+minutes or it re-posts for someone else. Everything — offers, claims,
+progress, pay — is the server's word; the journal just shows it.
+
+**Contracts** (wave 0, landed with this section): GDD "Missions and
+parties", PROTOCOL cmd ops `0x0006`–`0x000C` and events
+`0x0007`–`0x000B`, `server/data/missions.json`.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | Party core: membership, invite/respond/leave cmds, roster events, disconnect handling | `server/internal/server/party.go` | unit tests + t31 |
+| 2 | Party client: P panel (roster, invite, accept toast), look+E invite path | `client-unity/Assets/Game/UI/` | typecheck + live |
+| 3 | Mission registry + per-player persisted state + list/accept/abandon cmds | `server/internal/missions/`, store | unit tests |
+| 4 | Progress engine: kill/scout/fetch hooks on existing event paths, party-wide credit, completion pays | server | unit tests + t32 |
+| 5 | Dispatcher NPC at the relay + board flow + fetch turn-in | zones, `server/data/missions.json` | t32 |
+| 6 | Journal UI (J): offers, active missions, progress bars; HUD objective line + compass marker to the objective POI | `client-unity/Assets/Game/UI/` | screenshots |
+| 7 | Bounty lifecycle: warlord archetype, spawn at solver-eligible POI, claim/expiry/release state machine, priority_offer broadcast | server | unit tests |
+| 8 | t33: two-client claim RACE (exactly one wins), party-shared completion, expiry re-post | `test/t33-bounty.mjs` | the test |
+| 9 | QA: C72–C77 recorded, gallery, fleet unchanged | docs, `test/out/ui/` | criteria |
+
+### Acceptance criteria
+
+- **C72 Parties work.** Invite (both paths), accept, leave, dissolve;
+  roster events reach every member; a member's disconnect updates the
+  rest within a tick's breath. (t31)
+- **C73 Personal missions pay.** Kill, scout and fetch each complete
+  end to end and pay their credits exactly once; fetch consumes the
+  items at turn-in; abandon works. (t32)
+- **C74 Party credit is party-wide.** Two clients in a party: one acts,
+  both progress, both get full pay. (t32)
+- **C75 The bounty is exactly-one.** Two clients race `mission_accept`:
+  one claim, one `"claimed"` refusal — the seat-race proof, replayed
+  for missions. (t33)
+- **C76 The bounty never wedges.** Expiry releases and re-posts; a
+  stolen kill (non-claimant) releases without pay; all-claimants-offline
+  releases. (t33 + unit)
+- **C77 Nothing else moved.** The full harness fleet t2–t29 passes
+  unchanged; frame budget holds with the journal open.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.

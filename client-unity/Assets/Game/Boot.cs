@@ -115,11 +115,22 @@ namespace SpaceAdventure.Game
         // as that player.
         private SpaceAdventure.Game.UI.AccountView _accountView;
 
+        // Phase 10 — journal, party, and their state.
+        private readonly MissionLog _missionLog = new MissionLog();
+        private readonly PartyState _partyState = new PartyState();
+        private SpaceAdventure.Game.UI.JournalView _journalView;
+        private SpaceAdventure.Game.UI.PartyView _partyView;
+        private SpaceAdventure.Game.UI.PartyFrames _partyFrames;
+
         /// <summary>Screenshot rig (-uiApproach): inject forward+sprint.</summary>
         private bool _rigWalk;
         private bool _rigJump;
         private bool _rigFire;
         private bool _rigLamp;
+        private bool _rigAutoParty; // screenshot rig: accept any party invite
+        private bool _rigBack;      // screenshot rig: step backwards
+        private readonly System.Collections.Generic.List<(string, int, int, bool, bool)> _framesScratch =
+            new System.Collections.Generic.List<(string, int, int, bool, bool)>();
 
         /// <summary>
         /// Pulls the waypoint triples out of a route JSON by hand —
@@ -157,7 +168,8 @@ namespace SpaceAdventure.Game
 
         private bool ModalOpen =>
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
-            (_sheetView?.Open ?? false) || (_accountView?.Open ?? false);
+            (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
+            (_journalView?.Open ?? false) || (_partyView?.Open ?? false);
 
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
@@ -335,6 +347,11 @@ namespace SpaceAdventure.Game
             _bagsView = new SpaceAdventure.Game.UI.BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
             _sheetView = new SpaceAdventure.Game.UI.SheetView(_ui.Root, _character);
             _promptView = new SpaceAdventure.Game.UI.PromptView(_ui.Root);
+            _journalView = new SpaceAdventure.Game.UI.JournalView(_ui.Root, _missionLog,
+                _partyState, NearestBoard, NextCmdSeq, bts => _net.Send(bts));
+            _partyView = new SpaceAdventure.Game.UI.PartyView(_ui.Root, _partyState,
+                NearbyPlayers, NextCmdSeq, bts => _net.Send(bts));
+            _partyFrames = new SpaceAdventure.Game.UI.PartyFrames(_ui.Root);
             _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); StartCoroutine(RedeemLinkCode(code)); },
                 () => _accountView.Show(false));
@@ -396,6 +413,24 @@ namespace SpaceAdventure.Game
             if (keys?.rKey.wasPressedThisFrame == true) _net.Send(Character.ReloadCmd(NextCmdSeq()));
             if (keys?.bKey.wasPressedThisFrame == true) OpenPanel(_bagsView, _sheetView);
             if (keys?.cKey.wasPressedThisFrame == true) OpenPanel(_sheetView, _bagsView);
+            if (keys?.jKey.wasPressedThisFrame == true)
+            {
+                bool open = !_journalView.Open;
+                _journalView.Show(open);
+                if (open)
+                {
+                    _partyView.Show(false);
+                    uint board = NearestBoard();
+                    if (board != 0)
+                        _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionList, $"{{\"npc\":{board}}}"));
+                }
+            }
+            if (keys?.pKey.wasPressedThisFrame == true)
+            {
+                bool open = !_partyView.Open;
+                _partyView.Show(open);
+                if (open) _journalView.Show(false);
+            }
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
@@ -434,6 +469,7 @@ namespace SpaceAdventure.Game
                 if (_rigJump) li.ActionMask |= Net.Action.Jump;
             }
             if (_rigFire) li.FirePressed = true;
+            if (_rigBack) li.MoveY = -1;
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
             // rate would put several inputs in one tick, and the server keeps
@@ -469,6 +505,23 @@ namespace SpaceAdventure.Game
                     // Ask for the control seat; on "occupied" the seat_result
                     // handler walks down the passenger seats.
                     _net.Send(Encode.Board(_interact.Target, 1));
+                }
+                else if (_interact.TargetType == EntityType.Player && _interact.Target != 0)
+                {
+                    // Look + E is the fast invite path (GDD "Parties").
+                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.PartyInvite,
+                        $"{{\"target\":{_interact.Target}}}"));
+                    _interact.Notice = "invite sent";
+                    _noticeUntil = Time.time + 2f;
+                }
+                else if (_interact.TargetType == EntityType.Npc &&
+                         _views.TryGet(_interact.Target, out var tv) && tv.Label == "npc.dispatcher")
+                {
+                    // The dispatcher is a BOARD, not a shop: E opens the
+                    // journal and asks for the offers.
+                    _journalView.Show(true);
+                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionList,
+                        $"{{\"npc\":{_interact.Target}}}"));
                 }
                 else
                 {
@@ -542,6 +595,7 @@ namespace SpaceAdventure.Game
                 string name = v.Type switch
                 {
                     EntityType.Npc when v.Label == "npc.quartermaster" => "SHOP",
+                    EntityType.Npc when v.Label == "npc.warlord" => "WARLORD",
                     EntityType.Vehicle => "ROVER",
                     EntityType.Ship => "SHIP",
                     _ => null,
@@ -576,9 +630,45 @@ namespace SpaceAdventure.Game
             if (_interact.ShopOpen && !_shopView.Open) _shopView.Show(true);
             if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
 
+            _interact._selfId = _net.EntityId;
             _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
 
+            // Phase 10 banners: the priority offer shouts, completions cheer.
+            if (_missionLog.PriorityMission != null && Time.time < _missionLog.PriorityUntil)
+                _hudView.SetBanner($"PRIORITY: warlord sighted at {_missionLog.PriorityPoi?.ToUpperInvariant()} — open the journal (J)", true);
+            else if (Time.time - _missionLog.LastCompletedAt < 5f)
+                _hudView.SetBanner($"MISSION COMPLETE  +{_missionLog.LastCompletedCredits} CR", false);
+            else if (Time.time - _missionLog.LastSharedAt < 6f)
+                _hudView.SetBanner($"{_missionLog.LastSharedBy} shared \"{_missionLog.LastSharedName}\" — J for the journal", false);
+            else if (_partyState.PendingFrom != 0 && Time.time - _partyState.PendingAt < 10f)
+                _hudView.SetBanner($"{_partyState.PendingName} invites you to a party — P to answer", false);
+            else
+                _hudView.SetBanner(null, false);
+
             UpdateFlightReadout();
+
+            // Party frames, left edge: name + live health per member. Self
+            // reads from Character (no view exists for the local body);
+            // everyone else from their snapshot-fed view. A member whose
+            // entity has not arrived yet shows dimmed, not dead.
+            _framesScratch.Clear();
+            if (_partyState.InParty)
+            {
+                int playerMax = 100;
+                if (_character.Defs.Entities != null &&
+                    _character.Defs.Entities.TryGetValue("player", out var pd) && pd.MaxHealth > 0)
+                    playerMax = pd.MaxHealth;
+                foreach (var (mid, mname) in _partyState.Members)
+                {
+                    if (mid == _net.EntityId)
+                        _framesScratch.Add((mname, _character.Health, playerMax, true, true));
+                    else if (_views.TryGet(mid, out var mv))
+                        _framesScratch.Add((mname, mv.Health, playerMax, true, false));
+                    else
+                        _framesScratch.Add((mname, 0, playerMax, false, false));
+                }
+            }
+            _partyFrames.Update(_framesScratch);
 
             _hudView.SetLog(_hud.Lines);
             _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
@@ -774,6 +864,8 @@ namespace SpaceAdventure.Game
                 if (argv[at + 1] == "sheet") OpenPanel(_sheetView, _bagsView);
                 if (argv[at + 1] == "map") _map.Toggle();
                 if (argv[at + 1] == "account") _accountView.Show(true);
+                if (argv[at + 1] == "journal") _journalView.Show(true);
+                if (argv[at + 1] == "party") _partyView.Show(true);
                 yield return new WaitForSeconds(1f); // refresh round trip
             }
             // -uiRoute <path>: walk a solved route (test/out/route-*.json)
@@ -1008,6 +1100,57 @@ namespace SpaceAdventure.Game
                 }
                 if (!_rigFire) yield return new WaitForSeconds(1.5f); // let a popup land
             }
+
+            // -uiQuest: stage the journal showcase — accept the starter
+            // mission at the board the approach just reached, ask for the
+            // offer list (names), and auto-accept the party invite a wire
+            // helper sends. Everything on screen is the server's real word;
+            // the rig only pushes the buttons a hand would.
+            if (Array.IndexOf(argv, "-uiQuest") >= 0)
+            {
+                _rigAutoParty = true;
+
+                // The approach overshoots into the NPC's face, where the
+                // server's cone test rightly refuses — back off to a polite
+                // 2.2 m, looking at the eye, before doing business.
+                uint board = 0;
+                for (float w = 0; w < 6f; w += 0.15f)
+                {
+                    board = NearestBoard();
+                    if (board == 0 || !_views.TryGet(board, out var bv) || bv.Root == null) break;
+                    Vector3 bp = bv.Root.transform.position;
+                    Vector3 bup = bp.normalized;
+                    _fps.FaceToward(_camera.transform.position, bp + bup * 1.5f);
+                    float d = (bp + bup * 1.7f - _camera.transform.position).magnitude;
+                    if (d >= 2.0f && d <= 2.8f) break;
+                    _rigBack = d < 2.0f;
+                    _rigWalk = d > 2.8f;
+                    yield return new WaitForSeconds(0.15f);
+                    _rigBack = false;
+                    _rigWalk = false;
+                }
+                _rigBack = false;
+                _rigWalk = false;
+
+                // Real cmds, retried until the server says yes — the row on
+                // screen must be the server's word, not staging.
+                if (board != 0)
+                {
+                    for (int tries = 0; tries < 4; tries++)
+                    {
+                        _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionList, $"{{\"npc\":{board}}}"));
+                        _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionAccept, "{\"id\":\"mission.cull\"}"));
+                        yield return new WaitForSeconds(0.8f);
+                        if (_missionLog.State.TryGetValue("mission.cull", out var st) && st.active) break;
+                    }
+                }
+                // Wait for the helper's invite to land and the roster to form.
+                for (float w = 0; w < 20f && !_partyState.InParty; w += 0.5f)
+                    yield return new WaitForSeconds(0.5f);
+                _journalView.Show(true);
+                yield return new WaitForSeconds(0.5f);
+            }
+
             yield return new WaitForEndOfFrame();
             if (_rigLamp)
             {
@@ -1040,6 +1183,33 @@ namespace SpaceAdventure.Game
         /// whatever was last seen — a bag that still lists a rifle you sold on
         /// another client is worse than a bag that takes a round trip.
         /// </summary>
+        /// <summary>The board NPC within interact reach, or 0.</summary>
+        private uint NearestBoard()
+        {
+            Vector3 eye = _camera.transform.position;
+            foreach (var v in _views.All)
+            {
+                if (v.Root == null) continue;
+                if (v.Label != "npc.dispatcher" && v.Label != "npc.quartermaster") continue;
+                if ((v.Root.transform.position - eye).magnitude <= 3.5f) return v.Id;
+            }
+            return 0;
+        }
+
+        /// <summary>Players within 30 m, for the party panel's roster.</summary>
+        private System.Collections.Generic.List<(uint id, string name)> NearbyPlayers()
+        {
+            var outp = new System.Collections.Generic.List<(uint, string)>();
+            Vector3 eye = _camera.transform.position;
+            foreach (var v in _views.All)
+            {
+                if (v.Root == null || v.Type != EntityType.Player || v.Id == _net.EntityId) continue;
+                if ((v.Root.transform.position - eye).magnitude <= 30f)
+                    outp.Add((v.Id, string.IsNullOrEmpty(v.Label) ? $"player {v.Id}" : v.Label));
+            }
+            return outp;
+        }
+
         private void OpenPanel(SpaceAdventure.Game.UI.ModalView view, SpaceAdventure.Game.UI.ModalView other)
         {
             bool open = !view.Open;
@@ -1281,6 +1451,32 @@ namespace SpaceAdventure.Game
                             _fx.OnHit(ev, _net.EntityId);
                             OnHitFeedback(ev);
                             break;
+                        case EventId.MissionProgress:
+                            _missionLog.OnProgress(WireReader.Utf8.GetString(ev.Data));
+                            if (_journalView.Open) _journalView.Rebuild();
+                            break;
+                        case EventId.MissionComplete:
+                            _missionLog.OnComplete(WireReader.Utf8.GetString(ev.Data));
+                            if (_journalView.Open) _journalView.Rebuild();
+                            break;
+                        case EventId.PriorityOffer:
+                            _missionLog.OnPriorityOffer(WireReader.Utf8.GetString(ev.Data));
+                            if (_journalView.Open) _journalView.Rebuild();
+                            break;
+                        case EventId.MissionShared:
+                            _missionLog.OnShared(WireReader.Utf8.GetString(ev.Data));
+                            if (_journalView.Open) _journalView.Rebuild();
+                            break;
+                        case EventId.PartyUpdate:
+                            _partyState.OnUpdate(WireReader.Utf8.GetString(ev.Data));
+                            if (_partyView.Open) _partyView.Rebuild();
+                            break;
+                        case EventId.PartyInvited:
+                            _partyState.OnInvited(WireReader.Utf8.GetString(ev.Data));
+                            if (_rigAutoParty)
+                                _net.Send(Encode.Cmd(NextCmdSeq(), Op.PartyRespond, "{\"accept\":true}"));
+                            if (_partyView.Open) _partyView.Rebuild();
+                            break;
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
@@ -1328,9 +1524,13 @@ namespace SpaceAdventure.Game
                     if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
+                    if (r.Opcode == Op.MissionList && r.Ok)
+                        _missionLog.OnListResult(r.Body);
                     if (_shopView.Open) _shopView.Rebuild();
                     if (_bagsView.Open) _bagsView.Rebuild();
                     if (_sheetView.Open) _sheetView.Rebuild();
+                    if (_journalView.Open) _journalView.Rebuild();
+                    if (_partyView.Open) _partyView.Rebuild();
                     break;
                 }
             }

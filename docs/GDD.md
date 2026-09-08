@@ -1439,6 +1439,91 @@ The manual site-sweeps in camp.json/range.json become code:
 - Determinism: solver runs from the world seed; same seed, same world.
   Output is committed zone JSON — reviewed, not runtime magic.
 
+## Missions and parties (Phase 10)
+
+The world got places worth walking to (Phase 9); missions are the reasons
+to walk. Two shapes: PERSONAL missions everyone can hold at once, and
+LIMITED missions — bounties — that exactly one party claims at a time.
+Both are server-authoritative end to end: the client renders offers,
+progress and rewards; it asserts none of them.
+
+### Parties
+
+- **Max 4, session-scoped, leaderless.** Any member may invite; anyone
+  may leave; the party dissolves when one member remains. Nothing about
+  a party persists — reconnecting means re-inviting, which at this scale
+  is a feature, not a gap.
+- **Forming**: two paths to the same cmd. Look at a player within
+  interact range and press E ("invite to party"), or open the party
+  panel (P) and invite from the nearby-player roster. The invitee gets
+  a HUD toast and accepts or declines from the panel. One pending
+  invite per player; a newer one replaces it.
+- **Credit**: a qualifying action by ANY member progresses the mission
+  for EVERY member who holds it, wherever they stand — that is what the
+  formal party buys over proximity. Completion pays each holder the
+  full reward; the economy eats the inflation in exchange for "playing
+  together always feels good".
+
+### Mission types
+
+| type | objective | progress source | completes |
+|---|---|---|---|
+| `kill` | kill N hostiles (optionally of one archetype) | death events the server already emits | on the Nth kill |
+| `scout` | visit a named POI | entering the POI's mast-discovery radius (the compass math, server-side) | on entry |
+| `fetch` | hold N of an item collected from drops | loot pickups | at the board — turn-in CONSUMES the items |
+| `bounty` | kill THE named NPC | that entity's death | on the kill |
+
+Templates live in `server/data/missions.json` (id, type, params, credit
+reward) — data, like items and npcs. Personal missions are repeatable
+after completion (the board re-offers them); a cooldown is a template
+field, default none.
+
+**Sharing**: a member may push any held, active, non-bounty mission to
+party members who lack it — from anywhere, no board needed; being in
+the party is the authorisation. Recipients start at zero progress and
+get the full template with the notification (their journal may never
+have seen a board). Bounties are excluded: their membership follows
+the party through the claim machine.
+
+### The board
+
+`npc.dispatcher` stands at the relay — the Colony POI's purpose. E to
+talk, the same interaction cone and range as the quartermaster; the
+journal-style board lists offered templates and the player's active
+missions. Fetch missions turn in here. The quartermaster also offers
+the starter kill mission, so the loop is teachable without leaving
+spawn.
+
+### Bounties — the limited missions
+
+- **One live at a time.** The mission system spawns a named bounty NPC
+  (`npc.warlord`: tougher, meaner, generous loot) at a solver-eligible
+  POI, and BROADCASTS a `priority_offer` — every HUD raises the toast,
+  the journal shows it, anyone may accept from anywhere. First
+  `mission_accept` wins; everyone else is refused with `"claimed"`.
+- **The claim belongs to the accepting player's party, and FOLLOWS
+  it**: anyone who shares a party with an original claimant at the
+  moment of the kill counts as a claimant — a member who joins after
+  the accept completes the contract rather than stealing it, and the
+  pay goes to the claimant party's current members, full reward each.
+- **Release**: completion, explicit abandon by all claimants, every
+  claimant disconnecting, or a **15-minute expiry** — then the warlord
+  despawns and, after a ~2-minute cooldown, the system posts a fresh
+  bounty (fresh NPC, possibly another POI). Nobody squats a bounty;
+  content never wedges.
+- The bounty NPC is a real entity in the world: non-claimants can see
+  it, get shot by it, even kill it — but only claimants get the mission
+  credit (the kill still releases the claim; the world is not obligated
+  to be fair to snipers, and a stolen kill re-posts the bounty).
+
+### State and authority
+
+Per-player mission state (active missions + counts + completion
+history) persists on the player row beside credits and inventory.
+Parties and bounty claims are in-memory — they die with the server,
+which at worst re-posts a bounty. Every transition is a cmd the server
+validates or an event the server emits; the client's journal is a view.
+
 ## Phase 2 — items, weapons, combat, interaction
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules

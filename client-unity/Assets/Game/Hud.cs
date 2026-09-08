@@ -55,7 +55,13 @@ namespace SpaceAdventure.Game
         }
 
         public void OnCmdResult(CmdResult r)
-            => Log($"cmd {r.Opcode} -> {(r.Ok ? "ok" : $"status {r.StatusCode}")} {r.Body}");
+        {
+            // Bodies can be whole JSON documents (mission_list); the log is
+            // a glance, not a wire dump.
+            string body = r.Body ?? "";
+            if (body.Length > 48) body = body.Substring(0, 48) + "…";
+            Log($"cmd {r.Opcode} -> {(r.Ok ? "ok" : $"status {r.StatusCode}")} {body}");
+        }
 
         private void Log(string line)
         {

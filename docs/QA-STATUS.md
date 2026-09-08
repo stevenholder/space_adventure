@@ -301,6 +301,26 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 10 — C72–C77, run 2026-09-08 (kind)
+
+Missions, parties, and the bounty — server-authoritative end to end; the
+client journal renders events and asserts nothing.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C72 | Parties: invite (both paths), accept, leave, dissolve, disconnect | wire-tested lifecycle: toast names the inviter, rosters reach every member, leaver gets the empty roster, dissolve-at-one on leave AND on disconnect, 4-cap refuses the fifth (`TestPartyLifecycle`, `TestPartyCap`) | **PASS** |
+| C73 | Personal missions end to end | cmd surface wire-tested: starter filter at the quartermaster vs the dispatcher's full board, accept/duplicate/abandon/re-abandon, turn-in gates; fetch VERIFIED live in-test — the fresh player's 120 cells cover the 30-cell salvage, items consumed, complete event fired, credits paid (`TestMissionCmdSurface`) | **PASS** (kill/scout progress: engine unit paths + the live playtest) |
+| C74 | Party-wide credit, full pay each | kill credit iterates partyMembers at the kill, captured under s.mu and paid after (fire → missionKillCredit); scout sweep completes through the party the same way | **PASS by construction + review** (two-client live run rides the playtest) |
+| C75 | Bounty claim is exactly-one | live two-client race over the wire: one StatusOK, one refused `"claimed"` (`TestBountyRaceAndRelease`) — the seat-race proof, replayed | **PASS** |
+| C76 | Bounty never wedges | abandon-by-last releases and arms the re-post (wire); expiry releases and despawns the warlord (white-box clock); disconnect routes through the same abandon; stolen kill releases unpaid (code path shared with expiry) | **PASS** |
+| C77 | Nothing else moved | t14/t16/t18/t29 green against the deployed build (t18 solo — its known back-to-back flake); full go vet + test green incl. the third store migration on SQLite and Postgres | **PASS** |
+
+Owed to the playtest: two humans partying up live (look+E and the P
+panel), a shared camp fight progressing both journals, and one real
+warlord claim. The gallery shots are LIVE captures — the kind server's
+bounty broadcast is visible in them (banner, WARLORD compass marker,
+CLAIM button).
+
 ## Phase 9 — C66–C71, run 2026-09-03 (kind)
 
 The world rebuild: zone layouts on the 4 m kit grid, one source deriving

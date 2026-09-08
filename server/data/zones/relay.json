@@ -63,7 +63,19 @@
    }
   ]
  },
- "entities": [],
+ "entities": [
+  {
+   "$note": "the mission board (Phase 10)",
+   "type": "npc",
+   "def": "npc.dispatcher",
+   "pos": [
+    -6.5,
+    0.0,
+    2.5
+   ],
+   "yaw": -155.0
+  }
+ ],
  "props": [
   {
    "asset": "prop.generator",
