@@ -100,6 +100,28 @@ namespace SpaceAdventure.Game
         public long LastCompletedCredits;
         public float LastCompletedAt = -999f;
 
+        /// <summary>A party member pushed a quest into this journal.</summary>
+        public string LastSharedBy;
+        public string LastSharedName;
+        public float LastSharedAt = -999f;
+
+        public void OnShared(string data)
+        {
+            var parsed = Newtonsoft.Json.Linq.JObject.Parse(data);
+            var row = parsed["mission"]?.ToObject<MissionRow>();
+            if (row == null || string.IsNullOrEmpty(row.id)) return;
+            // The recipient may never have visited a board: the template
+            // rides the event so the journal can NAME the quest.
+            if (Offers.Find(o => o.id == row.id) == null) Offers.Add(row);
+            if (!State.TryGetValue(row.id, out var st))
+                State[row.id] = st = new MissionStateRow();
+            st.active = true;
+            st.count = 0;
+            LastSharedBy = (string)parsed["from"] ?? "";
+            LastSharedName = row.name;
+            LastSharedAt = Time.time;
+        }
+
         [Serializable] private class ProgressEvent { public string id; public int count; public int goal; }
         [Serializable] private class CompleteEvent { public string id; public long credits; }
         [Serializable] private class OfferEvent { public string id; public string poi; public int expires_s; }

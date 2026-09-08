@@ -14,15 +14,17 @@ namespace SpaceAdventure.Game.UI
     public sealed class JournalView : ModalView
     {
         private readonly MissionLog _log;
+        private readonly PartyState _party;
         private readonly Func<uint> _boardNpc; // nearest board's entity id, 0 = none
         private readonly Func<ushort> _nextSeq;
         private readonly Action<byte[]> _send;
 
-        public JournalView(VisualElement root, MissionLog log, Func<uint> boardNpc,
-            Func<ushort> nextSeq, Action<byte[]> send)
+        public JournalView(VisualElement root, MissionLog log, PartyState party,
+            Func<uint> boardNpc, Func<ushort> nextSeq, Action<byte[]> send)
             : base(root, "Journal", 420)
         {
             _log = log;
+            _party = party;
             _boardNpc = boardNpc;
             _nextSeq = nextSeq;
             _send = send;
@@ -72,6 +74,16 @@ namespace SpaceAdventure.Game.UI
                 l.style.flexGrow = 1;
                 row.Add(l);
                 string mid = kv.Key;
+                if (_party.InParty && (offer == null || offer.type != "bounty"))
+                {
+                    var share = new Button(() =>
+                    {
+                        _send(Cmd(Op.MissionShare, $"{{\"id\":\"{mid}\"}}"));
+                        Rebuild();
+                    }) { text = "SHARE" };
+                    ItemCard.StyleButton(share, false);
+                    row.Add(share);
+                }
                 if (board != 0 && offer != null && offer.type == "fetch")
                 {
                     var turnin = new Button(() =>

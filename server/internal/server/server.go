@@ -718,7 +718,8 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	case protocol.OpPartyInvite, protocol.OpPartyRespond, protocol.OpPartyLeave:
 		return s.partyCmd(c, req)
 	case protocol.OpMissionList, protocol.OpMissionAccept,
-		protocol.OpMissionAbandon, protocol.OpMissionTurnin:
+		protocol.OpMissionAbandon, protocol.OpMissionTurnin,
+		protocol.OpMissionShare:
 		return s.missionCmd(c, req)
 	}
 	var result protocol.CmdResult

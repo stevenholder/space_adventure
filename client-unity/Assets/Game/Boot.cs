@@ -343,7 +343,7 @@ namespace SpaceAdventure.Game
             _sheetView = new SpaceAdventure.Game.UI.SheetView(_ui.Root, _character);
             _promptView = new SpaceAdventure.Game.UI.PromptView(_ui.Root);
             _journalView = new SpaceAdventure.Game.UI.JournalView(_ui.Root, _missionLog,
-                NearestBoard, NextCmdSeq, bts => _net.Send(bts));
+                _partyState, NearestBoard, NextCmdSeq, bts => _net.Send(bts));
             _partyView = new SpaceAdventure.Game.UI.PartyView(_ui.Root, _partyState,
                 NearbyPlayers, NextCmdSeq, bts => _net.Send(bts));
             _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
@@ -631,6 +631,8 @@ namespace SpaceAdventure.Game
                 _hudView.SetBanner($"PRIORITY: warlord sighted at {_missionLog.PriorityPoi?.ToUpperInvariant()} — open the journal (J)", true);
             else if (Time.time - _missionLog.LastCompletedAt < 5f)
                 _hudView.SetBanner($"MISSION COMPLETE  +{_missionLog.LastCompletedCredits} CR", false);
+            else if (Time.time - _missionLog.LastSharedAt < 6f)
+                _hudView.SetBanner($"{_missionLog.LastSharedBy} shared \"{_missionLog.LastSharedName}\" — J for the journal", false);
             else if (_partyState.PendingFrom != 0 && Time.time - _partyState.PendingAt < 10f)
                 _hudView.SetBanner($"{_partyState.PendingName} invites you to a party — P to answer", false);
             else
@@ -1378,6 +1380,10 @@ namespace SpaceAdventure.Game
                             break;
                         case EventId.PriorityOffer:
                             _missionLog.OnPriorityOffer(WireReader.Utf8.GetString(ev.Data));
+                            if (_journalView.Open) _journalView.Rebuild();
+                            break;
+                        case EventId.MissionShared:
+                            _missionLog.OnShared(WireReader.Utf8.GetString(ev.Data));
                             if (_journalView.Open) _journalView.Rebuild();
                             break;
                         case EventId.PartyUpdate:

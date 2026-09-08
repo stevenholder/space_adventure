@@ -138,7 +138,11 @@ Constants:
   `0x000B` `mission_abandon` `{"id": "<mission id>"}`;
   `0x000C` `mission_turnin` `{"npc": <entity_id>, "id": "<mission id>"}`
   (fetch only — consumes the collected items at the board; kill/scout/bounty
-  complete on the spot). `0x0010`+ still reserved.
+  complete on the spot);
+  `0x000D` `mission_share` `{"id": "<mission id>"}` — pushes a held, active,
+  non-bounty mission to every party member who lacks it (works anywhere; the
+  party IS the authorisation). Result carries `{"shared": <n>}`.
+  `0x0010`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -152,6 +156,9 @@ Constants:
   `0x000A` `priority_offer` `{"id","poi","expires_s"}` — BROADCAST when a
   bounty posts, so every HUD can raise the toast;
   `0x000B` `party_invited` `{"from","name"}` (to the invitee);
+  `0x000C` `mission_shared` `{"from", "mission": {<the full template>}}` (to
+  each recipient — the template rides along because a recipient may never
+  have visited a board, and a journal that shows a bare id is not a journal);
   and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the player whose primary slot changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Broadcast when

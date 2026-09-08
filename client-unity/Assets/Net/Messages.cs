@@ -86,6 +86,7 @@ namespace SpaceAdventure.Net
         public const ushort MissionAccept = 0x000A;
         public const ushort MissionAbandon = 0x000B;
         public const ushort MissionTurnin = 0x000C;
+        public const ushort MissionShare = 0x000D;
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -114,6 +115,7 @@ namespace SpaceAdventure.Net
         public const ushort PartyUpdate = 0x0009;
         public const ushort PriorityOffer = 0x000A;
         public const ushort PartyInvited = 0x000B;
+        public const ushort MissionShared = 0x000C; // data = the full template
     }
 
     /// <summary>collider kinds.</summary>

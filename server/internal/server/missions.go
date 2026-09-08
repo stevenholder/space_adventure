@@ -138,6 +138,59 @@ func (s *Server) missionCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		s.bountyAbandon(c, body.ID)
 		return reply(protocol.StatusOK, nil)
 
+	case protocol.OpMissionShare:
+		var body struct {
+			ID string `json:"id"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		m, ok := s.reg.Missions[body.ID]
+		if !ok {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if m.Type == "bounty" {
+			// Bounty membership follows the party through the claim machine;
+			// sharing a claim by cmd would bypass the race.
+			return refuse("not_shareable")
+		}
+		var holds bool
+		c.ident.Mutate(func(p *store.Player) {
+			st, ok := p.Missions[m.ID]
+			holds = ok && st.Active
+		})
+		if !holds {
+			return refuse("not_active")
+		}
+		s.mu.Lock()
+		members := append([]*client{}, s.partyMembers(c)...)
+		s.mu.Unlock()
+		if len(members) <= 1 {
+			return refuse("no_party")
+		}
+		shared := 0
+		for _, member := range members {
+			if member == c {
+				continue
+			}
+			var took bool
+			member.ident.Mutate(func(p *store.Player) {
+				st := missionState(p, m.ID)
+				if st.Active {
+					return
+				}
+				st.Active = true
+				st.Count = 0
+				took = true
+			})
+			if took {
+				shared++
+				member.send(msg{data: missionSharedFrame(c.entity.Name, m)})
+				s.refreshScoutCache(member)
+			}
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{"shared": shared}))
+
 	case protocol.OpMissionTurnin:
 		var body struct {
 			NPC uint32 `json:"npc"`
@@ -329,6 +382,14 @@ type progressRow struct {
 func missionProgressFrame(r progressRow) []byte {
 	data, _ := json.Marshal(map[string]any{"id": r.ID, "count": r.Count, "goal": r.Goal})
 	return protocol.EncodeEvent(protocol.Event{EventID: protocol.EventMissionProgress, Data: data})
+}
+
+// missionSharedFrame carries the FULL template: the recipient may never
+// have visited a board, so their journal needs the name and goal, not just
+// an id.
+func missionSharedFrame(from string, m defs.Mission) []byte {
+	data, _ := json.Marshal(map[string]any{"from": from, "mission": m})
+	return protocol.EncodeEvent(protocol.Event{EventID: protocol.EventMissionShared, Data: data})
 }
 
 func missionCompleteFrame(m defs.Mission) []byte {

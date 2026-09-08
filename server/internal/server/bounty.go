@@ -214,10 +214,14 @@ func (s *Server) bountyClientGone(c *client) {
 	}
 }
 
-// bountyKilled resolves the warlord's death: a claimant's kill pays every
-// claimant; anyone else's kill is a stolen bounty — released, unpaid.
-// Called from fire() AFTER s.mu is released, with the resolution captured
-// by fireLocked.
+// bountyResolveKill resolves the warlord's death. The claim FOLLOWS THE
+// PARTY: anyone who, at the moment of the kill, shares a party with an
+// original claimant counts as one — a member who joined after the accept
+// completes the contract rather than stealing it, and the pay goes to the
+// claimant party's CURRENT members (late joiners included, full reward
+// each, per the GDD's credit rule). A kill by anyone genuinely outside the
+// claim is still a stolen bounty — released, unpaid. Called from fire()
+// AFTER s.mu is released, with the resolution captured by fireLocked.
 func (s *Server) bountyResolveKill(killer *client, victimID uint32) {
 	var payees, unpaid []*client
 	var m defs.Mission
@@ -230,17 +234,23 @@ func (s *Server) bountyResolveKill(killer *client, victimID uint32) {
 	}
 	m = b.mission
 	if b.claimed {
-		isClaimant := false
+		// The live claimant set: every current party member of every
+		// original claimant, deduplicated. A solo claimant is their own
+		// party of one.
+		seen := map[*client]bool{}
+		var live []*client
 		for _, cl := range b.claimants {
-			if cl == killer {
-				isClaimant = true
-				break
+			for _, member := range s.partyMembers(cl) {
+				if !seen[member] {
+					seen[member] = true
+					live = append(live, member)
+				}
 			}
 		}
-		if isClaimant {
-			payees = append(payees, b.claimants...)
+		if seen[killer] {
+			payees = live
 		} else {
-			unpaid = append(unpaid, b.claimants...)
+			unpaid = live
 		}
 	}
 	s.releaseBountyLocked()

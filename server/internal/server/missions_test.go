@@ -173,3 +173,64 @@ func TestMissionCmdSurface(t *testing.T) {
 		t.Fatalf("list at a target: status %d, want refused/notfound", r.Status)
 	}
 }
+
+// Sharing: a holder pushes a quest to party members who lack it; the
+// recipient gets the full template (they may never have seen a board), a
+// re-share reaches nobody, bounties refuse, and the partyless refuse.
+func TestMissionShare(t *testing.T) {
+	_, url := newTestServer(t)
+	a := joinPlayer(t, url, "A")
+	b := joinPlayer(t, url, "B")
+
+	// No party yet: sharing has nobody to reach.
+	qm := a.findSpawnByDef(t, "npc.quartermaster")
+	walkToNPC(t, a, qm)
+	a.cmdOK(t, 1, protocol.OpMissionAccept, `{"id":"mission.cull"}`)
+	if r := a.cmd(t, 2, protocol.OpMissionShare, `{"id":"mission.cull"}`); r.Status != protocol.StatusRefused {
+		t.Fatalf("partyless share: status %d, want refused", r.Status)
+	}
+
+	// Party up, share, and the recipient hears the full template.
+	a.cmdOK(t, 3, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, b.id))
+	b.event(t, protocol.EventPartyInvited)
+	b.cmdOK(t, 4, protocol.OpPartyRespond, `{"accept":true}`)
+	r := a.cmdOK(t, 5, protocol.OpMissionShare, `{"id":"mission.cull"}`)
+	var res struct {
+		Shared int `json:"shared"`
+	}
+	json.Unmarshal(r.Data, &res)
+	if res.Shared != 1 {
+		t.Fatalf("shared = %d, want 1", res.Shared)
+	}
+	ev := b.event(t, protocol.EventMissionShared)
+	var got struct {
+		From    string `json:"from"`
+		Mission struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Count  int    `json:"count"`
+			Reward int64  `json:"reward"`
+		} `json:"mission"`
+	}
+	if err := json.Unmarshal(ev.Data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Mission.ID != "mission.cull" || got.Mission.Name == "" || got.Mission.Count == 0 {
+		t.Fatalf("shared template = %+v, want the full mission.cull row", got.Mission)
+	}
+
+	// Everyone has it now: a re-share reaches nobody.
+	r = a.cmdOK(t, 6, protocol.OpMissionShare, `{"id":"mission.cull"}`)
+	json.Unmarshal(r.Data, &res)
+	if res.Shared != 0 {
+		t.Fatalf("re-share = %d, want 0", res.Shared)
+	}
+
+	// A mission the sharer does not hold, and the bounty, both refuse.
+	if r := a.cmd(t, 7, protocol.OpMissionShare, `{"id":"mission.gunners"}`); r.Status != protocol.StatusRefused {
+		t.Fatalf("share unheld: status %d, want refused", r.Status)
+	}
+	if r := a.cmd(t, 8, protocol.OpMissionShare, `{"id":"mission.bounty.warlord"}`); r.Status != protocol.StatusRefused {
+		t.Fatalf("share bounty: status %d, want refused", r.Status)
+	}
+}

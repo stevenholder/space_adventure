@@ -83,6 +83,7 @@ const (
 	OpMissionAccept  uint16 = 0x000A
 	OpMissionAbandon uint16 = 0x000B
 	OpMissionTurnin  uint16 = 0x000C
+	OpMissionShare   uint16 = 0x000D
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -109,6 +110,7 @@ const (
 	EventPartyUpdate     uint16 = 0x0009
 	EventPriorityOffer   uint16 = 0x000A // broadcast
 	EventPartyInvited    uint16 = 0x000B
+	EventMissionShared   uint16 = 0x000C // data = the full mission template
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

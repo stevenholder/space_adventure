@@ -1478,6 +1478,13 @@ reward) — data, like items and npcs. Personal missions are repeatable
 after completion (the board re-offers them); a cooldown is a template
 field, default none.
 
+**Sharing**: a member may push any held, active, non-bounty mission to
+party members who lack it — from anywhere, no board needed; being in
+the party is the authorisation. Recipients start at zero progress and
+get the full template with the notification (their journal may never
+have seen a board). Bounties are excluded: their membership follows
+the party through the claim machine.
+
 ### The board
 
 `npc.dispatcher` stands at the relay — the Colony POI's purpose. E to
@@ -1494,9 +1501,11 @@ spawn.
   POI, and BROADCASTS a `priority_offer` — every HUD raises the toast,
   the journal shows it, anyone may accept from anywhere. First
   `mission_accept` wins; everyone else is refused with `"claimed"`.
-- **The claim belongs to the accepting player's party** — the members
-  at accept time. Any claimant's kill completes it for all of them,
-  full reward each.
+- **The claim belongs to the accepting player's party, and FOLLOWS
+  it**: anyone who shares a party with an original claimant at the
+  moment of the kill counts as a claimant — a member who joins after
+  the accept completes the contract rather than stealing it, and the
+  pay goes to the claimant party's current members, full reward each.
 - **Release**: completion, explicit abandon by all claimants, every
   claimant disconnecting, or a **15-minute expiry** — then the warlord
   despawns and, after a ~2-minute cooldown, the system posts a fresh

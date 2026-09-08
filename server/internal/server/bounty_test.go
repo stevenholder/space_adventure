@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"space-adventure/server/internal/protocol"
+	"space-adventure/server/internal/store"
 )
 
 func TestBountyRaceAndRelease(t *testing.T) {
@@ -98,4 +99,51 @@ func TestBountyExpiry(t *testing.T) {
 	if !released || !gone {
 		t.Fatalf("after expiry: released=%v warlordGone=%v, want true/true", released, gone)
 	}
+}
+
+// A member who joins the party AFTER the claim completes the contract
+// rather than stealing it, and gets paid beside the original claimant.
+func TestBountyLateJoinerKill(t *testing.T) {
+	srv, url := newTestServer(t)
+	a := joinPlayer(t, url, "A")
+	a.event(t, protocol.EventPriorityOffer)
+	a.cmdOK(t, 1, protocol.OpMissionAccept, `{"id":"mission.bounty.warlord"}`)
+
+	// B joins A's party after the claim.
+	b := joinPlayer(t, url, "B")
+	a.cmdOK(t, 2, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, b.id))
+	b.event(t, protocol.EventPartyInvited)
+	b.cmdOK(t, 3, protocol.OpPartyRespond, `{"accept":true}`)
+	a.event(t, protocol.EventPartyUpdate)
+
+	srv.mu.Lock()
+	warlord := srv.bounty.entityID
+	bClient := srv.clients[b.id]
+	aClient := srv.clients[a.id]
+	srv.mu.Unlock()
+
+	var aBefore, bBefore int64
+	aClient.ident.Mutate(func(p *store.Player) { aBefore = p.Credits })
+	bClient.ident.Mutate(func(p *store.Player) { bBefore = p.Credits })
+
+	// The LATE JOINER lands the blow (driven directly; aiming a real shot
+	// at an AI that strafes is t33's job, the rule is the point here).
+	srv.bountyResolveKill(bClient, warlord)
+
+	srv.mu.Lock()
+	released := srv.bounty == nil
+	srv.mu.Unlock()
+	if !released {
+		t.Fatal("bounty not released by the late joiner's kill")
+	}
+	var aAfter, bAfter int64
+	aClient.ident.Mutate(func(p *store.Player) { aAfter = p.Credits })
+	bClient.ident.Mutate(func(p *store.Player) { bAfter = p.Credits })
+	if aAfter-aBefore != 500 || bAfter-bBefore != 500 {
+		t.Fatalf("pay: A +%d B +%d, want +500 each", aAfter-aBefore, bAfter-bBefore)
+	}
+
+	// Both got the completion event.
+	a.event(t, protocol.EventMissionComplete)
+	b.event(t, protocol.EventMissionComplete)
 }
