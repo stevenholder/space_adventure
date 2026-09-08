@@ -104,7 +104,9 @@ namespace SpaceAdventure.Game
             {
                 if (v.Root == null || !v.Root.activeSelf) continue;
                 if (v.Type != EntityType.Npc && v.Type != EntityType.Loot &&
-                    v.Type != EntityType.Vehicle && v.Type != EntityType.Ship) continue;
+                    v.Type != EntityType.Vehicle && v.Type != EntityType.Ship &&
+                    v.Type != EntityType.Player) continue;
+                if (v.Type == EntityType.Player && v.Id == _selfId) continue;
 
                 // A corpse is not a conversation. This used to be implied by
                 // activeSelf -- a dead body was switched off, so it fell out of
@@ -139,14 +141,19 @@ namespace SpaceAdventure.Game
                     EntityType.Loot => "E  ·  pick up",
                     EntityType.Vehicle => "E  ·  drive",
                     EntityType.Ship => "E  ·  fly",
+                    EntityType.Player => $"E  ·  invite {v.Label} to party",
                     _ => $"E  ·  talk to {Nice(v.Label)}",
                 };
             }
         }
 
+        /// <summary>Own entity id, so the cone never offers self-invites.</summary>
+        public uint _selfId;
+
         private static string Nice(string def) => def switch
         {
             "npc.quartermaster" => "Quartermaster Vex",
+            "npc.dispatcher" => "Dispatcher Oru",
             "" or null => "them",
             _ => def,
         };

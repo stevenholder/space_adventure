@@ -1058,6 +1058,17 @@ POI anatomy, the solver's clearance rules.
 
 # Phase 10 — missions, parties, and the bounty
 
+### Where Phase 10 stands (2026-09-08)
+
+Built and green on kind: C72–C77 recorded (docs/QA-STATUS.md "Phase
+10"). Server: parties, the mission engine (kill/scout/fetch,
+party-wide credit, the dispatcher board at the relay), and the bounty
+machine (post → race → claim → expire/steal/abandon → re-post), all
+wire- or white-box-tested. Client: journal (J), party panel (P),
+look+E invites, priority banner, WARLORD compass marker. Owed to
+humans: a two-player live session — party up, share a camp fight,
+claim one warlord together.
+
 **Playable proof.** Walk to the relay and the dispatcher has work: kill
 missions, scout missions, fetch missions — take them alone or invite a
 friend (look + E, or the party panel) and every kill counts for both of

@@ -78,6 +78,14 @@ namespace SpaceAdventure.Net
         public const ushort Equip = 0x0003;
         public const ushort Inventory = 0x0004;
         public const ushort Reload = 0x0005;
+        // Phase 10 (PROTOCOL.md): parties and missions, JSON bodies.
+        public const ushort PartyInvite = 0x0006;
+        public const ushort PartyRespond = 0x0007;
+        public const ushort PartyLeave = 0x0008;
+        public const ushort MissionList = 0x0009;
+        public const ushort MissionAccept = 0x000A;
+        public const ushort MissionAbandon = 0x000B;
+        public const ushort MissionTurnin = 0x000C;
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -100,6 +108,12 @@ namespace SpaceAdventure.Net
         public const ushort Death = 0x0004;
         public const ushort LootDropped = 0x0005;
         public const ushort Equipped = 0x0006; // Phase 3.5
+        // Phase 10: JSON payloads.
+        public const ushort MissionProgress = 0x0007;
+        public const ushort MissionComplete = 0x0008;
+        public const ushort PartyUpdate = 0x0009;
+        public const ushort PriorityOffer = 0x000A;
+        public const ushort PartyInvited = 0x000B;
     }
 
     /// <summary>collider kinds.</summary>
