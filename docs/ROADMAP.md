@@ -1114,6 +1114,58 @@ parties", PROTOCOL cmd ops `0x0006`–`0x000C` and events
 - **C77 Nothing else moved.** The full harness fleet t2–t29 passes
   unchanged; frame budget holds with the journal open.
 
+# Phase 11 — skills: what you did is what you are
+
+**Playable proof.** Open the sheet (K) and ten skills stare back, seven
+of them moving: sprint to the camp and Athletics ticks, win the fight
+and Marksmanship climbs, drag the loot home and Scavenging pays
+Commerce a visible synergy bonus at the shop counter. A level-up
+banners mid-fight and your next magazine hits harder. A fresh player's
+numbers are exactly 1.0 — nothing changes until trained — and the
+conformance suites hold at 1e-6 WITH multipliers live in both sims.
+
+**Contracts** (wave 0, landed with this section): GDD "Skills" — the
+ten-skill roster, the frozen RS curve, the efficacy/two-sims
+constraint, declared synergies, the K panel.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | skills.json (roster, awards, efficacy, synergies, unlock reqs) + registry parse | `server/data/`, `internal/defs` | go test |
+| 2 | Store: skills column (XP map + discovered POIs), migration 004 | `internal/store` | store tests both engines |
+| 3 | Curve math, pinned: points(L) landmarks, level-from-XP, both directions | `internal/skills` | unit vs 83 / 101,333 / 13,034,431 |
+| 4 | Award engine: hooks on damage/kill, distance (sprint/drive/fly), pickups, commerce, discovery; per-skill ≤1/s batch → skill_xp events | server | unit + wire |
+| 5 | Sim multipliers: sprint/drive/fly efficacy in BOTH sims, shipped on the sheet + level-ups, predictor applies; conformance cases at non-unit mults | `internal/sim`, C# mirror | t20/t23/t25 extended |
+| 6 | Server efficacy: damage mult, shop prices, loot extra-roll; synergy resolution; unlock gate on purchases | server | unit + t-fleet |
+| 7 | Client: sheet state, K panel (rows, bars, synergy arrows, greyed reserved), XP drip + LEVEL UP banner | `client-unity` | screenshots |
+| 8 | t34: live loop — sprint/fight/loot/trade/discover, watch seven skills move and persist across reconnect | `test/` | the test |
+| 9 | QA: C78–C83, gallery, docs | docs | criteria |
+
+### Acceptance criteria
+
+- **C78 Doing trains.** Every hooked verb awards its skill; events
+  batch (≤1/s/skill); XP survives reconnect. (t34)
+- **C79 The curve is RuneScape's.** Landmarks pinned by unit test;
+  level 92 is half of 99.
+- **C80 Efficacy is real and conformant.** Measured deltas at trained
+  levels vs 1; C30/C34-class conformance holds at 1e-6 with non-unit
+  multipliers in both sims; fresh players are bit-identical to today.
+- **C81 Synergies apply and show.** Bonus math unit-tested; the panel
+  draws the links.
+- **C82 Unlocks gate.** A data-gated purchase refuses below its level
+  and passes at it.
+- **C83 Nothing else moved.** Fleet t2–t29 unchanged; frame budget
+  holds with the panel open.
+
+# Phase 12 — the artisan loop (queued behind Phase 11)
+
+Mining (3 s drill channels on depleting ore nodes), Salvaging (wreck
+nodes), Engineering (workbench recipes at the relay), tools at the
+quartermaster, raw materials dropping on death as a lootable spill.
+Trains the three reserved skills on the proven framework. Contracted in
+GDD "Skills — Phase 12 preview"; tasked when Phase 11 closes.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
