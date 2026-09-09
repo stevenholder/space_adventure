@@ -39,8 +39,8 @@ func TestMigrate_SQLite(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 3 {
-		t.Fatalf("schema_version row count = %d, want 3 (001_player + 002_accounts + 003_missions)", count)
+	if count != 4 {
+		t.Fatalf("schema_version row count = %d, want 4 (001..004)", count)
 	}
 }
 
@@ -83,7 +83,7 @@ func TestMigrate_Postgres(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 3 {
-		t.Fatalf("schema_version row count = %d, want 3 (001_player + 002_accounts + 003_missions)", count)
+	if count != 4 {
+		t.Fatalf("schema_version row count = %d, want 4 (001..004)", count)
 	}
 }

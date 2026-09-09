@@ -280,10 +280,16 @@ func (s *Store) AccountPlayers(ctx context.Context, accountID string) ([]Player,
 // scanPlayerRow is GetPlayer's scan over a *sql.Rows, same JSON rules.
 func scanPlayerRow(rows *sql.Rows) (*Player, error) {
 	var p Player
-	var inventory, equipped, missions string
-	if err := rows.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions,
+	var inventory, equipped, missions, skillsCol string
+	if err := rows.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions, &skillsCol,
 		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs); err != nil {
 		return nil, fmt.Errorf("store: scanning player: %w", err)
+	}
+	if err := json.Unmarshal([]byte(skillsCol), &p.Skills); err != nil {
+		return nil, fmt.Errorf("store: corrupt skills JSON: %w", err)
+	}
+	if p.Skills.XP == nil {
+		p.Skills.XP = map[string]int64{}
 	}
 	if err := json.Unmarshal([]byte(missions), &p.Missions); err != nil {
 		return nil, fmt.Errorf("store: corrupt missions JSON: %w", err)
