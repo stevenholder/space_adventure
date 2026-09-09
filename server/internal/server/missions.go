@@ -473,6 +473,11 @@ func (s *Server) scoutSweep() {
 			if done {
 				member.send(msg{data: missionCompleteFrame(m)})
 				s.refreshScoutCache(member)
+				if xp := s.reg.Awards.ScoutMissionXP; xp > 0 {
+					s.mu.Lock()
+					member.awardLocked("recon", xp)
+					s.mu.Unlock()
+				}
 			}
 		}
 	}

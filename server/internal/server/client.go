@@ -84,6 +84,19 @@ type client struct {
 	// rebuilt by refreshScoutCache on every mission mutation.
 	scoutTargets map[string][3]float64
 
+	// Phase 11 skill accumulators, all guarded by srv.mu. Metre counters
+	// are fed by the tick loop and drained by the once-a-second skill
+	// sweep; xpPending batches awards between flushes; discovered mirrors
+	// the persisted POI set; lastPos anchors the per-tick deltas.
+	xpPending    map[string]int64
+	sprintMeters float64
+	driveMeters  float64
+	flyMeters    float64
+	discovered   map[string]bool
+	lastPos      [3]float64
+	hasLastPos   bool
+	airborneAt   float64 // Time the pilot's ship left the ground, 0 grounded
+
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the
 	// trigger was pulled (PROTOCOL.md "fire"), and this turns that name into

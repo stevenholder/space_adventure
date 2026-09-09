@@ -380,13 +380,20 @@ type payload struct {
 	Entities  map[string]EntityDef  `json:"entities"`
 	NPCs      map[string]payloadNPC `json:"npcs"`
 	Constants payloadConstants      `json:"constants"`
+	// Phase 11: the skill roster and synergies ride to the client for the
+	// K panel and the predictor's efficacy mirror. Additive JSON — old
+	// clients ignore it.
+	Skills    []Skill   `json:"skills,omitempty"`
+	Synergies []Synergy `json:"synergies,omitempty"`
 }
 
 func buildPayload(reg *Registry) ([]byte, error) {
 	p := payload{
-		Items:    reg.Items,
-		Entities: reg.Entities,
-		NPCs:     make(map[string]payloadNPC, len(reg.NPCs)),
+		Items:     reg.Items,
+		Entities:  reg.Entities,
+		Skills:    reg.Skills,
+		Synergies: reg.Synergies,
+		NPCs:      make(map[string]payloadNPC, len(reg.NPCs)),
 		Constants: payloadConstants{
 			InteractDist: 3.0,
 			InteractCone: 20.0,
