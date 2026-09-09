@@ -133,6 +133,7 @@ internal static class Program
                 MoveY = ie.GetProperty("move_y").GetDouble(),
                 LookDir = ReadVec(ie.GetProperty("look")),
                 ActionMask = ie.GetProperty("action_mask").GetInt32(),
+                SprintMult = ie.TryGetProperty("sprint_mult", out var sm) ? sm.GetDouble() : 0,
             };
             if (!havePrevLook) { prevLook = state.Facing; havePrevLook = true; }
             prevLook = Step.Apply(ref state, inp, prevLook, field, Rules.DT);
@@ -1428,7 +1429,8 @@ internal static class Program
             Drive.Apply(ref s,
                 ie.GetProperty("throttle").GetDouble(),
                 ie.GetProperty("steer").GetDouble(),
-                field, Rules.DT);
+                field, Rules.DT,
+                ie.TryGetProperty("eff_mult", out var dem) ? dem.GetDouble() : 0);
 
             outBuf.Append("{\"tick\":").Append(tick)
                   .Append(",\"pos\":[").Append(F(s.Pos.X)).Append(',').Append(F(s.Pos.Y)).Append(',').Append(F(s.Pos.Z))
@@ -1650,6 +1652,7 @@ internal static class Program
                 YawRate = ie.GetProperty("yaw_rate").GetDouble(),
                 PitchRate = ie.GetProperty("pitch_rate").GetDouble(),
                 Boost = ie.GetProperty("boost").GetBoolean(),
+                EffMult = ie.TryGetProperty("eff_mult", out var fem) ? fem.GetDouble() : 0,
             };
             Flight.Apply(ref s, inp, field, Rules.DT);
 

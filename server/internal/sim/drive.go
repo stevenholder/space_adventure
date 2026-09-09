@@ -64,9 +64,9 @@ func StepRover(e *Ent, dt float64, ctx StepCtx) {
 	// 4: throttle, grounded and under the slope cutoff only. Reverse at
 	// half accel, same rule as the flight model's backward thrust.
 	if v.Grounded && throttle != 0 && ctx.Terrain.Slope(up) <= DriveSlopeMax {
-		a := AccelDrive
+		a := AccelDrive * effMult(v.EffMult)
 		if throttle < 0 {
-			a = AccelDrive * 0.5
+			a = AccelDrive * 0.5 * effMult(v.EffMult)
 		}
 		vel = vel.Add(h.Scale(throttle * a * dt))
 	}

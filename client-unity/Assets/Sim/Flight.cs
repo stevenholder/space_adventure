@@ -33,6 +33,8 @@ namespace SpaceAdventure.Sim
     {
         public double Thrust, Roll, YawRate, PitchRate;
         public bool Boost;
+        /// <summary>Piloting efficacy (Phase 11), 0 = 1.0 identity.</summary>
+        public double EffMult;
     }
 
     /// <summary>The ship's mirrored state: wire triplet + carried ω/regime.</summary>
@@ -73,8 +75,9 @@ namespace SpaceAdventure.Sim
 
             // 2. Translation — thrust along ship forward; damp in atmosphere.
             Vec3 fwd = Quat.Rotate(q, new Vec3(0, 0, 1));
-            double accel = FlightRules.Accel, cap = FlightRules.Vmax;
-            if (inp.Boost) { accel = FlightRules.AccelBoost; cap = FlightRules.VmaxBoost; }
+            double em = inp.EffMult <= 0 ? 1 : inp.EffMult;
+            double accel = FlightRules.Accel * em, cap = FlightRules.Vmax;
+            if (inp.Boost) { accel = FlightRules.AccelBoost * em; cap = FlightRules.VmaxBoost; }
             double factor = thrust < 0 ? 0.5 * thrust : thrust;
             vel += fwd * (accel * factor * dt);
             if (thrust == 0 && !s.Space) vel *= Math.Exp(-FlightRules.Damp * dt);

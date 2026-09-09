@@ -32,6 +32,7 @@ type driveScriptLine struct {
 	Input *struct {
 		Throttle float64 `json:"throttle"`
 		Steer    float64 `json:"steer"`
+		EffMult  float64 `json:"eff_mult"`
 	} `json:"input"`
 }
 
@@ -101,6 +102,7 @@ func runDrive(args []string) error {
 			continue
 		}
 		v.Throttle, v.Steer = l.Input.Throttle, l.Input.Steer
+		v.EffMult = l.Input.EffMult
 		sim.StepRover(e, sim.DT, sim.StepCtx{Terrain: field})
 		if err := enc.Encode(driveDumpLine{
 			Tick: tick, Pos: e.Pos, Vel: e.Vel, Quat: e.Quat, Grounded: v.Grounded,

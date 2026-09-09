@@ -197,7 +197,11 @@ func (s *Server) skillsTick() {
 				results = append(results, result{skill, p.Skills.XP[skill], after, after > before})
 			}
 		})
+		leveled := false
 		for _, r := range results {
+			if r.leveled {
+				leveled = true
+			}
 			data, _ := json.Marshal(map[string]any{
 				"skill": r.skill, "xp": r.xp, "level": r.level,
 				"next_at": skills.PointsForLevel(r.level + 1), "leveled": r.leveled,
@@ -205,6 +209,9 @@ func (s *Server) skillsTick() {
 			f.c.send(msg{data: protocol.EncodeEvent(protocol.Event{
 				EventID: protocol.EventSkillXP, Data: data,
 			})})
+		}
+		if leveled {
+			s.refreshMovementMults(f.c)
 		}
 	}
 }
@@ -251,6 +258,22 @@ func (s *Server) efficacyMult(p *store.Player, skillID string) float64 {
 	return 1
 }
 
+// refreshMovementMults recomputes the sprint/drive/flight multipliers from
+// the player's current levels and stores them under s.mu, where the tick's
+// step reads them without an identity lock. The step then applies effMult's
+// identity for any that are still 1.0.
+func (s *Server) refreshMovementMults(c *client) {
+	var sp, dr, fl float64
+	c.ident.Mutate(func(p *store.Player) {
+		sp = s.efficacyMult(p, "athletics")
+		dr = s.efficacyMult(p, "driving")
+		fl = s.efficacyMult(p, "piloting")
+	})
+	s.mu.Lock()
+	c.sprintMult, c.driveMult, c.flightMult = sp, dr, fl
+	s.mu.Unlock()
+}
+
 // loadSkillCaches mirrors the persisted discovered set under s.mu at join.
 func (s *Server) loadSkillCaches(c *client) {
 	var discovered []string
@@ -264,6 +287,7 @@ func (s *Server) loadSkillCaches(c *client) {
 	s.mu.Lock()
 	c.discovered = set
 	s.mu.Unlock()
+	s.refreshMovementMults(c) // a reconnecting player arrives already trained
 }
 
 var _ = defs.Skill{} // referenced again when task 6 lands the efficacy hooks

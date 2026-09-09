@@ -34,8 +34,11 @@ namespace SpaceAdventure.Sim
     public static class Drive
     {
         /// <summary>One fixed-dt rover tick — the exact step order of drive.go.</summary>
+        /// <summary>An efficacy multiplier: 0 (unset) is the 1.0 identity.</summary>
+        public static double EffMult(double m) => m <= 0 ? 1 : m;
+
         public static void Apply(ref RoverState s, double throttle, double steer,
-                                 TerrainField t, double dt)
+                                 TerrainField t, double dt, double effMult = 0)
         {
             throttle = Sanitise(throttle);
             steer = Sanitise(steer);
@@ -59,7 +62,7 @@ namespace SpaceAdventure.Sim
             // half accel.
             if (s.Grounded && throttle != 0 && t.Slope(up) <= DriveRules.DriveSlopeMax)
             {
-                double a = throttle < 0 ? DriveRules.AccelDrive * 0.5 : DriveRules.AccelDrive;
+                double a = (throttle < 0 ? DriveRules.AccelDrive * 0.5 : DriveRules.AccelDrive) * EffMult(effMult);
                 vel += h * (throttle * a * dt);
             }
 

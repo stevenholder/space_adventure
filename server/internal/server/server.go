@@ -425,12 +425,14 @@ func (s *Server) tick() {
 					switch v := ent.Data.(type) {
 					case *sim.VehicleState:
 						v.Throttle, v.Steer = float64(w.MoveX), float64(w.MoveY)
+						v.EffMult = c.driveMult
 					case *sim.ShipState:
 						v.Thrust = float64(w.MoveX)
 						v.Roll = float64(w.MoveY)
 						v.YawRate = float64(w.LookDir[0])
 						v.PitchRate = float64(w.LookDir[1])
 						v.Boost = w.ActionMask&protocol.ActionBoost != 0
+						v.EffMult = c.flightMult
 					}
 				}
 			}

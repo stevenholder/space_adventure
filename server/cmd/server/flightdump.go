@@ -30,6 +30,7 @@ type flightScriptLine struct {
 		YawRate   float64 `json:"yaw_rate"`
 		PitchRate float64 `json:"pitch_rate"`
 		Boost     bool    `json:"boost"`
+		EffMult   float64 `json:"eff_mult"`
 	} `json:"input"`
 }
 
@@ -100,6 +101,7 @@ func runFlight(args []string) error {
 		st.Thrust, st.Roll = l.Input.Thrust, l.Input.Roll
 		st.YawRate, st.PitchRate = l.Input.YawRate, l.Input.PitchRate
 		st.Boost = l.Input.Boost
+		st.EffMult = l.Input.EffMult
 		sim.StepShip(e, sim.DT, sim.StepCtx{Terrain: field})
 		if err := enc.Encode(flightDumpLine{
 			Tick: tick, Pos: e.Pos, Vel: e.Vel, Quat: e.Quat,

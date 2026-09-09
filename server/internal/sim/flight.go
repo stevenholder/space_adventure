@@ -73,10 +73,10 @@ func StepShip(e *Ent, dt float64, ctx StepCtx) {
 
 	// 2. Translation — thrust along ship forward; damp only in atmosphere.
 	fwd := Rotate(q, Vec{0, 0, 1})
-	accel := FlightAccel
+	accel := FlightAccel * effMult(s.EffMult)
 	cap := FlightVmax
 	if s.Boost {
-		accel, cap = FlightAccelBoost, FlightVmaxBoost
+		accel, cap = FlightAccelBoost*effMult(s.EffMult), FlightVmaxBoost
 	}
 	factor := thrust
 	if thrust < 0 {

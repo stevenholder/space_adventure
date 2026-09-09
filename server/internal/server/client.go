@@ -96,6 +96,13 @@ type client struct {
 	lastPos      [3]float64
 	hasLastPos   bool
 	airborneAt   float64 // Time the pilot's ship left the ground, 0 grounded
+	// sprintMult/driveMult/flightMult are the movement efficacy multipliers,
+	// recomputed from levels at join and on every level-up so the step reads
+	// them without touching the identity lock. 0 until set = the 1.0
+	// identity (sim.effMult).
+	sprintMult float64
+	driveMult  float64
+	flightMult float64
 
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the
@@ -163,6 +170,7 @@ func (c *client) step(t *terrain.Field, colliders []protocol.Collider) {
 			Look:       sim.Vec{float64(w.LookDir[0]), float64(w.LookDir[1]), float64(w.LookDir[2])},
 			ActionMask: w.ActionMask,
 			Colliders:  colliders,
+			SprintMult: c.sprintMult,
 		}
 	}
 	c.entity.PrevLook = sim.Step(&c.entity.State, in, c.entity.PrevLook, t, sim.DT)

@@ -47,6 +47,10 @@ type ShipState struct {
 	Thrust, Roll, YawRate, PitchRate float64
 	Boost                            bool
 
+	// EffMult is the pilot's Piloting efficacy (Phase 11), 0 = 1.0 identity.
+	// Scales thrust response (handling); both sims apply it the same.
+	EffMult float64
+
 	// Owner is the stable identity key of the player who bought this ship
 	// (GDD "Ownership": one ship per owner, spawned on purchase or join).
 	Owner string

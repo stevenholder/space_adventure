@@ -61,6 +61,11 @@ type VehicleState struct {
 	// which makes driver disconnect coast-and-stop fall out for free: the
 	// same step runs with zero input (GDD "Control handoff").
 	Throttle, Steer float64
+
+	// EffMult is the driver's Driving efficacy (Phase 11), written beside
+	// the input each tick; 0 (no driver, or untrained) reads as 1.0. Both
+	// sims apply it identically, keeping drive prediction conformant.
+	EffMult float64
 }
 
 // NewVehicleState builds the rover's state, parked.

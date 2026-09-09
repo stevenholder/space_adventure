@@ -81,6 +81,9 @@ namespace SpaceAdventure.Sim
         /// the look actually applied after sanitisation, so the caller can
         /// carry it forward as the next tick's prevLook.
         /// </summary>
+        /// <summary>An efficacy multiplier: 0 (unset) is the 1.0 identity.</summary>
+        public static double EffMult(double m) => m <= 0 ? 1 : m;
+
         public static Vec3 Apply(ref State s, Input inp, Vec3 prevLook, TerrainField t, double dt)
         {
             // 1. Sanitise input.
@@ -115,7 +118,8 @@ namespace SpaceAdventure.Sim
             bool hasTarget = wish.Length > Rules.EpsDegen;
             Vec3 target = Vec3.Zero;
             if (hasTarget)
-                target = wish.Normalized() * (sprint ? Rules.SprintSpeed : Rules.WalkSpeed);
+                target = wish.Normalized() *
+                    (sprint ? Rules.SprintSpeed * EffMult(inp.SprintMult) : Rules.WalkSpeed);
 
             switch (mode)
             {

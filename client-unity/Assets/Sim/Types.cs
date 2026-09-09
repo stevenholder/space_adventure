@@ -106,6 +106,14 @@ namespace SpaceAdventure.Sim
         /// documented no-op, and that no-op is load-bearing — see Collide.
         /// </summary>
         public Collider[] Colliders;
+
+        /// <summary>
+        /// Sprint-speed multiplier (Phase 11 Athletics). Not on the wire,
+        /// threaded like Colliders; the caller supplies the same number the
+        /// server does. 0 (unset) reads as 1.0 — fresh players and every
+        /// pre-Phase-11 caller are unchanged.
+        /// </summary>
+        public double SprintMult;
     }
 
     /// <summary>Simulated body state.</summary>
