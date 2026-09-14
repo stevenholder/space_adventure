@@ -24,10 +24,13 @@ type npcAI struct {
 	// FlagDead would roll the table again — an NPC that dies once paying out
 	// several times over.
 	dropped bool
-	brain   ai.Brain
-	steer   ai.Steerer
-	melee   ai.MeleeState
-	ranged  ai.RangedState
+	// lootExtra is the killer's extra-roll chance, stashed on the kill
+	// tick because the roll happens later, from the tick loop.
+	lootExtra float64
+	brain     ai.Brain
+	steer     ai.Steerer
+	melee     ai.MeleeState
+	ranged    ai.RangedState
 }
 
 // ticksOf converts a duration in seconds to whole ticks. The tick rate is
@@ -310,7 +313,7 @@ func (s *Server) dropNPCLoot(n *npcAI) {
 	}
 	n.dropped = true
 	sim.DropLoot(s.world, s.reg, n.arch.Loot, n.ent.Pos, s.nextWorldID, s.rng,
-		sim.StepCtx{World: s.world, Events: &s.pendingEvents})
+		sim.StepCtx{World: s.world, Events: &s.pendingEvents}, n.lootExtra)
 	// Newly created drops have to reach worldEnts too, or they are simulated
 	// but never appear in a snapshot — the same shape as the Phase 2 bug where
 	// NPCs existed server-side and no client could see them.

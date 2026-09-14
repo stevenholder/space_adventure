@@ -107,26 +107,16 @@ func (s *Server) skillsTick() {
 		// POI discovery: entering any layout-zone's mast radius for the
 		// first time EVER pays Recon once. The cache mirrors the persisted
 		// set for the same reason scoutTargets does.
-		unit := terrain.Normalize(c.entity.State.Pos)
-		for id, z := range s.reg.Zones {
-			if z.Layout == nil {
-				continue
-			}
+		for _, id := range s.poisNear(c.entity.State.Pos) {
 			if c.discovered != nil && c.discovered[id] {
 				continue
 			}
-			dot := unit.Dot(terrain.Normalize(terrain.Vec(z.OriginDir)))
-			if dot > 1 {
-				dot = 1
+			if c.discovered == nil {
+				c.discovered = map[string]bool{}
 			}
-			if math.Acos(dot)*terrain.PlanetRadius <= scoutDiscoveryMeters {
-				if c.discovered == nil {
-					c.discovered = map[string]bool{}
-				}
-				c.discovered[id] = true
-				discoveries = append(discoveries, discoveryHit{c, id})
-				c.awardLocked("recon", aw.DiscoveryXP)
-			}
+			c.discovered[id] = true
+			discoveries = append(discoveries, discoveryHit{c, id})
+			c.awardLocked("recon", aw.DiscoveryXP)
 		}
 	}
 
@@ -211,7 +201,7 @@ func (s *Server) skillsTick() {
 			})})
 		}
 		if leveled {
-			s.refreshMovementMults(f.c)
+			s.refreshSkillMults(f.c)
 		}
 	}
 }
@@ -247,31 +237,84 @@ func skillLevel(p *store.Player, skill string) int {
 	return skills.LevelForXP(p.Skills.XP[skill])
 }
 
-// efficacyMult is 1 + (level−1)·per_level for the named skill — the fresh-
-// player identity: level 1 is exactly 1.0.
-func (s *Server) efficacyMult(p *store.Player, skillID string) float64 {
-	for _, sk := range s.reg.Skills {
+// efficacyBonus is (level−1)·per_level for the named skill — the fresh-
+// player identity: level 1 is exactly 0.
+func efficacyBonus(reg *defs.Registry, p *store.Player, skillID string) float64 {
+	for _, sk := range reg.Skills {
 		if sk.ID == skillID {
-			return 1 + float64(skillLevel(p, skillID)-1)*sk.Efficacy.PerLevel
+			return float64(skillLevel(p, skillID)-1) * sk.Efficacy.PerLevel
 		}
 	}
-	return 1
+	return 0
 }
 
-// refreshMovementMults recomputes the sprint/drive/flight multipliers from
-// the player's current levels and stores them under s.mu, where the tick's
-// step reads them without an identity lock. The step then applies effMult's
-// identity for any that are still 1.0.
-func (s *Server) refreshMovementMults(c *client) {
-	var sp, dr, fl float64
+// efficacyMult is 1 + efficacyBonus: exactly 1.0 untrained.
+func efficacyMult(reg *defs.Registry, p *store.Player, skillID string) float64 {
+	return 1 + efficacyBonus(reg, p, skillID)
+}
+
+// synergyBonus sums every declared synergy (skills.json) whose effect is
+// `what` at `where` ("" everywhere, "poi" inside a discovered POI):
+// (source level−1)·per_level each. Untrained sources contribute 0.
+func synergyBonus(reg *defs.Registry, p *store.Player, what, where string) float64 {
+	var b float64
+	for _, sy := range reg.Synergies {
+		if sy.What == what && sy.Where == where {
+			b += float64(skillLevel(p, sy.Source)-1) * sy.PerLevel
+		}
+	}
+	return b
+}
+
+// refreshSkillMults recomputes every cached multiplier from the player's
+// current levels and stores them under s.mu, where the tick loop reads them
+// without an identity lock. The movement step applies effMult's identity for
+// any that are still 0/1.0.
+func (s *Server) refreshSkillMults(c *client) {
+	var sp, dr, fl, dm, le, lp float64
 	c.ident.Mutate(func(p *store.Player) {
-		sp = s.efficacyMult(p, "athletics")
-		dr = s.efficacyMult(p, "driving")
-		fl = s.efficacyMult(p, "piloting")
+		sp = efficacyMult(s.reg, p, "athletics")
+		dr = efficacyMult(s.reg, p, "driving")
+		fl = efficacyMult(s.reg, p, "piloting")
+		dm = efficacyMult(s.reg, p, "marksmanship")
+		le = efficacyBonus(s.reg, p, "scavenging") + synergyBonus(s.reg, p, "loot_extra_roll", "")
+		lp = le + synergyBonus(s.reg, p, "loot_extra_roll", "poi")
 	})
 	s.mu.Lock()
 	c.sprintMult, c.driveMult, c.flightMult = sp, dr, fl
+	c.damageMult, c.lootExtra, c.lootExtraPOI = dm, le, lp
 	s.mu.Unlock()
+}
+
+// poisNear lists the layout zones whose discovery radius covers pos — the
+// same radius the scout sweep and Recon discovery use.
+func (s *Server) poisNear(pos [3]float64) []string {
+	unit := terrain.Normalize(pos)
+	var ids []string
+	for id, z := range s.reg.Zones {
+		if z.Layout == nil {
+			continue
+		}
+		dot := unit.Dot(terrain.Normalize(terrain.Vec(z.OriginDir)))
+		if dot > 1 {
+			dot = 1
+		}
+		if math.Acos(dot)*terrain.PlanetRadius <= scoutDiscoveryMeters {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// inDiscoveredPOI reports whether pos lies inside a POI c has discovered.
+// Caller holds s.mu (reads c.discovered).
+func (s *Server) inDiscoveredPOI(c *client, pos [3]float64) bool {
+	for _, id := range s.poisNear(pos) {
+		if c.discovered[id] {
+			return true
+		}
+	}
+	return false
 }
 
 // loadSkillCaches mirrors the persisted discovered set under s.mu at join.
@@ -287,7 +330,5 @@ func (s *Server) loadSkillCaches(c *client) {
 	s.mu.Lock()
 	c.discovered = set
 	s.mu.Unlock()
-	s.refreshMovementMults(c) // a reconnecting player arrives already trained
+	s.refreshSkillMults(c) // a reconnecting player arrives already trained
 }
-
-var _ = defs.Skill{} // referenced again when task 6 lands the efficacy hooks

@@ -355,8 +355,9 @@ Bodies per opcode:
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
 `insufficient_credits`, `out_of_range`, `unknown_item`, `no_stock`,
-`magazine_full`, `no_ammo`. The client maps codes to text; the server never
-sends prose for display.
+`magazine_full`, `no_ammo`, `locked` (a `shop_buy` below the item's
+`unlock_requirements` level, GDD "Skills"). The client maps codes to text;
+the server never sends prose for display.
 
 ### `defs` — the data the client needs (Phase 2)
 

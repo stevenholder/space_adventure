@@ -996,6 +996,7 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 		Tick:          tick,
 		RewindTicks:   rewindTicks,
 		ConeHalfAngle: wp.SpreadBase * math.Pi / 180,
+		DamageMult:    c.damageMult,
 	}
 	ray, hit, found := sim.ResolveShot(s.world, s.history, shot, wp, s.entityDef, s.rng)
 
@@ -1046,6 +1047,12 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 			killed = true
 			victimID = hit.Victim
 			victimArch = s.npcArchetypeOf(hit.Victim)
+			if n := s.npcOf(hit.Victim); n != nil {
+				n.lootExtra = c.lootExtra
+				if s.inDiscoveredPOI(c, n.ent.Pos) {
+					n.lootExtra = c.lootExtraPOI
+				}
+			}
 			members = append([]*client{}, s.partyMembers(c)...)
 			kxp := s.reg.Awards.KillXP
 			if victimArch == "npc.warlord" {
@@ -1060,12 +1067,20 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 // npcArchetypeOf maps a victim entity id to its archetype id ("npc.grunt"),
 // or "" for anything that is not an AI-run NPC. Caller holds s.mu.
 func (s *Server) npcArchetypeOf(id uint32) string {
-	for _, n := range s.npcAI {
-		if n.ent.ID == id {
-			return n.arch.ID
-		}
+	if n := s.npcOf(id); n != nil {
+		return n.arch.ID
 	}
 	return ""
+}
+
+// npcOf finds the AI record behind a world entity id, nil for non-NPCs.
+func (s *Server) npcOf(id uint32) *npcAI {
+	for _, n := range s.npcAI {
+		if n.ent.ID == id {
+			return n
+		}
+	}
+	return nil
 }
 
 // entityDef is ResolveShot's defOf callback.

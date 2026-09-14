@@ -232,3 +232,16 @@ func TestAddItem(t *testing.T) {
 		t.Fatalf("Inventory = %+v, want [{ammo.cell 120}]", p.Inventory)
 	}
 }
+
+// Phase 11 Commerce: BuyAt rounds the unit price to the nearest credit.
+func TestBuyAtDiscount(t *testing.T) {
+	reg := testRegistry()
+	npc := testNPC()
+	p := &store.Player{Credits: 1000}
+	if err := BuyAt(p, npc, "weapon.pulse", 1, reg, 0.902); err != nil {
+		t.Fatal(err)
+	}
+	if p.Credits != 1000-226 { // 250 × 0.902 = 225.5 → 226
+		t.Fatalf("Credits = %d, want 774", p.Credits)
+	}
+}

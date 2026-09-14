@@ -103,6 +103,12 @@ type client struct {
 	sprintMult float64
 	driveMult  float64
 	flightMult float64
+	// damageMult scales resolved shot damage (Marksmanship); lootExtra is
+	// the extra-roll chance on a kill's loot table (Scavenging), and
+	// lootExtraPOI the same inside a discovered POI (the Recon synergy).
+	damageMult   float64
+	lootExtra    float64
+	lootExtraPOI float64
 
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the

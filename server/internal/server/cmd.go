@@ -173,7 +173,16 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !inRange(w, pos) {
 			return refuse("out_of_range")
 		}
-		if err := sim.Buy(w.Player, npc, body.Item, body.Qty, w.Reg); err != nil {
+		// Data-driven unlock gates (GDD "Skills"): a purchase below the
+		// required level is refused `locked`. Empty at launch.
+		for _, u := range w.Reg.Unlocks {
+			if u.Item == body.Item && skillLevel(w.Player, u.Skill) < u.Level {
+				return refuse("locked")
+			}
+		}
+		// Commerce: −per_level on buy prices per level (cap −19.6% at 99).
+		buyMult := 1 - efficacyBonus(w.Reg, w.Player, "commerce")
+		if err := sim.BuyAt(w.Player, npc, body.Item, body.Qty, w.Reg, buyMult); err != nil {
 			var re sim.RefusalError
 			if errors.As(err, &re) {
 				return refuse(re.Reason)

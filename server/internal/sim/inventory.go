@@ -6,6 +6,7 @@
 package sim
 
 import (
+	"math"
 	"space-adventure/server/internal/defs"
 	"space-adventure/server/internal/store"
 )
@@ -72,6 +73,12 @@ func applyStack(stacks []store.Stack, item string, qty int, stackMax int, invSlo
 // are built in full before anything is assigned onto p, so a failure at any
 // step — including the last one — leaves p completely unchanged.
 func Buy(p *store.Player, npc defs.NPC, item string, qty int, reg *defs.Registry) error {
+	return BuyAt(p, npc, item, qty, reg, 1)
+}
+
+// BuyAt is Buy with the unit price scaled by priceMult and rounded to the
+// nearest credit (Phase 11 Commerce discount). priceMult 1 is Buy exactly.
+func BuyAt(p *store.Player, npc defs.NPC, item string, qty int, reg *defs.Registry, priceMult float64) error {
 	if qty < 1 || qty > maxQty {
 		return refuse(ReasonBadQty)
 	}
@@ -95,6 +102,9 @@ func Buy(p *store.Player, npc defs.NPC, item string, qty int, reg *defs.Registry
 		return refuse(ReasonNoStock)
 	}
 
+	if priceMult > 0 && priceMult != 1 {
+		price = int64(math.Round(float64(price) * priceMult))
+	}
 	cost := price * int64(qty)
 	if cost > p.Credits {
 		return refuse(ReasonInsufficientCredits)

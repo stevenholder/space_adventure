@@ -23,6 +23,9 @@ const eyeHeightMeters = terrain.EyeHeightMeters
 
 // Shot is a single hitscan shot request to resolve.
 type Shot struct {
+	// DamageMult scales the weapon's damage before rounding (Phase 11
+	// Marksmanship efficacy). 0 means 1: a fresh player is bit-identical.
+	DamageMult float64
 	// Shooter is the firing entity's id. Only ever used to look up the
 	// shooter's OWN rewound history — never trusted as a position.
 	Shooter uint32
@@ -147,7 +150,11 @@ func ResolveShot(w *World, h *History, s Shot, wp defs.Weapon,
 		return ray, Hit{}, false
 	}
 
-	damage := int(math.Round(float64(wp.Damage) * falloffAt(bestT, wp)))
+	mult := s.DamageMult
+	if mult <= 0 {
+		mult = 1
+	}
+	damage := int(math.Round(float64(wp.Damage) * falloffAt(bestT, wp) * mult))
 
 	victim := w.Ents[bestID]
 	victim.Health -= damage
