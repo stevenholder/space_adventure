@@ -56,7 +56,17 @@ namespace SpaceAdventure.Game
         public Material GenerateMaterial(
             GLTFast.Schema.MaterialBase gltfMaterial,
             IGltfReadable gltf,
-            bool pointsSupport = false) => _material;
+            bool pointsSupport = false)
+        {
+            // alphaMode BLEND (ship.v1's canopy glass, the only one in the
+            // art set) cannot go through the opaque vertex-colour material:
+            // the pilot sat behind a black slab. Sprites/Default is already
+            // a build-registered shader (tracers), unlit, alpha-blended and
+            // Cull Off, which is everything a canopy needs.
+            if (gltfMaterial.GetAlphaMode() != GLTFast.Schema.MaterialBase.AlphaMode.Blend) return _material;
+            Color tint = gltfMaterial.PbrMetallicRoughness?.BaseColor ?? new Color(1f, 1f, 1f, 0.3f);
+            return new Material(Shader.Find("Sprites/Default")) { color = tint };
+        }
 
         public void SetLogger(ICodeLogger logger) { }
     }
