@@ -1,0 +1,148 @@
+{
+ "when": "2026-09-14T21:13:54.689Z",
+ "xp": {
+  "athletics": 49,
+  "commerce": 170,
+  "driving": 19,
+  "marksmanship": 420,
+  "piloting": 210,
+  "recon": 500,
+  "scavenging": 250
+ },
+ "discovered": [
+  "relay",
+  "camp"
+ ],
+ "events": 117,
+ "minGapMs": 998,
+ "checks": [
+  {
+   "n": "a fresh sheet is empty",
+   "ok": true
+  },
+  {
+   "n": "quartermaster exists",
+   "ok": true
+  },
+  {
+   "n": "bought rifle, cell and ship",
+   "ok": true
+  },
+  {
+   "n": "armed",
+   "ok": true
+  },
+  {
+   "n": "Commerce: 851 cr moved = 170 XP",
+   "ok": true
+  },
+  {
+   "n": "Athletics trained on the sprint",
+   "ok": true
+  },
+  {
+   "n": "the ship spawned on the pad",
+   "ok": true
+  },
+  {
+   "n": "pilot seat granted",
+   "ok": true
+  },
+  {
+   "n": "disembarked the ship",
+   "ok": true
+  },
+  {
+   "n": "Piloting trained on the flight",
+   "ok": true
+  },
+  {
+   "n": "Piloting paid real distance (>= 100 XP)",
+   "ok": true
+  },
+  {
+   "n": "a rover exists",
+   "ok": true
+  },
+  {
+   "n": "driver seat granted",
+   "ok": true
+  },
+  {
+   "n": "disembarked the rover",
+   "ok": true
+  },
+  {
+   "n": "Driving trained on the drive",
+   "ok": true
+  },
+  {
+   "n": "the camp has hostiles",
+   "ok": true
+  },
+  {
+   "n": "reached the camp (<= 30 m)",
+   "ok": true
+  },
+  {
+   "n": "Recon: the camp paid 250 on entry",
+   "ok": true
+  },
+  {
+   "n": "our shots registered",
+   "ok": true
+  },
+  {
+   "n": "a hostile died to us",
+   "ok": true
+  },
+  {
+   "n": "Marksmanship trained on damage and the kill",
+   "ok": true
+  },
+  {
+   "n": "the kill dropped loot",
+   "ok": true
+  },
+  {
+   "n": "Scavenging trained on the pickup",
+   "ok": true
+  },
+  {
+   "n": "the sheet answers",
+   "ok": true
+  },
+  {
+   "n": "all seven skills moved",
+   "ok": true
+  },
+  {
+   "n": "the sheet agrees with the last event per skill",
+   "ok": true
+  },
+  {
+   "n": "every event carried the curve's level and next_at",
+   "ok": true
+  },
+  {
+   "n": "the sheet's levels match the curve",
+   "ok": true
+  },
+  {
+   "n": "the camp is on the discovered list",
+   "ok": true
+  },
+  {
+   "n": "Recon XP is exactly 250 per discovery",
+   "ok": true
+  },
+  {
+   "n": "events batch (>= 0.5 s between a skill's events)",
+   "ok": true
+  },
+  {
+   "n": "the sheet survives reconnect",
+   "ok": true
+  }
+ ]
+}
