@@ -180,6 +180,17 @@ internal static class Program
             !double.IsInfinity(Step.Hypot(1e200, 1e200)), $"got {F(Step.Hypot(1e200, 1e200))}");
         Check("hypot is exact on a 3-4-5 triangle", Step.Hypot(3, 4) == 5);
 
+        // Phase 11: the curve is RuneScape's, pinned at the same landmarks
+        // server/internal/skills/curve_test.go pins (C79).
+        Check("curve: level 2 at 83", SkillCurve.PointsForLevel(2) == 83);
+        Check("curve: level 50 at 101,333", SkillCurve.PointsForLevel(50) == 101333);
+        Check("curve: level 99 at 13,034,431", SkillCurve.PointsForLevel(99) == 13034431);
+        Check("curve: 92 is half of 99",
+            Math.Abs(SkillCurve.PointsForLevel(92) * 2 - SkillCurve.PointsForLevel(99)) < 100,
+            $"92→{SkillCurve.PointsForLevel(92)}");
+        Check("curve: LevelForXP inverts", SkillCurve.LevelForXP(82) == 1 && SkillCurve.LevelForXP(83) == 2
+            && SkillCurve.LevelForXP(13034431) == 99 && SkillCurve.LevelForXP(101332) == 49);
+
         // FaceOf/DirOf must invert each other, or seam crossings drift.
         foreach (var d in new[] { new Vec3(1, 0.3, -0.2), new Vec3(-0.1, 1, 0.4), new Vec3(0.2, -0.3, -1) })
         {

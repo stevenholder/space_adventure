@@ -69,9 +69,35 @@ namespace SpaceAdventure.Net
     /// null table. A client that has not yet received `defs` is the normal
     /// state for the first few frames, not an error.
     /// </summary>
+    /// <summary>One skill roster row (server/data/skills.json, Phase 11).</summary>
+    public sealed class SkillDef
+    {
+        public sealed class EfficacyDef
+        {
+            [JsonProperty("kind")] public string Kind { get; set; } = "";
+            [JsonProperty("per_level")] public double PerLevel { get; set; }
+        }
+        [JsonProperty("id")] public string Id { get; set; } = "";
+        [JsonProperty("name")] public string Name { get; set; } = "";
+        [JsonProperty("reserved")] public bool Reserved { get; set; }
+        [JsonProperty("efficacy")] public EfficacyDef Efficacy { get; set; }
+    }
+
+    /// <summary>One declared cross-skill bonus (the panel draws these).</summary>
+    public sealed class SynergyDef
+    {
+        [JsonProperty("source")] public string Source { get; set; } = "";
+        [JsonProperty("target")] public string Target { get; set; } = "";
+        [JsonProperty("what")] public string What { get; set; } = "";
+        [JsonProperty("per_level")] public double PerLevel { get; set; }
+        [JsonProperty("where")] public string Where { get; set; } = "";
+    }
+
     public sealed class Defs
     {
         [JsonProperty("items")] public Dictionary<string, ItemDef> Items { get; set; }
+        [JsonProperty("skills")] public List<SkillDef> Skills { get; set; }
+        [JsonProperty("synergies")] public List<SynergyDef> Synergies { get; set; }
         [JsonProperty("entities")] public Dictionary<string, EntityDef> Entities { get; set; }
         [JsonProperty("npcs")] public Dictionary<string, NpcDef> Npcs { get; set; }
 

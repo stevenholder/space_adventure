@@ -142,6 +142,9 @@ Constants:
   `0x000D` `mission_share` `{"id": "<mission id>"}` — pushes a held, active,
   non-bounty mission to every party member who lacks it (works anywhere; the
   party IS the authorisation). Result carries `{"shared": <n>}`.
+  Phase 11: `0x000E` `skills` `{}` — the whole sheet:
+  `{"xp":{"<skill>":<n>...},"levels":{"<skill>":<L>...},"discovered":["<zone>"...]}`.
+  Levels derive from XP through the curve both ends compute (GDD "Skills").
   `0x0010`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
@@ -159,6 +162,9 @@ Constants:
   `0x000C` `mission_shared` `{"from", "mission": {<the full template>}}` (to
   each recipient — the template rides along because a recipient may never
   have visited a board, and a journal that shows a bare id is not a journal);
+  Phase 11: `0x000D` `skill_xp` `{"skill","xp","level","next_at","leveled"}`
+  (to the trained player; awards batch server-side, at most one per skill per
+  second; `leveled: true` raises the banner);
   and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the player whose primary slot changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Broadcast when
@@ -362,8 +368,10 @@ the server never sends prose for display.
 ### `defs` — the data the client needs (Phase 2)
 
 Sent once, **after `terrain` and before the first `snapshot`**. UTF-8 JSON: the
-item table, weapon rule tables, entity-type hitboxes and max health, and the
-interactable metadata for the zone. It is the server's own `server/data/`
+item table, weapon rule tables, entity-type hitboxes and max health, the
+interactable metadata for the zone, and (Phase 11) the skill roster with its
+per-level efficacy rates and the declared synergies, so the K panel's
+tooltips run the server's own arithmetic. It is the server's own `server/data/`
 content, filtered to what a client needs to render and predict.
 
 The client **must not fire, predict damage, or draw an inventory before `defs`

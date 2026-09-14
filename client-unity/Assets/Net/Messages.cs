@@ -87,6 +87,7 @@ namespace SpaceAdventure.Net
         public const ushort MissionAbandon = 0x000B;
         public const ushort MissionTurnin = 0x000C;
         public const ushort MissionShare = 0x000D;
+        public const ushort Skills = 0x000E; // Phase 11: the full sheet
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -116,6 +117,7 @@ namespace SpaceAdventure.Net
         public const ushort PriorityOffer = 0x000A;
         public const ushort PartyInvited = 0x000B;
         public const ushort MissionShared = 0x000C; // data = the full template
+        public const ushort SkillXP = 0x000D; // Phase 11: {skill,xp,level,next_at,leveled}
     }
 
     /// <summary>collider kinds.</summary>

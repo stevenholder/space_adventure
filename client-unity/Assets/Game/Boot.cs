@@ -121,6 +121,9 @@ namespace SpaceAdventure.Game
         private SpaceAdventure.Game.UI.JournalView _journalView;
         private SpaceAdventure.Game.UI.PartyView _partyView;
         private SpaceAdventure.Game.UI.PartyFrames _partyFrames;
+        private readonly SkillSheet _skills = new SkillSheet();
+        private SpaceAdventure.Game.UI.SkillsView _skillsView;
+        private SpaceAdventure.Game.UI.SkillsFeed _skillsFeed;
 
         /// <summary>Screenshot rig (-uiApproach): inject forward+sprint.</summary>
         private bool _rigWalk;
@@ -169,7 +172,8 @@ namespace SpaceAdventure.Game
         private bool ModalOpen =>
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
             (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
-            (_journalView?.Open ?? false) || (_partyView?.Open ?? false);
+            (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
+            (_skillsView?.Open ?? false);
 
         // Mouse delta accumulated ACROSS the frames within one tick while
         // piloting — per-frame deltas consumed per-tick would drop most of
@@ -352,6 +356,8 @@ namespace SpaceAdventure.Game
             _partyView = new SpaceAdventure.Game.UI.PartyView(_ui.Root, _partyState,
                 NearbyPlayers, NextCmdSeq, bts => _net.Send(bts));
             _partyFrames = new SpaceAdventure.Game.UI.PartyFrames(_ui.Root);
+            _skillsView = new SpaceAdventure.Game.UI.SkillsView(_ui.Root, _skills, _character);
+            _skillsFeed = new SpaceAdventure.Game.UI.SkillsFeed(_ui.Root);
             _accountView = new SpaceAdventure.Game.UI.AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); StartCoroutine(RedeemLinkCode(code)); },
                 () => _accountView.Show(false));
@@ -431,6 +437,7 @@ namespace SpaceAdventure.Game
                 _partyView.Show(open);
                 if (open) _journalView.Show(false);
             }
+            if (keys?.kKey.wasPressedThisFrame == true) ToggleSkills();
 
             // The map takes the mouse. Movement keeps working underneath, so
             // you can read a bearing off it and walk without closing it.
@@ -558,6 +565,7 @@ namespace SpaceAdventure.Game
 
             UpdateHudView();
             _combatFeed?.Tick(_camera);
+            _skillsFeed?.Tick(_skills, _character.Defs, Time.time);
 
             _statFrames++;
             if (Time.unscaledDeltaTime > _statWorstDt) _statWorstDt = Time.unscaledDeltaTime;
@@ -866,6 +874,7 @@ namespace SpaceAdventure.Game
                 if (argv[at + 1] == "account") _accountView.Show(true);
                 if (argv[at + 1] == "journal") _journalView.Show(true);
                 if (argv[at + 1] == "party") _partyView.Show(true);
+                if (argv[at + 1] == "skills") ToggleSkills();
                 yield return new WaitForSeconds(1f); // refresh round trip
             }
             // -uiRoute <path>: walk a solved route (test/out/route-*.json)
@@ -1210,6 +1219,19 @@ namespace SpaceAdventure.Game
             return outp;
         }
 
+        /// <summary>K: the skills panel, refreshed from the server each time it opens.</summary>
+        private void ToggleSkills()
+        {
+            bool open = !_skillsView.Open;
+            _skillsView.Show(open);
+            if (open)
+            {
+                _journalView.Show(false);
+                _partyView.Show(false);
+                _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
+            }
+        }
+
         private void OpenPanel(SpaceAdventure.Game.UI.ModalView view, SpaceAdventure.Game.UI.ModalView other)
         {
             bool open = !view.Open;
@@ -1477,6 +1499,10 @@ namespace SpaceAdventure.Game
                                 _net.Send(Encode.Cmd(NextCmdSeq(), Op.PartyRespond, "{\"accept\":true}"));
                             if (_partyView.Open) _partyView.Rebuild();
                             break;
+                        case EventId.SkillXP:
+                            _skills.OnXP(WireReader.Utf8.GetString(ev.Data), Time.time);
+                            if (_skillsView.Open) _skillsView.Rebuild();
+                            break;
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
@@ -1526,6 +1552,8 @@ namespace SpaceAdventure.Game
                     if (followUp != null) _net.Send(followUp);
                     if (r.Opcode == Op.MissionList && r.Ok)
                         _missionLog.OnListResult(r.Body);
+                    if (r.Opcode == Op.Skills && r.Ok) _skills.OnSheet(r.Body);
+                    if (_skillsView.Open) _skillsView.Rebuild();
                     if (_shopView.Open) _shopView.Rebuild();
                     if (_bagsView.Open) _bagsView.Rebuild();
                     if (_sheetView.Open) _sheetView.Rebuild();
@@ -1565,6 +1593,9 @@ namespace SpaceAdventure.Game
             // once the terrain has landed -- which is here, and not earlier.
             _rocks.Build(_terrain, _net.WorldSeed);
             _worldBuilt = true;
+            // The sheet up front, so the first drip and the K panel already
+            // know the levels a reconnecting player arrives with.
+            _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
 
             // A packaged player has no HUD anyone is watching when it is run
             // headless in CI (C45 is "joins the deployed server from a cold
