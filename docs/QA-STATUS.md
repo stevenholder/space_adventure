@@ -301,6 +301,30 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 11 — C78–C83, run 2026-09-15 (kind)
+
+Skills, the RuneScape way: seven verbs train seven skills by doing, the
+curve is frozen, efficacy is real on both sims, and nothing else moved.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C78 | Doing trains: every hooked verb awards, events batch ≤1/s/skill, XP survives reconnect | `t34` plays one life over the wire — sprint, buy (rifle + cell + ship), fly the C34 arc, drive, walk into the camp, kill, walk onto the drop — and all seven skills move (marksmanship 420, athletics 49, driving 19, piloting 210, scavenging 250, commerce 170 = 851 cr / 5, recon 500 = 2 POIs × 250); 127 `skill_xp` events, min gap between one skill's events 998 ms; sheet equals the last event per skill and is byte-identical after reconnect on the same token (32 checks) | **PASS** |
+| C79 | The curve is RuneScape's; 92 is half of 99 | `PointsForLevel` pinned at 83 / 101,333 / 13,034,431 in Go (`curve_test.go`) and in the C# mirror (SimDump `--selftest`: "curve: 92 is half of 99  92→6,517,253"); every t34 event's `level`/`next_at` recomputed by the test from the formula and matched | **PASS** |
+| C80 | Efficacy is real and conformant; fresh players bit-identical | measured: damage 25 → 30 at ×1.196 and 50 at ×2 (`TestResolveShotDamageMult`), buy 250 → 226 at ×0.902 (`TestBuyAtDiscount`), extra roll doubles a chance-1 table (`TestDropLoot_ExtraRoll`); sprint at 1.30× conformant Go↔C# to 1e-10 m, drive and flight at 1.25× to 3.55e-15 / 0.00 m (`t35`); at ×1/0 every path is the old arithmetic (t20/t23/t25 unchanged, 10/10; fleet below) | **PASS** |
+| C81 | Synergies apply and show | Recon→Scavenging (in POI only), Athletics→Driving, Scavenging→Commerce resolved from `skills.json` by one function and unit-tested at levels 20/50 (`TestEfficacyAndSynergyMath`); the K panel draws the arrow under each source naming the partner and the live bonus (`test/out/ui/panel-skills.png`) | **PASS** (Scavenging→Commerce `sell_bonus` has no verb yet — there is no `shop_sell`; it applies the day one exists) |
+| C82 | Unlocks gate | `unlock_requirements` empty at launch; an injected row refuses `shop_buy` with `locked` below level 5 and passes at it, credits untouched on the refusal (`TestUnlockGateOnPurchase`) | **PASS** |
+| C83 | Nothing else moved; frame budget with the panel open | fleet on the deployed build: t2 t3 t4 t6 t7 t13 t14 t15 t16 t17 t18 (solo) t19 t21 t24 t26 t27 t28 (against kind) t29 all PASS; go vet + test green; unity-test / codec / conformance green; framestats with K open 119.9 fps avg, worst 9.0 ms, 17 entities | **PASS** |
+
+Two harness notes from the sweep, neither a Phase 11 regression:
+`t21`'s control volley had been picking the zero-offset grunt, which
+since Phase 9's second POI is the idle outpost grunt ~178 m out, past
+`max_range` — 0/3 on the pre-Phase-11 server (39aa959) too; it now
+picks in range (2/3, 3/3 checks). `t28` defaults to the old LAN
+production origin and 404s there; against kind (`SA_SITE_URL`) it is
+25/25. Owed to the playtest: the drip and the LEVEL UP banner seen live
+(the rig cannot earn XP before its shot), and a second player watching
+the sheet persist across a real day.
+
 ## Phase 10 — C72–C77, run 2026-09-08 (kind)
 
 Missions, parties, and the bounty — server-authoritative end to end; the

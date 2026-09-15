@@ -1116,6 +1116,20 @@ parties", PROTOCOL cmd ops `0x0006`–`0x000C` and events
 
 # Phase 11 — skills: what you did is what you are
 
+### Where Phase 11 stands (2026-09-15)
+
+Built and green on kind: C78–C83 recorded (docs/QA-STATUS.md "Phase
+11"). Server: the roster and curve, the award engine (metres, damage,
+kills, pickups, credits, discovery — batched once a second), movement
+efficacy inside both sims, damage/price/loot efficacy and the declared
+synergies on the server side, the data-driven unlock gate. Client: the
+K panel (ten rows, bars, arrows, reserved greyed), the XP drip and the
+LEVEL UP banner. `t34` plays the whole loop over the wire and watches
+seven skills move and persist. Owed to humans: the drip and the banner
+seen live. Phase 12's artisan loop is next; `shop_sell` is the first
+verb it should add, so the Scavenging→Commerce synergy has something to
+touch.
+
 **Playable proof.** Open the sheet (K) and ten skills stare back, seven
 of them moving: sprint to the camp and Athletics ticks, win the fight
 and Marksmanship climbs, drag the loot home and Scavenging pays
