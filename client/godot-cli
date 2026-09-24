@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# Godot from the command line, without hardcoding anything.
+#
+#   ./client/godot-cli where              print the editor, version and project paths
+#   ./client/godot-cli templates          install the export templates for this version
+#   ./client/godot-cli import             generate .godot/ (idempotent; build and run need it)
+#   ./client/godot-cli build [preset]     export a player to client/build/<preset>/ (default: Linux)
+#   ./client/godot-cli run [seconds]      run the packaged Linux player headless against the server
+#   ./client/godot-cli dev [seconds]      run from source, headless (no export needed)
+#   ./client/godot-cli play               run from source, windowed
+#   ./client/godot-cli editor             open the editor on this project
+#
+# What this exists to get right:
+#
+#   1. THE VERSION IS WRITTEN DOWN ONCE, in client/.godot-version, and the
+#      csproj's Sdk pin is checked against it: a project that builds with one
+#      Godot.NET.Sdk and runs under another editor is a project that fails at
+#      export time with a confusing message.
+#
+#   2. A C# EXCEPTION DOES NOT FAIL THE PROCESS. Godot .NET prints it and keeps
+#      going, so `run` and `dev` grep the output and decide the exit status
+#      themselves, and Boot.cs quits non-zero under -quitAfter.
+#
+# Nothing here needs Windows, a project lock, or a licence. `dotnet build`
+# works with the editor open.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$here/.." && pwd)"
+proj="$here/godot"
+build="$here/build"
+version="$(tr -d '[:space:]' < "$here/.godot-version")"   # e.g. 4.7.2-stable
+semver="${version%-*}"                                     # 4.7.2
+templates="$HOME/.local/share/godot/export_templates/${semver}.${version#*-}.mono"
+
+# GODOT overrides the search for a non-standard install.
+editor="${GODOT:-$HOME/opt/godot/$semver/Godot_v${version}_mono_linux.x86_64}"
+if [[ ! -x "$editor" ]]; then
+  echo "godot-cli: editor $version not found at:" >&2
+  echo "  $editor" >&2
+  echo "download Godot_v${version}_mono_linux_x86_64.zip from" >&2
+  echo "  https://github.com/godotengine/godot-builds/releases/tag/$version" >&2
+  echo "and unzip it there, or set GODOT to the binary." >&2
+  exit 1
+fi
+
+sdk="$(sed -n 's/.*Sdk="Godot\.NET\.Sdk\/\([^"]*\)".*/\1/p' "$proj/SpaceAdventure.csproj")"
+if [[ "$sdk" != "$semver" ]]; then
+  echo "godot-cli: SpaceAdventure.csproj pins Godot.NET.Sdk/$sdk but .godot-version is $version" >&2
+  exit 1
+fi
+
+# Every way Godot reports a failure on stdout/stderr instead of in its exit code.
+fatal_re='Unhandled exception|^ERROR:|System\.[A-Za-z.]*Exception|error CS[0-9]|Failed to load'
+
+# Stage the models the manifest names beside a packaged player, driven by
+# art/manifest.json rather than `find`: the manifest IS the definition of what
+# the game ships, and a find would pick up art/vendor/'s raw packs.
+stage_art() {
+  local out="$1"
+  rm -rf "$out/art"; mkdir -p "$out/art"
+  (cd "$root/art" && python3 - "$out/art" <<'PY'
+import json, os, shutil, sys
+out = sys.argv[1]
+d = json.load(open("manifest.json"))
+files = [a["file"] for a in d["assets"]]
+missing = [f for f in files if not os.path.exists(f)]
+for f in files:
+    if os.path.exists(f):
+        os.makedirs(os.path.join(out, os.path.dirname(f)), exist_ok=True)
+        shutil.copy2(f, os.path.join(out, f))
+shutil.copy2("manifest.json", os.path.join(out, "manifest.json"))
+print("art: %d models -> %s" % (len(files) - len(missing), out))
+if missing:
+    sys.stderr.write("art: MISSING %s\n" % missing)
+PY
+  )
+}
+
+# check_log <log>: the output is the authority, not $?.
+check_log() {
+  local log="$1"
+  if grep -qE "$fatal_re" "$log"; then
+    echo "godot-cli: the player logged an error" >&2
+    grep -nE -A4 "$fatal_re" "$log" | head -30 >&2
+    return 1
+  fi
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  where)
+    echo "editor:    $editor"
+    echo "version:   $version"
+    echo "project:   $proj"
+    echo "templates: $templates$([[ -d "$templates" ]] && echo ' (installed)' || echo ' (MISSING: godot-cli templates)')"
+    ;;
+
+  templates)
+    [[ -d "$templates" ]] && { echo "godot-cli: templates already at $templates"; exit 0; }
+    tmp="$(mktemp -d)"
+    echo "godot-cli: downloading export templates for $version"
+    curl -fL -o "$tmp/templates.tpz" "https://github.com/godotengine/godot-builds/releases/download/$version/Godot_v${version}_mono_export_templates.tpz"
+    mkdir -p "$templates"
+    unzip -q "$tmp/templates.tpz" -d "$tmp/x"
+    mv "$tmp/x/templates/"* "$templates/"
+    rm -rf "$tmp"
+    echo "godot-cli: templates installed at $templates"
+    ;;
+
+  import)
+    # Generates .godot/ (import cache, font import). Idempotent, seconds.
+    "$editor" --headless --path "$proj" --import >/dev/null 2>&1 || true
+    [[ -d "$proj/.godot" ]] || { echo "godot-cli: import produced no .godot/ directory" >&2; exit 1; }
+    echo "godot-cli: imported"
+    ;;
+
+  build)
+    preset="${1:-Linux}"
+    [[ -d "$templates" ]] || { echo "godot-cli: no export templates — run: ./client/godot-cli templates" >&2; exit 1; }
+    "$0" import
+    case "$preset" in
+      Linux)   out="$build/linux";   exe="$out/SpaceAdventure.x86_64" ;;
+      Windows) out="$build/windows"; exe="$out/SpaceAdventure.exe" ;;
+      *) echo "godot-cli: unknown preset '$preset' (Linux|Windows)" >&2; exit 2 ;;
+    esac
+    rm -rf "$out"; mkdir -p "$out"
+    log="$build/export-$preset.log"
+    set +e
+    "$editor" --headless --path "$proj" --export-release "$preset" "$exe" >"$log" 2>&1
+    status=$?
+    set -e
+    if [[ $status -ne 0 ]] || grep -qE "$fatal_re" "$log" || [[ ! -f "$exe" ]]; then
+      echo "godot-cli: export $preset failed (exit $status)" >&2
+      grep -nE "$fatal_re|error|Error" "$log" | head -30 >&2 || tail -30 "$log" >&2
+      exit 1
+    fi
+    stage_art "$out"
+    echo "build: $exe ($(du -sh "$out" | cut -f1))"
+    ;;
+
+  run)
+    seconds="${1:-20}"
+    exe="$build/linux/SpaceAdventure.x86_64"
+    [[ -x "$exe" ]] || { echo "godot-cli: no player at $exe — run './client/godot-cli build' first" >&2; exit 1; }
+    log="$build/run.log"
+    url="${SA_SERVER_URL:-ws://127.0.0.1:18080/ws}"
+    echo "godot-cli: running the player for ${seconds}s against $url"
+    set +e
+    timeout "$((seconds + 15))" "$exe" --headless -- -serverUrl "$url" -quitAfter "$seconds" >"$log" 2>&1
+    status=$?
+    set -e
+    check_log "$log"
+    [[ $status -eq 0 ]] || { echo "godot-cli: the player exited $status" >&2; tail -20 "$log" >&2; exit "$status"; }
+    grep -E "world ready|colliders:" "$log" || {
+      echo "godot-cli: the player never reported joining — is the server up?" >&2
+      tail -20 "$log" >&2
+      exit 1
+    }
+    ;;
+
+  dev)
+    # From source, headless. The runtime loads the assembly Godot.NET.Sdk drops
+    # in .godot/mono/temp/bin/Debug, so build first; no export involved.
+    seconds="${1:-5}"
+    shift || true
+    "$0" import
+    dotnet build "$proj/SpaceAdventure.csproj" -v q --nologo
+    log="$proj/.godot/dev.log"
+    set +e
+    timeout "$((seconds + 15))" "$editor" --headless --path "$proj" -- \
+      -serverUrl "${SA_SERVER_URL:-ws://127.0.0.1:18080/ws}" -quitAfter "$seconds" "$@" >"$log" 2>&1
+    status=$?
+    set -e
+    cat "$log"
+    check_log "$log"
+    [[ $status -eq 0 ]] || { echo "godot-cli: exited $status" >&2; exit "$status"; }
+    ;;
+
+  play)
+    "$0" import
+    dotnet build "$proj/SpaceAdventure.csproj" -v q --nologo
+    exec "$editor" --path "$proj" -- -serverUrl "${SA_SERVER_URL:-ws://127.0.0.1:18080/ws}" "$@"
+    ;;
+
+  editor)
+    "$editor" --editor --path "$proj" >/dev/null 2>&1 &
+    echo "godot-cli: launching the $version editor"
+    ;;
+
+  help|--help|-h)
+    sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    echo "godot-cli: unknown command '$cmd' (try: help)" >&2
+    exit 2
+    ;;
+esac

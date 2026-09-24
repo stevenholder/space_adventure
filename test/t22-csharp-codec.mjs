@@ -46,7 +46,7 @@ const go = (...args) =>
   })
 
 const cs = (...args) =>
-  execFileSync('dotnet', ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--', ...args], {
+  execFileSync('dotnet', ['run', '--project', 'client/simdump', '--nologo', '--', ...args], {
     cwd: root,
     encoding: 'utf8',
   })

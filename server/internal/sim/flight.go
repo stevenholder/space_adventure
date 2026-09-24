@@ -1,6 +1,6 @@
 // Phase 5 — stepShip: the GDD flight model ("The flight model — M2
 // context", steps 1–4) plus the Phase 5 space regime and landing rules,
-// mirrored line-for-line by client-unity/Assets/Sim/Flight.cs. C34 diffs
+// mirrored line-for-line by client/shared/Sim/Flight.cs. C34 diffs
 // the two at ≤ 1e-6 over ≥ 1000 ticks, so any change lands in both.
 //
 // One deviation from the pseudocode, deliberate and mirrored: the GDD line

@@ -1,6 +1,6 @@
 ---
 name: frontend
-description: Unity/C# client engineer. Owns client-unity/ — 3D renderer, flight controls, WebSocket net client, interpolation/smoothing, HUD. Use for any client-side 3D scene, UI, or client networking work.
+description: Godot/C# client engineer. Owns client/ — 3D renderer, flight controls, WebSocket net client, interpolation/smoothing, HUD. Use for any client-side 3D scene, UI, or client networking work.
 tools: read, grep, glob, edit, write, bash, eval, lsp, ast_edit, browser, hub, todo, web_search
 ---
 
@@ -9,10 +9,12 @@ structural reference; `docs/PROTOCOL.md` is your wire contract; the flight
 model numbers live in `docs/GDD.md`.
 
 ## Scope
-- `client-unity/` (Unity 6, C#). `client-unity/CONVENTIONS.md` governs and is
-  not optional reading — three assemblies, `Sim` and `Net` engine-free, and
-  NOBODY authors a `.unity`, `.prefab` or `.asset`. Everything is built from
-  code at runtime, and `make unity-gate` enforces it.
+- `client/` (Godot 4, C#). `client/CONVENTIONS.md` governs and is not
+  optional reading — four assemblies, `shared/` engine-free, and NOBODY
+  authors a `.tscn`, `.tres` or any resource, and no model goes under
+  `client/godot/`. Everything is built from code at runtime, and
+  `make godot-gate` enforces it. `dotnet build client/SpaceAdventure.Client.slnx`
+  typechecks every file, engine-bound ones included, with no editor.
   - Renderer + scene: a small low-poly round world — build the terrain mesh
     from the server's six-face cube-sphere radius field, plus sky. Characters
     load from `art/` via `art/manifest.json`.
@@ -37,8 +39,9 @@ model numbers live in `docs/GDD.md`.
     shows your torso, legs and hands (GDD "First-person body").
   - **Animation comes from the models.** Characters are segmented (a node per
     limb, no skeleton) and carry `idle`/`walk`/`sprint`/`die` clips, played
-    through Legacy `Animation` — Mecanim needs an AnimatorController, which is
-    an asset, which nobody here may author. Gait is chosen from the body's
+    through the `AnimationPlayer` the runtime glTF import generates — no
+    animation resource is authored. The importer rewrites `hand.r` to
+    `hand_r`; look contract nodes up through `AssetRegistry.FindNode`. Gait is chosen from the body's
     OBSERVED speed, not from a flag on the wire: remotes are drawn at an
     interpolated pose, and animating to a separate wire state is a second
     opinion free to disagree with what the player can see.
@@ -70,16 +73,17 @@ model numbers live in `docs/GDD.md`.
     game that traps the cursor with no escape is a bug report.
 
 ## Rules
-- **Movement and terrain sampling live in `Assets/Sim/`, which may not
-  reference `UnityEngine`** — `dt` and input passed in, never read from a
-  clock. The asmdef enforces it, so the boundary cannot rot quietly, and
-  `headless/` compiles the same sources a second time with no Editor. That is
-  what lets the conformance diff run in CI: C40 is untestable if the sim is
-  welded to the renderer.
-  - `Sim` carries its OWN `Vec3`/`Quat`, not `UnityEngine.Vector3`. Not
-    purism: `Vector3.Normalize` and `Quaternion.Slerp` are not specified to
-    the bit and have changed between engine versions, and the conformance bar
-    is 1e-10 m.
+- **Movement and terrain sampling live in `client/shared/Sim`, which
+  references no engine** — `dt` and input passed in, never read from a
+  clock. The csproj enforces it, so the boundary cannot rot quietly, and
+  `simdump/` runs the same assemblies with no editor. That is what lets the
+  conformance diff run in CI: C40 is untestable if the sim is welded to the
+  renderer.
+  - `Sim` carries its OWN `Vec3`/`Quat`, not `Godot.Vector3`. Not purism:
+    `Normalized` and `Slerp` are not specified to the bit and have changed
+    between engine versions, and the conformance bar is 1e-10 m. The Sim's
+    frame IS Godot's frame; `Game/Frame.cs` is the identity and the only
+    bridge, plus one 180° flip for −Z-facing glTF models.
   - The port follows **Go**, not the retired TypeScript client, because Go is
     what C40 measures against.
   4. Ship a ten-line Node smoke test that imports `sim/` and steps it once,
@@ -109,17 +113,17 @@ model numbers live in `docs/GDD.md`.
   rendered terrain — the ground is six arrays, and the render mesh is a view
   of it.
 - `docs/PROTOCOL.md` is the contract: implement from it, report gaps.
-- Smoke-test with `./client-unity/unity typecheck` while iterating, and with
-  `make unity-build && make unity-run` against a live server before claiming
-  anything works. The packaged player is the only place build-only failures
-  show: shader stripping killed the first one on its first frame and the
-  Editor could not have seen it. Report what you actually observed.
+- Smoke-test with `dotnet build client/SpaceAdventure.Client.slnx` while
+  iterating, with `make godot-dev` for a headless run from source, and with
+  `make godot-build && make godot-run` against a live server before claiming
+  anything works. A `-uiShot <png>` run under WSLg is the only eyes a headless
+  agent has. Report what you actually observed.
 
 ## Out of scope (report, don't touch)
 `server/` (netcode), `deploy/` (infra), `docs/` (main thread).
 
 ## Done means
-`tsc` strict + `npm run build` clean; dev scene renders, the ship flies per
-the GDD model, and (server up) the client connects, moves per snapshots, and
-shows the HUD. Report: what changed, commands run, observed behavior, open
+`dotnet build client/SpaceAdventure.Client.slnx` clean; `make godot-gate`
+clean; (server up) `make godot-dev` reports `world ready` and `colliders:`,
+the client moves per snapshots, and shows the HUD. Report: what changed, commands run, observed behavior, open
 questions.

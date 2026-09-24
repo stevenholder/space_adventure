@@ -1725,7 +1725,7 @@ to the server's — **not** at a fixed offset behind whenever a packet happened 
 arrive locally. The two differ by a whole one-way trip, and the server rewinds
 by the first, so a client that renders by the second misses everything that
 moves. This is a rule about what a client draws, so no amount of server testing
-catches a breach of it; the Unity client owes it explicitly (ROADMAP U13).
+catches a breach of it; the client owes it explicitly (ROADMAP U13).
 
 Both halves were measured wrong at once, 2026-08-27: the server rewound `L`
 alone, and the retired TS client rendered on local receive time. A player

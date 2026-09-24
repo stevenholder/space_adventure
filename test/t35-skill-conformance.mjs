@@ -46,7 +46,7 @@ execFileSync('go', ['build', '-o', '../test/out/server-dump', './cmd/server'],
 const goOut = execFileSync(path.join(root, 'test/out/server-dump'),
   ['dump', '-inputs', SCRIPT, '-seed', String(SEED)], { cwd: root, maxBuffer: 256 << 20 })
 const csOut = execFileSync('dotnet',
-  ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+  ['run', '--project', 'client/simdump', '--nologo', '--',
     '--dump', SCRIPT, '--world', WORLD],
   { cwd: root, maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'inherit'] })
 
@@ -80,7 +80,7 @@ writeFileSync(path.join(root, DRIVE_SCRIPT), driveLines.join('\n') + '\n')
 const goDrive = parse(execFileSync(path.join(root, 'test/out/server-dump'),
   ['drive', '-inputs', DRIVE_SCRIPT, '-seed', String(SEED)], { cwd: root, maxBuffer: 256 << 20 }))
 const csDrive = parse(execFileSync('dotnet',
-  ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--', '--drive', DRIVE_SCRIPT, '--world', WORLD],
+  ['run', '--project', 'client/simdump', '--nologo', '--', '--drive', DRIVE_SCRIPT, '--world', WORLD],
   { cwd: root, maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'inherit'] }))
 let driveWorst = 0
 for (let i = 0; i < Math.min(goDrive.length, csDrive.length); i++) driveWorst = Math.max(driveWorst, dist(goDrive[i].pos, csDrive[i].pos))
@@ -96,7 +96,7 @@ writeFileSync(path.join(root, FLIGHT_SCRIPT), flightLines.join('\n') + '\n')
 const goFlight = parse(execFileSync(path.join(root, 'test/out/server-dump'),
   ['flight', '-inputs', FLIGHT_SCRIPT, '-seed', String(SEED)], { cwd: root, maxBuffer: 256 << 20 }))
 const csFlight = parse(execFileSync('dotnet',
-  ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--', '--flight', FLIGHT_SCRIPT, '--world', WORLD],
+  ['run', '--project', 'client/simdump', '--nologo', '--', '--flight', FLIGHT_SCRIPT, '--world', WORLD],
   { cwd: root, maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'inherit'] }))
 let flightWorst = 0
 for (let i = 0; i < Math.min(goFlight.length, csFlight.length); i++) flightWorst = Math.max(flightWorst, dist(goFlight[i].pos, csFlight[i].pos))

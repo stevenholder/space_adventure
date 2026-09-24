@@ -65,7 +65,7 @@ try {
   await ready
   const out = execFileSync(
     'dotnet',
-    ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+    ['run', '--project', 'client/simdump', '--nologo', '--',
       '--predict', `ws://127.0.0.1:${PROXY_PORT}/ws`,
       // The connect URL is the proxy, which speaks WebSocket and nothing
       // else; the build worth recording belongs to what is behind it.

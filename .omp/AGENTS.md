@@ -27,8 +27,8 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 | Agent | Owns | Never touches |
 |-------|------|---------------|
 | `game` | `docs/GDD.md`, `server/data/**.json` (item/NPC/zone/loot data), gameplay rule files (e.g. `server/gameplay/` once it exists), balance data | client rendering, transport, infra, assets |
-| `netcode` | `server/` (except `server/data/**.json` and gameplay rule files; `server/data/embed.go` IS netcode's), `docs/PROTOCOL.md` only when explicitly instructed | `client-unity/`, `deploy/`, `art/` |
-| `frontend` | `client-unity/` | `server/`, `deploy/`, `art/` (consumes assets, doesn't edit) |
+| `netcode` | `server/` (except `server/data/**.json` and gameplay rule files; `server/data/embed.go` IS netcode's), `docs/PROTOCOL.md` only when explicitly instructed | `client/`, `deploy/`, `art/` |
+| `frontend` | `client/` | `server/`, `deploy/`, `art/` (consumes assets, doesn't edit) |
 | `art` | `art/` | all code directories |
 | `infra` | `deploy/`, root `Makefile` (root `Dockerfile*` from scale-out) | game logic, client code |
 | `qa` | `test/`, verification reports | all product code (reports bugs, never fixes) |
@@ -47,8 +47,9 @@ owning agent via `hub`); the main thread coordinates cross-module work.
 
 ## Conventions
 
-- C#: `client-unity/CONVENTIONS.md` governs. Three assemblies, `Sim` and
-  `Net` engine-free, nobody authors a scene or a prefab.
+- C#: `client/CONVENTIONS.md` governs. Four assemblies, `shared/` engine-free,
+  nobody authors a scene or a resource; `dotnet build
+  client/SpaceAdventure.Client.slnx` verifies any client file.
 - Go: module `space-adventure/server`, gofmt-clean, stdlib-first
   (`net/http`, `encoding/binary`), gorilla/websocket for WS, wrap errors
   (`%w`), no global mutable state.

@@ -538,3 +538,31 @@ Recorded because each looked exactly like a product bug:
 A fourth was pure positioning: stopping 17.5 m from a grunt leaves the gunners
 ~31 m away, outside their 30 m aggro, so no projectile was ever provoked. The
 approach closes to 9 m.
+
+
+# Phase 11.5 — the engine swap (2026-09-23)
+
+Run on the branch `feat/godot-client`, against a bare `server -listen :18080`
+(no kind), Godot 4.7.2-stable .NET, .NET SDK 10.0.112, WSLg for the windowed
+shots.
+
+| # | Result | Evidence |
+|---|---|---|
+| C84 | PASS | `make godot-test` (self-checks OVERALL: PASS), `godot-codec` 9/9, `godot-conformance` 7+10 checks, `t13` 9 scenarios, `t35` 6 checks — all on the moved sources |
+| C85 | PASS | `dotnet build client/SpaceAdventure.Client.slnx` builds Sim, Net, GameCore, SimDump and the Godot game assembly; `ci.yml` job `client` runs it |
+| C86 | PASS | `godot-cli build` → 149 MB Linux export with `art/` staged beside it; `godot-cli run 10` → `world ready: entity=3 seed=1337 tickHz=20`, `colliders: 28`, exit 0 |
+| C87 | PASS | `-selftest` 9/9 (yaw sign, pitch sign, pitch clamp, parallel transport, orientation basis ×2, model flip, winding ×2) |
+| C88 | PASS | `-dumpNodes char.player`: `arm_r/hand_r`, `eye`, `AnimationPlayer` with `die 0.33s idle 1.33s sprint 0.50s walk 0.67s`; importer emits `ImporterMeshInstance3D`, converted in `AssetRegistry.Generate` |
+| C89 | PASS | windowed 1280×720 shots: terrain and horizon (M1), quartermaster and rover (M2), starfield (M3), HUD/skills/map/bags (M4), armed rig (M5) |
+| C90 | PASS | `godot-cli build Windows` from Linux → `client/build/windows/SpaceAdventure.exe` (183 MB with staged art); not yet run on a Windows host |
+| C91 | PASS | `make godot-gate` → `C91 clean` |
+
+**Notes.** The volume fit replaced the longest-axis fit in `AttachFitted`:
+the Kenney rifle is 0.9 × 0.5 × 0.18 m, and fitted by length it stood 0.5 m
+tall five centimetres from the eye. The rig rest position moved out to suit
+(`ViewModel.RestPosition`); eyes-on tuning on a real display is still owed.
+Rocks (400 instances, MultiMesh) log `rocks: 145/126/129` but were not
+individually confirmed in a screenshot. Two harness-only observations: `t27`
+fails with "ship never spawned" when run right after `t26` has flown the ship
+off (server state, not client), and the pilot camera's hull-fixed basis is
+`hull * ModelFlip` because a Camera3D looks down −Z while the ship faces +Z.

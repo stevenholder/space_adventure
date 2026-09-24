@@ -1172,6 +1172,59 @@ constraint, declared synergies, the K panel.
 - **C83 Nothing else moved.** Fleet t2–t29 unchanged; frame budget
   holds with the panel open.
 
+# Phase 11.5 — the engine swap: Unity out, Godot in
+
+**Why.** Unity's toolchain fought the agent-first, code-first workflow: the
+project had to live on `/mnt/c` (Unity fatals on WSL paths), the Editor held a
+project lock so `unity compile`/`build` failed while it was open, batchmode
+exited 0 on compiler errors, no agent could drive the Editor, and CI never
+built the player. On top of that, Unity-the-company and its licensing.
+
+**What made it cheap.** Phase 3.5's split paid off: `Sim`, `Net` and
+`Game/Core` referenced no engine, so they moved to `client/shared/` unchanged
+(5.1k lines, `git mv`), and the harnesses that drive them through `SimDump`
+proved the move before a single engine API was touched. Only the engine-bound
+half of `Game/` was rewritten (~6.4k Godot lines for ~7.6k Unity lines), and
+there was no scene or prefab to migrate because there never was one (C47).
+
+**Two findings that shaped the port.** The Sim was already in Godot's frame —
+right-handed, Y-up, +Z forward — so the Unity build's Z-mirror and every
+"rebuild the rotation from two converted axes" workaround simply disappeared;
+`Frame.cs` is the identity plus one 180° model flip for −Z-facing glTF. And
+`Godot.NET.Sdk` pulls the engine bindings from NuGet, so `dotnet build`
+typechecks the whole client with no editor: CI went from compiling 0% of the
+client to 100%.
+
+**Engine.** Godot 4.7.2 (.NET), pinned in `client/.godot-version`;
+`net8.0` game assembly over `netstandard2.1` shared ones; `gl_compatibility`
+renderer so WSLg runs it. Export is `godot --headless --export-release`,
+Linux and Windows presets from the same Linux box.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| M0 | Move Sim/Net/Core/SimDump into `client/`, Godot project skeleton, `godot-cli`, Makefile and CI renames | `client/` | `make godot-gate godot-test godot-codec godot-conformance` |
+| M1 | Connect, terrain, local walk with prediction; `Frame`, `InputState`, `Fps`, `TerrainMesh` | `client/godot/Game/` | `make godot-build godot-run` → `world ready`, `colliders:` |
+| M2 | Entities, characters, glTF at runtime, animation, structures, props | `AssetRegistry`, `Entities`, `CharacterAnim`, `Structures` | `-dumpNodes char.player`; screenshot |
+| M3 | Seats, rover and ship prediction, sky, rocks | `Boot`, `Sky`, `Rocks` | `node test/t24 t26 t27`; screenshot |
+| M4 | The interface: HUD, panels, map, journal, party, skills | `UI/`, `Map`, `Missions`, `Skills` | `-uiPanel` gallery |
+| M5 | Combat FX, the first-person rig through a SubViewport | `Combat`, `ViewModel` | `-rigArmed` screenshot |
+| M6 | Screenshot rig, Windows export, CI export job, docs, `client-unity/` deleted | `Rig.cs`, `.github/`, `docs/` | full `make godot-*` sweep |
+
+### Acceptance criteria
+
+| # | Criterion | Verify |
+|---|---|---|
+| C84 | Every engine-free assembly moved byte-identical and every SimDump harness stayed green | `make godot-test godot-codec godot-conformance`; `node test/t13 t35` |
+| C85 | The client compiles with no editor installed, in CI, including the engine-bound assembly | `dotnet build client/SpaceAdventure.Client.slnx` in `ci.yml` |
+| C86 | A player exports headlessly from the command line and joins the deployed server from a cold start | `make godot-build godot-run` |
+| C87 | Sign rules pinned headless: mouse-right turns toward facing × up, mouse-up looks up, winding measure, model flip | `godot --headless --path client/godot -- -selftest` |
+| C88 | glTF node contract survives the importer (`hand.r` → `hand_r`, clips `idle walk sprint die`) | `-dumpNodes char.player` |
+| C89 | The C60 gallery reproduces: HUD, skills, map, bags, armed rig | `-uiShot` with `-uiPanel` / `-rigArmed` |
+| C90 | Windows export from Linux | `./client/godot-cli build Windows` |
+| C91 | No agent-authored scene or resource; one `Boot.tscn`; no `using Godot` in `shared/` | `make godot-gate` |
+
 # Phase 12 — the artisan loop (queued behind Phase 11)
 
 Mining (3 s drill channels on depleting ore nodes), Salvaging (wreck

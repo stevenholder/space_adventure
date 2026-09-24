@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The movement and terrain rules that must agree with the Go server to
+       1e-10 m. Engine-free by construction: this project references no
+       GodotSharp, so a `using Godot;` here is a build error. The Godot game
+       project consumes it as a ProjectReference; SimDump runs it headless
+       for the conformance diff (C40). netstandard2.1 on purpose: it is what
+       every consumer accepts, and nothing here needs a newer BCL. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>SpaceAdventure.Sim</RootNamespace>
+    <AssemblyName>Sim</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

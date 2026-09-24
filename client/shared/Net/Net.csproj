@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The wire codec and transport, per docs/PROTOCOL.md. Engine-free: no
+       GodotSharp reference, so codec parity against Go (C41) runs headless
+       via SimDump. The transport is System.Net.WebSockets.ClientWebSocket,
+       plain BCL, which the Godot desktop export ships in full. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>SpaceAdventure.Net</RootNamespace>
+    <AssemblyName>Net</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Sim/Sim.csproj" />
+  </ItemGroup>
+
+  <!-- Defs.cs parses the JSON `defs` payload with Newtonsoft. The Godot game
+       project gets it transitively through this reference. -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

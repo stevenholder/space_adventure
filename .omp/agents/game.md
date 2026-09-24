@@ -32,7 +32,7 @@ You are the gameplay designer/rules engineer on Space Adventure.
   update it and note the change in your report.
 
 ## Out of scope (report, don't touch)
-`client-unity/` rendering, `server/` transport, `deploy/`, `art/`.
+`client/` rendering, `server/` transport, `deploy/`, `art/`.
 
 ## Done means
 GDD section updated with testable rules; every number named and justified;

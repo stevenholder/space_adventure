@@ -42,7 +42,7 @@ const goOut = execFileSync(path.join(root, 'test/out/server-dump'),
 
 console.log('replaying the same script through the C# ship sim...')
 const csOut = execFileSync('dotnet',
-  ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+  ['run', '--project', 'client/simdump', '--nologo', '--',
     '--flight', SCRIPT, '--world', WORLD],
   { cwd: root, maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'inherit'] })
 

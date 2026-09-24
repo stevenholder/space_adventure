@@ -1,6 +1,6 @@
 // Phase 4 — stepRover, the ground drive model (GDD "Phase 4 — ground drive
 // model", steps 1–10, implemented in order and mirrored line-for-line by
-// client-unity/Assets/Sim/Drive.cs; C30 diffs the two at ≤ 1e-6 over ≥ 1000
+// client/shared/Sim/Drive.cs; C30 diffs the two at ≤ 1e-6 over ≥ 1000
 // ticks, so any change here must land in both).
 //
 // The model is deliberately simpler than flight: no angular velocity state,

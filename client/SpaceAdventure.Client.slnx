@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="shared/Sim/Sim.csproj" />
+  <Project Path="shared/Net/Net.csproj" />
+  <Project Path="shared/Core/GameCore.csproj" />
+  <Project Path="simdump/SimDump.csproj" />
+  <Project Path="godot/SpaceAdventure.csproj" />
+</Solution>
