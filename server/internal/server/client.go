@@ -450,13 +450,27 @@ func (c *client) sendSnapshot(body []byte, ack uint16) {
 	}
 }
 
-// send enqueues a frame. It blocks only while the writer is alive and the
-// queue is full (the writer makes progress or dies, and its teardown
-// releases the send); a dying client never holds a goroutine.
+// send enqueues a frame, and NEVER blocks the caller.
+//
+// It used to block while the writer was alive and the queue full, on the
+// theory that the writer makes progress or dies. The theory missed the
+// poison client: a connection that stops draining fills its queue AND its
+// TCP window, the writer stalls inside its writeTimeout, and every
+// broadcast under s.mu then blocks on this one client — the tick loop
+// stalls behind the same mutex and the whole server wedges (first seen as
+// CI's TestEquippedEventBroadcastAndReplay dying of heartbeat timeouts;
+// Phase 10's per-second broadcasts made the old window easy to tip).
+//
+// A client whose queue overflows while its writer lives cannot drain and
+// is dead by definition: tear it down instead of holding the lock hostage.
+// Asynchronously, because teardown takes s.mu via leave() and the caller
+// may already hold it.
 func (c *client) send(m msg) {
 	select {
 	case c.out <- m:
 	case <-c.done:
+	default:
+		go c.teardown()
 	}
 }
 

@@ -33,6 +33,14 @@ func dialWS(t *testing.T, url string) *wsClient {
 	}
 	// The terrain frame (~50 KiB) exceeds the 4 KiB default read limit.
 	conn.SetReadLimit(protocol.MaxMessageSize)
+	// The cleanup closure is LOAD-BEARING beyond tidiness: it keeps the
+	// conn reachable for the whole test. Without it, a client the test
+	// stops touching (the shooter after its last send, say) becomes
+	// garbage mid-test, the finalizer closes the fd, and the kernel RSTs
+	// the server side — which read as "equipped replay flakily missing"
+	// in CI for a full afternoon. GC timing decides, so it only bites
+	// under allocation pressure.
+	t.Cleanup(func() { conn.Close() })
 	return &wsClient{t: t, conn: conn}
 }
 

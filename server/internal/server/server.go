@@ -39,7 +39,12 @@ const (
 	// outQueue is the per-connection outbound buffer. Snapshots are full
 	// state, so when the queue is full the newest snapshot is dropped
 	// rather than blocking the tick loop.
-	outQueue = 32
+	// 256, up from 32: send() now KILLS a client whose queue overflows
+	// (client.go send — the poison-client wedge), so the buffer must absorb
+	// any legitimate burst. The join replay alone is ~30 frames back to
+	// back; 256 small frames is cheap insurance against killing a healthy
+	// client whose writer is one syscall behind.
+	outQueue = 256
 	// worldEntityIDBase is where zone-placed NPC/target entity ids start
 	// (see New): far above where player ids, which start at 1 and increment
 	// per join, will reach in one server run.
@@ -63,8 +68,8 @@ type Server struct {
 	bounty         *bountyState
 	bountyRepostAt time.Time
 	bountyRotation int
-	propsF     []byte // pre-encoded props frame, built once at startup
-	colliders  []protocol.Collider
+	propsF         []byte // pre-encoded props frame, built once at startup
+	colliders      []protocol.Collider
 
 	reg   *defs.Registry
 	world *sim.World // static NPC/target entities, composed from zones
