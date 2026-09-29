@@ -54,6 +54,8 @@ namespace SpaceAdventure.Game.UI
         public const int Cell = 60;
 
         public string SlotName = "";       // "" for a backpack cell
+        /// <summary>A display-only slot (shop stock): tooltip yes, drag and right-click no.</summary>
+        public bool Static;
         public string Item = "";
         public int Qty;
         public Defs Defs = Defs.Empty;
@@ -148,7 +150,7 @@ namespace SpaceAdventure.Game.UI
 
         public override void _GuiInput(InputEvent e)
         {
-            if (e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Right && !string.IsNullOrEmpty(Item))
+            if (!Static && e is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Right && !string.IsNullOrEmpty(Item))
             {
                 OnAlt?.Invoke();
                 AcceptEvent();
@@ -157,7 +159,7 @@ namespace SpaceAdventure.Game.UI
 
         public override Variant _GetDragData(Vector2 at)
         {
-            if (string.IsNullOrEmpty(Item)) return default;
+            if (Static || string.IsNullOrEmpty(Item)) return default;
             var preview = new ItemSlot { Item = Item, Qty = Qty, Defs = Defs, Icons = Icons, Modulate = new Color(1, 1, 1, 0.85f) };
             SetDragPreview(preview);
             return new Godot.Collections.Dictionary { { "item", Item }, { "from", SlotName } };
@@ -165,7 +167,7 @@ namespace SpaceAdventure.Game.UI
 
         public override bool _CanDropData(Vector2 at, Variant data)
         {
-            if (data.VariantType != Variant.Type.Dictionary) return false;
+            if (Static || data.VariantType != Variant.Type.Dictionary) return false;
             var d = data.AsGodotDictionary();
             string item = d["item"].AsString();
             if (SlotName == "") return true; // the bag takes anything back
@@ -205,7 +207,7 @@ namespace SpaceAdventure.Game.UI
                 desc.CustomMinimumSize = new Vector2(240, 0);
                 body.AddChild(desc);
             }
-            body.AddChild(Styles.Display_(SlotName == "" ? "right-click: equip  ·  drag to a slot" : "right-click: unequip  ·  drag to the bag", 10, Styles.Dust));
+            if (!Static) body.AddChild(Styles.Display_(SlotName == "" ? "right-click: equip  ·  drag to a slot" : "right-click: unequip  ·  drag to the bag", 10, Styles.Dust));
             return panel;
         }
     }

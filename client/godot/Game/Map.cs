@@ -70,7 +70,9 @@ namespace SpaceAdventure.Game
             Styles.PinAt(_panel, 0.5f, 0.06f);
             _panel.Visible = false;
             VBoxContainer body = Styles.Body(_panel);
-            body.AddChild(Styles.Header($"Map — facing up, {MapExtent:F0} m in every direction"));
+            VBoxContainer header = Styles.Header($"Map — facing up, {MapExtent:F0} m in every direction");
+            body.AddChild(header);
+            UI.PanelMemory.Grip(_panel, root, "map", header);
 
             _frame = Styles.Box(Colors.Transparent, Styles.Ink, 2);
             _image = new TextureRect
@@ -95,7 +97,12 @@ namespace SpaceAdventure.Game
 
         public bool Open => _panel.Visible;
 
-        public void Toggle() => _panel.Visible = !_panel.Visible;
+        public void Toggle()
+        {
+            _panel.Visible = !_panel.Visible;
+            if (_panel.Visible) UI.PanelMemory.Restore(_panel, _root, "map", ref _restored);
+        }
+        private bool _restored;
         public void Close() => _panel.Visible = false;
 
         /// <summary>Updates the map. Called every frame; does nothing while closed.</summary>

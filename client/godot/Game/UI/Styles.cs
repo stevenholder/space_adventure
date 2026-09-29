@@ -230,6 +230,69 @@ namespace SpaceAdventure.Game.UI
         }
 
         /// <summary>A horizontal row with vertically centred children.</summary>
+        /// <summary>
+        /// The card every list uses now (Phase 11.7 task 7): a steel panel
+        /// with a 2 px ink frame and a colour band on the left, a leading
+        /// control (an ItemSlot, a Tile), a title over a dust subline, and
+        /// trailing controls (prices, buttons) on the right.
+        /// </summary>
+        public static PanelContainer Card(Color band, Control leading, string title, Color titleColor, string sub, params Control[] trailing)
+        {
+            var sb = new StyleBoxFlat { BgColor = Steel, BorderColor = Ink, ContentMarginLeft = 0, ContentMarginRight = 8, ContentMarginTop = 6, ContentMarginBottom = 6 };
+            sb.SetBorderWidthAll(2);
+            var card = new PanelContainer();
+            card.AddThemeStyleboxOverride("panel", sb);
+            var row = Row(10);
+            card.AddChild(row);
+            row.AddChild(new ColorRect { Color = band, CustomMinimumSize = new Vector2(5, 0), SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
+            if (leading != null) { leading.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter; row.AddChild(leading); }
+            var text = Column(0);
+            text.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+            text.AddChild(Display_(title, 14, titleColor));
+            if (!string.IsNullOrEmpty(sub))
+            {
+                var subLab = Display_(sub, 11, Dust);
+                subLab.AutowrapMode = TextServer.AutowrapMode.Word;
+                text.AddChild(subLab);
+            }
+            row.AddChild(Grow(text));
+            foreach (Control t in trailing)
+            {
+                if (t == null) continue;
+                t.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+                row.AddChild(t);
+            }
+            return card;
+        }
+
+        /// <summary>A 40 px glyph tile: a letter or two on a coloured square, the icon for things without models.</summary>
+        public static Control Tile(string glyph, Color color, int size = 40)
+        {
+            var box = Box(new Color(color, 0.22f), color, 2);
+            box.CustomMinimumSize = new Vector2(size, size);
+            var l = Display_(glyph, size >= 40 ? 16 : 13, color);
+            l.HorizontalAlignment = HorizontalAlignment.Center;
+            l.VerticalAlignment = VerticalAlignment.Center;
+            l.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            l.MouseFilter = Control.MouseFilterEnum.Ignore;
+            box.AddChild(l);
+            return box;
+        }
+
+        /// <summary>A labelled progress bar: fill fraction, the text inside.</summary>
+        public static Control Progress(float frac, Color color, string text, float width = 140f)
+        {
+            var (bar, fill) = Bar(color, 12);
+            bar.CustomMinimumSize = new Vector2(width, 12);
+            SetFill(fill, frac);
+            var l = Display_(text, 9, Cream);
+            l.HorizontalAlignment = HorizontalAlignment.Center;
+            l.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            l.MouseFilter = Control.MouseFilterEnum.Ignore;
+            bar.AddChild(l);
+            return bar;
+        }
+
         public static HBoxContainer Row(int separation = 6)
         {
             var r = new HBoxContainer();

@@ -1360,6 +1360,11 @@ the planet's sun), then STATS, then SKILLS. **B** opens the backpack: a
   nothing open it opens the game menu: RETURN TO GAME, ACCOUNT, QUIT
   GAME. Escape again returns. There is no separate "free the cursor"
   key: an open panel frees it, closing captures it.
+- **Lists are cards**: a `steel` card with a 2 px `ink` frame and a
+  colour band on the left (rarity for items, the mission type's colour,
+  `amber` for anything that wants an answer), a leading tile or item
+  slot, a title over a `dust` subline, and prices/progress/buttons on the
+  right. The shop, journal and party use nothing else.
 - **Every panel drags by its header** and stays where it was put, per
   panel, across sessions (`user://sa.cfg` `[panels]`); at least the
   header always stays on screen.

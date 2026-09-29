@@ -321,8 +321,8 @@ namespace SpaceAdventure.Game
             _hudView = new HudView(_ui.Root);
             _combatFeed = new CombatFeed(_ui.Root);
             _map = new MapView(_ui.Root);
-            _shopView = new ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
             _icons = new Icons(_assets.Root);
+            _shopView = new ShopView(_ui.Root, _character, _interact, _icons, NextCmdSeq, b => _net.Send(b));
             _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
