@@ -40,6 +40,23 @@ turned off, that header disappears and the limits fall back to the
 Traefik-appended X-Forwarded-For hop, which is then the router; check
 gatekeeper.go before changing the edge.
 
+## Releases
+
+Every successful deploy publishes a GitHub pre-release for the commit it
+rolled out: tag `vYYYY.MM.DD-<sha7>`, the Linux (`.tar.gz`) and Windows
+(`.zip`) client exports from the CI run that was deployed, and notes made of
+a fixed header (what is live, how to run the downloads) plus GitHub's
+generated list of merged PRs since the previous `v*` tag. It is the
+`release` job at the end of `.github/workflows/deploy.yml`; a failed rollout
+means no release, so a release is always a build that was live.
+
+```sh
+gh release list --limit 5
+gh release download v2026.09.29-abc1234 -p '*windows*'   # a specific build
+```
+
+Flip `--prerelease` off in the workflow when a build should become "Latest".
+
 ## Roll back
 
 ```sh

@@ -578,3 +578,9 @@ individually confirmed in a screenshot. Two harness-only observations: `t27`
 fails with "ship never spawned" when run right after `t26` has flown the ship
 off (server state, not client), and the pilot camera's hull-fixed basis is
 `hull * ModelFlip` because a Camera3D looks down −Z while the ship faces +Z.
+
+# CI/CD — GitHub releases (2026-09-29)
+
+| # | Result | Evidence |
+|---|---|---|
+| C99 | PENDING | `deploy.yml` `release` job: after a green rollout, tag `vYYYY.MM.DD-<sha7>`, attach `client-linux` (.tar.gz, exec bit restored) and `client-windows` (.zip) from the deployed CI run, notes = header + GitHub generated notes since the previous `v*` tag, pre-release. Verified locally: YAML parses, `gh api …/generate-notes` returns the PR list, `gh run download` of both artifacts works. Becomes PASS on the first merge to main that produces a release |
