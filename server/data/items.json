@@ -1,8 +1,13 @@
 {
-  "$comment": "Item table. Contract: docs/GDD.md 'Items and currency' + 'Weapons'. Owned by the `game` agent. Shipped to clients in the `defs` message; never duplicated in the client.",
+  "$comment": "Item table. Contract: docs/GDD.md 'Items and currency' + 'Weapons'. Owned by the `game` agent. equip_slots is the character panel's slot set (Phase 11.7, GDD 'Equipment'). Shipped to clients in the `defs` message; never duplicated in the client.",
   "version": 1,
   "start_credits": 1000,
-  "start_items": [{ "item": "ammo.cell", "qty": 120 }],
+  "start_items": [
+    {
+      "item": "ammo.cell",
+      "qty": 120
+    }
+  ],
   "inv_slots": 20,
   "items": [
     {
@@ -27,14 +32,16 @@
         "spread_max": 2.5,
         "spread_per_shot": 0.35,
         "spread_decay": 3.0
-      }
+      },
+      "desc": "Hitscan pulse rifle. 30-cell magazine, falls off past 40 m."
     },
     {
       "id": "ammo.cell",
       "name": "Energy Cell",
       "kind": "ammo",
       "rarity": "common",
-      "stack_max": 300
+      "stack_max": 300,
+      "desc": "Energy cells for the pulse rifle. Stack to 300."
     },
     {
       "$comment": "Phase 5: owning this item IS owning a ship (GDD 'Ownership') - the server spawns the owner's ship on the pad at purchase and on join. stack_max 1: one ship per owner.",
@@ -43,7 +50,89 @@
       "kind": "vehicle",
       "rarity": "epic",
       "asset": "ship.v1",
-      "stack_max": 1
+      "stack_max": 1,
+      "desc": "Your own ship, parked on the pad. Owning it is flying it."
+    },
+    {
+      "id": "armor.helmet.scout",
+      "name": "Scout Helmet",
+      "kind": "armor",
+      "rarity": "common",
+      "slot": "head",
+      "stack_max": 1,
+      "armor": {
+        "value": 3
+      },
+      "desc": "Sealed visor, cracked in one corner. Keeps the dust out."
+    },
+    {
+      "id": "armor.suit.scout",
+      "name": "Scout Suit",
+      "kind": "armor",
+      "rarity": "uncommon",
+      "slot": "chest",
+      "stack_max": 1,
+      "armor": {
+        "value": 8
+      },
+      "desc": "Patched pressure suit. Most of the patches are yours."
+    },
+    {
+      "id": "armor.legs.scout",
+      "name": "Scout Leggings",
+      "kind": "armor",
+      "rarity": "common",
+      "slot": "legs",
+      "stack_max": 1,
+      "armor": {
+        "value": 5
+      },
+      "desc": "Reinforced at the knees, where you land."
+    },
+    {
+      "id": "armor.gloves.scout",
+      "name": "Scout Gloves",
+      "kind": "armor",
+      "rarity": "common",
+      "slot": "hands",
+      "stack_max": 1,
+      "armor": {
+        "value": 2
+      },
+      "desc": "Grip on the palms, no feeling in the fingertips."
+    },
+    {
+      "id": "armor.boots.scout",
+      "name": "Scout Boots",
+      "kind": "armor",
+      "rarity": "common",
+      "slot": "feet",
+      "stack_max": 1,
+      "armor": {
+        "value": 3
+      },
+      "desc": "Magnetic soles, switched off. They squeak."
+    },
+    {
+      "id": "pack.scout",
+      "name": "Scout Pack",
+      "kind": "armor",
+      "rarity": "uncommon",
+      "slot": "back",
+      "stack_max": 1,
+      "armor": {
+        "value": 2
+      },
+      "desc": "A frame pack with room for everything you have not found yet."
+    },
+    {
+      "id": "charm.rabbit",
+      "name": "Rabbit's Foot",
+      "kind": "accessory",
+      "rarity": "rare",
+      "slot": "accessory",
+      "stack_max": 1,
+      "desc": "It was not lucky for the rabbit."
     }
   ],
   "entity_defs": [
@@ -51,7 +140,10 @@
       "type": "player",
       "asset": "char.player",
       "max_health": 100,
-      "hitbox": { "radius": 0.35, "height": 1.8 },
+      "hitbox": {
+        "radius": 0.35,
+        "height": 1.8
+      },
       "damageable": false
     },
     {
@@ -59,14 +151,20 @@
       "type": "npc",
       "asset": "npc.shopkeeper",
       "max_health": 0,
-      "hitbox": { "radius": 0.35, "height": 1.8 },
+      "hitbox": {
+        "radius": 0.35,
+        "height": 1.8
+      },
       "damageable": true
     },
     {
       "type": "target",
       "asset": "prop.target",
       "max_health": 100,
-      "hitbox": { "radius": 0.45, "height": 1.8 },
+      "hitbox": {
+        "radius": 0.45,
+        "height": 1.8
+      },
       "damageable": true,
       "respawn": 3.0
     },
@@ -75,7 +173,10 @@
       "type": "vehicle",
       "asset": "vehicle.rover.v1",
       "max_health": 200,
-      "hitbox": { "radius": 1.2, "height": 1.6 },
+      "hitbox": {
+        "radius": 1.2,
+        "height": 1.6
+      },
       "damageable": false
     },
     {
@@ -83,8 +184,25 @@
       "type": "ship",
       "asset": "ship.v1",
       "max_health": 400,
-      "hitbox": { "radius": 2.0, "height": 2.6 },
+      "hitbox": {
+        "radius": 2.0,
+        "height": 2.6
+      },
       "damageable": false
     }
+  ],
+  "equip_slots": [
+    "head",
+    "chest",
+    "legs",
+    "hands",
+    "feet",
+    "back",
+    "accessory1",
+    "accessory2",
+    "primary",
+    "secondary",
+    "tool",
+    "gadget"
   ]
 }

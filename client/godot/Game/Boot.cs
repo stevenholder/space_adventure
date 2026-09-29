@@ -177,8 +177,9 @@ namespace SpaceAdventure.Game
         private HudView _hudView;
         private CombatFeed _combatFeed;
         private ShopView _shopView;
-        private BagsView _bagsView;
-        private SheetView _sheetView;
+        private BackpackView _bagsView;
+        private CharacterView _sheetView;
+        private Icons _icons;
         private PromptView _promptView;
         private AccountView _accountView;
         private readonly MissionLog _missionLog = new MissionLog();
@@ -321,8 +322,9 @@ namespace SpaceAdventure.Game
             _combatFeed = new CombatFeed(_ui.Root);
             _map = new MapView(_ui.Root);
             _shopView = new ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
-            _bagsView = new BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
-            _sheetView = new SheetView(_ui.Root, _character);
+            _icons = new Icons(_assets.Root);
+            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
+            _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
             _journalView = new JournalView(_ui.Root, _missionLog, _partyState, NearestBoard, NextCmdSeq, b => _net.Send(b));
             _partyView = new PartyView(_ui.Root, _partyState, NearbyPlayers, NextCmdSeq, b => _net.Send(b));
@@ -908,7 +910,12 @@ namespace SpaceAdventure.Game
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
                     if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy)) _character.OnWallet(r.Body);
-                    if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipAccepted();
+                    if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipResult(r.Body);
+                    if (r.Ok && (r.Opcode == Op.Equip || r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy))
+                    {
+                        if (_bagsView.Open) _bagsView.Rebuild();
+                        if (_sheetView.Open) _sheetView.Rebuild();
+                    }
                     if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
@@ -973,8 +980,8 @@ namespace SpaceAdventure.Game
         {
             switch (name)
             {
-                case "bags": OpenPanel(_bagsView, _sheetView); break;
-                case "sheet": OpenPanel(_sheetView, _bagsView); break;
+                case "bags": case "backpack": OpenPanel(_bagsView, _sheetView); break;
+                case "sheet": case "character": OpenPanel(_sheetView, _bagsView); break;
                 case "map": _map.Toggle(); break;
                 case "journal": _journalView.Show(true); break;
                 case "party": _partyView.Show(true); break;
@@ -991,6 +998,7 @@ namespace SpaceAdventure.Game
         private void UpdateHudView()
         {
             _hudView.SetVitals(_hud.Health, 100);
+            _sheetView.Tick(Clock.Dt);
             _hudView.SetDeath(_hud.Dead ? _hud.RespawnIn : -1);
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
                 _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
@@ -1191,7 +1199,11 @@ namespace SpaceAdventure.Game
             view.Show(open);
             if (open)
             {
-                other.Show(false);
+                // One modal at a time: the character panel over an open shop
+                // was two panels fighting for the same pixels.
+                foreach (ModalView m in new ModalView[] { other, _shopView, _journalView, _partyView, _skillsView, _accountView })
+                    if (m != null && m != view && m.Open) m.Show(false);
+                if (_interact.ShopOpen) _interact.CloseShop();
                 _net.Send(Character.RefreshCmd(NextCmdSeq()));
             }
         }

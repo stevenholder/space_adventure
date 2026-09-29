@@ -173,16 +173,6 @@ namespace SpaceAdventure.Game
             await Wait(wait);
             _rigLamp = Flag("-uiLamp");
 
-            // -uiPanel: open that panel first, so the gallery can capture the
-            // modals without simulated key presses. Shop is excluded — it
-            // only opens off a live NPC interaction.
-            string panel = Arg("-uiPanel");
-            if (panel != null)
-            {
-                OpenUiPanel(panel);
-                await Wait(1.0); // refresh round trip
-            }
-
             // -uiRoute <path>: walk a solved route before facing anything —
             // straight lines on this planet wedge on scarps. Same walker as
             // -uiApproach: sprint, jump when stuck.
@@ -458,11 +448,17 @@ namespace SpaceAdventure.Game
                 }
                 _rigInteract = true;
                 await Wait(1.0);
-                _net.Send(_interact.BuyCmd(NextCmdSeq(), buy, 0));
-                await Wait(0.6);
-                _net.Send(_character.EquipCmd(NextCmdSeq(), "primary", buy));
-                await Wait(0.6);
-                GD.Print($"ui: bought {buy}: primary={_character.Primary}");
+                // A comma list buys and wears several: -uiBuy weapon.pulse,armor.suit.scout
+                foreach (string one in buy.Split(','))
+                {
+                    _net.Send(_interact.BuyCmd(NextCmdSeq(), one, 0));
+                    await Wait(0.5);
+                    string slot = _character.Defs.SlotOf(one);
+                    if (slot == "accessory") slot = string.IsNullOrEmpty(_character.Worn("accessory1")) ? "accessory1" : "accessory2";
+                    if (!string.IsNullOrEmpty(slot)) _net.Send(_character.EquipCmd(NextCmdSeq(), slot, one));
+                    await Wait(0.5);
+                }
+                GD.Print($"ui: bought {buy}: worn={string.Join(",", _character.Equipped.Values)}");
             }
 
             // -uiClaim: claim the priority bounty the way the journal's button
@@ -528,6 +524,17 @@ namespace SpaceAdventure.Game
                 _hud.Dead = true;
                 _hud.DeadSince = Clock.Now - 1.6;
                 await Wait(0.2);
+            }
+
+            // -uiPanel: open that panel LAST, so the gallery can capture the
+            // modals without simulated key presses -- and after any -uiBuy,
+            // since a modal blocks the E that opens the shop. Shop is
+            // excluded: it only opens off a live NPC interaction.
+            string panel = Arg("-uiPanel");
+            if (panel != null)
+            {
+                OpenUiPanel(panel);
+                await Wait(1.0); // refresh round trip
             }
 
             if (_rigLamp && _sun != null)

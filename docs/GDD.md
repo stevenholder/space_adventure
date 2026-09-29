@@ -1327,6 +1327,38 @@ a bearing tape with `ink`-outlined markers (shop, rover, own ship, camp,
 spawn). Prompts ("E · talk", notices) stay bottom-center. The flight
 readout replaces the ammo cluster while seated in a ship.
 
+### Character panel and backpack (Phase 11.7)
+
+WoW's paper doll in this book's ink. **C** opens the character: the
+equipment slots in two columns of six around a live model of the
+character (its own viewport, turning slowly, lit for the panel, never by
+the planet's sun), then STATS, then SKILLS. **B** opens the backpack: a
+5×4 grid of `inv_slots` cells holding everything carried and not worn.
+
+- **Slot cell**: 60 px square, `steel` fill, 2 px `ink` frame when empty
+  with the slot's name in `dust` (ACC, WEAPON, SIDEARM); when filled a
+  **3 px frame in the item's rarity colour**, the icon, and a stack
+  count bottom-right. Icons are `art/icons/<item id>.png`, rendered from
+  the item's model at build (`gen_icons.py`); an item with no model
+  shows its initials in display type on the tile.
+- **Moving things**: drag a cell onto a slot it fits (the slot refuses
+  the drop otherwise), drag a worn slot onto the bag to take it off;
+  right-click equips (accessories to the first free accessory slot) or
+  unequips. Every move is one `equip`; the result's map redraws both
+  panels. Nothing is optimistic.
+- **Tooltip** on hover: name in rarity colour; tier · kind · slot;
+  weapon numbers (damage, rpm, rounds, range) or armor value; stack;
+  the item's `desc` line; the move hint.
+- **STATS** are the numbers the game computes, never invented ones:
+  health, armor (sum of worn `armor.value`), damage (weapon × Marksmanship),
+  fire rate, sprint (× Athletics), rover/ship bonus, loot rolls, buy
+  prices, discovery range, credits, bag. **SKILLS**: the ten, with level.
+- One modal at a time: opening C or B closes the shop, journal, party
+  and skills panels.
+- Placeholder gear: the Scout set (helmet, suit, leggings, gloves,
+  boots, pack) and the Rabbit's Foot at the quartermaster, so slots have
+  something to hold before armor matters.
+
 ### Motion
 
 Panels: 120 ms slide+fade in, none out (closing is instant — snappy
@@ -1636,8 +1668,15 @@ shooting a target range (`docs/ROADMAP.md`).
 - **Inventory** is a list of `{item, qty}` stacks on the player row, at most
   `inv_slots` stacks, each capped at that item's `stack_max`. A purchase that
   would exceed either is refused (`no_space`).
-- **Equipment** is one map, `{slot: item}`. Phase 2 has exactly one slot,
-  `primary`, holding a weapon. Equipping an item you do not own is refused.
+- **Equipment** is one map, `{slot: item}`. The slot set is data
+  (`items.json` `equip_slots`, Phase 11.7): `head`, `chest`, `legs`,
+  `hands`, `feet`, `back`, `accessory1`, `accessory2`, `primary`,
+  `secondary`, `tool`, `gadget`. An item declares the slot it fits; an
+  `accessory` item fits either accessory slot; one stack of one sits in
+  one slot at a time. `equip` with an empty item clears a slot. Only
+  `primary` is visible on the body and on the wire to others; armor
+  values are summed for the character panel and have no combat effect
+  yet. Equipping an item you do not own is refused.
 - Ammunition is an item like any other. The weapon's `magazine` is *not* in the
   inventory — it is loaded rounds, held per equipped weapon; `reload` moves
   rounds from the `ammo.cell` stack into the magazine.

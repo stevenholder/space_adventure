@@ -355,7 +355,7 @@ Bodies per opcode:
 |---|---|---|
 | `shop_list` | `{"npc": <entity_id>}` | `{"stock":[{"item":"weapon.pulse","price":250}]}` |
 | `shop_buy` | `{"npc": <entity_id>, "item":"weapon.pulse", "qty":1}` | `{"credits":750,"inventory":[{"item":"weapon.pulse","qty":1}]}` |
-| `equip` | `{"slot":"primary","item":"weapon.pulse"}` | `{"equipped":{"primary":"weapon.pulse"}}` |
+| `equip` | `{"slot":"primary","item":"weapon.pulse"}` — slot is one of `defs.equip_slots`; an `accessory` item fits `accessory1`/`accessory2`; an empty `item` clears the slot (Phase 11.7) | `{"equipped":{"primary":"weapon.pulse", …}}` — the WHOLE worn map, every slot |
 | `inventory` | `{}` | `{"credits":750,"inventory":[…],"equipped":{…}}` |
 | `reload` | `{}` | `{"magazine":30,"reserve":90}` |
 
@@ -373,6 +373,8 @@ interactable metadata for the zone, and (Phase 11) the skill roster with its
 per-level efficacy rates and the declared synergies, so the K panel's
 tooltips run the server's own arithmetic. It is the server's own `server/data/`
 content, filtered to what a client needs to render and predict.
+
+Phase 11.7 adds, additively: `equip_slots` (the ordered slot set the character panel draws and `equip` validates against), `inv_slots`, and per item `desc`, `armor:{value}`, `weapon:{damage,fire_interval,magazine,max_range,…}` for tooltips and the stats block.
 
 The client **must not fire, predict damage, or draw an inventory before `defs`
 arrives** — the same rule as `terrain`, for the same reason: it has no data to

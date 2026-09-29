@@ -1225,6 +1225,33 @@ Linux and Windows presets from the same Linux box.
 | C90 | Windows export from Linux | `./client/godot-cli build Windows` |
 | C91 | No agent-authored scene or resource; one `Boot.tscn`; no `using Godot` in `shared/` | `make godot-gate` |
 
+# Phase 11.7 — the interface, drawn (2026-09-29)
+
+The HUD earned its stripes in Phase 8; the panels were still lists. This
+phase makes the character panel and the backpack graphical — WoW's paper
+doll, Borderlands' item cards — on a framework the other panels are
+restyled onto next: `ItemSlot` (icon, rarity frame, count, drag source and
+target, right-click, tooltip), `Icons` (build-rendered PNGs), `Doll` (the
+character's own model in its own viewport). Contract: GDD "Character panel
+and backpack", GDD "Equipment", PROTOCOL `equip`/`defs`.
+
+**Playable proof.** Buy the Scout set and the rifle, press C: the
+astronaut turns in the middle of the panel wearing what you bought, each
+slot framed in its rarity, ARMOR reads 23, DAMAGE reads 25 and climbs with
+Marksmanship. Press B: cells and the ship in a 5×4 grid, the worn things
+gone from it. Drag the helmet from the bag onto HEAD; right-click it to
+take it off.
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | `equip_slots` in items.json, `Equip` validates the set, accessories, unequip, one-slot-per-item | server | `TestEquipSlots` |
+| 2 | Scout set + Rabbit's Foot with `armor`/`desc`, at the quartermaster | `server/data` | defs audit |
+| 3 | `gen_icons.py` → `art/icons`, staged beside art | `art/tools`, `godot-cli` | icons exist for every item with a model |
+| 4 | `ItemSlot`, `Icons`, tooltips, drag/drop | `client/godot/Game/UI/Inventory.cs` | C107 |
+| 5 | `CharacterView` (doll, slots, stats, skills), `BackpackView` (grid) | same | C107, C108 |
+| 6 | Boot: one modal at a time, equip result redraws, rig `-uiPanel character|backpack`, `-uiBuy a,b,c` | `Boot.cs`, `Rig.cs` | shots |
+| 7 | Restyle shop, journal, skills, party, map onto the framework | later pass | — |
+
 # Phase 12 — the artisan loop (queued behind Phase 11)
 
 Mining (3 s drill channels on depleting ore nodes), Salvaging (wreck

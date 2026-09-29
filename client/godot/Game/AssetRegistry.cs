@@ -70,6 +70,7 @@ namespace SpaceAdventure.Game
         {
             _material = material;
             _root = ResolveArtRoot();
+            Root = _root;
             LoadManifest();
         }
 
@@ -77,6 +78,9 @@ namespace SpaceAdventure.Game
         /// Where art/ is: -artDir, then SA_ART_DIR, then the repo's art/ when
         /// running from source, then the art/ staged beside the executable.
         /// </summary>
+        /// <summary>The art/ directory in use (icons live beside the models).</summary>
+        public string Root { get; private set; }
+
         private static string ResolveArtRoot()
         {
             string[] argv = OS.GetCmdlineUserArgs();

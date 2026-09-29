@@ -42,6 +42,16 @@ type Item struct {
 	Rarity   string  `json:"rarity,omitempty"` // Phase 8: common…legendary; absent reads as common
 	StackMax int     `json:"stack_max"`
 	Weapon   *Weapon `json:"weapon,omitempty"`
+	// Phase 11.7: the character panel reads these. desc is the tooltip
+	// line; armor is display-only until armor matters (GDD "Equipment").
+	Desc  string `json:"desc,omitempty"`
+	Armor *Armor `json:"armor,omitempty"`
+}
+
+// Armor is a wearable's protective value. Summed over the worn slots into
+// the character panel's ARMOR stat; no combat effect yet.
+type Armor struct {
+	Value int `json:"value"`
 }
 
 // EntityDef is one entity type's render/health/hitbox def
@@ -214,18 +224,21 @@ type Registry struct {
 		Item string `json:"item"`
 		Qty  int    `json:"qty"`
 	}
-	InvSlots  int
-	Missions  map[string]Mission
-	Skills    []Skill
-	Synergies []Synergy
-	Awards    SkillAwards
-	Unlocks   []UnlockRequirement
-	Items     map[string]Item
-	Entities  map[string]EntityDef
-	NPCs      map[string]NPC
-	Zones     map[string]Zone
-	Loot      map[string][]LootEntry
-	Payload   []byte
+	InvSlots int
+	// EquipSlots is the ordered slot set the character panel draws and
+	// Equip validates against (items.json equip_slots, Phase 11.7).
+	EquipSlots []string
+	Missions   map[string]Mission
+	Skills     []Skill
+	Synergies  []Synergy
+	Awards     SkillAwards
+	Unlocks    []UnlockRequirement
+	Items      map[string]Item
+	Entities   map[string]EntityDef
+	NPCs       map[string]NPC
+	Zones      map[string]Zone
+	Loot       map[string][]LootEntry
+	Payload    []byte
 }
 
 // itemsFile mirrors server/data/items.json.
@@ -236,6 +249,7 @@ type itemsFile struct {
 		Qty  int    `json:"qty"`
 	} `json:"start_items"`
 	InvSlots   int         `json:"inv_slots"`
+	EquipSlots []string    `json:"equip_slots"`
 	Items      []Item      `json:"items"`
 	EntityDefs []EntityDef `json:"entity_defs"`
 }
@@ -289,6 +303,7 @@ func Load() (*Registry, error) {
 		StartCredits: itemsF.StartCredits,
 		StartItems:   itemsF.StartItems,
 		InvSlots:     itemsF.InvSlots,
+		EquipSlots:   itemsF.EquipSlots,
 		Items:        make(map[string]Item, len(itemsF.Items)),
 		Entities:     make(map[string]EntityDef, len(itemsF.EntityDefs)),
 		NPCs:         make(map[string]NPC, len(npcsF.NPCs)),
@@ -385,15 +400,20 @@ type payload struct {
 	// clients ignore it.
 	Skills    []Skill   `json:"skills,omitempty"`
 	Synergies []Synergy `json:"synergies,omitempty"`
+	// Phase 11.7: the slot set and bag size, so the panels draw from data.
+	EquipSlots []string `json:"equip_slots,omitempty"`
+	InvSlots   int      `json:"inv_slots,omitempty"`
 }
 
 func buildPayload(reg *Registry) ([]byte, error) {
 	p := payload{
-		Items:     reg.Items,
-		Entities:  reg.Entities,
-		Skills:    reg.Skills,
-		Synergies: reg.Synergies,
-		NPCs:      make(map[string]payloadNPC, len(reg.NPCs)),
+		Items:      reg.Items,
+		Entities:   reg.Entities,
+		Skills:     reg.Skills,
+		Synergies:  reg.Synergies,
+		EquipSlots: reg.EquipSlots,
+		InvSlots:   reg.InvSlots,
+		NPCs:       make(map[string]payloadNPC, len(reg.NPCs)),
 		Constants: payloadConstants{
 			InteractDist: 3.0,
 			InteractCone: 20.0,

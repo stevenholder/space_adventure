@@ -44,6 +44,25 @@ namespace SpaceAdventure.Net
 
         /// <summary>Phase 8: absent reads as "" and renders common (C64).</summary>
         [JsonProperty("rarity")] public string Rarity { get; set; } = "";
+
+        // Phase 11.7: what the character panel and tooltips read.
+        [JsonProperty("desc")] public string Desc { get; set; } = "";
+        [JsonProperty("armor")] public ArmorDef Armor { get; set; }
+        [JsonProperty("weapon")] public WeaponDef Weapon { get; set; }
+        [JsonProperty("stack_max")] public int StackMax { get; set; } = 1;
+    }
+
+    public sealed class ArmorDef
+    {
+        [JsonProperty("value")] public int Value { get; set; }
+    }
+
+    public sealed class WeaponDef
+    {
+        [JsonProperty("damage")] public int Damage { get; set; }
+        [JsonProperty("fire_interval")] public double FireInterval { get; set; }
+        [JsonProperty("magazine")] public int Magazine { get; set; }
+        [JsonProperty("max_range")] public double MaxRange { get; set; }
     }
 
     /// <summary>One entity type's render and hitbox def.</summary>
@@ -96,6 +115,9 @@ namespace SpaceAdventure.Net
     public sealed class Defs
     {
         [JsonProperty("items")] public Dictionary<string, ItemDef> Items { get; set; }
+        /// <summary>Phase 11.7: the ordered equipment slot set; empty means primary only.</summary>
+        [JsonProperty("equip_slots")] public List<string> EquipSlots { get; set; } = new List<string>();
+        [JsonProperty("inv_slots")] public int InvSlots { get; set; }
         [JsonProperty("skills")] public List<SkillDef> Skills { get; set; }
         [JsonProperty("synergies")] public List<SynergyDef> Synergies { get; set; }
         [JsonProperty("entities")] public Dictionary<string, EntityDef> Entities { get; set; }
@@ -157,6 +179,16 @@ namespace SpaceAdventure.Net
 
         /// <summary>True when the item declares an equipment slot at all.</summary>
         public bool IsEquippable(string id) => !string.IsNullOrEmpty(SlotOf(id));
+
+        /// <summary>The item def, or null.</summary>
+        public ItemDef Item(string id) => TryItem(id, out ItemDef it) ? it : null;
+
+        /// <summary>
+        /// Mirrors the server's SlotAccepts: exact match, except an
+        /// "accessory" item fits any accessoryN slot.
+        /// </summary>
+        public static bool SlotAccepts(string itemSlot, string slot) =>
+            itemSlot == slot || (itemSlot == "accessory" && slot.StartsWith("accessory"));
 
         /// <summary>The art/manifest.json model id for an item, or "".</summary>
         public string ItemAsset(string id) => TryItem(id, out ItemDef it) ? it.Asset ?? "" : "";

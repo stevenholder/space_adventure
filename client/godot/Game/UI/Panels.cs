@@ -76,10 +76,10 @@ namespace SpaceAdventure.Game.UI
         protected readonly PanelContainer Box;
         private readonly VBoxContainer _body;
 
-        protected ModalView(Control root, string title, float width)
+        protected ModalView(Control root, string title, float width, float top = 0.18f)
         {
             Box = Styles.Panel(Styles.SkewNone);
-            Styles.PinAt(Box, 0.5f, 0.18f, width);
+            Styles.PinAt(Box, 0.5f, top, width);
             Box.Visible = false;
             VBoxContainer stack = Styles.Body(Box);
             stack.AddChild(Styles.Header(title));
@@ -174,48 +174,6 @@ namespace SpaceAdventure.Game.UI
     }
 
     /// <summary>Bags: the item-card list with equip actions.</summary>
-    public sealed class BagsView : ModalView
-    {
-        private readonly Character _character;
-        private readonly Func<ushort> _nextSeq;
-        private readonly Action<byte[]> _send;
-
-        public BagsView(Control root, Character character,
-            Func<ushort> nextSeq, Action<byte[]> send)
-            : base(root, "Bags", 400)
-        {
-            _character = character;
-            _nextSeq = nextSeq;
-            _send = send;
-        }
-
-        protected override void Fill(VBoxContainer body)
-        {
-            Line(body,
-                $"{_character.UsedSlots} of {Character.InventorySlots} slots  ·  " +
-                (_character.Credits < 0 ? "— cr" : $"{_character.Credits} cr"),
-                Styles.Dust);
-            body.AddChild(Styles.Gap(4));
-
-            if (_character.UsedSlots == 0) Line(body, "empty", Styles.Dust);
-            for (int i = 0; i < _character.UsedSlots; i++)
-            {
-                var it = _character.Inventory[i];
-                string slot = _character.Defs.SlotOf(it.item);
-                bool held = !string.IsNullOrEmpty(slot) && it.item == _character.Primary;
-                string action = string.IsNullOrEmpty(slot) || held ? null : "EQUIP";
-                string item = it.item;
-                string slotName = slot;
-                body.AddChild(ItemCard.Make(_character.Defs.ItemName(item), it.qty,
-                    _character.Defs.ItemRarity(item),
-                    held ? "equipped" : "", action,
-                    () => { _send(_character.EquipCmd(_nextSeq(), slotName, item)); Rebuild(); }));
-            }
-            body.AddChild(Styles.Gap(4));
-            Line(body, "B closes", Styles.Dust, 12);
-        }
-    }
-
     /// <summary>
     /// The F1 account panel: redeem a link code minted on the account site.
     /// The redeem request stays in Boot (it owns the network); this view
@@ -247,34 +205,5 @@ namespace SpaceAdventure.Game.UI
         public void SetStatus(string text) => _status.Text = text;
 
         protected override void Fill(VBoxContainer body) { }
-    }
-
-    /// <summary>The character sheet: read-only stats.</summary>
-    public sealed class SheetView : ModalView
-    {
-        private readonly Character _character;
-
-        public SheetView(Control root, Character character)
-            : base(root, "Character", 340)
-        {
-            _character = character;
-        }
-
-        protected override void Fill(VBoxContainer body)
-        {
-            void Row(string k, string v)
-            {
-                var r = Styles.Row(6);
-                r.AddChild(Styles.Grow(Styles.Display_(k, 13, Styles.Dust)));
-                r.AddChild(Styles.Display_(v, 13, Styles.Cream));
-                body.AddChild(r);
-            }
-            Row("health", _character.Health.ToString());
-            Row("credits", _character.Credits < 0 ? "—" : _character.Credits.ToString());
-            Row("primary", string.IsNullOrEmpty(_character.Primary) ? "—" : _character.Defs.ItemName(_character.Primary));
-            Row("magazine", _character.Magazine < 0 ? "—" : $"{_character.Magazine} / {_character.Reserve}");
-            body.AddChild(Styles.Gap(6));
-            Line(body, "C closes", Styles.Dust, 12);
-        }
     }
 }
