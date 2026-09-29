@@ -12,6 +12,9 @@
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
 //   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock
+//   -uiPitch <deg> [-uiYaw <deg>]  look down/up and turn, from where the rig stands
+//   -uiBuy <item>           E at the faced shopkeeper, buy it, equip it (a REAL weapon)
+//   -uiFireNow <secs>       re-apply -uiPitch/-uiYaw, then hold the trigger that long
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -38,6 +41,7 @@ namespace SpaceAdventure.Game
         private bool _rigAutoParty; // accept any party invite
         private bool _rigBack;      // step backwards
         private bool _rigArmed;
+        private bool _rigInteract; // one frame of E
         private float _detourSign = 1f;
 
         private async Task Wait(double seconds) =>
@@ -53,6 +57,7 @@ namespace SpaceAdventure.Game
                 if (_rigJump) li.ActionMask |= Net.Action.Jump;
             }
             if (_rigFire) li.FirePressed = true;
+            if (_rigInteract) { li.InteractPressed = true; _rigInteract = false; }
             if (_rigBack) li.MoveY = -1;
         }
 
@@ -402,6 +407,56 @@ namespace SpaceAdventure.Game
                 for (double w3 = 0; w3 < 20 && !_partyState.InParty; w3 += 0.5) await Wait(0.5);
                 _journalView.Show(true);
                 await Wait(0.5);
+            }
+
+            // -uiBuy <item>: E at whatever -uiFace npc lined up (the shop opens
+            // off the live interaction), buy it, equip it in `primary`. The
+            // real purchase, not -rigArmed's visual one, so the server will
+            // resolve a fire.
+            string buy = Arg("-uiBuy");
+            if (buy != null)
+            {
+                // The interaction cone is measured against the NPC's EYE
+                // (Interact.Update), not its feet, so face that.
+                EntityView shop = null; float shopD = float.MaxValue;
+                foreach (EntityView v in _views.All)
+                {
+                    if (v.Root == null || v.Type != EntityType.Npc || v.Dead) continue;
+                    float d = (v.Root.GlobalPosition - Eye).LengthSquared();
+                    if (d < shopD) { shopD = d; shop = v; }
+                }
+                if (shop != null)
+                {
+                    Vector3 feet = shop.Root.GlobalPosition;
+                    _fps.FaceToward(Eye, feet + feet.Normalized() * 1.7f);
+                    await Wait(0.2);
+                }
+                _rigInteract = true;
+                await Wait(1.0);
+                _net.Send(_interact.BuyCmd(NextCmdSeq(), buy, 0));
+                await Wait(0.6);
+                _net.Send(_character.EquipCmd(NextCmdSeq(), "primary", buy));
+                await Wait(0.6);
+                GD.Print($"ui: bought {buy}: primary={_character.Primary}");
+            }
+
+            // -uiFireNow <secs>: turn by -uiPitch/-uiYaw again (after any
+            // facing above), then hold the trigger that long.
+            string fireNow = Arg("-uiFireNow");
+            if (fireNow != null && float.TryParse(fireNow, NumberStyles.Float, CultureInfo.InvariantCulture, out float holdSecs))
+            {
+                if (pitchArg != null)
+                {
+                    float pitch = Mathf.DegToRad(float.Parse(pitchArg, CultureInfo.InvariantCulture));
+                    float yaw = Mathf.DegToRad(float.Parse(Arg("-uiYaw") ?? "0", CultureInfo.InvariantCulture));
+                    Vector3 eyeF = Eye, upF = eyeF.Normalized();
+                    Vector3 fwdF = CameraForward.Slide(upF).Normalized().Rotated(upF, -yaw);
+                    _fps.FaceToward(eyeF, eyeF + fwdF * (10f * Mathf.Cos(pitch)) + upF * (10f * Mathf.Sin(pitch)));
+                    await Wait(0.2);
+                }
+                _rigFire = true;
+                await Wait(holdSecs);
+                _rigFire = false;
             }
 
             if (_rigLamp && _sun != null)

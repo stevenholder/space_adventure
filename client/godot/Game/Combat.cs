@@ -102,13 +102,17 @@ namespace SpaceAdventure.Game
             if (len < 1e-4f) return;
 
             Vector3 up = Mathf.Abs(along.Normalized().Dot(Vector3.Up)) > 0.99f ? Vector3.Right : Vector3.Up;
+            // Scale in the tracer's OWN frame: Basis.Scaled() scales along the
+            // world axes, which stretched every tracer along world Z whatever
+            // the aim -- "the lasers fire in a fixed direction" (C100).
+            Basis basis = Basis.LookingAt(along, up) * Basis.FromScale(new Vector3(0.03f, 0.03f, len));
             var tracer = new MeshInstance3D
             {
                 Name = $"tracer-{ev.EntityId}",
                 Mesh = _tracerMesh,
                 MaterialOverride = Unlit(new Color(1f, 1f, 1f, 0.8f)),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                Transform = new Transform3D(Basis.LookingAt(along, up).Scaled(new Vector3(0.03f, 0.03f, len)), start),
+                Transform = new Transform3D(basis, start),
             };
             _parent.AddChild(tracer);
             Add(tracer, TracerSeconds, scaleOut: false);

@@ -586,3 +586,10 @@ off (server state, not client), and the pilot camera's hull-fixed basis is
 | # | Result | Evidence |
 |---|---|---|
 | C99 | PASS | First live run 2026-09-29 on the #23 merge (deploy run 36584666744): `release` job green, `v2026.09.29-158ce49` pre-release with `SpaceAdventure-…-linux-x86_64.tar.gz` (59 MB) and `…-windows-x86_64.zip` (70 MB), notes = header + the 22 merged PRs to date (no earlier `v*` tag). Later releases are bounded by the previous tag |
+
+# Client feedback round 2 (2026-09-29)
+
+| # | Result | Evidence |
+|---|---|---|
+| C100 | PASS | **Tracers fired in a fixed direction** (feedback with screenshot). Sent aim == camera forward == the server's returned ray (logged: `sent=(0.232,-0.131,-0.964)`, `recv dir=(0.231,-0.125,-0.965)`), so the drawing was wrong: `Basis.Scaled()` scales along the WORLD axes and stretched every tracer along world Z. Now `LookingAt * FromScale` (local). Logged tracer end == server end to 1e-6 on three shots. Rig gained `-uiBuy weapon.pulse` (real purchase through the live shop interaction, cone measured at the NPC's eye) and `-uiFireNow <s>`, which is how this was reproduced headless — `-rigArmed` is visual only and the server drops its fire |
+| C101 | PASS | **Rocks read as pebbles.** Floor raised 0.3 → 0.6 m; the 1.5 m cap STAYS (GDD: no prop collision in M1, nothing may be big enough that walking through it jars — a 3.5 m trial tripped `godot-test`'s "every rock is within the GDD size band"). Pebble clusters unchanged. `test/out/ui/world-rock.png` at 7 m. Bigger boulders need server-owned colliders: a milestone, not a knob |
