@@ -585,4 +585,4 @@ off (server state, not client), and the pilot camera's hull-fixed basis is
 
 | # | Result | Evidence |
 |---|---|---|
-| C99 | PENDING | `deploy.yml` `release` job: after a green rollout, tag `vYYYY.MM.DD-<sha7>`, attach `client-linux` (.tar.gz, exec bit restored) and `client-windows` (.zip) from the deployed CI run, notes = header + GitHub generated notes since the previous `v*` tag, pre-release. Verified locally: YAML parses, `gh api …/generate-notes` returns the PR list, `gh run download` of both artifacts works. Becomes PASS on the first merge to main that produces a release |
+| C99 | PASS | First live run 2026-09-29 on the #23 merge (deploy run 36584666744): `release` job green, `v2026.09.29-158ce49` pre-release with `SpaceAdventure-…-linux-x86_64.tar.gz` (59 MB) and `…-windows-x86_64.zip` (70 MB), notes = header + the 22 merged PRs to date (no earlier `v*` tag). Later releases are bounded by the previous tag |
