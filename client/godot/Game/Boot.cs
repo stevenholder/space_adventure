@@ -1044,7 +1044,9 @@ namespace SpaceAdventure.Game
             if (_interact.ShopOpen && !_shopView.Open) _shopView.Show(true);
             if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
 
-            _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
+            // The world prompt (E · talk) belongs to the world: with a panel
+            // open it sat on top of the shop it had just opened.
+            _promptView.Set(ModalOpen || _map.Open ? "" : !string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
 
             double now = Clock.Now;
             if (_missionLog.PriorityMission != null && now < _missionLog.PriorityUntil)

@@ -266,8 +266,14 @@ namespace SpaceAdventure.Game.UI
             _send = send;
         }
 
+        private ScrollContainer _scrollBox;
+
         protected override void Fill(VBoxContainer body)
         {
+            // A buy rebuilds the panel; the old scroll box is still alive
+            // here (freed at end of frame), so its offset carries over and
+            // the list does not jump back to the top.
+            int scrollAt = _scrollBox != null && GodotObject.IsInstanceValid(_scrollBox) ? _scrollBox.ScrollVertical : 0;
             long credits = _character.Credits;
             var head = Styles.Row(8);
             head.AddChild(Styles.Grow(Styles.Display_("stock", 12, Styles.Dust)));
@@ -281,6 +287,8 @@ namespace SpaceAdventure.Game.UI
                 // Ten items of stock at 76 px each outrun a 720p frame: the
                 // list scrolls inside a fixed height, the wallet stays put.
                 var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 400), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+                _scrollBox = scroll;
+                Callable.From(() => { if (GodotObject.IsInstanceValid(scroll)) scroll.ScrollVertical = scrollAt; }).CallDeferred();
                 var list = Styles.Column(4);
                 list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
                 scroll.AddChild(list);
