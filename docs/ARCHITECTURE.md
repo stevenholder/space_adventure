@@ -59,9 +59,12 @@ flowchart LR
   face −Z, so a loaded model sits under one node carrying a 180° flip, in
   `AssetRegistry` and nowhere else.
 - Scene: a small low-poly round world — terrain mesh built from the server's
-  six-face cube-sphere radius field, a generated starfield sky, scattered
-  rocks; characters loaded from `art/` via `art/manifest.json` by asset id,
-  at runtime through `GltfDocument`, animated by the clips they carry.
+  six-face cube-sphere radius field, flat-shaded one colour per triangle from
+  the GDD's banded palette (height bands, seeded noise patches, scree on
+  slopes), a generated starfield sky, scattered rocks with per-instance tints
+  and pebble clusters; characters loaded from `art/` via `art/manifest.json`
+  by asset id, at runtime through `GltfDocument`, animated by the clips they
+  carry.
 - The first-person rig (arms, weapon) sits on its own render layer, lit by
   a short-range omni light masked to that layer, and is drawn by the main
   camera. The transparent-SubViewport overlay (a depth-clearing second

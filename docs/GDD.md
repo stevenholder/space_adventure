@@ -1354,11 +1354,22 @@ difference must read at silhouette range:
 | light | flame-amber `#FFAE19` point glows | cool white `#CFE8F2` strips |
 | tell | one thing is always CROOKED | one thing is always SYMMETRIC |
 
-Shared planet palette stays beneath both: terrain greens/greys as
-generated, `ink #10131A` outlines on everything (the comic line weight
-the UI already committed to). Flat-shaded, vertex colors only, no
-textures — color changes happen at polygon edges, which is what keeps
-tri budgets honest.
+Shared planet palette stays beneath both. The ground is flat-shaded
+per triangle from the sampled height, in bands: crater dust
+`#857866`/rust dust `#755C4D` below the 124–190 m range's 0.30 mark,
+sage `#6E8C5C`/moss `#4F6B4A` plains around the 150 m datum, ochre
+`#99825A`/dun `#80705C` highlands from 0.50, pale `#BDBAB3`/frost
+`#9EA1A8` peaks from 0.72; scree `#5C4D42` on anything steeper than
+about half the walkable limit. A seeded 3D noise (~30 m patches, the
+world seed, client-side only) picks between each band's two colours, a
+per-triangle ±6 % value jitter keeps a plain faceted, and the map draws
+the same palette (`TerrainMesh.Shade`). `ink #10131A` outlines on
+everything built (the comic line weight the UI already committed to).
+Flat-shaded, vertex colors only, no textures — color changes happen at
+polygon edges, which is what keeps tri budgets honest. Rocks: the 400
+contract placements each get a warm-to-cool tint and 0–3 seated
+pebbles from a second seeded stream, so the same three models do not
+read as the same three rocks.
 
 ### Silhouette and the 23 m horizon
 

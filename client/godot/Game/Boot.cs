@@ -272,7 +272,7 @@ namespace SpaceAdventure.Game
 
             // The sun. Direction is what the Unity build had (Euler 35, −140
             // there), carried into the Sim frame as a vector.
-            _sun = new DirectionalLight3D { Name = "Sun", LightEnergy = 0.9f, ShadowEnabled = true };
+            _sun = new DirectionalLight3D { Name = "Sun", LightEnergy = 1.0f, ShadowEnabled = true };
             _sun.LightCullMask &= ~VmLayer; // the rig has its own light
             AddChild(_sun);
             _sun.LookAtFromPosition(Vector3.Zero, new Vector3(-0.527f, -0.574f, 0.627f), Vector3.Up);
@@ -296,7 +296,7 @@ namespace SpaceAdventure.Game
                     BackgroundMode = Godot.Environment.BGMode.Color,
                     BackgroundColor = Colors.Black,
                     AmbientLightSource = Godot.Environment.AmbientSource.Color,
-                    AmbientLightColor = new Color(0.10f, 0.11f, 0.15f),
+                    AmbientLightColor = new Color(0.17f, 0.18f, 0.24f),
                     AmbientLightEnergy = 1f,
                 },
             };
@@ -923,7 +923,7 @@ namespace SpaceAdventure.Game
                 GD.PushWarning($"sky unavailable, keeping the flat environment: {e.Message}");
             }
             _planet?.QueueFree();
-            _planet = TerrainMesh.Build(_terrain, _material, this);
+            _planet = TerrainMesh.Build(_terrain, _material, this, _net.WorldSeed);
             _predictor.Seed(_terrain, _colliders);
             _rover.Seed(_terrain);
             _ship.Seed(_terrain);
