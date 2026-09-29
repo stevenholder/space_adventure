@@ -12,6 +12,13 @@
 # Tailscale operator's API-server proxy. The ACL grant maps tag:ci to the
 # `ci-deployers` group; deploy/prod/05-rbac.yaml is that group's ceiling —
 # this workflow can redeploy the game and nothing else.
+#
+# Once the rollout is live, `release` publishes a GitHub pre-release for
+# the same commit: tag vYYYY.MM.DD-<sha7>, the Linux and Windows client
+# exports from the CI run that triggered this deploy, and notes = a fixed
+# header (what is live, how to run the downloads) + GitHub's generated list
+# of merged PRs since the previous release. A failed rollout means no
+# release, so every release is a build that was live.
 name: deploy
 
 on:
@@ -21,8 +28,9 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write  # the release job tags and publishes
   packages: write
+  actions: read    # the release job downloads the CI run's client exports
 
 concurrency: deploy-prod
 
@@ -96,3 +104,68 @@ jobs:
             kubectl -n space-adventure rollout undo deploy/server
             exit 1
           fi
+
+  release:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0  # tags: the previous release bounds the notes
+
+      - id: meta
+        name: Tag, previous tag, server build id
+        run: |
+          SHA='${{ github.event.workflow_run.head_sha }}'
+          echo "tag=v$(date -u +%Y.%m.%d)-${SHA:0:7}" >> "$GITHUB_OUTPUT"
+          echo "build=$(git rev-parse --short HEAD:server)" >> "$GITHUB_OUTPUT"
+          echo "prev=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Download the client exports from the CI run that was deployed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download '${{ github.event.workflow_run.id }}' -n client-linux -D client-linux
+          gh run download '${{ github.event.workflow_run.id }}' -n client-windows -D client-windows
+
+      - name: Package (restore the exec bit in case the artifact round-trip dropped it)
+        run: |
+          TAG='${{ steps.meta.outputs.tag }}'
+          chmod +x client-linux/SpaceAdventure.x86_64
+          tar -C client-linux -czf "SpaceAdventure-$TAG-linux-x86_64.tar.gz" .
+          (cd client-windows && zip -qr "../SpaceAdventure-$TAG-windows-x86_64.zip" .)
+          ls -la SpaceAdventure-*
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG='${{ steps.meta.outputs.tag }}'
+          SHA='${{ github.event.workflow_run.head_sha }}'
+          PREV='${{ steps.meta.outputs.prev }}'
+          BUILD='${{ steps.meta.outputs.build }}'
+          # What changed: GitHub's generated notes (merged PR titles, new
+          # contributors, full-changelog link) bounded by the previous v* tag.
+          if [ -n "$PREV" ]; then
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$TAG" -f target_commitish="$SHA" -f previous_tag_name="$PREV" \
+              --jq .body > changes.md
+          else
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$TAG" -f target_commitish="$SHA" --jq .body > changes.md
+          fi
+          cat > notes.md <<EOF
+          Live now at **wss://game.stevenholder.info/ws** — server build \`$BUILD\`, commit \`${SHA:0:7}\`.
+
+          ### Downloads
+          - **Windows** — \`SpaceAdventure-$TAG-windows-x86_64.zip\`: unzip, run \`SpaceAdventure.exe\`. It connects to the live server by itself.
+          - **Linux** — \`SpaceAdventure-$TAG-linux-x86_64.tar.gz\`: extract, run \`./SpaceAdventure.x86_64\`.
+
+          Keep the \`art/\` folder beside the executable (it is inside the archive). Another server: \`SpaceAdventure.exe -- -serverUrl ws://host:port/ws\`. Move with WASD, look with the mouse, E interacts, K skills, M map, J journal, Esc frees the cursor.
+
+          EOF
+          cat changes.md >> notes.md
+          gh release create "$TAG" --target "$SHA" --prerelease \
+            --title "Space Adventure $TAG" --notes-file notes.md \
+            SpaceAdventure-*.tar.gz SpaceAdventure-*.zip
