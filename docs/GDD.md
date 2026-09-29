@@ -1355,6 +1355,9 @@ the planet's sun), then STATS, then SKILLS. **B** opens the backpack: a
   prices, discovery range, credits, bag. **SKILLS**: the ten, with level.
 - One modal at a time: opening C or B closes the shop, journal, party
   and skills panels.
+- **Every panel drags by its header** and stays where it was put, per
+  panel, across sessions (`user://sa.cfg` `[panels]`); at least the
+  header always stays on screen.
 - Placeholder gear: the Scout set (helmet, suit, leggings, gloves,
   boots, pack) and the Rabbit's Foot at the quartermaster, so slots have
   something to hold before armor matters.

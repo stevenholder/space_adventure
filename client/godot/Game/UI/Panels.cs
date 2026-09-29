@@ -71,18 +71,90 @@ namespace SpaceAdventure.Game.UI
     /// <summary>
     /// A centered modal panel with a header; the base for shop/bags/sheet.
     /// </summary>
+    /// <summary>
+    /// A grip over a panel's header: press to grab, the panel follows the
+    /// pointer until release, clamped to the screen. Follows via _Process,
+    /// not GuiInput, so a fast drag that leaves the header keeps hold.
+    /// </summary>
+    public partial class DragHandle : Control
+    {
+        public Control Target;
+        public Control Bounds;
+        public System.Action OnDropped;
+        private bool _dragging;
+        private Vector2 _grab;
+
+        public override void _Ready()
+        {
+            MouseFilter = MouseFilterEnum.Stop;
+            MouseDefaultCursorShape = CursorShape.Move;
+        }
+
+        public override void _GuiInput(InputEvent e)
+        {
+            if (e is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
+            {
+                if (mb.Pressed)
+                {
+                    _dragging = true;
+                    _grab = GetGlobalMousePosition() - Target.GlobalPosition;
+                    AcceptEvent();
+                }
+                else if (_dragging) Release();
+            }
+        }
+
+        public override void _Process(double delta)
+        {
+            if (!_dragging) return;
+            if (!Input.IsMouseButtonPressed(MouseButton.Left)) { Release(); return; }
+            Target.GlobalPosition = GetGlobalMousePosition() - _grab;
+            Clamp(Target, Bounds);
+        }
+
+        private void Release()
+        {
+            _dragging = false;
+            OnDropped?.Invoke();
+        }
+
+        /// <summary>Keeps at least the header on screen.</summary>
+        public static void Clamp(Control target, Control bounds)
+        {
+            if (target == null || bounds == null) return;
+            Vector2 size = target.Size;
+            Vector2 max = bounds.Size - new Vector2(Mathf.Min(size.X, 120f), 40f);
+            Vector2 p = target.GlobalPosition;
+            target.GlobalPosition = new Vector2(Mathf.Clamp(p.X, 0f, Mathf.Max(0f, max.X)), Mathf.Clamp(p.Y, 0f, Mathf.Max(0f, max.Y)));
+        }
+    }
+
     public abstract class ModalView
     {
         protected readonly PanelContainer Box;
         private readonly VBoxContainer _body;
 
+        private readonly Control _root;
+        private readonly string _key;
+
         protected ModalView(Control root, string title, float width, float top = 0.18f)
         {
+            _root = root;
+            _key = title.ToLowerInvariant().Replace(' ', '_');
             Box = Styles.Panel(Styles.SkewNone);
             Styles.PinAt(Box, 0.5f, top, width);
             Box.Visible = false;
             VBoxContainer stack = Styles.Body(Box);
-            stack.AddChild(Styles.Header(title));
+            VBoxContainer header = Styles.Header(title);
+            stack.AddChild(header);
+            // The header is the grip: drag the panel anywhere, and it stays
+            // there across sessions (user://sa.cfg [panels]).
+            // Parented to the title LABEL, not the header container: a
+            // container lays its children out, and the grip would become a
+            // zero-height row that nothing can press.
+            var grip = new DragHandle { Target = Box, Bounds = root, OnDropped = SavePosition };
+            header.GetChild<Control>(0).AddChild(grip);
+            grip.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             _body = Styles.Column(2);
             stack.AddChild(_body);
             root.AddChild(Box);
@@ -93,8 +165,42 @@ namespace SpaceAdventure.Game.UI
         public void Show(bool on)
         {
             Box.Visible = on;
-            if (on) Rebuild();
+            if (on)
+            {
+                Rebuild();
+                RestorePosition();
+            }
         }
+
+        // ---- position memory --------------------------------------------
+
+        private const string ConfigPath = "user://sa.cfg";
+        private bool _restored;
+
+        private void RestorePosition()
+        {
+            if (_restored) { DragHandle.Clamp(Box, _root); return; }
+            _restored = true;
+            var cf = new ConfigFile();
+            if (cf.Load(ConfigPath) != Error.Ok) return;
+            if (!cf.HasSectionKey("panels", _key)) return;
+            Vector2 at = cf.GetValue("panels", _key).AsVector2();
+            // Deferred: the panel's size is known only after a layout pass.
+            Box.CallDeferred(Control.MethodName.SetPosition, at);
+            Callable.From(() => DragHandle.Clamp(Box, _root)).CallDeferred();
+        }
+
+        private void SavePosition()
+        {
+            var cf = new ConfigFile();
+            cf.Load(ConfigPath);
+            cf.SetValue("panels", _key, Box.Position);
+            cf.Save(ConfigPath);
+        }
+
+        /// <summary>Screen position, for the rig's drag proof.</summary>
+        public Vector2 Position => Box.Position;
+        public Vector2 HeaderCentre => Box.GlobalPosition + new Vector2(Box.Size.X * 0.5f, 18f);
 
         /// <summary>Clears and repopulates the body from current state.</summary>
         public void Rebuild()

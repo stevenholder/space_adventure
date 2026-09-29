@@ -535,6 +535,29 @@ namespace SpaceAdventure.Game
             {
                 OpenUiPanel(panel);
                 await Wait(1.0); // refresh round trip
+
+                // -uiDragDemo: grab the open panel by its header and drag it
+                // 300 px right, 120 px down through Godot's own input path,
+                // then report where it landed and what was saved.
+                if (Flag("-uiDragDemo"))
+                {
+                    UI.ModalView target = panel switch { "backpack" or "bags" => _bagsView, "journal" => _journalView, "skills" => _skillsView, "party" => _partyView, _ => _sheetView };
+                    Vector2 from = target.HeaderCentre, to = from + new Vector2(300, 120);
+                    Vector2 before = target.Position;
+                    Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = from, GlobalPosition = from });
+                    await Wait(0.1);
+                    for (int i = 1; i <= 6; i++)
+                    {
+                        Vector2 at = from.Lerp(to, i / 6f);
+                        Godot.Input.WarpMouse(at);
+                        Godot.Input.ParseInputEvent(new InputEventMouseMotion { Position = at, GlobalPosition = at });
+                        await Wait(0.05);
+                    }
+                    Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = to, GlobalPosition = to });
+                    await Wait(0.2);
+                    var cf = new ConfigFile(); cf.Load("user://sa.cfg");
+                    GD.Print($"ui: dragged {panel} {before} -> {target.Position}, saved={cf.HasSection("panels")}");
+                }
             }
 
             if (_rigLamp && _sun != null)
