@@ -92,8 +92,10 @@ func TestResolveColliders_DegenerateCentre(t *testing.T) {
 			t.Fatalf("outVel = %v, want finite", outVel)
 		}
 	}
-	// Degenerate fallback: pushed out along up by the full body radius.
-	wantPos := [3]float64{0, -BodySphereH + BodyRadius, 0}
+	// Interior centre: out through the NEAREST face by half + radius (all
+	// faces of the unit cube tie; the scan picks x), not straight up by the
+	// radius -- that left the body inside the wall.
+	wantPos := [3]float64{1 + BodyRadius, -BodySphereH, 0}
 	if outPos != wantPos {
 		t.Fatalf("outPos = %v, want %v", outPos, wantPos)
 	}

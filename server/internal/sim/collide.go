@@ -112,6 +112,27 @@ func nearestBox(c Vec, radius float64, col protocol.Collider, up Vec) (hit bool,
 	qConj := Quat{-q[0], -q[1], -q[2], q[3]}
 
 	local := Rotate(qConj, c.Sub(center))
+
+	// A centre INSIDE the box is decided here, in the box's own frame,
+	// not by the distance below: the rotate round trip leaves ~1e-8 of
+	// noise, so "dist <= radius" with a zero radius (line of sight, a
+	// projectile's path) missed interior points and every NPC saw and shot
+	// through every wall. Exit along the nearest face.
+	if math.Abs(local[0]) <= half[0] && math.Abs(local[1]) <= half[1] && math.Abs(local[2]) <= half[2] {
+		axis, pen := 0, half[0]-math.Abs(local[0])
+		for i := 1; i < 3; i++ {
+			if p := half[i] - math.Abs(local[i]); p < pen {
+				axis, pen = i, p
+			}
+		}
+		var out Vec
+		out[axis] = 1
+		if local[axis] < 0 {
+			out[axis] = -1
+		}
+		return true, Rotate(q, out), radius + pen
+	}
+
 	clamped := Vec{
 		clampf(local[0], -half[0], half[0]),
 		clampf(local[1], -half[1], half[1]),
@@ -121,10 +142,7 @@ func nearestBox(c Vec, radius float64, col protocol.Collider, up Vec) (hit bool,
 
 	diff := c.Sub(closest)
 	dist := diff.Len()
-	// Strictly greater: a zero-radius probe (line of sight, a projectile's
-	// path) sitting INSIDE the shape has dist 0 and must count as a hit.
-	// With >= it never did, and every NPC saw and shot through every wall.
-	if dist > radius {
+	if dist >= radius {
 		return false, Vec{}, 0
 	}
 	if dist < degenEps {
