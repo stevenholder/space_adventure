@@ -999,6 +999,121 @@ in the phase PR.
 - **C65 Budget holds.** 120 fps capped, worst frame under 16.7 ms with
   the new UI live (framestats).
 
+# Phase 9 — a world worth walking to
+
+### Where Phase 9 stands (2026-09-03)
+
+Built and green on kind: C66–C71 PASS (docs/QA-STATUS.md "Phase 9").
+The kit tiles, the camp and range are rebuilt on layouts, the solver
+placed the outpost and the relay, and the audit test holds every site
+to the clearance rules. Gallery: poi-range-colony.png,
+poi-camp-scrap.png. Owed to a human: eyeballing the two new POIs in a
+live walk (no solved routes reach them yet — routes are a natural next
+task alongside more POI templates).
+
+**Playable proof.** Stand anywhere and the horizon tells you where to go:
+one glowing mast per point of interest, each a different silhouette. Walk
+to one and it was BUILT, not stretched — walls tile from a modular kit,
+corners belong to posts, nothing clips, and who built it reads at a
+glance (Scrapyard lean vs Colony symmetry). Enter it and there is a
+reason you came: cover to fight through and a core to loot. The camp is
+the first rebuild; two new POIs follow from templates a solver placed.
+
+**Contracts** (wave 0, landed with this section): GDD "World art style
+guide" — the two builders, the 4 m module grid, the mast/horizon math,
+POI anatomy, the solver's clearance rules.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | Kit generator: wall4/corner/gate4/tower/mast/hab/shack × two faction skins, recipes + manifest ids | `art/tools/gen_kit.py`, `art/recipes/` | `npm --prefix art test` |
+| 2 | verify.mjs learns cell bounds: a kit GLB must fit its declared 4 m cells + skirt | `art/tools/verify.mjs` | red on a violating piece |
+| 3 | Zone schema v2: `layout` (kit placements on the grid) with colliders DERIVED from it, camp/range migrated | `server/internal/defs`, `server/data/zones/` | go test + t-fleet unchanged |
+| 4 | Client renders layouts: tile modules per placement, posts own corners, skirts down — stretched-box path retired | `client-unity/Assets/Game/Structures.cs` | screenshots, no clipping |
+| 5 | Camp rebuilt on the Scrapyard kit; spawn + range get Colony dressing | `server/data/zones/`, art | gallery + live look |
+| 6 | Masts: emissive tips, per-POI silhouettes; compass discovery gated by the visibility formula | art + `UI/HudView.cs` | bearing + visibility unit test |
+| 7 | Placement solver: clearance/slope/spacing rules from the seed, emits zone JSON for review | `server/cmd/server` (new subcommand) | t30 clearance audit |
+| 8 | Two new POIs from templates (one Scrapyard loot pocket, one Colony relay), loot cores wired | zones + `server/data/loot.json` | t-fleet + live loot run |
+| 9 | QA: gallery per POI, C65 re-run, criteria table | `test/out/ui/`, docs | C66–C71 |
+
+### Acceptance criteria
+
+- **C66 The kit is honest.** Every kit piece passes verify (cell bounds,
+  skirt, tri budget); no visual in the world is a unit box scaled past
+  its banded axis.
+- **C67 Nothing clips.** The rebuilt camp has no interpenetrating
+  pieces (pairwise bounds check in the layout validator) and the fleet
+  passes unchanged against its colliders.
+- **C68 Landmarks work.** Each POI mast's height clears the visibility
+  formula for its intended discovery range; compass markers appear at
+  discovery range, not before.
+- **C69 The solver is a contract.** Same seed, same sites; every
+  clearance rule holds, proven by an audit test (t30) not a promise.
+- **C70 POIs pay off.** Two new POIs live with guarded loot cores;
+  killing the guards and looting the core works end to end (t29-style
+  run extended or a sibling).
+- **C71 Budget holds.** 120 fps capped, worst frame < 16.7 ms with the
+  new world live.
+
+# Phase 10 — missions, parties, and the bounty
+
+### Where Phase 10 stands (2026-09-08)
+
+Built and green on kind: C72–C77 recorded (docs/QA-STATUS.md "Phase
+10"). Server: parties, the mission engine (kill/scout/fetch,
+party-wide credit, the dispatcher board at the relay), and the bounty
+machine (post → race → claim → expire/steal/abandon → re-post), all
+wire- or white-box-tested. Client: journal (J), party panel (P),
+look+E invites, priority banner, WARLORD compass marker. Owed to
+humans: a two-player live session — party up, share a camp fight,
+claim one warlord together.
+
+**Playable proof.** Walk to the relay and the dispatcher has work: kill
+missions, scout missions, fetch missions — take them alone or invite a
+friend (look + E, or the party panel) and every kill counts for both of
+you, full pay each. Then the HUD toast fires: a warlord has been sighted
+at a POI. First party to accept claims it; kill it together inside 15
+minutes or it re-posts for someone else. Everything — offers, claims,
+progress, pay — is the server's word; the journal just shows it.
+
+**Contracts** (wave 0, landed with this section): GDD "Missions and
+parties", PROTOCOL cmd ops `0x0006`–`0x000C` and events
+`0x0007`–`0x000B`, `server/data/missions.json`.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | Party core: membership, invite/respond/leave cmds, roster events, disconnect handling | `server/internal/server/party.go` | unit tests + t31 |
+| 2 | Party client: P panel (roster, invite, accept toast), look+E invite path | `client-unity/Assets/Game/UI/` | typecheck + live |
+| 3 | Mission registry + per-player persisted state + list/accept/abandon cmds | `server/internal/missions/`, store | unit tests |
+| 4 | Progress engine: kill/scout/fetch hooks on existing event paths, party-wide credit, completion pays | server | unit tests + t32 |
+| 5 | Dispatcher NPC at the relay + board flow + fetch turn-in | zones, `server/data/missions.json` | t32 |
+| 6 | Journal UI (J): offers, active missions, progress bars; HUD objective line + compass marker to the objective POI | `client-unity/Assets/Game/UI/` | screenshots |
+| 7 | Bounty lifecycle: warlord archetype, spawn at solver-eligible POI, claim/expiry/release state machine, priority_offer broadcast | server | unit tests |
+| 8 | t33: two-client claim RACE (exactly one wins), party-shared completion, expiry re-post | `test/t33-bounty.mjs` | the test |
+| 9 | QA: C72–C77 recorded, gallery, fleet unchanged | docs, `test/out/ui/` | criteria |
+
+### Acceptance criteria
+
+- **C72 Parties work.** Invite (both paths), accept, leave, dissolve;
+  roster events reach every member; a member's disconnect updates the
+  rest within a tick's breath. (t31)
+- **C73 Personal missions pay.** Kill, scout and fetch each complete
+  end to end and pay their credits exactly once; fetch consumes the
+  items at turn-in; abandon works. (t32)
+- **C74 Party credit is party-wide.** Two clients in a party: one acts,
+  both progress, both get full pay. (t32)
+- **C75 The bounty is exactly-one.** Two clients race `mission_accept`:
+  one claim, one `"claimed"` refusal — the seat-race proof, replayed
+  for missions. (t33)
+- **C76 The bounty never wedges.** Expiry releases and re-posts; a
+  stolen kill (non-claimant) releases without pay; all-claimants-offline
+  releases. (t33 + unit)
+- **C77 Nothing else moved.** The full harness fleet t2–t29 passes
+  unchanged; frame budget holds with the journal open.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.

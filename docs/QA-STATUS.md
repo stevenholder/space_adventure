@@ -301,6 +301,44 @@ ulp — Go's `Sqrt(dot)` against TypeScript's `Math.hypot` — this follows Go.
 `Step.Hypot` replicates Go's scaled hypot algorithm rather than approximating
 it with `sqrt(x*x + y*y)`.
 
+## Phase 10 — C72–C77, run 2026-09-08 (kind)
+
+Missions, parties, and the bounty — server-authoritative end to end; the
+client journal renders events and asserts nothing.
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C72 | Parties: invite (both paths), accept, leave, dissolve, disconnect | wire-tested lifecycle: toast names the inviter, rosters reach every member, leaver gets the empty roster, dissolve-at-one on leave AND on disconnect, 4-cap refuses the fifth (`TestPartyLifecycle`, `TestPartyCap`) | **PASS** |
+| C73 | Personal missions end to end | cmd surface wire-tested: starter filter at the quartermaster vs the dispatcher's full board, accept/duplicate/abandon/re-abandon, turn-in gates; fetch VERIFIED live in-test — the fresh player's 120 cells cover the 30-cell salvage, items consumed, complete event fired, credits paid (`TestMissionCmdSurface`) | **PASS** (kill/scout progress: engine unit paths + the live playtest) |
+| C74 | Party-wide credit, full pay each | kill credit iterates partyMembers at the kill, captured under s.mu and paid after (fire → missionKillCredit); scout sweep completes through the party the same way | **PASS by construction + review** (two-client live run rides the playtest) |
+| C75 | Bounty claim is exactly-one | live two-client race over the wire: one StatusOK, one refused `"claimed"` (`TestBountyRaceAndRelease`) — the seat-race proof, replayed | **PASS** |
+| C76 | Bounty never wedges | abandon-by-last releases and arms the re-post (wire); expiry releases and despawns the warlord (white-box clock); disconnect routes through the same abandon; stolen kill releases unpaid (code path shared with expiry) | **PASS** |
+| C77 | Nothing else moved | t14/t16/t18/t29 green against the deployed build (t18 solo — its known back-to-back flake); full go vet + test green incl. the third store migration on SQLite and Postgres | **PASS** |
+
+Owed to the playtest: two humans partying up live (look+E and the P
+panel), a shared camp fight progressing both journals, and one real
+warlord claim. The gallery shots are LIVE captures — the kind server's
+bounty broadcast is visible in them (banner, WARLORD compass marker,
+CLAIM button).
+
+## Phase 9 — C66–C71, run 2026-09-03 (kind)
+
+The world rebuild: zone layouts on the 4 m kit grid, one source deriving
+both colliders and visuals; camp and range rebuilt; two solver-placed
+POIs live (outpost, relay).
+
+| # | Asserts | Measured | Verdict |
+|---|---|---|---|
+| C66 | Kit honest: cell bounds, skirts, budgets; no stretched boxes | 14 pieces pass the verify cell gate (36–144 tris each); the client's stretched-box collider visual is deleted — box colliders draw nothing, kit props ARE the walls | **PASS** |
+| C67 | Nothing clips; fleet green on the new colliders | corners belong to posts (walls butt in, dedupe-tested), pieces confined to their cells by the art gate; t13/t14/t16/t18/t29 green against the rebuilt world (21-check journey through the new 2.4 m gate) | **PASS** |
+| C68 | Landmarks: one mast per POI, discovery at visibility range | audit test: exactly one mast per layout, mast spacing ≥ 120 m; compass gates OUTPOST/RELAY markers at 84 m (12.6 m mast via visible ≈ 22.6 + √(300·h)) | **PASS** (marker gating verified by code + formula; live eyeball rides the playtest) |
+| C69 | Solver deterministic; every clearance holds in an audit | `server poi` byte-identical across runs; `TestZoneSiteClearance` audits every committed zone against spawn, 6 landmarks, 11 craters and every other zone (legacy camp/range at zero margin, solver sites at +10 m) | **PASS** |
+| C70 | Two POIs pay off | outpost live with 2 grunts + 1 gunner (kills roll chance-1.0 tables, walk-over pickup — the t29-proven loop); relay live as the safe Colony landmark; spawn census confirms both | **PASS** |
+| C71 | Budget holds with the new world | framestats 120.0 fps avg, worst 8.5 ms, colliders 11 → 28 | **PASS** |
+
+Terrain recaptured (two new flatten discs change the field):
+world-seed1337.json sha256_16 c53cdbbe57d5ead1; t2 re-verified against it.
+
 ## Phase 8 — C60–C65, run 2026-09-03 (kind)
 
 The UI refresh: everything IMGUI moved to code-built UI Toolkit in the

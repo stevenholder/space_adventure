@@ -39,7 +39,12 @@ const (
 	// outQueue is the per-connection outbound buffer. Snapshots are full
 	// state, so when the queue is full the newest snapshot is dropped
 	// rather than blocking the tick loop.
-	outQueue = 32
+	// 256, up from 32: send() now KILLS a client whose queue overflows
+	// (client.go send — the poison-client wedge), so the buffer must absorb
+	// any legitimate burst. The join replay alone is ~30 frames back to
+	// back; 256 small frames is cheap insurance against killing a healthy
+	// client whose writer is one syscall behind.
+	outQueue = 256
 	// worldEntityIDBase is where zone-placed NPC/target entity ids start
 	// (see New): far above where player ids, which start at 1 and increment
 	// per join, will reach in one server run.
@@ -59,8 +64,12 @@ type Server struct {
 	// tick's stream. Without this, DropLoot's LootDropped event went to a
 	// nil ctx.Events and no client ever saw one.
 	pendingEvents []protocol.Event
-	propsF     []byte // pre-encoded props frame, built once at startup
-	colliders  []protocol.Collider
+	// Phase 10 bounty machine (bounty.go), guarded by mu.
+	bounty         *bountyState
+	bountyRepostAt time.Time
+	bountyRotation int
+	propsF         []byte // pre-encoded props frame, built once at startup
+	colliders      []protocol.Collider
 
 	reg   *defs.Registry
 	world *sim.World // static NPC/target entities, composed from zones
@@ -326,6 +335,22 @@ func (s *Server) OnlineCount() int {
 func (s *Server) Run(ctx context.Context) {
 	t := time.NewTicker(time.Second / time.Duration(s.tickHz))
 	defer t.Stop()
+	// The scout sweep walks positions against POI discovery radii once a
+	// second — its own cadence, its own goroutine, no identity lock under
+	// s.mu (missions.go, "lock order").
+	scout := time.NewTicker(time.Second)
+	defer scout.Stop()
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-scout.C:
+				s.scoutSweep()
+				s.bountyTick()
+			}
+		}
+	}()
 	var lastLog time.Time
 	for {
 		select {
@@ -632,6 +657,21 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	// After publishing, so every client that must hear the joiner's weapon
 	// is already in s.clients.
 	s.syncEquipped(c)
+	s.refreshScoutCache(c) // a reconnect arrives with its missions already live
+	// A live unclaimed bounty replays its offer to the joiner — the
+	// broadcast happened once, possibly before this client existed.
+	s.mu.Lock()
+	if b := s.bounty; b != nil && !b.claimed {
+		c.send(msg{data: protocol.EncodeEvent(protocol.Event{
+			EntityID: b.entityID,
+			EventID:  protocol.EventPriorityOffer,
+			Data: encodeJSON(map[string]any{
+				"id": b.mission.ID, "poi": b.poi,
+				"expires_s": b.mission.ClaimMinutes * 60,
+			}),
+		})})
+	}
+	s.mu.Unlock()
 
 	// An owner's ship follows them across reconnects (GDD "Ownership":
 	// spawn on join). After publishing, so the spawn broadcast lands on a
@@ -648,9 +688,15 @@ func (s *Server) leave(c *client) {
 	}
 	id := c.entity.ID
 	s.freeSeat(c)
+	s.removeFromParty(c) // roster updates reach the survivors (GDD, Phase 10)
 	delete(s.clients, id)
 	s.history.Forget(id)
 	s.mu.Unlock()
+
+	// The bounty claim survives a member dropping only while ANY claimant
+	// remains online; the last disconnect releases it (GDD). Outside s.mu —
+	// it walks the claim under its own locking.
+	s.bountyClientGone(c)
 
 	if c.ident != nil {
 		c.ident.Close(context.Background())
@@ -671,6 +717,16 @@ func (s *Server) leave(c *client) {
 // writes any mutation back — the same read/mutate/write-back shape
 // identity.go's Mutate doc comment calls for.
 func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
+	// Party ops read and write OTHER clients, which cmdWorld's one-player
+	// view cannot; they take s.mu themselves and never touch the identity.
+	switch req.Opcode {
+	case protocol.OpPartyInvite, protocol.OpPartyRespond, protocol.OpPartyLeave:
+		return s.partyCmd(c, req)
+	case protocol.OpMissionList, protocol.OpMissionAccept,
+		protocol.OpMissionAbandon, protocol.OpMissionTurnin,
+		protocol.OpMissionShare:
+		return s.missionCmd(c, req)
+	}
 	var result protocol.CmdResult
 	var before, after string
 	c.ident.Mutate(func(p *store.Player) {
@@ -811,6 +867,18 @@ func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
 // follows a tick later from sim.StepTarget's own health check, reused
 // rather than duplicated here).
 func (s *Server) fire(c *client, f protocol.Fire) {
+	members, victimArch, victimID, killed := s.fireLocked(c, f)
+	if killed {
+		// Identity locks are only safe with s.mu released (doCmd's order);
+		// the attribution was captured under the lock, the pay happens here.
+		s.missionKillCredit(members, victimArch)
+		s.bountyResolveKill(c, victimID)
+	}
+}
+
+// fireLocked is fire's original body: everything that needs s.mu. It reports
+// a kill's attribution so the mission credit can run after release.
+func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, victimArch string, victimID uint32, killed bool) {
 	primary := c.ident.Snapshot().Equipped[slotPrimary]
 	wp, ok := s.weaponFor(primary)
 	if !ok {
@@ -909,7 +977,25 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 		for _, oc := range s.clients {
 			oc.send(msg{data: hitFrame})
 		}
+		if hit.HealthAfter == 0 {
+			killed = true
+			victimID = hit.Victim
+			victimArch = s.npcArchetypeOf(hit.Victim)
+			members = append([]*client{}, s.partyMembers(c)...)
+		}
 	}
+	return members, victimArch, victimID, killed
+}
+
+// npcArchetypeOf maps a victim entity id to its archetype id ("npc.grunt"),
+// or "" for anything that is not an AI-run NPC. Caller holds s.mu.
+func (s *Server) npcArchetypeOf(id uint32) string {
+	for _, n := range s.npcAI {
+		if n.ent.ID == id {
+			return n.arch.ID
+		}
+	}
+	return ""
 }
 
 // entityDef is ResolveShot's defOf callback.

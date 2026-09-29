@@ -1,5 +1,5 @@
 {
- "$comment": "Hostile encampment. Contract: docs/GDD.md 'Phase 3 - NPC combat at an encampment' and 'Static colliders' for the authoring frame. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; yaw in degrees about +y, 0 = facing +z. SITE: chosen by sweeping the sphere against ALL 19 world features - spawn, the range zone, the 6 landmarks AND the 11 craters - for maximum clearance (142 m, against a 44 m flatten reach). The first site cleared landmarks but not craters and sat 39 m from one, levelling it: t9 read 10 of 11 craters confirmed in the field. The range zone made the same mistake against a landmark. Anything the terrain audit checks for has to be in the avoid set, not just the things you remembered.",
+ "$comment": "Hostile encampment, rebuilt on the Phase 9 kit (GDD \"World art style guide\"): the layout block is the single source for perimeter walls -- colliders and visuals both derive from it (defs/layout.go). Hand-authored colliders below are only the pieces the kit does not cover (the cover-post sphere). Contract: docs/GDD.md 'Phase 3 - NPC combat at an encampment' and 'Static colliders' for the authoring frame. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; yaw in degrees about +y, 0 = facing +z. SITE: chosen by sweeping the sphere against ALL 19 world features - spawn, the range zone, the 6 landmarks AND the 11 craters - for maximum clearance (142 m, against a 44 m flatten reach). The first site cleared landmarks but not craters and sat 39 m from one, levelling it: t9 read 10 of 11 craters confirmed in the field. The range zone made the same mistake against a landmark. Anything the terrain audit checks for has to be in the avoid set, not just the things you remembered.",
  "version": 1,
  "id": "camp",
  "origin_dir": [
@@ -10,96 +10,6 @@
  "flatten_radius": 30.0,
  "flatten_falloff": 12.0,
  "colliders": [
-  {
-   "$note": "perimeter wall, north",
-   "kind": "box",
-   "pos": [
-    0.0,
-    1.5,
-    14.0
-   ],
-   "half": [
-    16.0,
-    1.5,
-    0.4
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "perimeter wall, south",
-   "kind": "box",
-   "pos": [
-    0.0,
-    1.5,
-    -14.0
-   ],
-   "half": [
-    16.0,
-    1.5,
-    0.4
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "perimeter wall, east",
-   "kind": "box",
-   "pos": [
-    15.6,
-    1.5,
-    0.0
-   ],
-   "half": [
-    0.4,
-    1.5,
-    14.0
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "west wall, north half \u2014 the gap between these two is the entrance",
-   "kind": "box",
-   "pos": [
-    -15.6,
-    1.5,
-    8.0
-   ],
-   "half": [
-    0.4,
-    1.5,
-    6.0
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "west wall, south half",
-   "kind": "box",
-   "pos": [
-    -15.6,
-    1.5,
-    -8.0
-   ],
-   "half": [
-    0.4,
-    1.5,
-    6.0
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "inner cover block",
-   "kind": "box",
-   "pos": [
-    3.0,
-    1.0,
-    2.0
-   ],
-   "half": [
-    2.0,
-    1.0,
-    2.0
-   ],
-   "yaw": 30.0
-  },
   {
    "$note": "cover post \u2014 the sphere collider path",
    "kind": "sphere",
@@ -271,5 +181,97 @@
    ],
    "yaw": 95.0
   }
- ]
+ ],
+ "layout": {
+  "faction": "scrap",
+  "pieces": [
+   {
+    "$note": "perimeter, north (8 modules)",
+    "kind": "wall_run",
+    "from": [
+     -16.0,
+     0.0,
+     14.0
+    ],
+    "to": [
+     16.0,
+     0.0,
+     14.0
+    ]
+   },
+   {
+    "$note": "perimeter, south",
+    "kind": "wall_run",
+    "from": [
+     -16.0,
+     0.0,
+     -14.0
+    ],
+    "to": [
+     16.0,
+     0.0,
+     -14.0
+    ]
+   },
+   {
+    "$note": "perimeter, east",
+    "kind": "wall_run",
+    "from": [
+     16.0,
+     0.0,
+     -14.0
+    ],
+    "to": [
+     16.0,
+     0.0,
+     14.0
+    ]
+   },
+   {
+    "$note": "perimeter, west -- module 4 is the gate (z -2..2, the old entrance)",
+    "kind": "wall_run",
+    "from": [
+     -16.0,
+     0.0,
+     -14.0
+    ],
+    "to": [
+     -16.0,
+     0.0,
+     14.0
+    ],
+    "gate_at": 4
+   },
+   {
+    "$note": "the old inner cover block, as a kit piece",
+    "kind": "cover4",
+    "pos": [
+     3.0,
+     0.0,
+     2.0
+    ],
+    "yaw": 30.0
+   },
+   {
+    "$note": "THE landmark: one mast per POI (C68)",
+    "kind": "mast",
+    "pos": [
+     6.0,
+     0.0,
+     6.0
+    ],
+    "yaw": 10.0
+   },
+   {
+    "$note": "squat shack, the camp reads as lived-in",
+    "kind": "shack",
+    "pos": [
+     -8.0,
+     0.0,
+     -7.0
+    ],
+    "yaw": 8.0
+   }
+  ]
+ }
 }

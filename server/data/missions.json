@@ -1,0 +1,65 @@
+{
+ "$comment": "Mission templates. Contract: docs/GDD.md 'Missions and parties' (Phase 10). Types: kill (count, optional archetype), scout (poi = zone id, completes on entering its mast-discovery radius), fetch (item + count, turn-in at the board consumes them), bounty (the limited one -- posted by the bounty scheduler, never offered at the board; 'archetype' names the NPC it spawns). Rewards are credits through the normal wallet. board=true is offered by the dispatcher; the quartermaster offers starter=true ones too.",
+ "version": 1,
+ "missions": [
+  {
+   "id": "mission.cull",
+   "type": "kill",
+   "name": "Thin the herd",
+   "text": "Hostiles at the camp and the outpost are getting bold. Put five down.",
+   "count": 5,
+   "reward": 150,
+   "board": true,
+   "starter": true
+  },
+  {
+   "id": "mission.gunners",
+   "type": "kill",
+   "name": "Counter-battery",
+   "text": "The ranged ones first. Kill three gunners.",
+   "archetype": "npc.gunner",
+   "count": 3,
+   "reward": 200,
+   "board": true
+  },
+  {
+   "id": "mission.scout.outpost",
+   "type": "scout",
+   "name": "Eyes on the outpost",
+   "text": "Get close enough to the scrapyard outpost to read its mast.",
+   "poi": "outpost",
+   "reward": 75,
+   "board": true,
+   "starter": true
+  },
+  {
+   "id": "mission.scout.camp",
+   "type": "scout",
+   "name": "Eyes on the camp",
+   "text": "Confirm the encampment is where we think it is.",
+   "poi": "camp",
+   "reward": 75,
+   "board": true
+  },
+  {
+   "id": "mission.salvage",
+   "type": "fetch",
+   "name": "Cell salvage",
+   "text": "Bring back thirty energy cells scavenged from hostile drops.",
+   "item": "ammo.cell",
+   "count": 30,
+   "reward": 120,
+   "board": true
+  },
+  {
+   "id": "mission.bounty.warlord",
+   "type": "bounty",
+   "name": "PRIORITY: warlord sighted",
+   "text": "A warlord is rallying the scrap gangs. One party takes the contract; end them.",
+   "archetype": "npc.warlord",
+   "reward": 500,
+   "claim_minutes": 15,
+   "repost_minutes": 2
+  }
+ ]
+}

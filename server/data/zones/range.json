@@ -1,5 +1,5 @@
 {
- "$comment": "Target range, 110 m from spawn. Contract: docs/GDD.md 'Static colliders'. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; lane runs along +x; yaw in degrees about +y, 0 = facing +z. SITE CHOICE IS LOAD-BEARING: flatten_radius 32 + flatten_falloff 12 levels terrain out to 44 m, so the origin must clear both the spawn disc and every landmark by more than that. The first placement was 60 m from spawn on a bearing that put it 8 m from the 'beacon' landmark -- it flattened the landmark away (t9 read 154 m against an expected 165 m) and its falloff band tilted the spawn disc to 2.59 m against a 0.5 m tolerance. This site is 110 m from spawn and 161 m from the nearest landmark.",
+ "$comment": "Target range on the Phase 9 kit (Colony skin): lane walls and backstop derive from the layout block; the 34 m hand walls became 32 m (whole 4 m modules), backstop 12.6 -> 12 m. Originally: 110 m from spawn. Contract: docs/GDD.md 'Static colliders'. Local frame: +x east, +y up as height ABOVE the terrain surface, +z north; lane runs along +x; yaw in degrees about +y, 0 = facing +z. SITE CHOICE IS LOAD-BEARING: flatten_radius 32 + flatten_falloff 12 levels terrain out to 44 m, so the origin must clear both the spawn disc and every landmark by more than that. The first placement was 60 m from spawn on a bearing that put it 8 m from the 'beacon' landmark -- it flattened the landmark away (t9 read 154 m against an expected 165 m) and its falloff band tilted the spawn disc to 2.59 m against a 0.5 m tolerance. This site is 110 m from spawn and 161 m from the nearest landmark.",
  "version": 1,
  "id": "range",
  "origin_dir": [
@@ -10,51 +10,6 @@
  "flatten_radius": 32.0,
  "flatten_falloff": 12.0,
  "colliders": [
-  {
-   "$note": "side wall, north",
-   "kind": "box",
-   "pos": [
-    12.0,
-    1.25,
-    6.0
-   ],
-   "half": [
-    17.0,
-    1.25,
-    0.3
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "side wall, south",
-   "kind": "box",
-   "pos": [
-    12.0,
-    1.25,
-    -6.0
-   ],
-   "half": [
-    17.0,
-    1.25,
-    0.3
-   ],
-   "yaw": 0.0
-  },
-  {
-   "$note": "backstop",
-   "kind": "box",
-   "pos": [
-    29.0,
-    1.5,
-    0.0
-   ],
-   "half": [
-    0.4,
-    1.5,
-    6.3
-   ],
-   "yaw": 0.0
-  },
   {
    "$note": "cover post - the sphere collider path",
    "kind": "sphere",
@@ -152,5 +107,62 @@
    ],
    "yaw": 90.0
   }
- ]
+ ],
+ "layout": {
+  "faction": "colony",
+  "pieces": [
+   {
+    "$note": "lane wall, north (8 modules)",
+    "kind": "wall_run",
+    "from": [
+     -4.0,
+     0.0,
+     6.0
+    ],
+    "to": [
+     28.0,
+     0.0,
+     6.0
+    ]
+   },
+   {
+    "$note": "lane wall, south",
+    "kind": "wall_run",
+    "from": [
+     -4.0,
+     0.0,
+     -6.0
+    ],
+    "to": [
+     28.0,
+     0.0,
+     -6.0
+    ]
+   },
+   {
+    "$note": "backstop (3 modules)",
+    "kind": "wall_run",
+    "from": [
+     28.0,
+     0.0,
+     -6.0
+    ],
+    "to": [
+     28.0,
+     0.0,
+     6.0
+    ]
+   },
+   {
+    "$note": "colony mast: the range is a POI too (C68). BESIDE the lane mouth, not in it \u2014 a 1x1 collider at z=0 would eat t14/t18 shots.",
+    "kind": "mast",
+    "pos": [
+     -8.0,
+     0.0,
+     10.0
+    ],
+    "yaw": 0.0
+   }
+  ]
+ }
 }

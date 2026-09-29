@@ -20,6 +20,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Label _credits;
         private readonly VisualElement _compass;
         private readonly Label _flight;
+        private readonly Label _banner;
         private readonly List<(Label label, double bearing)> _markers = new();
         private readonly Label[] _log;
         private readonly VisualElement _logBox;
@@ -104,6 +105,15 @@ namespace SpaceAdventure.Game.UI
             _flight.style.translate = new Translate(Length.Percent(-50), 0);
             _flight.style.display = DisplayStyle.None;
             root.Add(_flight);
+
+            // ---- mission/party banner, below the flight line -----------------
+            _banner = Styles.Display_("", 15, Styles.Amber);
+            _banner.style.position = Position.Absolute;
+            _banner.style.top = 76;
+            _banner.style.left = Length.Percent(50);
+            _banner.style.translate = new Translate(Length.Percent(-50), 0);
+            _banner.style.display = DisplayStyle.None;
+            root.Add(_banner);
 
             // ---- crosshair ---------------------------------------------------
             foreach (var (w, h) in new[] { (2f, 12f), (12f, 2f) })
@@ -247,6 +257,14 @@ namespace SpaceAdventure.Game.UI
         {
             _ammoMag.text = armed ? mag.ToString() : "--";
             _ammoReserve.text = armed ? $"/ {reserve}" : "";
+        }
+
+        /// <summary>Mission/party banner under the compass; null hides it.</summary>
+        public void SetBanner(string text, bool priority)
+        {
+            _banner.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+            _banner.text = text ?? "";
+            _banner.style.color = priority ? Styles.Amber : Styles.Good;
         }
 
         /// <summary>Flight readout; null hides it (on foot).</summary>

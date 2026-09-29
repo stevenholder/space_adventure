@@ -32,6 +32,7 @@
 //   footprint is centred in XZ. A future structure that is NOT symmetric
 //   about its local X would need the mirror handled rather than absorbed.
 
+using System.Collections.Generic;
 using UnityEngine;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
@@ -64,10 +65,15 @@ namespace SpaceAdventure.Game
             _root.transform.SetParent(_parent, false);
             if (colliders == null) return;
 
+            // Phase 9: BOX colliders no longer get a visual here — zone
+            // layouts derive both the colliders and the kit-piece props from
+            // one source (server defs/layout.go), so the props message
+            // carries every wall's real model and the stretched-unit-box era
+            // is over. Spheres (cover posts) keep their path: no kit piece
+            // replaces them yet.
             foreach (Sim.Collider c in colliders)
             {
                 if (c.Kind == Sim.ColliderKind.Sphere) AddSphere(c);
-                else AddBox(c);
             }
         }
 
@@ -84,11 +90,19 @@ namespace SpaceAdventure.Game
         ///
         /// No collider of their own. Walk straight through a barrel.
         /// </summary>
+        /// <summary>
+        /// POI masts, harvested from the props (asset struct.mast.*): world
+        /// position + whether the builder was Scrapyard. The compass gates
+        /// discovery on these (GDD "Silhouette and the 23 m horizon").
+        /// </summary>
+        public readonly List<(Vector3 pos, bool scrap)> Masts = new List<(Vector3, bool)>();
+
         public void BuildProps(Prop[] props)
         {
             if (_propRoot != null) Object.Destroy(_propRoot);
             _propRoot = new GameObject("props");
             _propRoot.transform.SetParent(_parent, false);
+            Masts.Clear();
             if (props == null) return;
 
             foreach (Prop p in props)
@@ -114,6 +128,9 @@ namespace SpaceAdventure.Game
                 // there yet, and a grey cube standing in for it would be more
                 // distracting than the gap.
                 _assets.Attach(p.Asset, go.transform, null);
+
+                if (p.Asset.StartsWith("struct.mast."))
+                    Masts.Add((go.transform.position, p.Asset.EndsWith(".scrap")));
             }
             // Logged like the colliders beside them, so a headless run says
             // whether the zone dressing arrived at all.
@@ -129,18 +146,6 @@ namespace SpaceAdventure.Game
         /// on a sphere world every wall has a different idea of which way is
         /// down.
         /// </summary>
-        private void AddBox(Sim.Collider c)
-        {
-            Vector3 up = TerrainMesh.ToUnity(Quat.Rotate(c.Rot, new Vec3(0, 1, 0)));
-            Vector3 fwd = TerrainMesh.ToUnity(Quat.Rotate(c.Rot, new Vec3(0, 0, 1)));
-
-            GameObject go = Mount("struct.wall", c);
-            go.transform.rotation = Quaternion.LookRotation(fwd, up);
-            go.transform.position = TerrainMesh.ToUnity(c.Center) - up * (float)c.Half.Y;
-            go.transform.localScale = new Vector3(
-                (float)c.Half.X * 2f, (float)c.Half.Y * 2f, (float)c.Half.Z * 2f);
-        }
-
         /// <summary>
         /// struct.post is a unit-RADIUS sphere centred on the origin, so it
         /// takes the collider's centre directly and a uniform scale. Only
