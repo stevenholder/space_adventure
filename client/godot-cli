@@ -5,6 +5,7 @@
 #   ./client/godot-cli templates          install the export templates for this version
 #   ./client/godot-cli import             generate .godot/ (idempotent; build and run need it)
 #   ./client/godot-cli build [preset]     export a player to client/build/<preset>/ (default: Linux)
+#   ./client/godot-cli play-win           export Windows, stage under C:\Users\<you>\SpaceAdventure, launch natively against this WSL's IP
 #   ./client/godot-cli run [seconds]      run the packaged Linux player headless against the server
 #   ./client/godot-cli dev [seconds]      run from source, headless (no export needed)
 #   ./client/godot-cli play               run from source, windowed
@@ -183,6 +184,24 @@ case "$cmd" in
     "$0" import
     dotnet build "$proj/SpaceAdventure.csproj" -v q --nologo
     exec "$editor" --path "$proj" -- -serverUrl "${SA_SERVER_URL:-ws://127.0.0.1:18080/ws}" "$@"
+    ;;
+
+  play-win)
+    # Native Windows window from WSL: the WSLg X11 path cannot confine the
+    # mouse, so looking around does not work there. Exports the Windows
+    # preset, stages it under the Windows user's profile, and launches it
+    # against THIS WSL instance's IP -- under NAT networking Windows does not
+    # reach WSL's localhost, and the IP changes on reboot, so it is read at
+    # launch. -serverUrl / SA_SERVER_URL still win when given.
+    "$0" build Windows
+    winuser="$(cmd.exe /c 'echo %USERNAME%' 2>/dev/null | tr -d '\r')"
+    stage="/mnt/c/Users/$winuser/SpaceAdventure"
+    mkdir -p "$stage"
+    rsync -a --delete "$build/windows/" "$stage/"
+    ip="$(hostname -I | awk '{print $1}')"
+    url="${SA_SERVER_URL:-ws://$ip:18080/ws}"
+    echo "godot-cli: launching C:\\Users\\$winuser\\SpaceAdventure\\SpaceAdventure.exe against $url"
+    powershell.exe -NoProfile -Command "Start-Process -FilePath 'C:\Users\$winuser\SpaceAdventure\SpaceAdventure.exe' -WorkingDirectory 'C:\Users\$winuser\SpaceAdventure' -ArgumentList @('--','-serverUrl','$url')"
     ;;
 
   editor)

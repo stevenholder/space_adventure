@@ -123,7 +123,7 @@ namespace SpaceAdventure.Game
                     // Ambient stays flat and slightly blue, so the unlit side
                     // of the planet is legible without looking daylit.
                     AmbientLightSource = Godot.Environment.AmbientSource.Color,
-                    AmbientLightColor = new Color(0.10f, 0.11f, 0.15f),
+                    AmbientLightColor = new Color(0.17f, 0.18f, 0.24f),
                     AmbientLightEnergy = 1f,
                 },
             };

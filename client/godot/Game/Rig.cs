@@ -243,6 +243,19 @@ namespace SpaceAdventure.Game
 
             // -uiFace target|npc|hostile|player|wounded: aim the camera at
             // the nearest such entity, so a combat shot has something in frame.
+            // -uiPitch <deg> [-uiYaw <deg>]: look down (negative) or up, and
+            // turn, from wherever the rig stands -- a mouse move on demand.
+            string pitchArg = Arg("-uiPitch");
+            if (pitchArg != null)
+            {
+                float pitch = Mathf.DegToRad(float.Parse(pitchArg, CultureInfo.InvariantCulture));
+                float yaw = Mathf.DegToRad(float.Parse(Arg("-uiYaw") ?? "0", CultureInfo.InvariantCulture));
+                Vector3 eyeP = Eye, upP = eyeP.Normalized();
+                Vector3 fwdP = CameraForward.Slide(upP).Normalized().Rotated(upP, -yaw);
+                _fps.FaceToward(eyeP, eyeP + fwdP * (10f * Mathf.Cos(pitch)) + upP * (10f * Mathf.Sin(pitch)));
+                await Wait(0.1);
+            }
+
             string wantArg = Arg("-uiFace");
             if (wantArg == "rock")
             {

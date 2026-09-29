@@ -250,7 +250,7 @@ godot-join: check-server
 # from it, export via export_presets.cfg. No project lock, no licence, and it
 # fails on the errors Godot only prints (a C# exception does not fail the
 # process on its own).
-.PHONY: godot-import godot-build godot-run godot-dev godot-play
+.PHONY: godot-import godot-build godot-run godot-dev godot-play godot-play-win
 
 # Generates .godot/ (import cache, font import). Idempotent.
 godot-import:
@@ -271,6 +271,10 @@ godot-run: check-server
 # From source, headless, no export: the fast loop while iterating.
 godot-dev:
 	$(GODOT_CLI) dev $(SECS)
+
+# Native Windows window from WSL (the WSLg X11 window cannot capture the mouse).
+godot-play-win:
+	$(GODOT_CLI) play-win
 
 # From source, windowed (WSLg or a native desktop).
 godot-play:
