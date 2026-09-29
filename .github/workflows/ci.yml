@@ -62,10 +62,17 @@ jobs:
           version: ${{ steps.godot.outputs.version }}
           use-dotnet: true
           include-templates: true
-      - run: ./client/godot-cli build
+      - run: ./client/godot-cli build Linux
+        env:
+          GODOT: ${{ env.GODOT4 }}
+      - run: ./client/godot-cli build Windows
         env:
           GODOT: ${{ env.GODOT4 }}
       - uses: actions/upload-artifact@v4
         with:
           name: client-linux
           path: client/build/linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-windows
+          path: client/build/windows

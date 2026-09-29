@@ -166,13 +166,19 @@ namespace SpaceAdventure.Game.UI
                     Vector2 screen = cam.UnprojectPosition(above);
                     float depth = cam.GlobalPosition.DistanceTo(above);
 
-                    float width = Mathf.Clamp(900f / depth, 26f, 90f);
-                    const float height = 5f;
+                    // Sized by eye on a 1280x720 shot: 900/26/90 and 5 px tall read as a
+                    // hairline at 9 m and vanished at 13 m.
+                    float width = Mathf.Clamp(1400f / depth, 40f, 120f);
+                    const float height = 8f;
 
                     if (!_healthBars.TryGetValue(v.Id, out var bar))
                     {
                         var box = new Panel { MouseFilter = Control.MouseFilterEnum.Ignore };
-                        box.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color(0f, 0f, 0f, 0.65f) });
+                        // A hairline border: a black box on the space sky was invisible, so a
+                        // low bar read as a floating sliver of fill.
+                        var style = new StyleBoxFlat { BgColor = new Color(0f, 0f, 0f, 0.65f), BorderColor = new Color(1f, 1f, 1f, 0.35f) };
+                        style.SetBorderWidthAll(1);
+                        box.AddThemeStyleboxOverride("panel", style);
                         var fill = new ColorRect { Position = new Vector2(1, 1), MouseFilter = Control.MouseFilterEnum.Ignore };
                         box.AddChild(fill);
                         _healthBarLayer.AddChild(box);

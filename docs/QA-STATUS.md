@@ -557,6 +557,17 @@ shots.
 | C90 | PASS | `godot-cli build Windows` from Linux → `client/build/windows/SpaceAdventure.exe` (183 MB with staged art); not yet run on a Windows host |
 | C91 | PASS | `make godot-gate` → `C91 clean` |
 
+### Debts closed 2026-09-28 (`fix/godot-rig-eyes`)
+
+Same bench: bare `server -listen :18080`, Godot 4.7.2 .NET, WSLg for the shots.
+
+| # | Result | Evidence |
+|---|---|---|
+| C92 | PASS | Rig lit and posed by eye: `-uiShot -rigArmed` → `test/out/ui/rig-armed.png` (rifle lower-right, barrel toward the crosshair, lit). Root cause of the black slab: under `gl_compatibility` nothing in the transparent SubViewport overlay received light, and a second `DirectionalLight3D` lit nothing anywhere; the overlay is gone, the rig is drawn by the main camera with an `OmniLight3D` (range 3 m, cull mask = rig layer, which the compat renderer does honour) |
+| C93 | PASS | Over-head health bars readable: `-uiDemo -uiFace hostile` → `test/out/ui/combat-godot.png`, bars at 9 m and 13 m with a border (were 5 px, borderless, black on a black sky) |
+| C94 | PASS | Rocks seen, not just logged: `-uiFace rock -uiApproach 6` walks to the nearest scatter placement (38 m → 5 m) → `test/out/ui/rocks.png`, boulder seated in the ground, more on the ridges |
+| C95 | PASS | `godot-cli build Linux` 149 MB and `build Windows` 183 MB on the same sources; `godot-cli run 20` on the Linux export → `world ready`, `colliders: 28`, exit 0. `ci.yml` `client-export` now uploads `client-windows` beside `client-linux` (the .exe is still unrun on a Windows host) |
+
 **Notes.** The volume fit replaced the longest-axis fit in `AttachFitted`:
 the Kenney rifle is 0.9 × 0.5 × 0.18 m, and fitted by length it stood 0.5 m
 tall five centimetres from the eye. The rig rest position moved out to suit

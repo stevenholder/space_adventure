@@ -62,9 +62,11 @@ flowchart LR
   six-face cube-sphere radius field, a generated starfield sky, scattered
   rocks; characters loaded from `art/` via `art/manifest.json` by asset id,
   at runtime through `GltfDocument`, animated by the clips they carry.
-- The first-person rig (arms, weapon) renders through a transparent
-  SubViewport with its own camera and layer, over the main view — Godot's
-  equivalent of a depth-clearing overlay camera.
+- The first-person rig (arms, weapon) sits on its own render layer, lit by
+  a short-range omni light masked to that layer, and is drawn by the main
+  camera. The transparent-SubViewport overlay (a depth-clearing second
+  camera) came out on 2026-09-28: under `gl_compatibility` nothing inside it
+  received light. A wall closer than the rig will clip it.
 - **The camera's up vector is the local radial direction**, not `+Y`. It
   changes continuously as the player walks, and getting it wrong shows up as
   the world slowly rolling. Same for character orientation: remote players
