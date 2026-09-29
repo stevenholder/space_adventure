@@ -37,7 +37,7 @@ func TestDropLoot_ChanceOneAlwaysDrops(t *testing.T) {
 	reg := lootTestRegistry()
 	rng := rand.New(rand.NewSource(1))
 
-	DropLoot(w, reg, "loot.grunt", [3]float64{1, 2, 3}, idCounter(), rng, StepCtx{})
+	DropLoot(w, reg, "loot.grunt", [3]float64{1, 2, 3}, idCounter(), rng, StepCtx{}, 0)
 
 	if len(w.Ents) != 1 {
 		t.Fatalf("len(w.Ents) = %d, want 1", len(w.Ents))
@@ -182,5 +182,14 @@ func TestStepLoot_Expires(t *testing.T) {
 	StepLoot(e, DT, ctx)
 	if _, ok := w.Ents[1]; ok {
 		t.Fatalf("drop still present after LootLifetimeTicks ticks")
+	}
+}
+
+// Phase 11 Scavenging: extra = 1 always rolls the table twice.
+func TestDropLoot_ExtraRoll(t *testing.T) {
+	w := NewWorld()
+	DropLoot(w, lootTestRegistry(), "loot.grunt", [3]float64{1, 2, 3}, idCounter(), rand.New(rand.NewSource(1)), StepCtx{}, 1)
+	if len(w.Ents) != 2 {
+		t.Fatalf("len(w.Ents) = %d, want 2 (one extra pass)", len(w.Ents))
 	}
 }

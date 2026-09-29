@@ -1,0 +1,22 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <!-- The engine-bound assembly: everything that touches a Node. Godot.NET.Sdk
+       globs every .cs under this directory, which is why the shared code lives
+       one level up; inside, it would compile twice. GodotSharp comes from
+       NuGet, so `dotnet build` typechecks this with no editor installed; the
+       editor and the exporter invoke this same csproj. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>SpaceAdventure.Game</RootNamespace>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../shared/Sim/Sim.csproj" />
+    <ProjectReference Include="../shared/Net/Net.csproj" />
+    <ProjectReference Include="../shared/Core/GameCore.csproj" />
+  </ItemGroup>
+
+</Project>

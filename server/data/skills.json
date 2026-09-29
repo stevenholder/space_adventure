@@ -1,0 +1,35 @@
+{
+ "$comment": "The skill roster (docs/GDD.md 'Skills'). Trained BY DOING: the award table maps verbs to XP, the curve is RuneScape's exactly (internal/skills pins the landmarks), efficacy rows scale numbers per level, synergies are the declared cross-skill bonuses the panel draws, and unlock_requirements gate purchases by level (empty at launch: gates exist for FUTURE tiers, nothing shipped is gated). Reserved skills are Phase 12's artisan loop, greyed at 1 on the panel.",
+ "version": 1,
+ "skills": [
+  {"id": "marksmanship", "name": "Marksmanship", "efficacy": {"kind": "damage_mult", "per_level": 0.004}},
+  {"id": "athletics", "name": "Athletics", "efficacy": {"kind": "sprint_mult", "per_level": 0.0015}},
+  {"id": "driving", "name": "Driving", "efficacy": {"kind": "drive_mult", "per_level": 0.003}},
+  {"id": "piloting", "name": "Piloting", "efficacy": {"kind": "flight_mult", "per_level": 0.003}},
+  {"id": "scavenging", "name": "Scavenging", "efficacy": {"kind": "loot_extra_roll", "per_level": 0.003}},
+  {"id": "commerce", "name": "Commerce", "efficacy": {"kind": "buy_discount", "per_level": 0.002}},
+  {"id": "recon", "name": "Recon", "efficacy": {"kind": "discovery_range", "per_level": 0.005}},
+  {"id": "mining", "name": "Mining", "reserved": true},
+  {"id": "salvaging", "name": "Salvaging", "reserved": true},
+  {"id": "engineering", "name": "Engineering", "reserved": true}
+ ],
+ "synergies": [
+  {"$note": "knowing the ground pays", "source": "recon", "target": "scavenging", "what": "loot_extra_roll", "per_level": 0.002, "where": "poi"},
+  {"$note": "a fit body drives harder", "source": "athletics", "target": "driving", "what": "drive_grip", "per_level": 0.001},
+  {"$note": "knowing what junk is worth", "source": "scavenging", "target": "commerce", "what": "sell_bonus", "per_level": 0.001}
+ ],
+ "awards": {
+  "damage_xp_per_point": 2,
+  "kill_xp": 40,
+  "kill_xp_warlord": 400,
+  "sprint_xp_per_10m": 1,
+  "drive_xp_per_10m": 1,
+  "fly_xp_per_10m": 1,
+  "landing_xp": 50,
+  "pickup_xp_per_item": 10,
+  "commerce_xp_per_5cr": 1,
+  "discovery_xp": 250,
+  "scout_mission_xp": 100
+ },
+ "unlock_requirements": []
+}

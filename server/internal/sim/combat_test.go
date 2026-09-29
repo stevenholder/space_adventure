@@ -226,3 +226,23 @@ func vecDist(a, b [3]float64) float64 {
 	dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
+
+// Phase 11 Marksmanship: DamageMult scales before rounding; 0 is the identity.
+func TestResolveShotDamageMult(t *testing.T) {
+	defsByKey := map[string]defs.EntityDef{"target": targetDef()}
+	wp := testWeapon()
+	for _, tc := range []struct {
+		mult float64
+		want int
+	}{{0, 25}, {1, 25}, {1.196, 30}, {2, 50}} {
+		w := NewWorld()
+		h := NewHistory(0)
+		newShooter(w, h, 1, 100)
+		addTarget(w, h, 2, 100, 0, 30)
+		s := Shot{Shooter: 1, Dir: [3]float64{0, 0, 1}, Tick: 100, DamageMult: tc.mult}
+		_, hit, ok := ResolveShot(w, h, s, wp, defOf(defsByKey), rand.New(rand.NewSource(1)))
+		if !ok || hit.Damage != tc.want {
+			t.Fatalf("mult %v: ok=%v damage=%d, want %d", tc.mult, ok, hit.Damage, tc.want)
+		}
+	}
+}

@@ -38,8 +38,11 @@ type LootState struct {
 	Claimed   bool
 }
 
+// extra is the chance of one additional pass over the table (Phase 11
+// Scavenging efficacy, plus the Recon synergy inside a discovered POI);
+// 0 consumes no extra randomness, so an untrained kill rolls as before.
 func DropLoot(w *World, reg *defs.Registry, table string, pos [3]float64,
-	nextID func() uint32, rng *rand.Rand, ctx StepCtx) {
+	nextID func() uint32, rng *rand.Rand, ctx StepCtx, extra float64) {
 	if w == nil || nextID == nil || rng == nil {
 		return
 	}
@@ -49,33 +52,39 @@ func DropLoot(w *World, reg *defs.Registry, table string, pos [3]float64,
 	// The registry is the one parser over server/data. This file briefly had
 	// its own copy of the loot.json schema, which is a second thing to update
 	// when the schema moves and a silent divergence when someone forgets.
-	for _, entry := range reg.Loot[table] {
-		{
-			if _, ok := reg.Items[entry.Item]; !ok {
+	roll := func() {
+		for _, entry := range reg.Loot[table] {
+			{
+				if _, ok := reg.Items[entry.Item]; !ok {
+					continue
+				}
+			}
+			if rng.Float64() >= entry.Chance {
 				continue
 			}
-		}
-		if rng.Float64() >= entry.Chance {
-			continue
-		}
-		id := nextID()
-		w.Add(&Ent{
-			ID:   id,
-			Kind: EntityKind(protocol.EntityTypeLoot),
-			Pos:  pos,
-			Def:  entry.Item,
-			Data: &LootState{
-				Item:      entry.Item,
-				Qty:       entry.Qty,
-				LifeTicks: LootLifetimeTicks,
-			},
-		})
-		if ctx.Events != nil {
-			*ctx.Events = append(*ctx.Events, protocol.Event{
-				EntityID: id,
-				EventID:  protocol.EventLootDropped,
+			id := nextID()
+			w.Add(&Ent{
+				ID:   id,
+				Kind: EntityKind(protocol.EntityTypeLoot),
+				Pos:  pos,
+				Def:  entry.Item,
+				Data: &LootState{
+					Item:      entry.Item,
+					Qty:       entry.Qty,
+					LifeTicks: LootLifetimeTicks,
+				},
 			})
+			if ctx.Events != nil {
+				*ctx.Events = append(*ctx.Events, protocol.Event{
+					EntityID: id,
+					EventID:  protocol.EventLootDropped,
+				})
+			}
 		}
+	}
+	roll()
+	if extra > 0 && rng.Float64() < extra {
+		roll()
 	}
 }
 

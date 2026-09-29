@@ -348,6 +348,7 @@ func (s *Server) Run(ctx context.Context) {
 			case <-scout.C:
 				s.scoutSweep()
 				s.bountyTick()
+				s.skillsTick()
 			}
 		}
 	}()
@@ -424,12 +425,14 @@ func (s *Server) tick() {
 					switch v := ent.Data.(type) {
 					case *sim.VehicleState:
 						v.Throttle, v.Steer = float64(w.MoveX), float64(w.MoveY)
+						v.EffMult = c.driveMult
 					case *sim.ShipState:
 						v.Thrust = float64(w.MoveX)
 						v.Roll = float64(w.MoveY)
 						v.YawRate = float64(w.LookDir[0])
 						v.PitchRate = float64(w.LookDir[1])
 						v.Boost = w.ActionMask&protocol.ActionBoost != 0
+						v.EffMult = c.flightMult
 					}
 				}
 			}
@@ -452,6 +455,52 @@ func (s *Server) tick() {
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
 	}
+	// Phase 11: metre accumulators for the skill sweep. Deltas come off the
+	// same post-step state the snapshot ships, classified by how the metres
+	// were earned: sprinting on foot, driving seat 1 of a rover, piloting a
+	// ship (which also owns the clean-landing bonus).
+	for _, c := range s.list {
+		pos := [3]float64(c.entity.State.Pos)
+		if c.seat != 0 {
+			if ent, _ := s.vehicleByID(c.seatVehicle); ent != nil {
+				pos = ent.Pos
+			}
+		}
+		if c.hasLastPos {
+			d := sim.Vec{pos[0] - c.lastPos[0], pos[1] - c.lastPos[1], pos[2] - c.lastPos[2]}.Len()
+			if d < 5 { // a respawn teleport is not training
+				switch {
+				case c.seat == 0:
+					if w := c.input.Load(); w != nil && w.ActionMask&protocol.ActionSprint != 0 && c.entity.State.Grounded {
+						c.sprintMeters += d
+					}
+				case c.seat == 1:
+					if ent, _ := s.vehicleByID(c.seatVehicle); ent != nil {
+						switch ent.Kind {
+						case sim.EntityKind(protocol.EntityTypeVehicle):
+							c.driveMeters += d
+						case sim.EntityKind(protocol.EntityTypeShip):
+							c.flyMeters += d
+							grounded := ent.Flags&protocol.FlagGrounded != 0
+							now := float64(tick) / float64(sim.TickHz)
+							if !grounded && c.airborneAt == 0 {
+								c.airborneAt = now
+							}
+							if grounded && c.airborneAt > 0 {
+								if now-c.airborneAt >= 3 {
+									c.awardLocked("piloting", s.reg.Awards.LandingXP)
+								}
+								c.airborneAt = 0
+							}
+						}
+					}
+				}
+			}
+		}
+		c.lastPos = pos
+		c.hasLastPos = true
+	}
+
 	// Seated bodies compose from the POST-step vehicle transform, so the
 	// snapshot's seat position and the vehicle it rides never disagree by a
 	// tick. Their lag-comp history records the composed position.
@@ -658,6 +707,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	// is already in s.clients.
 	s.syncEquipped(c)
 	s.refreshScoutCache(c) // a reconnect arrives with its missions already live
+	s.loadSkillCaches(c)   // and with its discoveries already made
 	// A live unclaimed bounty replays its offer to the joiner — the
 	// broadcast happened once, possibly before this client existed.
 	s.mu.Lock()
@@ -726,10 +776,14 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		protocol.OpMissionAbandon, protocol.OpMissionTurnin,
 		protocol.OpMissionShare:
 		return s.missionCmd(c, req)
+	case protocol.OpSkills:
+		return s.skillsCmd(c, req)
 	}
 	var result protocol.CmdResult
 	var before, after string
+	var creditsBefore, creditsAfter int64
 	c.ident.Mutate(func(p *store.Player) {
+		creditsBefore = p.Credits
 		before = p.Equipped[slotPrimary]
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
 			Player:  p,
@@ -741,7 +795,17 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			Ent:     c.entity,
 		})
 		after = p.Equipped[slotPrimary]
+		creditsAfter = p.Credits
 	})
+	// Commerce trains on credits MOVED at a shop (Phase 11) — buys today,
+	// sells when selling exists.
+	if req.Opcode == protocol.OpShopBuy && result.Status == protocol.StatusOK && creditsBefore > creditsAfter {
+		if per := s.reg.Awards.CommerceXPPer5cr; per > 0 {
+			s.mu.Lock()
+			c.awardLocked("commerce", (creditsBefore-creditsAfter)/5*per)
+			s.mu.Unlock()
+		}
+	}
 	// The primary slot is on no entity row, so a change reaches the other
 	// clients only as an `equipped` event (PROTOCOL.md event_id 0x0006).
 	// Broadcast outside Mutate: the cmd path takes the identity lock and then
@@ -932,6 +996,7 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 		Tick:          tick,
 		RewindTicks:   rewindTicks,
 		ConeHalfAngle: wp.SpreadBase * math.Pi / 180,
+		DamageMult:    c.damageMult,
 	}
 	ray, hit, found := sim.ResolveShot(s.world, s.history, shot, wp, s.entityDef, s.rng)
 
@@ -977,11 +1042,23 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 		for _, oc := range s.clients {
 			oc.send(msg{data: hitFrame})
 		}
+		c.awardLocked("marksmanship", int64(hit.Damage)*s.reg.Awards.DamageXPPerPoint)
 		if hit.HealthAfter == 0 {
 			killed = true
 			victimID = hit.Victim
 			victimArch = s.npcArchetypeOf(hit.Victim)
+			if n := s.npcOf(hit.Victim); n != nil {
+				n.lootExtra = c.lootExtra
+				if s.inDiscoveredPOI(c, n.ent.Pos) {
+					n.lootExtra = c.lootExtraPOI
+				}
+			}
 			members = append([]*client{}, s.partyMembers(c)...)
+			kxp := s.reg.Awards.KillXP
+			if victimArch == "npc.warlord" {
+				kxp = s.reg.Awards.KillXPWarlord
+			}
+			c.awardLocked("marksmanship", kxp)
 		}
 	}
 	return members, victimArch, victimID, killed
@@ -990,12 +1067,20 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 // npcArchetypeOf maps a victim entity id to its archetype id ("npc.grunt"),
 // or "" for anything that is not an AI-run NPC. Caller holds s.mu.
 func (s *Server) npcArchetypeOf(id uint32) string {
-	for _, n := range s.npcAI {
-		if n.ent.ID == id {
-			return n.arch.ID
-		}
+	if n := s.npcOf(id); n != nil {
+		return n.arch.ID
 	}
 	return ""
+}
+
+// npcOf finds the AI record behind a world entity id, nil for non-NPCs.
+func (s *Server) npcOf(id uint32) *npcAI {
+	for _, n := range s.npcAI {
+		if n.ent.ID == id {
+			return n
+		}
+	}
+	return nil
 }
 
 // entityDef is ResolveShot's defOf callback.

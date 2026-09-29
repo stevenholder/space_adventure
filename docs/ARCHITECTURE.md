@@ -8,7 +8,7 @@ Status: v2 — reflects Phase 3.5 as built. Updated as each phase lands
 ```mermaid
 flowchart LR
   subgraph Desktop
-    C[Unity client<br/>packaged build: render + controls + HUD]
+    C[Godot client<br/>packaged build: render + controls + HUD]
   end
   subgraph kind cluster
     S[Go game server<br/>authoritative sim @ 20 Hz<br/>/ws on NodePort 30080 → host :18080]
@@ -21,27 +21,50 @@ flowchart LR
 - One authoritative Go server process per world instance (M1: single
   instance).
 - Clients connect over WebSocket; all world state is server-authoritative.
-- **Client delivery is a packaged native desktop build** (Unity, C#) as of the
-  Phase 3.5 decision, 2026-08-26. Browser delivery is dropped. See "Client
+- **Client delivery is a packaged native desktop build** (Godot 4, C#) as of
+  the Phase 11.5 engine swap, 2026-09-23; Phase 3.5 (2026-08-26) had made it
+  native with Unity, and browser delivery has been dropped since. See "Client
   delivery" below — the TS/Three.js client shipped Phases 1–3 and was retired
-  in Phase 3.5 (ROADMAP U18).
+  in Phase 3.5 (ROADMAP U18); the Unity client shipped Phases 3.5–11 and was
+  retired in Phase 11.5.
 - `make up` runs the stack on a local **kind** cluster — server and (from
   Phase 2) Postgres — so the deployed path is the development path. The client
   is a packaged desktop build that connects in. See "Deployment".
 - What kind does *not* exercise is sharding, delta snapshots and load; that is
   the scale-out phase's job, not now.
 
-## Client (`client-unity/`) — Unity 6, C#
+## Client (`client/`) — Godot 4, C#
 
-- A packaged desktop build. Browser delivery was dropped in Phase 3.5: the
-  original Three.js client lived in `client/` and was retired by ROADMAP U18
-  once the Unity one passed the same criteria. It is in git history.
+- A packaged desktop build, exported headlessly from the command line
+  (`make godot-build`); Linux and Windows presets, no editor and no licence
+  involved. Browser delivery was dropped in Phase 3.5; the Unity client that
+  followed was replaced by this one in Phase 11.5 because its toolchain fought
+  the agent-first workflow (a Windows-only project path, an Editor lock, a
+  batchmode that exits 0 on compiler errors, no CI build). It is in git history.
 - Code-first, and that is a hard rule rather than a style: no agent authors a
-  `.unity`, `.prefab` or `.asset`, so every object, material and camera is
-  built from C# at runtime. `client-unity/CONVENTIONS.md` has the why.
+  `.tscn`, `.tres` or any resource, and no model goes under the project (it
+  would be imported as a scene). Exactly one four-line scene, `Boot.tscn`,
+  carries `Boot.cs`; every node, mesh, material, camera and light is built
+  from C# at runtime. `client/CONVENTIONS.md` has the why; `make godot-gate`
+  (C91) enforces it.
+- Layout: `client/shared/{Sim,Net,Core}` are engine-free netstandard2.1
+  assemblies (the sim rules, the wire codec and transport, prediction and the
+  render timeline), consumed by `client/godot/` (the game, `Godot.NET.Sdk`)
+  and by `client/simdump/` (the headless runner the harnesses drive). One
+  source of truth, one `dotnet build` for all of it — `Godot.NET.Sdk` pulls
+  the engine bindings from NuGet, so CI compiles 100% of the client.
+- **The Sim's frame is Godot's frame.** Right-handed, Y-up, local +Z forward
+  on both sides, so the conversion in `client/godot/Game/Frame.cs` is the
+  identity and it is the only place Sim math meets Godot math. glTF models
+  face −Z, so a loaded model sits under one node carrying a 180° flip, in
+  `AssetRegistry` and nowhere else.
 - Scene: a small low-poly round world — terrain mesh built from the server's
-  six-face cube-sphere radius field, sky, scattered props; characters loaded
-  from `art/` via `art/manifest.json` by asset id.
+  six-face cube-sphere radius field, a generated starfield sky, scattered
+  rocks; characters loaded from `art/` via `art/manifest.json` by asset id,
+  at runtime through `GltfDocument`, animated by the clips they carry.
+- The first-person rig (arms, weapon) renders through a transparent
+  SubViewport with its own camera and layer, over the main view — Godot's
+  equivalent of a depth-clearing overlay camera.
 - **The camera's up vector is the local radial direction**, not `+Y`. It
   changes continuously as the player walks, and getting it wrong shows up as
   the world slowly rolling. Same for character orientation: remote players
@@ -62,8 +85,8 @@ flowchart LR
   collision. The moment props become collidable, placement has to move
   server-side.
 - **Movement and terrain sampling live in a pure module** — no engine types, no
-  renderer, no platform globals (in Unity: an `asmdef` that references
-  `UnityEngine` nowhere) — that the render loop calls into. This is not style: the
+  renderer, no platform globals (a csproj that references no engine package)
+  — that the render loop calls into. This is not style: the
   conformance test (ROADMAP criterion 5) runs the TypeScript sim headless
   under Node and diffs it against the Go sim, which is impossible if movement
   is entangled with the renderer. Same reason the module takes `dt` and input
@@ -71,13 +94,12 @@ flowchart LR
 
   Four things keep this honest, in order of how much work they save:
 
-  1. **The compiler enforces it.** `Assets/Sim/` is its own assembly and may
-     not reference `UnityEngine` at all, so touching a `GameObject`, a
-     `Transform` or `Time` in that folder is a build error rather than a
-     code-review note. `make unity-test` compiles it a second time with no
-     Editor in sight, which is what lets the conformance diff run in CI.
-     (The retired TypeScript client did the same job with a DOM-free
-     `tsconfig.sim.json`.)
+  1. **The compiler enforces it.** `client/shared/Sim` is its own assembly
+     and references no engine at all, so touching a `Node3D`, a
+     `Transform3D` or the engine clock in that folder is a build error rather
+     than a code-review note. `make godot-test` builds it with no editor in
+     sight, which is what lets the conformance diff run in CI. (The retired
+     TypeScript client did the same job with a DOM-free `tsconfig.sim.json`.)
   2. **A signature, fixed now**, so the Go and TypeScript sims mirror each
      other and criterion 5 has something to diff:
      `step(state, input, terrain, dt) -> state` and
@@ -353,7 +375,8 @@ not a rewrite.
 | Decision | Choice | Why |
 |---|---|---|
 | 3D engine (Phases 1–3) | Three.js + TypeScript | deepest ecosystem, browser-native, full control |
-| 3D engine (Phase 3.5 on) | Unity + C#, native desktop | humanoid animation, asset pipeline and zone authoring are the gaps Three.js was never going to close; browser dropped, which is what removed Godot's one advantage |
+| 3D engine (Phases 3.5–11) | Unity + C#, native desktop | humanoid animation, asset pipeline and zone authoring are the gaps Three.js was never going to close; browser dropped, which is what removed Godot's one advantage |
+| 3D engine (Phase 11.5 on) | Godot 4 + C#, native desktop | Unity's toolchain fought the agent-first workflow (Windows-only path, Editor lock, batchmode exiting 0 on errors, no CI build) and its licensing was a liability; the engine-free Sim/Net/Core assemblies moved unchanged, only the engine-bound half was rewritten, and `dotnet build` now typechecks all of it with no editor |
 | Server language | Go | one static binary; goroutines fit tick + IO |
 | Transport | WebSocket (binary) | simple, works everywhere; revisit UDP if M1 feels limited |
 | Authority | server-authoritative | MMO correctness, cheat resistance |

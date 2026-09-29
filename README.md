@@ -13,7 +13,7 @@ on each other — NPCs and gun combat (Phase 2), fighting an enemy encampment
 (Phase 3), a rover you climb into and drive (Phase 4), then a ship you buy,
 board and fly into space (Phase 5). See `docs/ROADMAP.md`.
 
-- **Client:** Unity 6 (C#), packaged desktop build, 3D-first UI
+- **Client:** Godot 4 (C#), packaged desktop build, 3D-first UI
 - **Server:** Go, authoritative fixed-tick simulation over WebSocket
 - **Infra:** local kind cluster (server + client in a namespace, nginx `/ws` proxy) behind a Makefile
 - **Development:** agent-first — specialized AI agents work in parallel on
@@ -24,6 +24,7 @@ board and fly into space (Phase 5). See `docs/ROADMAP.md`.
 | Path | What | Owner (agent) |
 |------|------|---------------|
 | `server/` | Go game server: simulation, networking, protocol | `netcode` (rules: `game`) |
+| `client/` | Godot 4 client: engine-free `shared/` assemblies, the `godot/` game, the `simdump/` headless runner | `frontend` |
 | `art/` | Low-poly assets (glTF), shaders, asset manifest | `art` |
 | `deploy/` | local kind run (Makefile) + K8s manifests + Dockerfiles | `infra` |
 | `test/` | Cross-module integration/e2e tests | `qa` |
@@ -46,33 +47,32 @@ make up     # kind cluster + server image + manifests + readiness check
 make down   # tear down the cluster, forwards, and logs
 ```
 
-### The Unity client
+### The Godot client
 
-`client-unity/unity` is the command line for the client. It resolves the
-editor from the project's own `ProjectVersion.txt` and the project path with
-`wslpath`, so neither the editor version nor the repo location is written down
-twice — and unlike `Unity -quit`, it fails on a compiler error instead of
-exiting 0 with "Aborting batchmode".
+`client/godot-cli` is the command line for the client. The Godot version is
+written down once, in `client/.godot-version`, and the wrapper resolves the
+editor binary from it; nothing needs Windows, a project lock, or a licence.
 
 ```sh
-./client-unity/unity compile   # full compile (close the Editor first)
-./client-unity/unity typecheck # typecheck Assets/Game with the Editor still open
-./client-unity/unity build     # package a standalone player
-./client-unity/unity run 20    # run that player headless against the live server
-./client-unity/unity open      # launch the Editor
-./client-unity/unity where     # which editor, which project
+./client/godot-cli where        # which editor, which project, are the templates installed
+./client/godot-cli dev 8        # run from source, headless, against the live server
+./client/godot-cli play         # run from source, windowed
+./client/godot-cli build        # export a Linux player to client/build/linux (Windows: build Windows)
+./client/godot-cli run 20       # run that player headless against the live server
+./client/godot-cli editor       # open the editor
 ```
 
-The same commands are `make unity-compile`, `unity-build`, `unity-run`,
-`unity-scene`. `make unity-test` and `unity-codec` need no Editor at all: the
-`Sim`, `Net` and `GameCore` assemblies build headless from
-`client-unity/headless/`, which is what keeps C40 (sim conformance) and C41
-(codec parity) runnable in CI.
+The same commands are `make godot-dev`, `godot-play`, `godot-build`,
+`godot-run`. `make godot-test`, `godot-codec` and `godot-conformance` need no
+editor at all: `dotnet build client/SpaceAdventure.Client.slnx` compiles every
+assembly including the engine-bound one (`Godot.NET.Sdk` pulls the bindings
+from NuGet), which is what keeps C40 (sim conformance), C41 (codec parity) and
+now the whole client compile runnable in CI.
 
-To play in the Editor, press Play — `Boot.cs` builds the whole hierarchy at
-runtime from a `RuntimeInitializeOnLoadMethod`, so no scene setup is needed.
-It connects to `ws://127.0.0.1:18080/ws` unless `SA_SERVER_URL` or
-`-serverUrl` says otherwise, so bring the server up with `make up` first.
+`Boot.cs` builds the whole hierarchy at runtime from the one four-line scene,
+so no scene setup is needed. It connects to `ws://127.0.0.1:18080/ws` unless
+`SA_SERVER_URL` or `-serverUrl` (after `--`) says otherwise, so bring the
+server up with `make up` first.
 
 ## Agent-first development
 
@@ -83,7 +83,7 @@ main session orchestrates; agents run in parallel on paths they own:
 |-------|-------|
 | `game` | Gameplay design → precise, implementable rules (GDD) |
 | `netcode` | Go server, simulation tick loop, network protocol |
-| `frontend` | Unity client, 3D UI, prediction/interpolation |
+| `frontend` | Godot client, 3D UI, prediction/interpolation |
 | `art` | Low-poly asset pipeline (glTF, shaders, manifest) |
 | `infra` | kind, K8s manifests, Docker, Makefile |
 | `qa` | Verification against acceptance criteria, e2e tests |

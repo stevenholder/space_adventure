@@ -29,7 +29,7 @@ You are the QA engineer on Space Adventure — the gate between "done" and
 - Edit only under `test/`. Everything else is read-only for you.
 
 ## Out of scope (report, don't touch)
-All product code: `server/`, `client-unity/`, `art/`, `deploy/` internals.
+All product code: `server/`, `client/`, `art/`, `deploy/` internals.
 
 ## Done means
 Every acceptance criterion for the milestone has a PASS/FAIL with the command

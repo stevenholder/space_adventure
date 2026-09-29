@@ -1524,6 +1524,90 @@ Parties and bounty claims are in-memory — they die with the server,
 which at worst re-posts a bounty. Every transition is a cmd the server
 validates or an event the server emits; the client's journal is a view.
 
+## Skills (Phase 11 core, Phase 12 artisan)
+
+RuneScape's shape: many individual skills, each trained BY DOING its
+thing, each with its own exponential ladder to 99. No classes, no
+points to allocate — what you did is what you are. Levels both scale
+numbers (efficacy) and open doors (unlocks), some skills feed each
+other (declared synergies), and the whole sheet is the character.
+
+### The roster
+
+Ten skills. Seven train in Phase 11 against verbs the game already
+has; three are RESERVED for Phase 12's artisan loop and appear on the
+panel greyed at 1, so the sheet shows where the game is going.
+
+| skill | trains by | efficacy (per level, linear to 99) | unlocks (data-driven) |
+|---|---|---|---|
+| **Marksmanship** | damage dealt (2 XP/point), kills (+40, warlord +400) | +0.4% weapon damage | future weapon tiers |
+| **Athletics** | metres sprinted (1 XP/10 m), jumps landed (1 XP) | +0.15% sprint speed | — |
+| **Driving** | metres driven as the driver (1 XP/10 m) | +0.3% rover accel & grip | future vehicle tiers |
+| **Piloting** | metres flown as pilot (1 XP/10 m), clean landings (+50) | +0.3% ship handling | future ship tiers |
+| **Scavenging** | loot pickups (10 XP × qty) | +0.3% extra-roll chance on loot tables | rare-drop table at 30 |
+| **Commerce** | credits moved at shops (1 XP / 5 cr, buy or sell) | −0.2% buy prices (cap −19.6%) | future vendor stock tiers |
+| **Recon** | first discovery of each POI (+250, permanent per player), scout missions (+100) | +0.5% compass discovery range | — |
+| *Mining* | Phase 12: drilling nodes | ore tier access, yield speed | — |
+| *Salvaging* | Phase 12: cutting wrecks | scrap tier access, yield | — |
+| *Engineering* | Phase 12: crafting at the bench | recipe tiers | — |
+
+### The curve — RuneScape's, exactly
+
+`points(L) = floor( Σ_{l=1}^{L−1} (l + 300·2^(l/7)) / 4 )` — level 2 at
+83 XP, 50 at 101,333, 99 at 13,034,431, and level 92 is the halfway
+point of 99, as tradition demands. Award rates above are tuned so a
+regular player's ceiling is around 50; 99 in anything is a monument.
+The table is FROZEN — both ends compute it from the formula, and a
+unit test pins the landmark values forever.
+
+### Efficacy and the two sims (the load-bearing constraint)
+
+Combat, prices and loot roll server-side only — free. **Movement
+multipliers enter the simulation**, and the sim is mirrored (C30/C34
+conformance at 1e-6), so they must be deterministic on BOTH ends: the
+server computes the player's multipliers from their levels, ships them
+in the skills sheet (and on every level-up event), and the client's
+predictor applies the SAME numbers. Conformance suites gain cases at
+non-unit multipliers. A fresh player's multipliers are exactly 1.0, so
+every existing test and every existing player behaves identically —
+skills change nothing until trained.
+
+### Synergies — declared, visible
+
+Data, not lore (`skills.json`): each synergy names source, target,
+per-level bonus, and where it applies. Launch set:
+
+- **Recon → Scavenging**: +0.2%/Recon-level extra loot yield inside a
+  discovered POI's radius — knowing the ground pays.
+- **Athletics → Driving**: +0.1%/Athletics-level rover grip — a fit
+  body drives harder.
+- **Scavenging → Commerce**: +0.1%/Scavenging-level better sell
+  prices — knowing what junk is worth.
+
+The skills panel draws the arrows; training one visibly moves its
+partner's tooltip.
+
+### On the wire, on the sheet
+
+XP awards BATCH server-side (flush ≤1/s per skill) into a `skill_xp`
+event: `{skill, xp, level, next_at, leveled}`. `leveled: true` raises
+the banner. The full sheet (XP per skill + derived multipliers +
+discovered POIs) answers a `skills` cmd and persists beside inventory
+(migration 004). The panel is **K**: ten rows, level, progress bar to
+next, synergy arrows, multiplier tooltips. Reserved skills render
+greyed.
+
+### Phase 12 preview — the artisan loop (decided, not yet built)
+
+Mining: E on an ore node starts a ~3 s server-timed drill channel;
+ore drops as loot; nodes deplete after N yields and respawn. Needs
+`tool.drill` (quartermaster). Salvaging mirrors it on wreck nodes
+with `tool.cutter`. Engineering crafts at the WORKBENCH at the relay
+— recipes (data) turn ore + scrap into ammo, medkits, weapon mods;
+travel is part of the loop. **Raw materials drop on death** as a
+lootable spill where you fell (equipment and credits stay) — the
+banked-versus-carried tension, without full RS brutality.
+
 ## Phase 2 — items, weapons, combat, interaction
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules
@@ -1641,7 +1725,7 @@ to the server's — **not** at a fixed offset behind whenever a packet happened 
 arrive locally. The two differ by a whole one-way trip, and the server rewinds
 by the first, so a client that renders by the second misses everything that
 moves. This is a rule about what a client draws, so no amount of server testing
-catches a breach of it; the Unity client owes it explicitly (ROADMAP U13).
+catches a breach of it; the client owes it explicitly (ROADMAP U13).
 
 Both halves were measured wrong at once, 2026-08-27: the server rewound `L`
 alone, and the retired TS client rendered on local receive time. A player

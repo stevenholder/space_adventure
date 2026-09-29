@@ -40,7 +40,7 @@ execFileSync('go', ['run', './cmd/server', 'collide', scenarioPath, goOut], {
 })
 execFileSync(
   'dotnet',
-  ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+  ['run', '--project', 'client/simdump', '--nologo', '--',
     '--collide', scenarioPath, csOut],
   { cwd: root, encoding: 'utf8' },
 )

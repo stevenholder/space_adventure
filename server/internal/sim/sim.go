@@ -73,6 +73,13 @@ type Input struct {
 	Look       Vec     // desired look direction (arbitrary length)
 	ActionMask uint16
 
+	// SprintMult scales sprint speed (Phase 11 Athletics efficacy). Not on
+	// the wire, threaded like Colliders — the CALLER (server from levels,
+	// client from its sheet) supplies the same number, keeping both sims
+	// deterministic. 0 means "unset" and reads as 1.0, so a fresh player and
+	// every pre-Phase-11 caller behave exactly as before.
+	SprintMult float64
+
 	// Colliders is not part of the 24-byte wire payload: it is the zone's
 	// static collider list (GDD "Static colliders"), threaded through Input
 	// because it is state the step already has access to. Nil/empty is a
@@ -114,6 +121,15 @@ func tangential(v, up Vec) Vec { return v.Sub(up.Scale(v.Dot(up))) }
 // before any input). Step returns the look actually applied after
 // sanitisation so the caller can carry it forward as the next tick's
 // prevLook.
+// effMult reads an efficacy multiplier: 0 (unset) is the 1.0 identity, so a
+// fresh player and every caller that never set it behave unchanged.
+func effMult(m float64) float64 {
+	if m <= 0 {
+		return 1
+	}
+	return m
+}
+
 func Step(s *State, in Input, prevLook Vec, t *terrain.Field, dt float64) Vec {
 	// 1. Sanitise input.
 	mx := sanitiseAxis(in.MoveX)
@@ -156,7 +172,7 @@ func Step(s *State, in Input, prevLook Vec, t *terrain.Field, dt float64) Vec {
 	if hasTarget {
 		speed := WalkSpeed
 		if sprint {
-			speed = SprintSpeed
+			speed = SprintSpeed * effMult(in.SprintMult)
 		}
 		target = terrain.Normalize(wish).Scale(speed)
 	}

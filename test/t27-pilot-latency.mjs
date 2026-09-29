@@ -108,7 +108,7 @@ await sleep(500)
 let code = 1
 try {
   execFileSync('dotnet',
-    ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+    ['run', '--project', 'client/simdump', '--nologo', '--',
       '--pilot', `ws://127.0.0.1:${PROXY_PORT}/ws`, '--ship', String(shipId),
       '--token', token, '--evidence', EVIDENCE],
     { cwd: root, stdio: 'inherit' })

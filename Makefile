@@ -17,7 +17,7 @@
 # that file and recreate the cluster to actually move it.
 #
 # There is no client port any more. The cluster serves the game SERVER; the
-# client is a packaged desktop build (`make unity-build`) that connects to it,
+# client is a packaged desktop build (`make godot-build`) that connects to it,
 # not a page the cluster hands out. See ROADMAP U18.
 
 CLUSTER     ?= space-adventure
@@ -126,7 +126,7 @@ forward:
 	@echo ""
 	@echo "space-adventure is up:"
 	@echo "  server : http://localhost:$(SERVER_PORT)/healthz   (WS: ws://localhost:$(SERVER_PORT)/ws)"
-	@echo "  client : make unity-build && make unity-run"
+	@echo "  client : make godot-build && make godot-run"
 
 down:
 	# Legacy cleanup: earlier revisions ran kubectl port-forward (and, briefly,
@@ -178,22 +178,22 @@ test-pg:
 	docker rm -f $(PG_TEST_CONTAINER) >/dev/null; \
 	exit $$status
 
-# ---- Unity client (Phase 3.5) ----------------------------------------------
-# C44: Sim and Net build and their checks run with NO Unity Editor. That is not
-# a convenience -- the conformance diff against the Go sim (C40) has to run in
-# CI, and CI has no Editor.
-UNITY_SLN = client-unity/headless/SpaceAdventure.Client.slnx
+# ---- Godot client ----------------------------------------------------------
+# C44: the whole client compiles and its checks run with NO engine installed.
+# Godot.NET.Sdk pulls GodotSharp from NuGet, so `dotnet build` typechecks the
+# engine-bound assembly too -- the conformance diff against the Go sim (C40)
+# and the codec parity (C41) have to run in CI, and CI has no editor.
+CLIENT_SLN = client/SpaceAdventure.Client.slnx
+GODOT_CLI  = ./client/godot-cli
 
-.PHONY: unity-test unity-gate
-unity-test:
-	dotnet build $(UNITY_SLN) -v q --nologo
-	dotnet run --project client-unity/headless/SimDump --nologo -- --selftest
+.PHONY: godot-test godot-gate
+godot-test:
+	dotnet build $(CLIENT_SLN) -v q --nologo
+	dotnet run --project client/simdump --nologo -- --selftest
 
-# C40: the C# sim must match the Go sim on the C5 route within 1e-10 m. This
-# is the Phase 3.5 gate -- if it cannot close, everything downstream is wasted
-# work against a client that silently disagrees with the server.
-.PHONY: unity-conformance
-unity-conformance:
+# C40: the C# sim must match the Go sim on the C5 route within 1e-10 m.
+.PHONY: godot-conformance
+godot-conformance:
 	node test/t20-csharp-conformance.mjs
 	node test/t23-drive-conformance.mjs
 	node test/t25-flight-conformance.mjs
@@ -201,74 +201,9 @@ unity-conformance:
 # C41: the C# codec must agree with the Go one BYTE FOR BYTE, both
 # directions. A codec's own round-trip test agrees with its own bug, so this
 # is the only check that can see a framing or offset slip.
-.PHONY: unity-codec
-unity-codec:
+.PHONY: godot-codec
+godot-codec:
 	node test/t22-csharp-codec.mjs
-
-# U10: the transport's only real test is a real server. Needs `make up`, and
-# gated on check-server for the same reason unity-run is -- "a real server" has
-# to mean THIS one.
-.PHONY: unity-join
-unity-join: check-server
-	dotnet run --project client-unity/headless/SimDump --nologo -- --join ws://127.0.0.1:$(SERVER_PORT)/ws
-
-# The Unity CLI wrapper. It resolves the editor from the project's own
-# ProjectVersion.txt and the project path with wslpath, so neither the editor
-# version nor the repo location is written down twice -- and it fails on a
-# compiler error, which `Unity -quit` does not: batchmode can exit 0 having
-# printed "Aborting batchmode due to failure: Scripts have compiler errors".
-UNITY_CLI = ./client-unity/unity
-
-# Typecheck every assembly, including the Unity-only ones the headless
-# solution cannot see.
-.PHONY: unity-compile unity-typecheck unity-build unity-scene unity-run art-sync
-unity-compile:
-	$(UNITY_CLI) compile
-
-# Typechecks Assets/Game against the editor's own reference assemblies, with
-# no Editor process involved -- so it works while the project is open, which
-# is exactly when you are iterating on gameplay code.
-unity-typecheck:
-	$(UNITY_CLI) typecheck
-
-# art/ is the single source of truth for models. Unity can only ship files it
-# finds under Assets/, so the .glb files and the manifest are COPIED into
-# StreamingAssets -- which Unity packages verbatim, with no importer, no .meta
-# semantics that matter, and nothing for C47 to catch.
-#
-# The copy is gitignored on purpose. Committing it would put two of every
-# binary in the repo, free to drift, and the one under Assets/ would be the
-# one nobody edits and everybody ships.
-# art/ is the single source of truth for models. Unity can only ship files it
-# finds under Assets/, so the .glb files and the manifest are COPIED into
-# StreamingAssets -- which Unity packages verbatim, with no importer, no .meta
-# semantics that matter, and nothing for C47 to catch.
-#
-# The copy is gitignored on purpose. Committing it would put two of every
-# binary in the repo, free to drift, and the one under Assets/ would be the
-# one nobody edits and everybody ships.
-#
-# Driven by manifest.json, NOT by `find art -name '*.glb'`. The manifest is
-# already the definition of what the game ships -- the client resolves models
-# by looking ids up in it -- so a file the manifest does not name is by
-# definition not a game asset. A find picks up art/vendor/, which holds the
-# raw downloaded CC0 packs: 153 unprocessed models that would go into the
-# build for nothing.
-STREAMING := client-unity/Assets/StreamingAssets/art
-
-.PHONY: art-sync
-art-sync:
-	@rm -rf $(STREAMING)
-	@mkdir -p $(STREAMING)
-	@cd art && python3 -c "import json,os,shutil,sys; \
-	    d=json.load(open('manifest.json')); out=os.path.join('..','$(STREAMING)'); \
-	    files=[a['file'] for a in d['assets']]; \
-	    missing=[f for f in files if not os.path.exists(f)]; \
-	    [os.makedirs(os.path.join(out,os.path.dirname(f)),exist_ok=True) for f in files if os.path.exists(f)]; \
-	    [shutil.copy2(f,os.path.join(out,f)) for f in files if os.path.exists(f)]; \
-	    shutil.copy2('manifest.json',os.path.join(out,'manifest.json')); \
-	    print('art-sync: %d models -> $(STREAMING)'%(len(files)-len(missing))); \
-	    sys.stderr.write('art-sync: MISSING %s\n'%missing) if missing else None"
 
 # Asserts that whatever is answering on :$(SERVER_PORT) is the build in this
 # working tree, not something left running. Depended on by anything that
@@ -304,34 +239,58 @@ check-server:
 	fi; \
 	echo "server on :$(SERVER_PORT) is build $$got (matches this tree)"
 
+# The transport's only real test is a real server. Needs `make up`, and gated
+# on check-server for the same reason godot-run is -- "a real server" has to
+# mean THIS one.
+.PHONY: godot-join
+godot-join: check-server
+	dotnet run --project client/simdump --nologo -- --join ws://127.0.0.1:$(SERVER_PORT)/ws
+
+# The Godot CLI wrapper: version from client/.godot-version, editor resolved
+# from it, export via export_presets.cfg. No project lock, no licence, and it
+# fails on the errors Godot only prints (a C# exception does not fail the
+# process on its own).
+.PHONY: godot-import godot-build godot-run godot-dev godot-play
+
+# Generates .godot/ (import cache, font import). Idempotent.
+godot-import:
+	$(GODOT_CLI) import
+
 # C45: a packaged desktop build that joins the deployed server from a cold
-# start, with the URL from config rather than compiled in. The player is the
-# only thing that catches build-only failures -- shader stripping killed the
-# first one on its first frame, and the Editor could not have seen it.
-unity-build: art-sync
-	$(UNITY_CLI) build
+# start, with the URL from config rather than compiled in. art/ is the single
+# source of truth for models; the export step stages the manifest-listed .glb
+# files beside the executable, and a dev run reads art/ in place. Nothing is
+# copied into the project, so nothing is imported as a scene (C91).
+godot-build:
+	$(GODOT_CLI) build $(PRESET)
 
 # Runs that player headless against the live stack. Needs `make up`.
-unity-run: check-server
-	$(UNITY_CLI) run 20
+godot-run: check-server
+	$(GODOT_CLI) run 20
 
-# Regenerates the one permitted scene. It is empty by design -- Boot.cs builds
-# the hierarchy at runtime -- so this exists to register it in build settings.
-unity-scene:
-	$(UNITY_CLI) scene
+# From source, headless, no export: the fast loop while iterating.
+godot-dev:
+	$(GODOT_CLI) dev $(SECS)
 
-# C47: no agent-authored scenes or prefabs. Unity's native storage is
-# GUID-keyed YAML -- unreviewable diffs, unmergeable conflicts, and "verify"
-# means opening the Editor. Exactly one boot scene is allowed; everything else
-# is built from C# at runtime. Scoped to Assets/ on purpose: Unity generates
-# ProjectSettings/*.asset itself and those MUST be committed.
-unity-gate:
-	@scenes=$$(find client-unity/Assets -name '*.unity' -not -path '*/Scenes/Boot.unity' 2>/dev/null); \
-	prefabs=$$(find client-unity/Assets -name '*.prefab' 2>/dev/null); \
-	assets=$$(find client-unity/Assets -name '*.asset' 2>/dev/null); \
-	if [ -n "$$scenes$$prefabs$$assets" ]; then \
-		echo "C47: scene/prefab debt (build these from code instead):" >&2; \
-		echo "$$scenes$$prefabs$$assets" >&2; \
+# From source, windowed (WSLg or a native desktop).
+godot-play:
+	$(GODOT_CLI) play
+
+# C91: no agent-authored scenes or resources. Exactly one scene is allowed,
+# client/godot/Boot.tscn, and no .tres/.res/.gd/.material/.mesh; models never
+# go under the project (they would be imported as scenes). The shared
+# assemblies reference no engine: a `using Godot` there is the rule broken.
+godot-gate:
+	@scenes=$$(find client/godot -name '*.tscn' -not -path 'client/godot/Boot.tscn' -not -path '*/.godot/*' 2>/dev/null); \
+	res=$$(find client/godot \( -name '*.tres' -o -name '*.res' -o -name '*.scn' -o -name '*.gd' \
+	       -o -name '*.material' -o -name '*.mesh' -o -name '*.glb' -o -name '*.gltf' \) -not -path '*/.godot/*' 2>/dev/null); \
+	if [ -n "$$scenes$$res" ]; then \
+		echo "C91: scene/resource debt (build these from code instead):" >&2; \
+		echo "$$scenes$$res" >&2; \
 		exit 1; \
 	fi; \
-	echo "C47 clean: no agent-authored scenes or prefabs"
+	if grep -rl --include='*.cs' "using Godot" client/shared client/simdump 2>/dev/null; then \
+		echo "C91: engine reference in an engine-free assembly" >&2; \
+		exit 1; \
+	fi; \
+	echo "C91 clean: one scene, no resources, shared/ engine-free"

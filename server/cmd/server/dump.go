@@ -56,6 +56,7 @@ type scriptInput struct {
 	MoveY      float64    `json:"move_y"`
 	Look       [3]float64 `json:"look"`
 	ActionMask uint16     `json:"action_mask"`
+	SprintMult float64    `json:"sprint_mult"`
 }
 
 type dumpLine struct {
@@ -163,6 +164,7 @@ func runDump(args []string) error {
 				MoveY:      l.Input.MoveY,
 				Look:       sim.Vec(l.Input.Look),
 				ActionMask: l.Input.ActionMask,
+				SprintMult: l.Input.SprintMult,
 			}
 			// Mirror the server's join: the first step's prevLook is the
 			// spawn (or script) facing.

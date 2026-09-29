@@ -30,9 +30,18 @@ type Player struct {
 	Equipped  map[string]string
 	Pos       [3]float64
 	// Missions is per-mission progress keyed by mission id (Phase 10).
-	Missions  map[string]*MissionState
+	Missions map[string]*MissionState
+	// Skills is Phase 11's sheet: XP per skill id, and the POIs this
+	// player has permanently discovered (Recon pays each exactly once).
+	Skills SkillsState
 	CreatedMs int64
 	UpdatedMs int64
+}
+
+// SkillsState is the whole skill sheet.
+type SkillsState struct {
+	XP         map[string]int64 `json:"xp,omitempty"`
+	Discovered []string         `json:"discovered,omitempty"`
 }
 
 // MissionState is one mission's progress for one player.
@@ -42,7 +51,7 @@ type MissionState struct {
 	Done   int  `json:"done"`
 }
 
-const playerColumns = `token, name, credits, inventory, equipped, missions, pos_x, pos_y, pos_z, created_ms, updated_ms`
+const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms`
 
 // GetPlayer returns the row for token, or (nil, nil) when there is none.
 // Absence is not an error: a first-time token is the normal case, and making
@@ -53,8 +62,8 @@ func (s *Store) GetPlayer(ctx context.Context, token string) (*Player, error) {
 		`SELECT `+playerColumns+` FROM player WHERE token = $1`, token)
 
 	var p Player
-	var inventory, equipped, missions string
-	err := row.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions,
+	var inventory, equipped, missions, skillsCol string
+	err := row.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions, &skillsCol,
 		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -75,6 +84,9 @@ func (s *Store) GetPlayer(ctx context.Context, token string) (*Player, error) {
 	if err := json.Unmarshal([]byte(missions), &p.Missions); err != nil {
 		return nil, fmt.Errorf("store: player %q has unreadable missions: %w", token, err)
 	}
+	if err := json.Unmarshal([]byte(skillsCol), &p.Skills); err != nil {
+		return nil, fmt.Errorf("store: player %q has unreadable skills: %w", token, err)
+	}
 	if p.Inventory == nil {
 		p.Inventory = []Stack{}
 	}
@@ -83,6 +95,9 @@ func (s *Store) GetPlayer(ctx context.Context, token string) (*Player, error) {
 	}
 	if p.Missions == nil {
 		p.Missions = map[string]*MissionState{}
+	}
+	if p.Skills.XP == nil {
+		p.Skills.XP = map[string]int64{}
 	}
 	return &p, nil
 }
@@ -108,6 +123,10 @@ func (s *Store) PutPlayer(ctx context.Context, p *Player) error {
 	if p.Missions == nil {
 		missions = []byte("{}")
 	}
+	skillsCol, err := json.Marshal(p.Skills)
+	if err != nil {
+		return fmt.Errorf("store: encoding skills: %w", err)
+	}
 
 	now := time.Now().UnixMilli()
 	if p.CreatedMs == 0 {
@@ -117,11 +136,11 @@ func (s *Store) PutPlayer(ctx context.Context, p *Player) error {
 
 	_, err = s.DB.ExecContext(ctx,
 		`INSERT INTO player (`+playerColumns+`)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 ON CONFLICT (token) DO UPDATE SET
 		   name = $2, credits = $3, inventory = $4, equipped = $5,
-		   missions = $6, pos_x = $7, pos_y = $8, pos_z = $9, updated_ms = $11`,
-		p.Token, p.Name, p.Credits, string(inventory), string(equipped), string(missions),
+		   missions = $6, skills = $7, pos_x = $8, pos_y = $9, pos_z = $10, updated_ms = $12`,
+		p.Token, p.Name, p.Credits, string(inventory), string(equipped), string(missions), string(skillsCol),
 		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs)
 	if err != nil {
 		return fmt.Errorf("store: upserting player: %w", err)

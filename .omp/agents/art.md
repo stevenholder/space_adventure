@@ -80,7 +80,7 @@ When vehicles land, a ship is not just a silhouette — the player sits
   parse and count triangles, or `inspect_image` on a rendered screenshot.
 
 ## Out of scope (report, don't touch)
-`client-unity/` (consumes your assets via the manifest), `server/`, `deploy/`, `docs/`.
+`client/` (consumes your assets via the manifest), `server/`, `deploy/`, `docs/`.
 
 ## Done means
 Assets present, registered in the manifest, verified loadable by Three.js,

@@ -84,6 +84,32 @@ type client struct {
 	// rebuilt by refreshScoutCache on every mission mutation.
 	scoutTargets map[string][3]float64
 
+	// Phase 11 skill accumulators, all guarded by srv.mu. Metre counters
+	// are fed by the tick loop and drained by the once-a-second skill
+	// sweep; xpPending batches awards between flushes; discovered mirrors
+	// the persisted POI set; lastPos anchors the per-tick deltas.
+	xpPending    map[string]int64
+	sprintMeters float64
+	driveMeters  float64
+	flyMeters    float64
+	discovered   map[string]bool
+	lastPos      [3]float64
+	hasLastPos   bool
+	airborneAt   float64 // Time the pilot's ship left the ground, 0 grounded
+	// sprintMult/driveMult/flightMult are the movement efficacy multipliers,
+	// recomputed from levels at join and on every level-up so the step reads
+	// them without touching the identity lock. 0 until set = the 1.0
+	// identity (sim.effMult).
+	sprintMult float64
+	driveMult  float64
+	flightMult float64
+	// damageMult scales resolved shot damage (Marksmanship); lootExtra is
+	// the extra-roll chance on a kill's loot table (Scavenging), and
+	// lootExtraPOI the same inside a discovered POI (the Recon synergy).
+	damageMult   float64
+	lootExtra    float64
+	lootExtraPOI float64
+
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the
 	// trigger was pulled (PROTOCOL.md "fire"), and this turns that name into
@@ -150,6 +176,7 @@ func (c *client) step(t *terrain.Field, colliders []protocol.Collider) {
 			Look:       sim.Vec{float64(w.LookDir[0]), float64(w.LookDir[1]), float64(w.LookDir[2])},
 			ActionMask: w.ActionMask,
 			Colliders:  colliders,
+			SprintMult: c.sprintMult,
 		}
 	}
 	c.entity.PrevLook = sim.Step(&c.entity.State, in, c.entity.PrevLook, t, sim.DT)

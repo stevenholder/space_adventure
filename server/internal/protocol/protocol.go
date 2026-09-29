@@ -84,6 +84,7 @@ const (
 	OpMissionAbandon uint16 = 0x000B
 	OpMissionTurnin  uint16 = 0x000C
 	OpMissionShare   uint16 = 0x000D
+	OpSkills         uint16 = 0x000E // Phase 11: the full sheet
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -111,6 +112,7 @@ const (
 	EventPriorityOffer   uint16 = 0x000A // broadcast
 	EventPartyInvited    uint16 = 0x000B
 	EventMissionShared   uint16 = 0x000C // data = the full mission template
+	EventSkillXP         uint16 = 0x000D // Phase 11: {skill,xp,level,next_at,leveled}
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

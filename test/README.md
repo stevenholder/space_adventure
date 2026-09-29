@@ -4,7 +4,7 @@
 
 ## Why parity tests, not per-side unit tests
 
-Anything implemented twice — once in Go on the server, once in C# in the Unity
+Anything implemented twice — once in Go on the server, once in C# in the Godot
 client — needs a test that runs BOTH and diffs. Per-side unit tests exercise
 one implementation against itself and prove nothing about agreement, and this
 project has been bitten by that twice: the strafe axis was wrong in both sims
@@ -15,11 +15,11 @@ so the seq would have gone on the wire as the message type).
 
 Hence the standing pair:
 
-- **`t20-csharp-conformance.mjs`** (`make unity-conformance`, C40) — one input
+- **`t20-csharp-conformance.mjs`** (`make godot-conformance`, C40) — one input
   script through the Go sim and the C# `Sim` assembly, trajectories diffed
   per tick. `t13-collide-parity.mjs` covers the collider resolve the C5 route
   never touches.
-- **`t22-csharp-codec.mjs`** (`make unity-codec`, C41) — the C# `Net` codec
+- **`t22-csharp-codec.mjs`** (`make godot-codec`, C41) — the C# `Net` codec
   against Go-emitted vectors, byte-for-byte, both directions.
 
 The harnesses in this directory carry their **own independent third
@@ -37,9 +37,9 @@ them.
 - `t9-terrain.py` — terrain field audit (walkability, landmarks, craters).
 - Go entry points the harnesses shell out to: `server codec emit|parse`,
   `server dump`, `server collide`.
-- C# entry point: `client-unity/headless/` (`SimDump` — `--selftest`, `--join`,
+- C# entry point: `client/simdump/` (`SimDump` — `--selftest`, `--join`,
   `--predict`, `--authority`, `--collide`, `--dump`), which builds `Sim`/`Net`
-  with no Unity Editor.
+  with no engine.
 - `test/out/` — committed evidence (result JSONs, reports) plus regenerable
   artifacts held back by `.gitignore`.
 - The latency-injecting WS proxy used for prediction-error measurement lives in

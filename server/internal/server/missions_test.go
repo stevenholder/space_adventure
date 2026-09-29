@@ -19,8 +19,15 @@ import (
 // the quartermaster and interact_dist is 3.0 (the t14 lesson), and a blind
 // timed walk overshoots.
 func walkToNPC(t *testing.T, c *pClient, npc uint32) {
+	walkToNPCFrom(t, c, npc, 1)
+}
+
+// walkToNPCFrom lets a test that already burned input seqs keep counting
+// up — the server ignores stale sequence numbers, so restarting at 1 after
+// sixty sprint inputs walks nowhere.
+func walkToNPCFrom(t *testing.T, c *pClient, npc uint32, seqStart uint16) {
 	t.Helper()
-	seq := uint16(1)
+	seq := seqStart
 	for i := 0; i < 60; i++ {
 		me := c.posOf(t, c.id)
 		to := c.posOf(t, npc)

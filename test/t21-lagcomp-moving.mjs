@@ -263,13 +263,16 @@ const checks = []
 const check = (name, ok, detail = '') => { checks.push([name, ok]); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`) }
 
 // --- setup -----------------------------------------------------------------
-const proxy = spawn('node', [path.join(root, 'test/lib/proxy.mjs'), '18082', '127.0.0.1', '18080', String(ONE_WAY_MS)], { stdio: 'ignore' })
+// SA_PORT: the server's port (kind's 18080 by default), so the test can be
+// pointed at a second server beside it.
+const SA_PORT = Number(process.env.SA_PORT ?? 18080)
+const proxy = spawn('node', [path.join(root, 'test/lib/proxy.mjs'), '18082', '127.0.0.1', String(SA_PORT), String(ONE_WAY_MS)], { stdio: 'ignore' })
 await sleep(400)
 const route = JSON.parse(readFileSync(new URL('./out/route-camp.json', import.meta.url), 'utf8'))
 const camp = route.waypoints[route.waypoints.length - 1]
 
 const shooter = await session('lagshooter', 18082)
-const bait = await session('lagbait', 18080)
+const bait = await session('lagbait', SA_PORT)
 console.log(`shooter id=${shooter.myId} (RTT ${2 * ONE_WAY_MS} ms), bait id=${bait.myId} (direct)`)
 await armed(shooter)
 console.log('shooter armed with the pulse rifle')
@@ -437,7 +440,9 @@ let controlHits = 0
 for (let i = 0; i < 3; i++) {
   const still = gruntIds
     .map(id => ({ id, st: shooter.ents.get(id), lv: bait.ents.get(id) }))
-    .filter(g => g.st && g.lv && g.lv.health > 0)
+    // In range: since Phase 9 the outpost's idle grunts sit ~178 m out, past
+    // max_range, and are exactly the zero-offset pick this sort would make.
+    .filter(g => g.st && g.lv && g.lv.health > 0 && dist(shooter.me(), g.lv.pos) < 100)
     .sort((a, b) => dist(a.st.pos, a.lv.pos) - dist(b.st.pos, b.lv.pos))[0]
   if (!still) break
   const r = await shoot(still.lv.pos, still.id)

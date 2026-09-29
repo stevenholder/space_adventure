@@ -1,7 +1,7 @@
 {
   "criterion": "C4 (ROADMAP #4): connection loss despawns the entity on other clients within 10 s (heartbeat timeout)",
   "run": {
-    "ts": "2026-09-03T15:02:34.827Z",
+    "ts": "2026-09-15T05:04:40.295Z",
     "endpoints": {
       "A": "ws://127.0.0.1:18080/ws (nginx)",
       "B": "ws://127.0.0.1:18080/ws (direct)"
@@ -9,15 +9,15 @@
   },
   "phase_a": {
     "A": {
-      "entity_id": 78,
+      "entity_id": 13,
       "endpoint": "ws://127.0.0.1:18080/ws (nginx)"
     },
     "B": {
-      "entity_id": 79,
+      "entity_id": 14,
       "endpoint": "ws://127.0.0.1:18080/ws (direct)"
     },
-    "b_last_input_ns": "342128141755181",
-    "b_kill_ns": "342128341483092",
+    "b_last_input_ns": "118666868853153",
+    "b_kill_ns": "118667068877928",
     "b_sent": {
       "hello": 1,
       "input": 1,
@@ -25,27 +25,27 @@
       "closeFrame": false,
       "killed": true
     },
-    "despawn_at_ns": "342128342620824",
-    "kill_to_despawn_ms": 1.14,
-    "last_write_to_despawn_ms": 200.87,
+    "despawn_at_ns": "118667070482761",
+    "kill_to_despawn_ms": 1.6,
+    "last_write_to_despawn_ms": 201.63,
     "limit_ms": 10000,
     "first_snapshot_without_B_after_kill": {
-      "tick": 126037,
-      "at_ns": "342128387884099",
-      "at_ms": 46.4
+      "tick": 660505,
+      "at_ns": "118667081483345",
+      "at_ms": 12.61
     },
     "mechanism": "immediate connection-loss detection: server read loop hit EOF/RST on the destroyed TCP (no close frame involved) and broadcast despawn"
   },
   "phase_b": {
     "A2": {
-      "entity_id": 80,
+      "entity_id": 15,
       "endpoint": "ws://127.0.0.1:18080/ws (nginx)"
     },
     "B2": {
-      "entity_id": 81,
+      "entity_id": 16,
       "endpoint": "ws://127.0.0.1:18080/ws (direct)"
     },
-    "b2_last_input_ns": "342129303142398",
+    "b2_last_input_ns": "118667931216953",
     "b2_sent": {
       "hello": 1,
       "input": 1,
@@ -56,16 +56,16 @@
     "b2_closed_by_server": {
       "reason": "TCP closed",
       "code": null,
-      "observed_at_ns": "342139605504048",
-      "observed_at_ms": 10302.36
+      "observed_at_ns": "118678246697374",
+      "observed_at_ms": 10315.48
     },
-    "despawn_at_ns": "342139303499084",
-    "silent_to_despawn_ms": 10000.36,
+    "despawn_at_ns": "118677934676260",
+    "silent_to_despawn_ms": 10003.46,
     "expected_ms": 10000,
     "tolerance_ms": 500,
     "first_snapshot_without_B2": {
-      "tick": 126256,
-      "at_ns": "342139337988643"
+      "tick": 660723,
+      "at_ns": "118677981315328"
     }
   },
   "overall": "PASS",
@@ -73,22 +73,22 @@
     {
       "id": "a1: B despawned on A within 10 s of the hard kill",
       "pass": true,
-      "detail": "kill->DESPAWN = 1.1 ms (limit 10000); last-B2write->DESPAWN = 200.9 ms"
+      "detail": "kill->DESPAWN = 1.6 ms (limit 10000); last-B2write->DESPAWN = 201.6 ms"
     },
     {
       "id": "a2: mechanism is connection loss, not a close frame (B sent none)",
       "pass": true,
-      "detail": "B sent 1 hello + 1 input, 0 WS close frames, then kill(); latency 1.1 ms << 10 s read deadline -> server detected the dead TCP (read EOF/RST) and despawned on connection loss"
+      "detail": "B sent 1 hello + 1 input, 0 WS close frames, then kill(); latency 1.6 ms << 10 s read deadline -> server detected the dead TCP (read EOF/RST) and despawned on connection loss"
     },
     {
       "id": "b1: silent (open) connection dropped at ~10 s (heartbeat timeout)",
       "pass": true,
-      "detail": "last-B2-write -> DESPAWN = 10000.4 ms (expected ~10000 ms, tolerance +/-500)"
+      "detail": "last-B2-write -> DESPAWN = 10003.5 ms (expected ~10000 ms, tolerance +/-500)"
     },
     {
       "id": "b2: server closed B2 silent socket after the timeout (before our cleanup)",
       "pass": true,
-      "detail": "B2 close: reason=TCP closed, code=n/a, observed +10302.4 ms (server teardown; WS close frame not observed — port-forward teardown delivers a bare TCP close)"
+      "detail": "B2 close: reason=TCP closed, code=n/a, observed +10315.5 ms (server teardown; WS close frame not observed — port-forward teardown delivers a bare TCP close)"
     }
   ],
   "notes": [

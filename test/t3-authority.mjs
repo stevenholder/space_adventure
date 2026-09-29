@@ -35,7 +35,7 @@ const evidence = path.join(root, 'test', 'out', 't3-authority.json')
 try {
   const out = execFileSync(
     'dotnet',
-    ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+    ['run', '--project', 'client/simdump', '--nologo', '--',
       '--authority', url, '--evidence', evidence],
     { cwd: root, encoding: 'utf8' },
   )

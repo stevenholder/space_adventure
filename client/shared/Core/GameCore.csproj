@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The engine-free half of the game: prediction, the render timeline,
+       rock scatter, bearings, the skill curve. Pure arithmetic over Sim and
+       Net, so it stays testable with no engine anywhere. Anything that
+       touches a Node lives in client/godot/Game and is not here. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <RootNamespace>SpaceAdventure.Game</RootNamespace>
+    <AssemblyName>GameCore</AssemblyName>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Sim/Sim.csproj" />
+    <ProjectReference Include="../Net/Net.csproj" />
+  </ItemGroup>
+
+</Project>

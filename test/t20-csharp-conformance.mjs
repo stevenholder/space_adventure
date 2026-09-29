@@ -3,7 +3,7 @@
  * C40 — the C# sim must match the Go sim on the C5 conformance route.
  *
  * This is the gate for Phase 3.5. Replay reconciliation converges only while
- * client and server step identically, and the Unity client is a THIRD
+ * client and server step identically, and the C# client is a THIRD
  * implementation of rules that already exist twice. If this cannot close, the
  * phase stops here: every renderer, HUD and input task downstream is wasted
  * work against a client that silently disagrees with the server.
@@ -53,7 +53,7 @@ writeFileSync(path.join(root, GO_OUT), goOut)
 
 console.log('replaying the same script through the C# sim...')
 const csOut = execFileSync('dotnet',
-  ['run', '--project', 'client-unity/headless/SimDump', '--nologo', '--',
+  ['run', '--project', 'client/simdump', '--nologo', '--',
     '--dump', SCRIPT, '--world', WORLD],
   { cwd: root, maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'inherit'] })
 writeFileSync(path.join(root, CS_OUT), csOut)

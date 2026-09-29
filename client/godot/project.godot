@@ -1,0 +1,25 @@
+; Space Adventure -- Godot project settings. Hand-written; the editor may
+; rewrite this file, and that is fine, but nothing else under this directory
+; is authored in the editor (client/CONVENTIONS.md).
+
+config_version=5
+
+[application]
+
+config/name="Space Adventure"
+run/main_scene="res://Boot.tscn"
+run/max_fps=120
+config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+
+[display]
+
+window/vsync/vsync_mode=0
+
+[dotnet]
+
+project/assembly_name="SpaceAdventure"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

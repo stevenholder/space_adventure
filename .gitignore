@@ -44,4 +44,9 @@ test/out/t10-sim-result-prefix.json
 
 # QA evidence logs (referenced from docs/QA-STATUS.md)
 !test/out/*.log
-client-unity/Assets/Game/Resources/ui/
+
+# Godot exports (client/godot-cli build) and their staged art copy, and the
+# .NET build outputs of every client project
+client/build/
+client/**/bin/
+client/**/obj/

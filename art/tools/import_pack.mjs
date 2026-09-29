@@ -10,15 +10,15 @@
  * forward axis, textured materials, and node names nobody here mounts things
  * by. This applies the fixups, deterministically, from a recipe.
  *
- * THE ONE THAT MATTERS IS `bake`. The Unity client draws every single model
- * with ONE material, SpaceAdventure/TerrainVertexColor, which reads colour out
- * of the vertex stream. That is not a stylistic preference — the client builds
- * its materials in C# via Shader.Find, so the build has no asset referencing
- * any shader, and Unity strips every shader it cannot see referenced. A model
- * that arrives wanting its own PBR material renders MAGENTA in a packaged
- * build and looks perfectly fine in the Editor, which is the worst way for
- * this to fail. So the colour is baked down into COLOR_0 here, at import, and
- * the client never needs a second shader.
+ * THE ONE THAT MATTERS IS `bake`. The client draws every model with ONE
+ * material that reads colour out of the vertex stream (Godot:
+ * StandardMaterial3D with VertexColorUseAsAlbedo, built in C#, no shader
+ * resources in the project). This started as a Unity constraint — Unity
+ * stripped every shader nothing referenced, so per-model PBR materials went
+ * MAGENTA in packaged builds — and it stays because the Godot client
+ * (AssetRegistry) still reads COLOR_0 and nothing else. So the colour is baked
+ * down into COLOR_0 here, at import, and the client never needs a second
+ * material.
  *
  * Usage:
  *   node tools/import_pack.mjs <recipe.json>       apply one recipe
@@ -503,7 +503,7 @@ export async function importPack(recipe) {
 
 /**
  * Write the import's result back into art/manifest.json, which is the contract
- * `verify.mjs` and the Unity client both read. `tris` has to be exact — verify
+ * `verify.mjs` and the Godot client both read. `tris` has to be exact — verify
  * compares it against the file — and the provenance fields are the record of
  * where a model came from and under what licence.
  */

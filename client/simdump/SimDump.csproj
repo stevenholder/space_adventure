@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Headless runner for the client's engine-free assemblies: the C40
+       conformance dump, the self-checks, and the C41 codec vectors. Console
+       app, no test framework, same shape as the test/*.mjs harnesses, and it
+       runs with no engine anywhere. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SpaceAdventure.SimDump</RootNamespace>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../shared/Sim/Sim.csproj" />
+    <ProjectReference Include="../shared/Net/Net.csproj" />
+    <ProjectReference Include="../shared/Core/GameCore.csproj" />
+  </ItemGroup>
+
+</Project>

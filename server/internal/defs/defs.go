@@ -76,6 +76,48 @@ type Mission struct {
 	RepostMinutes int    `json:"repost_minutes,omitempty"`
 }
 
+// Skill is one roster row (server/data/skills.json, Phase 11).
+type Skill struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Reserved bool   `json:"reserved,omitempty"`
+	Efficacy struct {
+		Kind     string  `json:"kind"`
+		PerLevel float64 `json:"per_level"`
+	} `json:"efficacy,omitempty"`
+}
+
+// Synergy is one declared cross-skill bonus.
+type Synergy struct {
+	Source   string  `json:"source"`
+	Target   string  `json:"target"`
+	What     string  `json:"what"`
+	PerLevel float64 `json:"per_level"`
+	Where    string  `json:"where,omitempty"` // "" = everywhere, "poi" = inside a discovered POI
+}
+
+// SkillAwards is the verb → XP table.
+type SkillAwards struct {
+	DamageXPPerPoint int64 `json:"damage_xp_per_point"`
+	KillXP           int64 `json:"kill_xp"`
+	KillXPWarlord    int64 `json:"kill_xp_warlord"`
+	SprintXPPer10m   int64 `json:"sprint_xp_per_10m"`
+	DriveXPPer10m    int64 `json:"drive_xp_per_10m"`
+	FlyXPPer10m      int64 `json:"fly_xp_per_10m"`
+	LandingXP        int64 `json:"landing_xp"`
+	PickupXPPerItem  int64 `json:"pickup_xp_per_item"`
+	CommerceXPPer5cr int64 `json:"commerce_xp_per_5cr"`
+	DiscoveryXP      int64 `json:"discovery_xp"`
+	ScoutMissionXP   int64 `json:"scout_mission_xp"`
+}
+
+// UnlockRequirement gates a purchase behind a skill level.
+type UnlockRequirement struct {
+	Item  string `json:"item"`
+	Skill string `json:"skill"`
+	Level int    `json:"level"`
+}
+
 // NPC is one NPC archetype (server/data/npcs.json).
 type NPC struct {
 	ID    string `json:"id"`
@@ -172,14 +214,18 @@ type Registry struct {
 		Item string `json:"item"`
 		Qty  int    `json:"qty"`
 	}
-	InvSlots int
-	Missions map[string]Mission
-	Items    map[string]Item
-	Entities map[string]EntityDef
-	NPCs     map[string]NPC
-	Zones    map[string]Zone
-	Loot     map[string][]LootEntry
-	Payload  []byte
+	InvSlots  int
+	Missions  map[string]Mission
+	Skills    []Skill
+	Synergies []Synergy
+	Awards    SkillAwards
+	Unlocks   []UnlockRequirement
+	Items     map[string]Item
+	Entities  map[string]EntityDef
+	NPCs      map[string]NPC
+	Zones     map[string]Zone
+	Loot      map[string][]LootEntry
+	Payload   []byte
 }
 
 // itemsFile mirrors server/data/items.json.
@@ -248,6 +294,21 @@ func Load() (*Registry, error) {
 		NPCs:         make(map[string]NPC, len(npcsF.NPCs)),
 		Zones:        make(map[string]Zone, len(zoneFiles)),
 		Missions:     map[string]Mission{},
+	}
+	if raw, err := data.FS.ReadFile("skills.json"); err == nil {
+		var sf struct {
+			Skills    []Skill             `json:"skills"`
+			Synergies []Synergy           `json:"synergies"`
+			Awards    SkillAwards         `json:"awards"`
+			Unlocks   []UnlockRequirement `json:"unlock_requirements"`
+		}
+		if err := json.Unmarshal(raw, &sf); err != nil {
+			return nil, fmt.Errorf("defs: parse skills.json: %w", err)
+		}
+		reg.Skills = sf.Skills
+		reg.Synergies = sf.Synergies
+		reg.Awards = sf.Awards
+		reg.Unlocks = sf.Unlocks
 	}
 	if raw, err := data.FS.ReadFile("missions.json"); err == nil {
 		var mf struct {
@@ -319,13 +380,20 @@ type payload struct {
 	Entities  map[string]EntityDef  `json:"entities"`
 	NPCs      map[string]payloadNPC `json:"npcs"`
 	Constants payloadConstants      `json:"constants"`
+	// Phase 11: the skill roster and synergies ride to the client for the
+	// K panel and the predictor's efficacy mirror. Additive JSON — old
+	// clients ignore it.
+	Skills    []Skill   `json:"skills,omitempty"`
+	Synergies []Synergy `json:"synergies,omitempty"`
 }
 
 func buildPayload(reg *Registry) ([]byte, error) {
 	p := payload{
-		Items:    reg.Items,
-		Entities: reg.Entities,
-		NPCs:     make(map[string]payloadNPC, len(reg.NPCs)),
+		Items:     reg.Items,
+		Entities:  reg.Entities,
+		Skills:    reg.Skills,
+		Synergies: reg.Synergies,
+		NPCs:      make(map[string]payloadNPC, len(reg.NPCs)),
 		Constants: payloadConstants{
 			InteractDist: 3.0,
 			InteractCone: 20.0,

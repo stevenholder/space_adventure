@@ -1114,6 +1114,125 @@ parties", PROTOCOL cmd ops `0x0006`–`0x000C` and events
 - **C77 Nothing else moved.** The full harness fleet t2–t29 passes
   unchanged; frame budget holds with the journal open.
 
+# Phase 11 — skills: what you did is what you are
+
+### Where Phase 11 stands (2026-09-15)
+
+Built and green on kind: C78–C83 recorded (docs/QA-STATUS.md "Phase
+11"). Server: the roster and curve, the award engine (metres, damage,
+kills, pickups, credits, discovery — batched once a second), movement
+efficacy inside both sims, damage/price/loot efficacy and the declared
+synergies on the server side, the data-driven unlock gate. Client: the
+K panel (ten rows, bars, arrows, reserved greyed), the XP drip and the
+LEVEL UP banner. `t34` plays the whole loop over the wire and watches
+seven skills move and persist. Owed to humans: the drip and the banner
+seen live. Phase 12's artisan loop is next; `shop_sell` is the first
+verb it should add, so the Scavenging→Commerce synergy has something to
+touch.
+
+**Playable proof.** Open the sheet (K) and ten skills stare back, seven
+of them moving: sprint to the camp and Athletics ticks, win the fight
+and Marksmanship climbs, drag the loot home and Scavenging pays
+Commerce a visible synergy bonus at the shop counter. A level-up
+banners mid-fight and your next magazine hits harder. A fresh player's
+numbers are exactly 1.0 — nothing changes until trained — and the
+conformance suites hold at 1e-6 WITH multipliers live in both sims.
+
+**Contracts** (wave 0, landed with this section): GDD "Skills" — the
+ten-skill roster, the frozen RS curve, the efficacy/two-sims
+constraint, declared synergies, the K panel.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| 1 | skills.json (roster, awards, efficacy, synergies, unlock reqs) + registry parse | `server/data/`, `internal/defs` | go test |
+| 2 | Store: skills column (XP map + discovered POIs), migration 004 | `internal/store` | store tests both engines |
+| 3 | Curve math, pinned: points(L) landmarks, level-from-XP, both directions | `internal/skills` | unit vs 83 / 101,333 / 13,034,431 |
+| 4 | Award engine: hooks on damage/kill, distance (sprint/drive/fly), pickups, commerce, discovery; per-skill ≤1/s batch → skill_xp events | server | unit + wire |
+| 5 | Sim multipliers: sprint/drive/fly efficacy in BOTH sims, shipped on the sheet + level-ups, predictor applies; conformance cases at non-unit mults | `internal/sim`, C# mirror | t20/t23/t25 extended |
+| 6 | Server efficacy: damage mult, shop prices, loot extra-roll; synergy resolution; unlock gate on purchases | server | unit + t-fleet |
+| 7 | Client: sheet state, K panel (rows, bars, synergy arrows, greyed reserved), XP drip + LEVEL UP banner | `client-unity` | screenshots |
+| 8 | t34: live loop — sprint/fight/loot/trade/discover, watch seven skills move and persist across reconnect | `test/` | the test |
+| 9 | QA: C78–C83, gallery, docs | docs | criteria |
+
+### Acceptance criteria
+
+- **C78 Doing trains.** Every hooked verb awards its skill; events
+  batch (≤1/s/skill); XP survives reconnect. (t34)
+- **C79 The curve is RuneScape's.** Landmarks pinned by unit test;
+  level 92 is half of 99.
+- **C80 Efficacy is real and conformant.** Measured deltas at trained
+  levels vs 1; C30/C34-class conformance holds at 1e-6 with non-unit
+  multipliers in both sims; fresh players are bit-identical to today.
+- **C81 Synergies apply and show.** Bonus math unit-tested; the panel
+  draws the links.
+- **C82 Unlocks gate.** A data-gated purchase refuses below its level
+  and passes at it.
+- **C83 Nothing else moved.** Fleet t2–t29 unchanged; frame budget
+  holds with the panel open.
+
+# Phase 11.5 — the engine swap: Unity out, Godot in
+
+**Why.** Unity's toolchain fought the agent-first, code-first workflow: the
+project had to live on `/mnt/c` (Unity fatals on WSL paths), the Editor held a
+project lock so `unity compile`/`build` failed while it was open, batchmode
+exited 0 on compiler errors, no agent could drive the Editor, and CI never
+built the player. On top of that, Unity-the-company and its licensing.
+
+**What made it cheap.** Phase 3.5's split paid off: `Sim`, `Net` and
+`Game/Core` referenced no engine, so they moved to `client/shared/` unchanged
+(5.1k lines, `git mv`), and the harnesses that drive them through `SimDump`
+proved the move before a single engine API was touched. Only the engine-bound
+half of `Game/` was rewritten (~6.4k Godot lines for ~7.6k Unity lines), and
+there was no scene or prefab to migrate because there never was one (C47).
+
+**Two findings that shaped the port.** The Sim was already in Godot's frame —
+right-handed, Y-up, +Z forward — so the Unity build's Z-mirror and every
+"rebuild the rotation from two converted axes" workaround simply disappeared;
+`Frame.cs` is the identity plus one 180° model flip for −Z-facing glTF. And
+`Godot.NET.Sdk` pulls the engine bindings from NuGet, so `dotnet build`
+typechecks the whole client with no editor: CI went from compiling 0% of the
+client to 100%.
+
+**Engine.** Godot 4.7.2 (.NET), pinned in `client/.godot-version`;
+`net8.0` game assembly over `netstandard2.1` shared ones; `gl_compatibility`
+renderer so WSLg runs it. Export is `godot --headless --export-release`,
+Linux and Windows presets from the same Linux box.
+
+### Task list
+
+| # | Task | Where | Verify |
+|---|---|---|---|
+| M0 | Move Sim/Net/Core/SimDump into `client/`, Godot project skeleton, `godot-cli`, Makefile and CI renames | `client/` | `make godot-gate godot-test godot-codec godot-conformance` |
+| M1 | Connect, terrain, local walk with prediction; `Frame`, `InputState`, `Fps`, `TerrainMesh` | `client/godot/Game/` | `make godot-build godot-run` → `world ready`, `colliders:` |
+| M2 | Entities, characters, glTF at runtime, animation, structures, props | `AssetRegistry`, `Entities`, `CharacterAnim`, `Structures` | `-dumpNodes char.player`; screenshot |
+| M3 | Seats, rover and ship prediction, sky, rocks | `Boot`, `Sky`, `Rocks` | `node test/t24 t26 t27`; screenshot |
+| M4 | The interface: HUD, panels, map, journal, party, skills | `UI/`, `Map`, `Missions`, `Skills` | `-uiPanel` gallery |
+| M5 | Combat FX, the first-person rig through a SubViewport | `Combat`, `ViewModel` | `-rigArmed` screenshot |
+| M6 | Screenshot rig, Windows export, CI export job, docs, `client-unity/` deleted | `Rig.cs`, `.github/`, `docs/` | full `make godot-*` sweep |
+
+### Acceptance criteria
+
+| # | Criterion | Verify |
+|---|---|---|
+| C84 | Every engine-free assembly moved byte-identical and every SimDump harness stayed green | `make godot-test godot-codec godot-conformance`; `node test/t13 t35` |
+| C85 | The client compiles with no editor installed, in CI, including the engine-bound assembly | `dotnet build client/SpaceAdventure.Client.slnx` in `ci.yml` |
+| C86 | A player exports headlessly from the command line and joins the deployed server from a cold start | `make godot-build godot-run` |
+| C87 | Sign rules pinned headless: mouse-right turns toward facing × up, mouse-up looks up, winding measure, model flip | `godot --headless --path client/godot -- -selftest` |
+| C88 | glTF node contract survives the importer (`hand.r` → `hand_r`, clips `idle walk sprint die`) | `-dumpNodes char.player` |
+| C89 | The C60 gallery reproduces: HUD, skills, map, bags, armed rig | `-uiShot` with `-uiPanel` / `-rigArmed` |
+| C90 | Windows export from Linux | `./client/godot-cli build Windows` |
+| C91 | No agent-authored scene or resource; one `Boot.tscn`; no `using Godot` in `shared/` | `make godot-gate` |
+
+# Phase 12 — the artisan loop (queued behind Phase 11)
+
+Mining (3 s drill channels on depleting ore nodes), Salvaging (wreck
+nodes), Engineering (workbench recipes at the relay), tools at the
+quartermaster, raw materials dropping on death as a lootable spill.
+Trains the three reserved skills on the proven framework. Contracted in
+GDD "Skills — Phase 12 preview"; tasked when Phase 11 closes.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
