@@ -26,6 +26,8 @@ namespace SpaceAdventure.Game.UI
         private readonly Label _debug;
         private readonly PanelContainer _debugPanel;
         private readonly Control _healthBarLayer;
+        private readonly ColorRect _death;
+        private readonly Label _deathLine;
         private readonly Dictionary<uint, (Panel box, ColorRect fill)> _healthBars = new();
         private readonly List<uint> _staleBars = new();
 
@@ -123,6 +125,23 @@ namespace SpaceAdventure.Game.UI
             }
             root.AddChild(logBox);
 
+            // ---- death overlay: the whole screen, over everything ------------
+            _death = new ColorRect { Color = new Color(0.30f, 0.02f, 0.02f, 0.55f), MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
+            _death.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            var deathBox = Styles.Column(6);
+            deathBox.MouseFilter = Control.MouseFilterEnum.Ignore;
+            deathBox.SetAnchorsPreset(Control.LayoutPreset.Center);
+            deathBox.GrowHorizontal = Control.GrowDirection.Both;
+            deathBox.GrowVertical = Control.GrowDirection.Both;
+            var deathTitle = Styles.Display_("YOU DIED", 48, Styles.Cream);
+            deathTitle.HorizontalAlignment = HorizontalAlignment.Center;
+            _deathLine = Styles.Display_("", 20, Styles.Amber);
+            _deathLine.HorizontalAlignment = HorizontalAlignment.Center;
+            deathBox.AddChild(deathTitle);
+            deathBox.AddChild(_deathLine);
+            _death.AddChild(deathBox);
+            root.AddChild(_death);
+
             // ---- F3 debug overlay --------------------------------------------
             _debugPanel = Styles.Panel(Styles.SkewNone);
             _debugPanel.MouseFilter = Control.MouseFilterEnum.Ignore;
@@ -200,6 +219,13 @@ namespace SpaceAdventure.Game.UI
                 _healthBars[id].box.QueueFree();
                 _healthBars.Remove(id);
             }
+        }
+
+        /// <summary>The death screen; negative hides it, otherwise seconds to respawn.</summary>
+        public void SetDeath(double respawnIn)
+        {
+            _death.Visible = respawnIn >= 0;
+            if (respawnIn >= 0) _deathLine.Text = respawnIn > 0.05 ? $"RESPAWNING IN {System.Math.Ceiling(respawnIn):0}" : "RESPAWNING…";
         }
 
         public void SetVitals(int health, int maxHealth)

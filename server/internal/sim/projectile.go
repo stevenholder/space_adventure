@@ -60,9 +60,19 @@ func StepProjectile(e *Ent, dt float64, ctx StepCtx) {
 	segLen := state.Speed * dt
 	next := prev.Add(dir.Scale(segLen))
 
+	// Step 1 — the wall between here and there. Step 3 used to test only
+	// the END point, and a gunner's round covers more than a wall's
+	// thickness per tick, so shots tunnelled through the kit walls and hit
+	// whoever stood behind them. The swept test gives the distance, so a
+	// capsule beyond the wall is not a hit.
+	wallT, wallHit := SegmentColliderHit([3]float64(prev), [3]float64(dir), segLen, ctx.Colliders)
+
 	// Step 2 — swept segment vs. damageable capsules (except Owner/self).
 	if ctx.World != nil && ctx.DefOf != nil && dir != (Vec{}) {
 		bestT := math.Inf(1)
+		if wallHit {
+			bestT = wallT
+		}
 		var bestID uint32
 		found := false
 		for _, id := range ctx.World.order {
@@ -117,6 +127,12 @@ func StepProjectile(e *Ent, dt float64, ctx StepCtx) {
 			ctx.World.Remove(e.ID)
 			return
 		}
+	}
+	if wallHit {
+		if ctx.World != nil {
+			ctx.World.Remove(e.ID)
+		}
+		return
 	}
 
 	// Step 3 — stop on the terrain or a static collider at the new position.

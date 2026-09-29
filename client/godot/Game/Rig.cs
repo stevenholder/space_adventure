@@ -11,7 +11,12 @@
 //   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug first
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
-//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock
+//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock|mast
+//   -uiPitch <deg> [-uiYaw <deg>]  look down/up and turn, from where the rig stands
+//   -uiBuy <item>           E at the faced shopkeeper, buy it, equip it (a REAL weapon)
+//   -uiFireNow <secs>       re-apply -uiPitch/-uiYaw, then hold the trigger that long
+//   -uiClaim                claim the priority bounty like the journal button, report the log
+//   -uiDeathDemo            show the death screen (local flag only) for a shot
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -38,6 +43,8 @@ namespace SpaceAdventure.Game
         private bool _rigAutoParty; // accept any party invite
         private bool _rigBack;      // step backwards
         private bool _rigArmed;
+        private bool _rigInteract; // one frame of E
+        private bool _rigDeathDemo; // -uiDeathDemo holds the dead flag against the snapshots
         private float _detourSign = 1f;
 
         private async Task Wait(double seconds) =>
@@ -53,6 +60,7 @@ namespace SpaceAdventure.Game
                 if (_rigJump) li.ActionMask |= Net.Action.Jump;
             }
             if (_rigFire) li.FirePressed = true;
+            if (_rigInteract) { li.InteractPressed = true; _rigInteract = false; }
             if (_rigBack) li.MoveY = -1;
         }
 
@@ -257,7 +265,29 @@ namespace SpaceAdventure.Game
             }
 
             string wantArg = Arg("-uiFace");
-            if (wantArg == "rock")
+            if (wantArg == "mast")
+            {
+                // Masts are props, not entities: aim at the nearest POI mast.
+                Vector3? mast = null; float mastD = float.MaxValue;
+                foreach (var m in _structures.Masts)
+                {
+                    float d = m.pos.DistanceSquaredTo(Eye);
+                    if (d < mastD) { mastD = d; mast = m.pos; }
+                }
+                if (mast.HasValue)
+                {
+                    _fps.FaceToward(Eye, mast.Value);
+                    GD.Print($"ui: facing mast at {Mathf.Sqrt(mastD):F0} m");
+                    string appMast = Arg("-uiApproach");
+                    if (appMast != null && float.TryParse(appMast, NumberStyles.Float, CultureInfo.InvariantCulture, out float closeToMast))
+                    {
+                        await ApproachTo(mast.Value, closeToMast);
+                        _fps.FaceToward(Eye, mast.Value);
+                    }
+                }
+                else GD.Print("ui: no masts to face");
+            }
+            else if (wantArg == "rock")
             {
                 // Rocks are not entities: aim at the nearest scatter placement.
                 Vector3? rock = _rocks.Nearest(Eye);
@@ -402,6 +432,102 @@ namespace SpaceAdventure.Game
                 for (double w3 = 0; w3 < 20 && !_partyState.InParty; w3 += 0.5) await Wait(0.5);
                 _journalView.Show(true);
                 await Wait(0.5);
+            }
+
+            // -uiBuy <item>: E at whatever -uiFace npc lined up (the shop opens
+            // off the live interaction), buy it, equip it in `primary`. The
+            // real purchase, not -rigArmed's visual one, so the server will
+            // resolve a fire.
+            string buy = Arg("-uiBuy");
+            if (buy != null)
+            {
+                // The interaction cone is measured against the NPC's EYE
+                // (Interact.Update), not its feet, so face that.
+                EntityView shop = null; float shopD = float.MaxValue;
+                foreach (EntityView v in _views.All)
+                {
+                    if (v.Root == null || v.Type != EntityType.Npc || v.Dead) continue;
+                    float d = (v.Root.GlobalPosition - Eye).LengthSquared();
+                    if (d < shopD) { shopD = d; shop = v; }
+                }
+                if (shop != null)
+                {
+                    Vector3 feet = shop.Root.GlobalPosition;
+                    _fps.FaceToward(Eye, feet + feet.Normalized() * 1.7f);
+                    await Wait(0.2);
+                }
+                _rigInteract = true;
+                await Wait(1.0);
+                _net.Send(_interact.BuyCmd(NextCmdSeq(), buy, 0));
+                await Wait(0.6);
+                _net.Send(_character.EquipCmd(NextCmdSeq(), "primary", buy));
+                await Wait(0.6);
+                GD.Print($"ui: bought {buy}: primary={_character.Primary}");
+            }
+
+            // -uiClaim: claim the priority bounty the way the journal's button
+            // does, then report the log -- the accept result is what moves it.
+            if (Flag("-uiClaim"))
+            {
+                for (double waited = 0; _missionLog.PriorityMission == null && waited < 10; waited += 0.25) await Wait(0.25);
+                string pid = _missionLog.PriorityMission;
+                if (pid == null) GD.Print("ui: no priority offer to claim");
+                else
+                {
+                    _missionLog.OnAcceptSent(pid);
+                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionAccept, $"{{\"id\":\"{pid}\"}}"));
+                    await Wait(1.5);
+                    bool active = _missionLog.State.TryGetValue(pid, out var st) && st.active;
+                    GD.Print($"ui: claimed {pid}: active={active} priority={_missionLog.PriorityMission ?? "none"} note={_missionLog.ClaimNote ?? "none"}");
+                }
+            }
+
+            // -uiFireNow <secs>: turn by -uiPitch/-uiYaw again (after any
+            // facing above), then hold the trigger that long.
+            string fireNow = Arg("-uiFireNow");
+            if (fireNow != null && float.TryParse(fireNow, NumberStyles.Float, CultureInfo.InvariantCulture, out float holdSecs))
+            {
+                if (pitchArg != null)
+                {
+                    float pitch = Mathf.DegToRad(float.Parse(pitchArg, CultureInfo.InvariantCulture));
+                    float yaw = Mathf.DegToRad(float.Parse(Arg("-uiYaw") ?? "0", CultureInfo.InvariantCulture));
+                    Vector3 eyeF = Eye, upF = eyeF.Normalized();
+                    Vector3 fwdF = CameraForward.Slide(upF).Normalized().Rotated(upF, -yaw);
+                    _fps.FaceToward(eyeF, eyeF + fwdF * (10f * Mathf.Cos(pitch)) + upF * (10f * Mathf.Sin(pitch)));
+                    await Wait(0.2);
+                }
+                _rigFire = true;
+                await Wait(holdSecs);
+                _rigFire = false;
+            }
+
+            // -uiKitDemo: two kit pieces 7 m ahead through the props path
+            // (AssetRegistry.Attach), so the wall render can be photographed
+            // at spawn instead of after a 250 m walk.
+            if (Flag("-uiKitDemo"))
+            {
+                Vector3 eyeK = Eye, upK = eyeK.Normalized();
+                Vector3 fwdK = CameraForward.Slide(upK).Normalized();
+                Vector3 rightK = fwdK.Cross(upK).Normalized();
+                foreach (var (asset, off) in new[] { ("struct.wall4.scrap", -3f), ("struct.tower.colony", 4f) })
+                {
+                    Vector3 ground = (eyeK + fwdK * 7f + rightK * off).Normalized();
+                    ground *= (float)_terrain.SampleRadius(Frame.ToSim(ground));
+                    var holder = new Node3D { Name = "kitdemo", Transform = new Transform3D(Frame.OrientationBasis(Frame.ToSim(ground), Frame.ToSim(-fwdK)), ground) };
+                    AddChild(holder);
+                    _assets.Attach(asset, holder, null);
+                }
+                await Wait(0.3);
+            }
+
+            // -uiDeathDemo: the death screen without dying -- local flag only,
+            // the way -uiDemo stages grunts. Nothing is sent.
+            if (Flag("-uiDeathDemo"))
+            {
+                _rigDeathDemo = true;
+                _hud.Dead = true;
+                _hud.DeadSince = Clock.Now - 1.6;
+                await Wait(0.2);
             }
 
             if (_rigLamp && _sun != null)

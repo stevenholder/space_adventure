@@ -112,6 +112,27 @@ func nearestBox(c Vec, radius float64, col protocol.Collider, up Vec) (hit bool,
 	qConj := Quat{-q[0], -q[1], -q[2], q[3]}
 
 	local := Rotate(qConj, c.Sub(center))
+
+	// A centre INSIDE the box is decided here, in the box's own frame,
+	// not by the distance below: the rotate round trip leaves ~1e-8 of
+	// noise, so "dist <= radius" with a zero radius (line of sight, a
+	// projectile's path) missed interior points and every NPC saw and shot
+	// through every wall. Exit along the nearest face.
+	if math.Abs(local[0]) <= half[0] && math.Abs(local[1]) <= half[1] && math.Abs(local[2]) <= half[2] {
+		axis, pen := 0, half[0]-math.Abs(local[0])
+		for i := 1; i < 3; i++ {
+			if p := half[i] - math.Abs(local[i]); p < pen {
+				axis, pen = i, p
+			}
+		}
+		var out Vec
+		out[axis] = 1
+		if local[axis] < 0 {
+			out[axis] = -1
+		}
+		return true, Rotate(q, out), radius + pen
+	}
+
 	clamped := Vec{
 		clampf(local[0], -half[0], half[0]),
 		clampf(local[1], -half[1], half[1]),
@@ -151,8 +172,16 @@ func clampf(x, lo, hi float64) float64 {
 // occlude, and marching the radius field along a ray costs far more than the
 // handful of box tests it replaces.
 func SegmentHitsColliders(from, dir [3]float64, length float64, cs []protocol.Collider) bool {
+	_, hit := SegmentColliderHit(from, dir, length, cs)
+	return hit
+}
+
+// SegmentColliderHit is SegmentHitsColliders with the distance: how far along
+// the segment the first static collider is entered. A projectile uses it to
+// stop at a wall BEFORE it reaches whoever stands behind it.
+func SegmentColliderHit(from, dir [3]float64, length float64, cs []protocol.Collider) (float64, bool) {
 	if len(cs) == 0 || length <= 0 {
-		return false
+		return 0, false
 	}
 	// Sample along the segment against the same sphere-vs-shape test the
 	// push-out uses, with a probe radius of zero. Step by half the smallest
@@ -167,9 +196,9 @@ func SegmentHitsColliders(from, dir [3]float64, length float64, cs []protocol.Co
 		p := [3]float64{from[0] + dir[0]*t, from[1] + dir[1]*t, from[2] + dir[2]*t}
 		for _, c := range cs {
 			if hit, _, _ := nearest(p, 0, c, Vec{0, 1, 0}); hit {
-				return true
+				return t, true
 			}
 		}
 	}
-	return false
+	return 0, false
 }

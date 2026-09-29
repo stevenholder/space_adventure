@@ -124,7 +124,10 @@ namespace SpaceAdventure.Game
             if (_input.Held(Key.Shift)) result.ActionMask |= Net.Action.Sprint;
             if (_input.Held(Key.Space)) result.ActionMask |= Net.Action.Jump;
             result.InteractPressed = _input.Pressed(Key.E);
-            result.FirePressed = _input.LeftButtonHeld;
+            // A click with the cursor free is a UI click (a journal button, a
+            // shop row), never a shot -- claiming a mission used to fire the
+            // rifle. Captured pointer = the world has the mouse.
+            result.FirePressed = _input.LeftButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured;
             return result;
         }
 

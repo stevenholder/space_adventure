@@ -779,7 +779,7 @@ scatters them identically. They cost the server nothing and the wire nothing.
 | name | value | unit | note |
 |------|-------|------|------|
 | `rock_count` | ~400 | | over the whole asteroid |
-| `rock_size` | 0.3–1.5 | m | see the collision constraint |
+| `rock_size` | 0.6–1.5 | m | see the collision constraint; the floor rose from 0.3 on 2026-09-29 — the small end read as pebbles (pebbles proper are the client's cluster pass, 0.15–0.45 m, 0–3 per rock) |
 | `rock_variants` | 3 | | `prop.rock.a/b/c` — one silhouette at 400 scales reads as a repeating texture |
 | `rock_slope_max` | 35 | deg | do not scatter onto near-cliff faces |
 

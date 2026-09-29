@@ -201,7 +201,7 @@ case "$cmd" in
     ip="$(hostname -I | awk '{print $1}')"
     url="${SA_SERVER_URL:-ws://$ip:18080/ws}"
     echo "godot-cli: launching C:\\Users\\$winuser\\SpaceAdventure\\SpaceAdventure.exe against $url"
-    powershell.exe -NoProfile -Command "Start-Process -FilePath 'C:\Users\$winuser\SpaceAdventure\SpaceAdventure.exe' -WorkingDirectory 'C:\Users\$winuser\SpaceAdventure' -ArgumentList @('--','-serverUrl','$url')"
+    powershell.exe -NoProfile -Command "Start-Process -FilePath 'C:\\Users\\$winuser\\SpaceAdventure\\SpaceAdventure.exe' -WorkingDirectory 'C:\\Users\\$winuser\\SpaceAdventure' -ArgumentList @('--','-serverUrl','$url')"
     ;;
 
   editor)

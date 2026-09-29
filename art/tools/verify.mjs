@@ -122,6 +122,26 @@ function findByName(root, name) {
   return out;
 }
 
+// A byte COLOR_0 must say normalized (glTF 2.0). Without it Godot reads
+// 0..255 as floats and the mesh renders pure white -- the kit did, C106.
+// three.js normalises on its own, so this reads the raw accessor JSON.
+function rawColorProblems(file) {
+  const buf = readFileSync(path.join(artDir, file));
+  const jsonLen = buf.readUInt32LE(12);
+  const g = JSON.parse(buf.toString("utf8", 20, 20 + jsonLen));
+  const out = [];
+  for (const mesh of g.meshes ?? []) {
+    for (const prim of mesh.primitives ?? []) {
+      const idx = prim.attributes?.COLOR_0;
+      if (idx === undefined) continue;
+      const a = g.accessors[idx];
+      if ((a.componentType === 5121 || a.componentType === 5123) && !a.normalized)
+        out.push(`COLOR_0 is ${a.componentType === 5121 ? "u8" : "u16"} but not normalized (renders white)`);
+    }
+  }
+  return out;
+}
+
 const loader = new GLTFLoader();
 function loadGlb(file) {
   const buf = readFileSync(path.join(artDir, file));
@@ -199,6 +219,7 @@ for (const asset of selected) {
         `leaks its ${cw}x${cd} cell: x [${b.min.x.toFixed(2)}, ${b.max.x.toFixed(2)}] ` +
         `z [${b.min.z.toFixed(2)}, ${b.max.z.toFixed(2)}] vs ±${hx.toFixed(2)}/±${hz.toFixed(2)}`);
     if (b.min.y < -0.35) problems.push(`skirt too deep: min y ${b.min.y.toFixed(2)}`);
+    problems.push(...rawColorProblems(asset.file));
     if (asset.height && b.max.y > asset.height)
       problems.push(`taller than declared: ${b.max.y.toFixed(2)} > ${asset.height}`);
   }

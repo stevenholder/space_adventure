@@ -1,6 +1,6 @@
 // Where the rocks go. Pure arithmetic, no engine.
 //
-// GDD "Rocks": ~400 rocks, 0.3-1.5 m, three variants, none on slopes above 35
+// GDD "Rocks": ~400 rocks, 0.6-1.5 m, three variants, none on slopes above 35
 // degrees, denser in crater floors and along ridges.
 //
 // This lives under Assets/Game/Core, which is the half of the Game assembly
@@ -54,7 +54,11 @@ namespace SpaceAdventure.Game
         /// <summary>GDD: rocks skip slopes above 35 degrees.</summary>
         public const double SlopeMax = 35.0 * Math.PI / 180.0;
         public const int TargetCount = 400;
-        private const double MinSize = 0.3;
+        // The 1.5 m cap is the GDD's walk-through constraint (no prop collision
+        // in M1). The floor rose from 0.3 (feedback 2026-09-29: the small end
+        // read as pebbles next to a 35 m flattened plateau); the pebbles proper
+        // are Rocks.cs's cluster pass. Only the mapping of the draw changed.
+        private const double MinSize = 0.6;
         private const double MaxSize = 1.5;
 
         /// <summary>

@@ -92,6 +92,53 @@ namespace SpaceAdventure.Game
             PriorityMission = p.id;
             PriorityPoi = p.poi;
             PriorityUntil = (float)Clock.Now + 12f;
+            ClaimNote = null;
+            // A bounty is never listed at a board, so the journal would show
+            // the raw id once it is active; give it a row with a name.
+            if (Offers.Find(o => o.id == p.id) == null)
+                Offers.Add(new MissionRow { id = p.id, type = "bounty", name = $"Bounty: warlord at {p.poi}", poi = p.poi });
+        }
+
+        /// <summary>The accept/claim in flight, so its result can land on the right row.</summary>
+        public string PendingAccept;
+        /// <summary>Why the last claim was refused, for the journal; null when none.</summary>
+        public string ClaimNote;
+
+        public void OnAcceptSent(string id)
+        {
+            PendingAccept = id;
+            ClaimNote = null;
+        }
+
+        /// <summary>
+        /// The server's answer to mission_accept carries no id and no state,
+        /// and nothing else tells this client the journal changed until the
+        /// next board listing -- so the row is updated here. A refusal
+        /// reverts the board's optimistic activation and says why.
+        /// </summary>
+        public void OnAcceptResult(bool ok, string body)
+        {
+            string id = PendingAccept;
+            PendingAccept = null;
+            if (id == null) return;
+            if (ok)
+            {
+                if (State.TryGetValue(id, out var st)) { st.active = true; st.count = 0; }
+                else State[id] = new MissionStateRow { active = true };
+                if (id == PriorityMission) PriorityMission = null;
+                return;
+            }
+            if (State.TryGetValue(id, out var was)) was.active = false;
+            string reason = "refused";
+            try { reason = Newtonsoft.Json.Linq.JObject.Parse(body ?? "{}")["reason"]?.ToString() ?? reason; } catch (JsonException) { }
+            ClaimNote = reason switch
+            {
+                "claimed" => "bounty already claimed by another party",
+                "no_bounty" => "that bounty is gone",
+                _ => $"refused: {reason}",
+            };
+            // A dead bounty offer stops shouting.
+            if (id == PriorityMission && (reason == "claimed" || reason == "no_bounty")) PriorityMission = null;
         }
 
         public string LastCompleted;

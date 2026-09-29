@@ -216,3 +216,35 @@ func TestProjectileHitEventCarriesItsPayload(t *testing.T) {
 		t.Errorf("health_after = %d, want 75", got)
 	}
 }
+
+// A wall between the gunner and the target stops the round: no damage, no
+// hit event, projectile gone. Before the swept test the round covered more
+// than the wall's thickness per tick and struck whoever stood behind it.
+func TestProjectileStopsAtWall(t *testing.T) {
+	wall := protocol.Collider{
+		Kind:   protocol.ColliderBox,
+		Center: [3]float32{200, 1, 10},
+		Half:   [3]float32{3, 1.5, 0.4},
+		Quat:   [4]float32{0, 0, 0, 1},
+	}
+	w, ctx, events := newProjectileWorld([]protocol.Collider{wall})
+	target := addProjTarget(w, 2, [3]float64{200, 0, 20})
+	proj := newProjectile(1, 99, [3]float64{200, 0, 0}, [3]float64{0, 0, 1}, 45, 25, 100)
+	w.Add(proj)
+
+	for i := 0; i < 12 && w.Ents[1] != nil; i++ {
+		w.Step(DT, ctx)
+	}
+
+	if target.Health != 100 {
+		t.Fatalf("target health = %d, want 100 (the wall took the round)", target.Health)
+	}
+	if w.Ents[1] != nil {
+		t.Fatalf("expected projectile removed at the wall")
+	}
+	for _, ev := range *events {
+		if ev.EventID == protocol.EventHit {
+			t.Fatalf("expected no EventHit through a wall, got %v", *events)
+		}
+	}
+}

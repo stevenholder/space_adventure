@@ -16,6 +16,12 @@ namespace SpaceAdventure.Game
         public IReadOnlyList<string> Lines => _log;
 
         public ushort Health { get; set; }
+        /// <summary>The server's dead flag on our own row, and when it first showed.</summary>
+        public bool Dead;
+        public double DeadSince = -1;
+        /// <summary>GDD respawn_delay: the body stays down this long.</summary>
+        public const double RespawnDelay = 5.0;
+        public double RespawnIn => Dead && DeadSince >= 0 ? System.Math.Max(0, RespawnDelay - (Clock.Now - DeadSince)) : 0;
 
         public void OnEvent(EventMsg ev, uint selfId)
         {
