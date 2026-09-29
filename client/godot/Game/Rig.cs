@@ -15,6 +15,7 @@
 //   -uiPitch <deg> [-uiYaw <deg>]  look down/up and turn, from where the rig stands
 //   -uiBuy <item>           E at the faced shopkeeper, buy it, equip it (a REAL weapon)
 //   -uiFireNow <secs>       re-apply -uiPitch/-uiYaw, then hold the trigger that long
+//   -uiClaim                claim the priority bounty like the journal button, report the log
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -438,6 +439,23 @@ namespace SpaceAdventure.Game
                 _net.Send(_character.EquipCmd(NextCmdSeq(), "primary", buy));
                 await Wait(0.6);
                 GD.Print($"ui: bought {buy}: primary={_character.Primary}");
+            }
+
+            // -uiClaim: claim the priority bounty the way the journal's button
+            // does, then report the log -- the accept result is what moves it.
+            if (Flag("-uiClaim"))
+            {
+                for (double waited = 0; _missionLog.PriorityMission == null && waited < 10; waited += 0.25) await Wait(0.25);
+                string pid = _missionLog.PriorityMission;
+                if (pid == null) GD.Print("ui: no priority offer to claim");
+                else
+                {
+                    _missionLog.OnAcceptSent(pid);
+                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionAccept, $"{{\"id\":\"{pid}\"}}"));
+                    await Wait(1.5);
+                    bool active = _missionLog.State.TryGetValue(pid, out var st) && st.active;
+                    GD.Print($"ui: claimed {pid}: active={active} priority={_missionLog.PriorityMission ?? "none"} note={_missionLog.ClaimNote ?? "none"}");
+                }
             }
 
             // -uiFireNow <secs>: turn by -uiPitch/-uiYaw again (after any

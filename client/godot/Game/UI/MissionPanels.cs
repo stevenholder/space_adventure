@@ -42,10 +42,12 @@ namespace SpaceAdventure.Game.UI
                 string pid = _log.PriorityMission;
                 row.AddChild(Styles.Button("CLAIM", false, () =>
                 {
+                    _log.OnAcceptSent(pid);
                     _send(Cmd(Op.MissionAccept, $"{{\"id\":\"{pid}\"}}"));
                     Rebuild();
                 }));
             }
+            if (_log.ClaimNote != null) LabelRow(body, _log.ClaimNote, 12, Styles.Danger);
 
             // Active missions, with progress.
             bool anyActive = false;
@@ -106,6 +108,7 @@ namespace SpaceAdventure.Game.UI
                         string mid = o.id;
                         row.AddChild(Styles.Button("ACCEPT", false, () =>
                         {
+                            _log.OnAcceptSent(mid);
                             _send(Cmd(Op.MissionAccept, $"{{\"id\":\"{mid}\"}}"));
                             if (_log.State.TryGetValue(mid, out var st2)) st2.active = true;
                             else _log.State[mid] = new MissionStateRow { active = true };

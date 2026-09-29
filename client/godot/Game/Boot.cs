@@ -898,6 +898,11 @@ namespace SpaceAdventure.Game
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
                     if (r.Opcode == Op.MissionList && r.Ok) _missionLog.OnListResult(r.Body);
+                    if (r.Opcode == Op.MissionAccept)
+                    {
+                        _missionLog.OnAcceptResult(r.Ok, r.Body);
+                        if (_journalView.Open) _journalView.Rebuild();
+                    }
                     if (r.Opcode == Op.Skills && r.Ok) _skills.OnSheet(r.Body);
                     if (_skillsView.Open) _skillsView.Rebuild();
                     if (_shopView.Open) _shopView.Rebuild();
