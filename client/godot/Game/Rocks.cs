@@ -28,12 +28,25 @@ namespace SpaceAdventure.Game
         private readonly Material _material;
         private readonly AssetRegistry _assets;
         private Node3D _root;
+        private readonly List<Vector3> _positions = new List<Vector3>(); // every rock, for the screenshot rig
 
         public Rocks(Node parent, Material material, AssetRegistry assets)
         {
             _parent = parent;
             _material = material;
             _assets = assets;
+        }
+
+        /// <summary>The rock nearest `from`, or null before Build: `-uiFace rock`.</summary>
+        public Vector3? Nearest(Vector3 from)
+        {
+            Vector3? best = null; float bestD = float.MaxValue;
+            foreach (Vector3 r in _positions)
+            {
+                float d = r.DistanceSquaredTo(from);
+                if (d < bestD) { bestD = d; best = r; }
+            }
+            return best;
         }
 
         /// <summary>
@@ -50,6 +63,7 @@ namespace SpaceAdventure.Game
             _root = new Node3D { Name = "rocks" };
             _parent.AddChild(_root);
 
+            _positions.Clear();
             var batches = new List<Transform3D>[] { new List<Transform3D>(), new List<Transform3D>(), new List<Transform3D>() };
             foreach (RockPlacement p in RockScatter.Scatter(terrain, worldSeed))
             {
@@ -63,6 +77,7 @@ namespace SpaceAdventure.Game
                 Basis basis = align.Rotated(up, (float)p.Spin)
                             * Basis.FromScale(Frame.ToGodot(p.Scale));
                 batches[p.Variant].Add(new Transform3D(basis, Frame.ToGodot(p.Pos)));
+                _positions.Add(Frame.ToGodot(p.Pos));
             }
 
             for (int v = 0; v < 3; v++)

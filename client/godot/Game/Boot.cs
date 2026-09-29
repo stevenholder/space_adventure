@@ -43,13 +43,31 @@ namespace SpaceAdventure.Game
         /// Server URL. C45 requires this to come from config rather than being
         /// compiled in, so -serverUrl or the env var wins over the default.
         /// </summary>
+        /// <summary>What the HUD says while there is no world to look at.</summary>
+        private string LinkBanner() => _net.State switch
+        {
+            LinkState.Failed => $"CONNECTION FAILED: {_serverUrl} — {_net.LastError}",
+            LinkState.Reconnecting => $"RECONNECTING to {_serverUrl}… ({_net.LastError})",
+            LinkState.Joined => "JOINED — loading the world…",
+            _ => $"CONNECTING to {_serverUrl}…",
+        };
+
         private static string ResolveServerUrl()
         {
             string url = Arg("-serverUrl");
             if (url != null) return url;
             string env = System.Environment.GetEnvironmentVariable("SA_SERVER_URL");
-            return string.IsNullOrEmpty(env) ? "ws://127.0.0.1:18080/ws" : env;
+            if (!string.IsNullOrEmpty(env)) return env;
+            // From the editor (and every godot-cli flow, which passes -serverUrl)
+            // the default is the local stack. A double-clicked export has no
+            // server on its localhost -- the first Windows launch sat on an
+            // empty HUD -- so it goes to the public door.
+            return OS.HasFeature("editor") ? "ws://127.0.0.1:18080/ws" : PublicServerUrl;
         }
+
+        /// <summary>The public door (docs/RUNBOOK.md): Cloudflare → NPM → Traefik.</summary>
+        private const string PublicServerUrl = "wss://game.stevenholder.info/ws";
+        private string _serverUrl;
 
         private const string ConfigPath = "user://sa.cfg";
 
@@ -90,7 +108,7 @@ namespace SpaceAdventure.Game
         private readonly InputState _input = new InputState();
 
         private Camera3D _camera;
-        private Camera3D _overlayCamera;
+        private OmniLight3D _rigLight;
         private DirectionalLight3D _sun;
         private bool _cursorFreed;
 
@@ -242,28 +260,15 @@ namespace SpaceAdventure.Game
             // altitude a flight reaches (C36) — the world is ~380 m across
             // and the scripted orbits sit within ~1500 m.
             _camera = new Camera3D { Name = "Eye", Near = 0.05f, Far = 6000f, Fov = 60f };
-            _camera.CullMask &= ~VmLayer; // the world, minus the rig
             AddChild(_camera);
             _camera.Current = true;
 
-            // The overlay pass: a transparent SubViewport over the main view
-            // whose camera draws only the rig, with its own narrower FOV so
-            // the weapon does not look warped at the edge of a wide view.
-            var overlayLayer = new CanvasLayer { Name = "Overlay", Layer = 50 };
-            AddChild(overlayLayer);
-            var container = new SubViewportContainer { Name = "ViewModelView", Stretch = true, MouseFilter = Control.MouseFilterEnum.Ignore };
-            container.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-            overlayLayer.AddChild(container);
-            var overlay = new SubViewport
-            {
-                TransparentBg = true,
-                HandleInputLocally = false,
-                RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
-            };
-            container.AddChild(overlay);
-            _overlayCamera = new Camera3D { Name = "ViewModelCamera", Near = 0.01f, Far = 10f, Fov = ViewModel.OverlayFov, CullMask = VmLayer };
-            overlay.AddChild(_overlayCamera);
-            _overlayCamera.Current = true;
+            // The rig is drawn by the main camera, not a SubViewport overlay:
+            // under gl_compatibility nothing in a transparent SubViewport
+            // received any light (the rig rendered as an unlit black slab),
+            // so the Unity-style camera stack is gone. ponytail: the rig can
+            // clip into a wall closer than ~1.2 m; a depth-cleared overlay
+            // pass is the upgrade if that ever reads badly on a real display.
 
             // The sun. Direction is what the Unity build had (Euler 35, −140
             // there), carried into the Sim frame as a vector.
@@ -272,12 +277,13 @@ namespace SpaceAdventure.Game
             AddChild(_sun);
             _sun.LookAtFromPosition(Vector3.Zero, new Vector3(-0.527f, -0.574f, 0.627f), Vector3.Up);
 
-            // A light that follows the eye and reaches ONLY the rig. Ambient
-            // is low now that the sky is space, so a weapon lit by the sun
-            // alone is a black cutout whenever you face away from it.
-            var rigLight = new DirectionalLight3D { Name = "RigLight", LightEnergy = 1.05f, LightCullMask = VmLayer, ShadowEnabled = false };
-            _camera.AddChild(rigLight);
-            rigLight.Basis = Basis.LookingAt(new Vector3(-0.468f, -0.469f, -0.749f), Vector3.Up);
+            // A light that follows the eye and reaches ONLY the rig (cull
+            // mask). Ambient is low now that the sky is space, so a weapon
+            // lit by the sun alone is a black cutout whenever you face away
+            // from it. An omni, not a directional: a second DirectionalLight3D
+            // never lit anything under gl_compatibility.
+            _rigLight = new OmniLight3D { Name = "RigLight", LightEnergy = 2.5f, OmniRange = 3f, LightCullMask = VmLayer, ShadowEnabled = false };
+            AddChild(_rigLight);
 
             // Until the sky lands with the world seed: black, with the same
             // faint ambient the space sky carries, so a face turned from the
@@ -338,7 +344,8 @@ namespace SpaceAdventure.Game
             }
 
             _net = new NetClient();
-            _net.Connect(ResolveServerUrl(), System.Environment.MachineName ?? "player", ResolveToken());
+            _serverUrl = ResolveServerUrl();
+            _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
 
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
 
@@ -393,7 +400,12 @@ namespace SpaceAdventure.Game
             }
 
             DrainNetwork();
-            if (!_worldBuilt) return;
+            if (!_worldBuilt)
+            {
+                // No world yet: the only thing worth drawing is why.
+                _hudView.SetBanner(LinkBanner(), true);
+                return;
+            }
 
             // Escape releases the mouse. It latches: without the latch the
             // next frame would grab the pointer straight back.
@@ -485,7 +497,7 @@ namespace SpaceAdventure.Game
             _views.Render(_timeline, _net.EntityId);
             if (_seat != 0) PlaceSeatCamera();
             else _fps.PlaceCamera(_predictor.State.Pos);
-            _overlayCamera.GlobalTransform = _camera.GlobalTransform;
+            _rigLight.GlobalPosition = _camera.GlobalTransform * new Vector3(0.35f, 0.25f, 0.1f); // above and right of the eye: lights the top and rear of the rifle
 
             // The rig follows the character sheet, which is the one place
             // that knows what is equipped. The body stands where the
@@ -1011,6 +1023,8 @@ namespace SpaceAdventure.Game
                 _hudView.SetBanner($"{_missionLog.LastSharedBy} shared \"{_missionLog.LastSharedName}\" — J for the journal", false);
             else if (_partyState.PendingFrom != 0 && now - _partyState.PendingAt < 10)
                 _hudView.SetBanner($"{_partyState.PendingName} invites you to a party — P to answer", false);
+            else if (!_worldBuilt || _net.State != LinkState.Joined)
+                _hudView.SetBanner(LinkBanner(), true);
             else
                 _hudView.SetBanner(null, false);
 

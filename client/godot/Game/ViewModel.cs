@@ -3,11 +3,10 @@
 // Two separate things, and they are separate on purpose.
 //
 // THE VIEWMODEL — arms and weapon — is parented to the camera on its own
-// render layer and drawn by a SECOND camera inside a transparent SubViewport
-// that sees only that layer, over the main view. Without that overlay pass
-// the weapon intersects any wall you stand against and half the gun
-// disappears into it. Godot has no camera stacking; the SubViewport gives
-// the depth clear the Unity overlay camera had.
+// render layer, so the rig light (Boot) can reach it and nothing else. It
+// is drawn by the main camera: the transparent-SubViewport overlay pass the
+// Unity build had rendered unlit under gl_compatibility, so it went (see
+// Boot). A wall closer than the rig will clip it.
 //
 // THE BODY is the opposite: a real object at the player's feet, on the normal
 // layer, casting a normal shadow — so looking down shows your chest and legs
@@ -33,17 +32,16 @@ namespace SpaceAdventure.Game
     public sealed class ViewModel
     {
         // Held roughly where a rifle sits at the low ready: right of centre,
-        // below the sightline, canted slightly inward. The height is not
-        // free: at the overlay camera's 48° FOV the visible half-height at
-        // this distance is about 0.28 m. Retune together with OverlayFov.
-        // ponytail: tuned by screenshot for the volume-fitted Kenney rifle
-        // (0.55 × 0.30 m), further out than the box rifle sat; eyes-on
-        // tuning on a real display is the upgrade path.
-        private static readonly Vector3 RestPosition = new Vector3(0.18f, -0.17f, -0.62f);
-        private const float RestYawDeg = 4f;   // canted inward, toward the centre
+        // below the sightline, canted inward and nose-up so the barrel
+        // climbs toward the crosshair. Tuned by 1280x720 -uiShot against the
+        // main camera's 60° FOV (2026-09-28): the rear of the fitted Kenney
+        // rifle (0.55 × 0.30 m) sits 0.63 m out, its top 0.15 m below the
+        // sightline, so the receiver top and the barrel show and the stock
+        // falls off the bottom edge.
+        private static readonly Vector3 RestPosition = new Vector3(0.24f, -0.30f, -0.80f);
+        private const float RestYawDeg = 8f;   // canted inward, toward the centre
         private const float RestRollDeg = 2f;
-
-        public const float OverlayFov = 48f;
+        private const float RestPitchDeg = 6f;  // nose up, so the barrel climbs into frame
 
         private const float SwayDegrees = 0.9f;   // how far the rig lags a fast turn
         private const float SwaySmoothing = 12f;
@@ -131,7 +129,7 @@ namespace SpaceAdventure.Game
             // Yaw positive turns the flipped rifle's −Z toward −X: inward.
             // The sway lags the turn: mouse-right (sway.X < 0) yaws left.
             var euler = new Vector3(
-                Mathf.DegToRad(-swayDeg.Y),
+                Mathf.DegToRad(RestPitchDeg - swayDeg.Y),
                 Mathf.DegToRad(RestYawDeg - swayDeg.X),
                 Mathf.DegToRad(RestRollDeg));
             _rig.Transform = new Transform3D(Basis.FromEuler(euler) * Frame.ModelFlip, RestPosition + bob);

@@ -11,7 +11,7 @@
 //   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug first
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
-//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded
+//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -102,6 +102,46 @@ namespace SpaceAdventure.Game
             arg == "npc" || arg == "hostile" ? EntityType.Npc
             : arg == "player" ? EntityType.Player
             : EntityType.Target;
+
+        /// <summary>
+        /// -uiApproach: walks toward `goal` until within `closeTo` metres
+        /// (the horizon is ~23 m, so anything worth photographing has to be
+        /// closed to arm's reach first). Sidesteps and jumps when wedged.
+        /// </summary>
+        private async Task ApproachTo(Vector3 goal, float closeTo)
+        {
+            double deadline = Clock.Now + 150;
+            _rigWalk = true;
+            Vector3 lastEye = Eye;
+            double lastMoveAt = Clock.Now;
+            double detourUntil = 0;
+            while (Clock.Now < deadline)
+            {
+                Vector3 eyeNow = Eye;
+                Vector3 to = goal - eyeNow;
+                if (to.Length() <= closeTo) break;
+                // Wedged? Sidestep: aim 40 degrees off a moment,
+                // alternating sides around obstacles.
+                if ((eyeNow - lastEye).Length() > 0.3f) { lastEye = eyeNow; lastMoveAt = Clock.Now; }
+                else if (Clock.Now - lastMoveAt > 0.8 && Clock.Now > detourUntil)
+                {
+                    detourUntil = Clock.Now + 3;
+                    lastMoveAt = Clock.Now;
+                    _detourSign = -_detourSign;
+                }
+                // Jump at whatever we are wedged on — a scarp
+                // under max_slope yields to it.
+                _rigJump = Clock.Now - lastMoveAt > 0.6 || Clock.Now < detourUntil;
+                Vector3 aimPoint = goal;
+                if (Clock.Now < detourUntil)
+                    aimPoint = eyeNow + to.Rotated(eyeNow.Normalized(), -Mathf.DegToRad(_detourSign * 40f));
+                _fps.FaceToward(eyeNow, aimPoint);
+                await Wait(0.2);
+            }
+            _rigWalk = false;
+            _rigJump = false;
+            GD.Print($"ui: approached to {(goal - Eye).Length():F0} m");
+        }
 
         /// <summary>Saves the review screenshot once the scene settles, after any staging.</summary>
         private async Task SaveUiShot(string path)
@@ -204,7 +244,24 @@ namespace SpaceAdventure.Game
             // -uiFace target|npc|hostile|player|wounded: aim the camera at
             // the nearest such entity, so a combat shot has something in frame.
             string wantArg = Arg("-uiFace");
-            if (wantArg != null)
+            if (wantArg == "rock")
+            {
+                // Rocks are not entities: aim at the nearest scatter placement.
+                Vector3? rock = _rocks.Nearest(Eye);
+                if (rock.HasValue)
+                {
+                    _fps.FaceToward(Eye, rock.Value);
+                    GD.Print($"ui: facing rock at {Eye.DistanceTo(rock.Value):F0} m");
+                    string appRock = Arg("-uiApproach");
+                    if (appRock != null && float.TryParse(appRock, NumberStyles.Float, CultureInfo.InvariantCulture, out float closeToRock))
+                    {
+                        await ApproachTo(rock.Value, closeToRock);
+                        _fps.FaceToward(Eye, rock.Value);
+                    }
+                }
+                else GD.Print("ui: no rocks to face");
+            }
+            else if (wantArg != null)
             {
                 ushort want = KindOf(wantArg);
                 EntityView best = null;
@@ -236,37 +293,7 @@ namespace SpaceAdventure.Game
                     string app = Arg("-uiApproach");
                     if (app != null && float.TryParse(app, NumberStyles.Float, CultureInfo.InvariantCulture, out float closeTo))
                     {
-                        double deadline = Clock.Now + 150;
-                        _rigWalk = true;
-                        Vector3 lastEye = Eye;
-                        double lastMoveAt = Clock.Now;
-                        double detourUntil = 0;
-                        while (Clock.Now < deadline)
-                        {
-                            Vector3 eyeNow = Eye;
-                            Vector3 to = goal - eyeNow;
-                            if (to.Length() <= closeTo) break;
-                            // Wedged? Sidestep: aim 40 degrees off a moment,
-                            // alternating sides around obstacles.
-                            if ((eyeNow - lastEye).Length() > 0.3f) { lastEye = eyeNow; lastMoveAt = Clock.Now; }
-                            else if (Clock.Now - lastMoveAt > 0.8 && Clock.Now > detourUntil)
-                            {
-                                detourUntil = Clock.Now + 3;
-                                lastMoveAt = Clock.Now;
-                                _detourSign = -_detourSign;
-                            }
-                            // Jump at whatever we are wedged on — a scarp
-                            // under max_slope yields to it.
-                            _rigJump = Clock.Now - lastMoveAt > 0.6 || Clock.Now < detourUntil;
-                            Vector3 aimPoint = goal;
-                            if (Clock.Now < detourUntil)
-                                aimPoint = eyeNow + to.Rotated(eyeNow.Normalized(), -Mathf.DegToRad(_detourSign * 40f));
-                            _fps.FaceToward(eyeNow, aimPoint);
-                            await Wait(0.2);
-                        }
-                        _rigWalk = false;
-                        _rigJump = false;
-                        GD.Print($"ui: approached to {(goal - Eye).Length():F0} m");
+                        await ApproachTo(goal, closeTo);
 
                         // Re-pick at arrival: the thing wounded NOW may be a
                         // different entity — and -uiReface <kind> can retarget.

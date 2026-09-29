@@ -557,6 +557,18 @@ shots.
 | C90 | PASS | `godot-cli build Windows` from Linux → `client/build/windows/SpaceAdventure.exe` (183 MB with staged art); not yet run on a Windows host |
 | C91 | PASS | `make godot-gate` → `C91 clean` |
 
+### Debts closed 2026-09-28 (`fix/godot-rig-eyes`)
+
+Same bench: bare `server -listen :18080`, Godot 4.7.2 .NET, WSLg for the shots.
+
+| # | Result | Evidence |
+|---|---|---|
+| C92 | PASS | Rig lit and posed by eye: `-uiShot -rigArmed` → `test/out/ui/rig-armed.png` (rifle lower-right, barrel toward the crosshair, lit). Root cause of the black slab: under `gl_compatibility` nothing in the transparent SubViewport overlay received light, and a second `DirectionalLight3D` lit nothing anywhere; the overlay is gone, the rig is drawn by the main camera with an `OmniLight3D` (range 3 m, cull mask = rig layer, which the compat renderer does honour) |
+| C93 | PASS | Over-head health bars readable: `-uiDemo -uiFace hostile` → `test/out/ui/combat-godot.png`, bars at 9 m and 13 m with a border (were 5 px, borderless, black on a black sky) |
+| C94 | PASS | Rocks seen, not just logged: `-uiFace rock -uiApproach 6` walks to the nearest scatter placement (38 m → 5 m) → `test/out/ui/rocks.png`, boulder seated in the ground, more on the ridges |
+| C95 | PASS | `godot-cli build Linux` 149 MB and `build Windows` 183 MB on the same sources; `godot-cli run 20` on the Linux export → `world ready`, `colliders: 28`, exit 0. `ci.yml` `client-export` now uploads `client-windows` beside `client-linux` (the .exe is still unrun on a Windows host) |
+| C96 | PASS | First Windows launch (2026-09-28): the .exe ran but sat on an empty HUD — default server was `ws://127.0.0.1:18080/ws` and nothing said so. Now an export (no `editor` feature) defaults to `wss://game.stevenholder.info/ws`, and until the world lands the banner shows the link state: dead port → `RECONNECTING TO ws://127.0.0.1:1/ws… (Unable to connect to the remote server)`. Export with no URL joins over LAN (`-serverUrl ws://192.168.1.163/ws` → `world ready`, `colliders: 28`). **The public door itself is DOWN as of this run**: `https://game.stevenholder.info/version` → Cloudflare 523 while `http://192.168.1.163/version` → `5da7a0c`; the break is between Cloudflare and NPM/router, outside this repo |
+
 **Notes.** The volume fit replaced the longest-axis fit in `AttachFitted`:
 the Kenney rifle is 0.9 × 0.5 × 0.18 m, and fitted by length it stood 0.5 m
 tall five centimetres from the eye. The rig rest position moved out to suit
