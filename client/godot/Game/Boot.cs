@@ -110,7 +110,7 @@ namespace SpaceAdventure.Game
         private Camera3D _camera;
         private OmniLight3D _rigLight;
         private DirectionalLight3D _sun;
-        private bool _cursorFreed;
+        private GameMenuView _gameMenu;
 
         /// <summary>The viewmodel's render layer (bit 2): the overlay camera draws only this.</summary>
         private const uint VmLayer = 1u << 1;
@@ -197,7 +197,7 @@ namespace SpaceAdventure.Game
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
             (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
-            (_skillsView?.Open ?? false);
+            (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -331,6 +331,7 @@ namespace SpaceAdventure.Game
             _partyFrames = new PartyFrames(_ui.Root);
             _skillsView = new SkillsView(_ui.Root, _skills, _character);
             _skillsFeed = new SkillsFeed(_ui.Root);
+            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0));
             _accountView = new AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); _ = RedeemLinkCode(code); },
                 () => _accountView.Show(false));
@@ -409,12 +410,13 @@ namespace SpaceAdventure.Game
                 return;
             }
 
-            // Escape releases the mouse. It latches: without the latch the
-            // next frame would grab the pointer straight back.
+            // Escape: close whatever is open; with nothing open, the game
+            // menu (WoW's rule). The menu itself frees the cursor, so the
+            // old "Esc frees the cursor" latch is gone.
             if (_input.Pressed(Key.Escape))
             {
-                _cursorFreed = !_cursorFreed;
-                Godot.Input.MouseMode = _cursorFreed ? Godot.Input.MouseModeEnum.Visible : Godot.Input.MouseModeEnum.Captured;
+                if (ModalOpen || _map.Open) CloseAllPanels();
+                else _gameMenu.Show(true);
             }
             if (_input.Pressed(Key.F3)) _hud.DebugOpen = !_hud.DebugOpen;
             if (_input.Pressed(Key.F1))
@@ -451,7 +453,7 @@ namespace SpaceAdventure.Game
             bool wantsCursor = _map.Open || ModalOpen;
             if (wantsCursor && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured)
                 Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
-            else if (!wantsCursor && !_cursorFreed && Godot.Input.MouseMode != Godot.Input.MouseModeEnum.Captured)
+            else if (!wantsCursor && Godot.Input.MouseMode != Godot.Input.MouseModeEnum.Captured)
                 Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
             // The pilot's mouse steers the ship, never the view (GDD:
             // hull-fixed camera). Accumulate the raw delta for SendTick.
@@ -988,6 +990,7 @@ namespace SpaceAdventure.Game
                 case "skills": ToggleSkills(); break;
                 case "account": _accountView.Show(true); break;
                 case "debug": _hud.DebugOpen = true; break;
+                case "menu": _gameMenu.Show(true); break;
             }
         }
 
@@ -1193,6 +1196,15 @@ namespace SpaceAdventure.Game
         /// credits and inventory: panels show server truth rather than
         /// whatever was last seen.
         /// </summary>
+        /// <summary>Escape's first job: every panel, the map and the shop.</summary>
+        private void CloseAllPanels()
+        {
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu })
+                if (m != null && m.Open) m.Show(false);
+            if (_map.Open) _map.Toggle();
+            if (_interact.ShopOpen) _interact.CloseShop();
+        }
+
         private void OpenPanel(ModalView view, ModalView other)
         {
             // Panels stack: the backpack and the character panel are meant

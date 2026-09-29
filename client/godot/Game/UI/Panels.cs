@@ -312,4 +312,33 @@ namespace SpaceAdventure.Game.UI
 
         protected override void Fill(VBoxContainer body) { }
     }
+
+    /// <summary>
+    /// Escape with nothing open: the game menu (WoW's). Return, the account
+    /// link, quit. Escape again returns.
+    /// </summary>
+    public sealed class GameMenuView : ModalView
+    {
+        private readonly System.Action _onAccount;
+        private readonly System.Action _onQuit;
+
+        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit)
+            : base(root, "Menu", 260, 0.30f)
+        {
+            _onAccount = onAccount;
+            _onQuit = onQuit;
+        }
+
+        protected override void Fill(VBoxContainer body)
+        {
+            body.AddChild(Styles.Gap(2));
+            body.AddChild(Styles.Button("RETURN TO GAME", false, () => Show(false)));
+            body.AddChild(Styles.Gap(4));
+            body.AddChild(Styles.Button("ACCOUNT", false, () => { Show(false); _onAccount(); }));
+            body.AddChild(Styles.Gap(4));
+            body.AddChild(Styles.Button("QUIT GAME", true, _onQuit));
+            body.AddChild(Styles.Gap(6));
+            Line(body, "Esc returns", Styles.Dust, 11);
+        }
+    }
 }

@@ -1356,6 +1356,10 @@ the planet's sun), then STATS, then SKILLS. **B** opens the backpack: a
 - Panels stack. C and B are meant to be open together (that is what
   dragging between them is for): the character sits left of centre by
   default, the backpack right. No key closes another panel.
+- **Escape** closes everything that is open (panels, map, shop). With
+  nothing open it opens the game menu: RETURN TO GAME, ACCOUNT, QUIT
+  GAME. Escape again returns. There is no separate "free the cursor"
+  key: an open panel frees it, closing captures it.
 - **Every panel drags by its header** and stays where it was put, per
   panel, across sessions (`user://sa.cfg` `[panels]`); at least the
   header always stays on screen.
