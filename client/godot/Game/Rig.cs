@@ -11,11 +11,12 @@
 //   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug first
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
-//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock
+//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock|mast
 //   -uiPitch <deg> [-uiYaw <deg>]  look down/up and turn, from where the rig stands
 //   -uiBuy <item>           E at the faced shopkeeper, buy it, equip it (a REAL weapon)
 //   -uiFireNow <secs>       re-apply -uiPitch/-uiYaw, then hold the trigger that long
 //   -uiClaim                claim the priority bounty like the journal button, report the log
+//   -uiDeathDemo            show the death screen (local flag only) for a shot
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -43,6 +44,7 @@ namespace SpaceAdventure.Game
         private bool _rigBack;      // step backwards
         private bool _rigArmed;
         private bool _rigInteract; // one frame of E
+        private bool _rigDeathDemo; // -uiDeathDemo holds the dead flag against the snapshots
         private float _detourSign = 1f;
 
         private async Task Wait(double seconds) =>
@@ -263,7 +265,29 @@ namespace SpaceAdventure.Game
             }
 
             string wantArg = Arg("-uiFace");
-            if (wantArg == "rock")
+            if (wantArg == "mast")
+            {
+                // Masts are props, not entities: aim at the nearest POI mast.
+                Vector3? mast = null; float mastD = float.MaxValue;
+                foreach (var m in _structures.Masts)
+                {
+                    float d = m.pos.DistanceSquaredTo(Eye);
+                    if (d < mastD) { mastD = d; mast = m.pos; }
+                }
+                if (mast.HasValue)
+                {
+                    _fps.FaceToward(Eye, mast.Value);
+                    GD.Print($"ui: facing mast at {Mathf.Sqrt(mastD):F0} m");
+                    string appMast = Arg("-uiApproach");
+                    if (appMast != null && float.TryParse(appMast, NumberStyles.Float, CultureInfo.InvariantCulture, out float closeToMast))
+                    {
+                        await ApproachTo(mast.Value, closeToMast);
+                        _fps.FaceToward(Eye, mast.Value);
+                    }
+                }
+                else GD.Print("ui: no masts to face");
+            }
+            else if (wantArg == "rock")
             {
                 // Rocks are not entities: aim at the nearest scatter placement.
                 Vector3? rock = _rocks.Nearest(Eye);
@@ -475,6 +499,35 @@ namespace SpaceAdventure.Game
                 _rigFire = true;
                 await Wait(holdSecs);
                 _rigFire = false;
+            }
+
+            // -uiKitDemo: two kit pieces 7 m ahead through the props path
+            // (AssetRegistry.Attach), so the wall render can be photographed
+            // at spawn instead of after a 250 m walk.
+            if (Flag("-uiKitDemo"))
+            {
+                Vector3 eyeK = Eye, upK = eyeK.Normalized();
+                Vector3 fwdK = CameraForward.Slide(upK).Normalized();
+                Vector3 rightK = fwdK.Cross(upK).Normalized();
+                foreach (var (asset, off) in new[] { ("struct.wall4.scrap", -3f), ("struct.tower.colony", 4f) })
+                {
+                    Vector3 ground = (eyeK + fwdK * 7f + rightK * off).Normalized();
+                    ground *= (float)_terrain.SampleRadius(Frame.ToSim(ground));
+                    var holder = new Node3D { Name = "kitdemo", Transform = new Transform3D(Frame.OrientationBasis(Frame.ToSim(ground), Frame.ToSim(-fwdK)), ground) };
+                    AddChild(holder);
+                    _assets.Attach(asset, holder, null);
+                }
+                await Wait(0.3);
+            }
+
+            // -uiDeathDemo: the death screen without dying -- local flag only,
+            // the way -uiDemo stages grunts. Nothing is sent.
+            if (Flag("-uiDeathDemo"))
+            {
+                _rigDeathDemo = true;
+                _hud.Dead = true;
+                _hud.DeadSince = Clock.Now - 1.6;
+                await Wait(0.2);
             }
 
             if (_rigLamp && _sun != null)

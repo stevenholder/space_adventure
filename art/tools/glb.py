@@ -243,7 +243,11 @@ def write_glb(path, root, materials):
                 if has_color:
                     cb = add_view(bytes(col))
                     ca = len(accessors)
+                    # normalized is REQUIRED for a byte COLOR_0 (glTF 2.0):
+                    # without it Godot read 0..255 as floats and every kit
+                    # piece rendered pure white (C106).
                     accessors.append({"bufferView": cb, "componentType": 5121,
+                                      "normalized": True,
                                       "count": 3 * n, "type": "VEC3"})
                     attrs["COLOR_0"] = ca
                 prims.append({"attributes": attrs, "indices": ia,

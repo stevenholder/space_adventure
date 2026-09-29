@@ -44,7 +44,7 @@ namespace SpaceAdventure.Game
         /// compiled in, so -serverUrl or the env var wins over the default.
         /// </summary>
         /// <summary>What the HUD says while there is no world to look at.</summary>
-        private string LinkBanner() => _net.State switch
+        private string LinkBanner() => _net == null ? "" : _net.State switch
         {
             LinkState.Failed => $"CONNECTION FAILED: {_serverUrl} — {_net.LastError}",
             LinkState.Reconnecting => $"RECONNECTING to {_serverUrl}… ({_net.LastError})",
@@ -660,6 +660,13 @@ namespace SpaceAdventure.Game
                 return;
             }
 
+            // Dead: the server ignores everything but look, so predict the
+            // same -- moving a corpse locally only earned a teleport back
+            // when the snapshot arrived.
+            if (_hud.Dead)
+            {
+                li.MoveX = 0; li.MoveY = 0; li.ActionMask = 0; li.FirePressed = false;
+            }
             var input = new Sim.Input
             {
                 MoveX = li.MoveX,
@@ -787,6 +794,14 @@ namespace SpaceAdventure.Game
                             }
                             _hud.Health = row.Health;
                             _character.Health = row.Health;
+                            // Death is the server's call (GDD: dead flag set,
+                            // input ignored except look). Latch the moment for
+                            // the countdown; the flag clearing is the respawn.
+                            if (!_rigDeathDemo)
+                            {
+                                if (row.Dead && !_hud.Dead) _hud.DeadSince = Clock.Now;
+                                _hud.Dead = row.Dead;
+                            }
                         }
                         else if (_seat != 0 && row.Id == _seatVehicle)
                         {
@@ -976,6 +991,7 @@ namespace SpaceAdventure.Game
         private void UpdateHudView()
         {
             _hudView.SetVitals(_hud.Health, 100);
+            _hudView.SetDeath(_hud.Dead ? _hud.RespawnIn : -1);
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
                 _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
             _hudView.SetCredits(_character.Credits);
