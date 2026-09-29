@@ -43,13 +43,31 @@ namespace SpaceAdventure.Game
         /// Server URL. C45 requires this to come from config rather than being
         /// compiled in, so -serverUrl or the env var wins over the default.
         /// </summary>
+        /// <summary>What the HUD says while there is no world to look at.</summary>
+        private string LinkBanner() => _net.State switch
+        {
+            LinkState.Failed => $"CONNECTION FAILED: {_serverUrl} — {_net.LastError}",
+            LinkState.Reconnecting => $"RECONNECTING to {_serverUrl}… ({_net.LastError})",
+            LinkState.Joined => "JOINED — loading the world…",
+            _ => $"CONNECTING to {_serverUrl}…",
+        };
+
         private static string ResolveServerUrl()
         {
             string url = Arg("-serverUrl");
             if (url != null) return url;
             string env = System.Environment.GetEnvironmentVariable("SA_SERVER_URL");
-            return string.IsNullOrEmpty(env) ? "ws://127.0.0.1:18080/ws" : env;
+            if (!string.IsNullOrEmpty(env)) return env;
+            // From the editor (and every godot-cli flow, which passes -serverUrl)
+            // the default is the local stack. A double-clicked export has no
+            // server on its localhost -- the first Windows launch sat on an
+            // empty HUD -- so it goes to the public door.
+            return OS.HasFeature("editor") ? "ws://127.0.0.1:18080/ws" : PublicServerUrl;
         }
+
+        /// <summary>The public door (docs/RUNBOOK.md): Cloudflare → NPM → Traefik.</summary>
+        private const string PublicServerUrl = "wss://game.stevenholder.info/ws";
+        private string _serverUrl;
 
         private const string ConfigPath = "user://sa.cfg";
 
@@ -326,7 +344,8 @@ namespace SpaceAdventure.Game
             }
 
             _net = new NetClient();
-            _net.Connect(ResolveServerUrl(), System.Environment.MachineName ?? "player", ResolveToken());
+            _serverUrl = ResolveServerUrl();
+            _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
 
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
 
@@ -381,7 +400,12 @@ namespace SpaceAdventure.Game
             }
 
             DrainNetwork();
-            if (!_worldBuilt) return;
+            if (!_worldBuilt)
+            {
+                // No world yet: the only thing worth drawing is why.
+                _hudView.SetBanner(LinkBanner(), true);
+                return;
+            }
 
             // Escape releases the mouse. It latches: without the latch the
             // next frame would grab the pointer straight back.
@@ -999,6 +1023,8 @@ namespace SpaceAdventure.Game
                 _hudView.SetBanner($"{_missionLog.LastSharedBy} shared \"{_missionLog.LastSharedName}\" — J for the journal", false);
             else if (_partyState.PendingFrom != 0 && now - _partyState.PendingAt < 10)
                 _hudView.SetBanner($"{_partyState.PendingName} invites you to a party — P to answer", false);
+            else if (!_worldBuilt || _net.State != LinkState.Joined)
+                _hudView.SetBanner(LinkBanner(), true);
             else
                 _hudView.SetBanner(null, false);
 
