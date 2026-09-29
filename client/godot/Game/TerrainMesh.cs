@@ -66,10 +66,13 @@ namespace SpaceAdventure.Game
             // DirOf's (u, v) handedness is not the same on every face, so a
             // uniform winding leaves some faces inside-out -- which shows up
             // only as the ground vanishing when you walk onto them. Rather
-            // than hard-code which faces flip, MEASURE one triangle: Godot's
-            // front face is counter-clockwise, so cross(b-a, c-a) is the
-            // front normal; if it points into the planet, reverse this face.
-            bool flip = FacesInward(lattice, new[] { 0, 1, n });
+            // than hard-code which faces flip, MEASURE one triangle. Godot's
+            // FRONT face is CLOCKWISE (the ArrayMesh docs; the smooth mesh's
+            // comment said the opposite and was wrong -- the ground under
+            // the player was culled and the far side showed through it, C98),
+            // so a triangle whose counter-clockwise normal points OUT of the
+            // planet is the one that must be reversed.
+            bool flip = !FacesInward(lattice, new[] { 0, 1, n });
 
             int triCount = (n - 1) * (n - 1) * 2;
             var verts = new Vector3[triCount * 3];
@@ -80,7 +83,10 @@ namespace SpaceAdventure.Game
             {
                 if (flip) (b, c) = (c, b);
                 Vector3 pa = lattice[a], pb = lattice[b], pc = lattice[c];
+                // The face normal, made to point out of the planet whatever
+                // the winding: lighting must not depend on the cull test.
                 Vector3 normal = (pb - pa).Cross(pc - pa).Normalized();
+                if (normal.Dot(pa) < 0f) normal = -normal;
                 Vec3 centre = (dirs[a] + dirs[b] + dirs[c]).Normalized();
                 Color color = Shade(field, centre, (pa + pb + pc) / 3f, t);
                 verts[t * 3] = pa; verts[t * 3 + 1] = pb; verts[t * 3 + 2] = pc;
