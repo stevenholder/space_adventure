@@ -9,6 +9,7 @@ import (
 	"math"
 	"space-adventure/server/internal/defs"
 	"space-adventure/server/internal/store"
+	"strings"
 )
 
 // RefusalError is a typed, machine-readable refusal from a validated
@@ -125,6 +126,16 @@ func BuyAt(p *store.Player, npc defs.NPC, item string, qty int, reg *defs.Regist
 // player's inventory) and wrong_slot (the item's def slot does not match
 // the requested slot). On success it sets p.Equipped[slot] = item.
 func Equip(p *store.Player, slot, item string, reg *defs.Registry) error {
+	// The slot set is data (items.json equip_slots). A registry with none
+	// declared keeps the Phase 2 world: primary only.
+	if !SlotKnown(reg, slot) {
+		return refuse(ReasonWrongSlot)
+	}
+	// An empty item is the unequip: the slot goes back to bare.
+	if item == "" {
+		delete(p.Equipped, slot)
+		return nil
+	}
 	def, ok := reg.Items[item]
 	if !ok {
 		return refuse(ReasonUnknownItem)
@@ -141,8 +152,15 @@ func Equip(p *store.Player, slot, item string, reg *defs.Registry) error {
 		return refuse(ReasonNotOwned)
 	}
 
-	if def.Slot != slot {
+	if !SlotAccepts(def.Slot, slot) {
 		return refuse(ReasonWrongSlot)
+	}
+	// One stack of one can be in one slot: a ring equipped in accessory1
+	// leaves accessory1 when it goes to accessory2.
+	for other, held := range p.Equipped {
+		if held == item && other != slot && CountItem(p, item) < 2 {
+			delete(p.Equipped, other)
+		}
 	}
 
 	if p.Equipped == nil {
@@ -150,6 +168,29 @@ func Equip(p *store.Player, slot, item string, reg *defs.Registry) error {
 	}
 	p.Equipped[slot] = item
 	return nil
+}
+
+// SlotKnown reports whether slot is one the registry declares. With no
+// declared set, "primary" is the whole set (Phase 2 registries and tests).
+func SlotKnown(reg *defs.Registry, slot string) bool {
+	if len(reg.EquipSlots) == 0 {
+		return slot == "primary"
+	}
+	for _, s := range reg.EquipSlots {
+		if s == slot {
+			return true
+		}
+	}
+	return false
+}
+
+// SlotAccepts reports whether an item declared for itemSlot may sit in
+// slot. Exact match, except "accessory" items fit any accessoryN slot.
+func SlotAccepts(itemSlot, slot string) bool {
+	if itemSlot == slot {
+		return true
+	}
+	return itemSlot == "accessory" && strings.HasPrefix(slot, "accessory")
 }
 
 // CountItem reports how many of item p is carrying, across its stacks.

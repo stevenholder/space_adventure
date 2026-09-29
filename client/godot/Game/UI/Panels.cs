@@ -71,18 +71,90 @@ namespace SpaceAdventure.Game.UI
     /// <summary>
     /// A centered modal panel with a header; the base for shop/bags/sheet.
     /// </summary>
+    /// <summary>
+    /// A grip over a panel's header: press to grab, the panel follows the
+    /// pointer until release, clamped to the screen. Follows via _Process,
+    /// not GuiInput, so a fast drag that leaves the header keeps hold.
+    /// </summary>
+    public partial class DragHandle : Control
+    {
+        public Control Target;
+        public Control Bounds;
+        public System.Action OnDropped;
+        private bool _dragging;
+        private Vector2 _grab;
+
+        public override void _Ready()
+        {
+            MouseFilter = MouseFilterEnum.Stop;
+            MouseDefaultCursorShape = CursorShape.Move;
+        }
+
+        public override void _GuiInput(InputEvent e)
+        {
+            if (e is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
+            {
+                if (mb.Pressed)
+                {
+                    _dragging = true;
+                    _grab = GetGlobalMousePosition() - Target.GlobalPosition;
+                    AcceptEvent();
+                }
+                else if (_dragging) Release();
+            }
+        }
+
+        public override void _Process(double delta)
+        {
+            if (!_dragging) return;
+            if (!Input.IsMouseButtonPressed(MouseButton.Left)) { Release(); return; }
+            Target.GlobalPosition = GetGlobalMousePosition() - _grab;
+            Clamp(Target, Bounds);
+        }
+
+        private void Release()
+        {
+            _dragging = false;
+            OnDropped?.Invoke();
+        }
+
+        /// <summary>Keeps at least the header on screen.</summary>
+        public static void Clamp(Control target, Control bounds)
+        {
+            if (target == null || bounds == null) return;
+            Vector2 size = target.Size;
+            Vector2 max = bounds.Size - new Vector2(Mathf.Min(size.X, 120f), 40f);
+            Vector2 p = target.GlobalPosition;
+            target.GlobalPosition = new Vector2(Mathf.Clamp(p.X, 0f, Mathf.Max(0f, max.X)), Mathf.Clamp(p.Y, 0f, Mathf.Max(0f, max.Y)));
+        }
+    }
+
     public abstract class ModalView
     {
         protected readonly PanelContainer Box;
         private readonly VBoxContainer _body;
 
-        protected ModalView(Control root, string title, float width)
+        private readonly Control _root;
+        private readonly string _key;
+
+        protected ModalView(Control root, string title, float width, float top = 0.18f, float left = 0.5f)
         {
+            _root = root;
+            _key = title.ToLowerInvariant().Replace(' ', '_');
             Box = Styles.Panel(Styles.SkewNone);
-            Styles.PinAt(Box, 0.5f, 0.18f, width);
+            Styles.PinAt(Box, left, top, width);
             Box.Visible = false;
             VBoxContainer stack = Styles.Body(Box);
-            stack.AddChild(Styles.Header(title));
+            VBoxContainer header = Styles.Header(title);
+            stack.AddChild(header);
+            // The header is the grip: drag the panel anywhere, and it stays
+            // there across sessions (user://sa.cfg [panels]).
+            // Parented to the title LABEL, not the header container: a
+            // container lays its children out, and the grip would become a
+            // zero-height row that nothing can press.
+            var grip = new DragHandle { Target = Box, Bounds = root, OnDropped = SavePosition };
+            header.GetChild<Control>(0).AddChild(grip);
+            grip.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             _body = Styles.Column(2);
             stack.AddChild(_body);
             root.AddChild(Box);
@@ -93,8 +165,42 @@ namespace SpaceAdventure.Game.UI
         public void Show(bool on)
         {
             Box.Visible = on;
-            if (on) Rebuild();
+            if (on)
+            {
+                Rebuild();
+                RestorePosition();
+            }
         }
+
+        // ---- position memory --------------------------------------------
+
+        private const string ConfigPath = "user://sa.cfg";
+        private bool _restored;
+
+        private void RestorePosition()
+        {
+            if (_restored) { DragHandle.Clamp(Box, _root); return; }
+            _restored = true;
+            var cf = new ConfigFile();
+            if (cf.Load(ConfigPath) != Error.Ok) return;
+            if (!cf.HasSectionKey("panels", _key)) return;
+            Vector2 at = cf.GetValue("panels", _key).AsVector2();
+            // Deferred: the panel's size is known only after a layout pass.
+            Box.CallDeferred(Control.MethodName.SetPosition, at);
+            Callable.From(() => DragHandle.Clamp(Box, _root)).CallDeferred();
+        }
+
+        private void SavePosition()
+        {
+            var cf = new ConfigFile();
+            cf.Load(ConfigPath);
+            cf.SetValue("panels", _key, Box.Position);
+            cf.Save(ConfigPath);
+        }
+
+        /// <summary>Screen position, for the rig's drag proof.</summary>
+        public Vector2 Position => Box.Position;
+        public Vector2 HeaderCentre => Box.GlobalPosition + new Vector2(Box.Size.X * 0.5f, 18f);
 
         /// <summary>Clears and repopulates the body from current state.</summary>
         public void Rebuild()
@@ -174,48 +280,6 @@ namespace SpaceAdventure.Game.UI
     }
 
     /// <summary>Bags: the item-card list with equip actions.</summary>
-    public sealed class BagsView : ModalView
-    {
-        private readonly Character _character;
-        private readonly Func<ushort> _nextSeq;
-        private readonly Action<byte[]> _send;
-
-        public BagsView(Control root, Character character,
-            Func<ushort> nextSeq, Action<byte[]> send)
-            : base(root, "Bags", 400)
-        {
-            _character = character;
-            _nextSeq = nextSeq;
-            _send = send;
-        }
-
-        protected override void Fill(VBoxContainer body)
-        {
-            Line(body,
-                $"{_character.UsedSlots} of {Character.InventorySlots} slots  ·  " +
-                (_character.Credits < 0 ? "— cr" : $"{_character.Credits} cr"),
-                Styles.Dust);
-            body.AddChild(Styles.Gap(4));
-
-            if (_character.UsedSlots == 0) Line(body, "empty", Styles.Dust);
-            for (int i = 0; i < _character.UsedSlots; i++)
-            {
-                var it = _character.Inventory[i];
-                string slot = _character.Defs.SlotOf(it.item);
-                bool held = !string.IsNullOrEmpty(slot) && it.item == _character.Primary;
-                string action = string.IsNullOrEmpty(slot) || held ? null : "EQUIP";
-                string item = it.item;
-                string slotName = slot;
-                body.AddChild(ItemCard.Make(_character.Defs.ItemName(item), it.qty,
-                    _character.Defs.ItemRarity(item),
-                    held ? "equipped" : "", action,
-                    () => { _send(_character.EquipCmd(_nextSeq(), slotName, item)); Rebuild(); }));
-            }
-            body.AddChild(Styles.Gap(4));
-            Line(body, "B closes", Styles.Dust, 12);
-        }
-    }
-
     /// <summary>
     /// The F1 account panel: redeem a link code minted on the account site.
     /// The redeem request stays in Boot (it owns the network); this view
@@ -249,32 +313,32 @@ namespace SpaceAdventure.Game.UI
         protected override void Fill(VBoxContainer body) { }
     }
 
-    /// <summary>The character sheet: read-only stats.</summary>
-    public sealed class SheetView : ModalView
+    /// <summary>
+    /// Escape with nothing open: the game menu (WoW's). Return, the account
+    /// link, quit. Escape again returns.
+    /// </summary>
+    public sealed class GameMenuView : ModalView
     {
-        private readonly Character _character;
+        private readonly System.Action _onAccount;
+        private readonly System.Action _onQuit;
 
-        public SheetView(Control root, Character character)
-            : base(root, "Character", 340)
+        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit)
+            : base(root, "Menu", 260, 0.30f)
         {
-            _character = character;
+            _onAccount = onAccount;
+            _onQuit = onQuit;
         }
 
         protected override void Fill(VBoxContainer body)
         {
-            void Row(string k, string v)
-            {
-                var r = Styles.Row(6);
-                r.AddChild(Styles.Grow(Styles.Display_(k, 13, Styles.Dust)));
-                r.AddChild(Styles.Display_(v, 13, Styles.Cream));
-                body.AddChild(r);
-            }
-            Row("health", _character.Health.ToString());
-            Row("credits", _character.Credits < 0 ? "—" : _character.Credits.ToString());
-            Row("primary", string.IsNullOrEmpty(_character.Primary) ? "—" : _character.Defs.ItemName(_character.Primary));
-            Row("magazine", _character.Magazine < 0 ? "—" : $"{_character.Magazine} / {_character.Reserve}");
+            body.AddChild(Styles.Gap(2));
+            body.AddChild(Styles.Button("RETURN TO GAME", false, () => Show(false)));
+            body.AddChild(Styles.Gap(4));
+            body.AddChild(Styles.Button("ACCOUNT", false, () => { Show(false); _onAccount(); }));
+            body.AddChild(Styles.Gap(4));
+            body.AddChild(Styles.Button("QUIT GAME", true, _onQuit));
             body.AddChild(Styles.Gap(6));
-            Line(body, "C closes", Styles.Dust, 12);
+            Line(body, "Esc returns", Styles.Dust, 11);
         }
     }
 }

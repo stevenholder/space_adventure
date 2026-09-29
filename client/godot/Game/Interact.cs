@@ -23,7 +23,7 @@ namespace SpaceAdventure.Game
     internal class StockEntry { public string item { get; set; } public int price { get; set; } }
     internal class ShopStock { public StockEntry[] stock { get; set; } }
     public class ItemStack { public string item; public int qty; }
-    public class WalletResult { public int credits; public ItemStack[] inventory; }
+    public class WalletResult { public int credits; public ItemStack[] inventory; public System.Collections.Generic.Dictionary<string, string> equipped; }
     public class AmmoResult { public int magazine; public int reserve; }
 
     /// <summary>Look-at targeting, the E prompt, and the shop panel.</summary>

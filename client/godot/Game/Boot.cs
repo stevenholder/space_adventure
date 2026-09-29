@@ -110,7 +110,7 @@ namespace SpaceAdventure.Game
         private Camera3D _camera;
         private OmniLight3D _rigLight;
         private DirectionalLight3D _sun;
-        private bool _cursorFreed;
+        private GameMenuView _gameMenu;
 
         /// <summary>The viewmodel's render layer (bit 2): the overlay camera draws only this.</summary>
         private const uint VmLayer = 1u << 1;
@@ -177,8 +177,9 @@ namespace SpaceAdventure.Game
         private HudView _hudView;
         private CombatFeed _combatFeed;
         private ShopView _shopView;
-        private BagsView _bagsView;
-        private SheetView _sheetView;
+        private BackpackView _bagsView;
+        private CharacterView _sheetView;
+        private Icons _icons;
         private PromptView _promptView;
         private AccountView _accountView;
         private readonly MissionLog _missionLog = new MissionLog();
@@ -196,7 +197,7 @@ namespace SpaceAdventure.Game
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
             (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
-            (_skillsView?.Open ?? false);
+            (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -321,14 +322,16 @@ namespace SpaceAdventure.Game
             _combatFeed = new CombatFeed(_ui.Root);
             _map = new MapView(_ui.Root);
             _shopView = new ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
-            _bagsView = new BagsView(_ui.Root, _character, NextCmdSeq, b => _net.Send(b));
-            _sheetView = new SheetView(_ui.Root, _character);
+            _icons = new Icons(_assets.Root);
+            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
+            _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
             _journalView = new JournalView(_ui.Root, _missionLog, _partyState, NearestBoard, NextCmdSeq, b => _net.Send(b));
             _partyView = new PartyView(_ui.Root, _partyState, NearbyPlayers, NextCmdSeq, b => _net.Send(b));
             _partyFrames = new PartyFrames(_ui.Root);
             _skillsView = new SkillsView(_ui.Root, _skills, _character);
             _skillsFeed = new SkillsFeed(_ui.Root);
+            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0));
             _accountView = new AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); _ = RedeemLinkCode(code); },
                 () => _accountView.Show(false));
@@ -407,12 +410,13 @@ namespace SpaceAdventure.Game
                 return;
             }
 
-            // Escape releases the mouse. It latches: without the latch the
-            // next frame would grab the pointer straight back.
+            // Escape: close whatever is open; with nothing open, the game
+            // menu (WoW's rule). The menu itself frees the cursor, so the
+            // old "Esc frees the cursor" latch is gone.
             if (_input.Pressed(Key.Escape))
             {
-                _cursorFreed = !_cursorFreed;
-                Godot.Input.MouseMode = _cursorFreed ? Godot.Input.MouseModeEnum.Visible : Godot.Input.MouseModeEnum.Captured;
+                if (ModalOpen || _map.Open) CloseAllPanels();
+                else _gameMenu.Show(true);
             }
             if (_input.Pressed(Key.F3)) _hud.DebugOpen = !_hud.DebugOpen;
             if (_input.Pressed(Key.F1))
@@ -449,7 +453,7 @@ namespace SpaceAdventure.Game
             bool wantsCursor = _map.Open || ModalOpen;
             if (wantsCursor && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured)
                 Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
-            else if (!wantsCursor && !_cursorFreed && Godot.Input.MouseMode != Godot.Input.MouseModeEnum.Captured)
+            else if (!wantsCursor && Godot.Input.MouseMode != Godot.Input.MouseModeEnum.Captured)
                 Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
             // The pilot's mouse steers the ship, never the view (GDD:
             // hull-fixed camera). Accumulate the raw delta for SendTick.
@@ -908,7 +912,12 @@ namespace SpaceAdventure.Game
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
                     if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy)) _character.OnWallet(r.Body);
-                    if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipAccepted();
+                    if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipResult(r.Body);
+                    if (r.Ok && (r.Opcode == Op.Equip || r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy))
+                    {
+                        if (_bagsView.Open) _bagsView.Rebuild();
+                        if (_sheetView.Open) _sheetView.Rebuild();
+                    }
                     if (r.Ok && r.Opcode == Op.Reload) _character.OnReload(r.Body);
                     byte[] followUp = _interact.OnCmdResult(r, NextCmdSeq);
                     if (followUp != null) _net.Send(followUp);
@@ -973,14 +982,15 @@ namespace SpaceAdventure.Game
         {
             switch (name)
             {
-                case "bags": OpenPanel(_bagsView, _sheetView); break;
-                case "sheet": OpenPanel(_sheetView, _bagsView); break;
+                case "bags": case "backpack": OpenPanel(_bagsView, _sheetView); break;
+                case "sheet": case "character": OpenPanel(_sheetView, _bagsView); break;
                 case "map": _map.Toggle(); break;
                 case "journal": _journalView.Show(true); break;
                 case "party": _partyView.Show(true); break;
                 case "skills": ToggleSkills(); break;
                 case "account": _accountView.Show(true); break;
                 case "debug": _hud.DebugOpen = true; break;
+                case "menu": _gameMenu.Show(true); break;
             }
         }
 
@@ -991,6 +1001,7 @@ namespace SpaceAdventure.Game
         private void UpdateHudView()
         {
             _hudView.SetVitals(_hud.Health, 100);
+            _sheetView.Tick(Clock.Dt);
             _hudView.SetDeath(_hud.Dead ? _hud.RespawnIn : -1);
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
                 _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
@@ -1185,15 +1196,24 @@ namespace SpaceAdventure.Game
         /// credits and inventory: panels show server truth rather than
         /// whatever was last seen.
         /// </summary>
+        /// <summary>Escape's first job: every panel, the map and the shop.</summary>
+        private void CloseAllPanels()
+        {
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu })
+                if (m != null && m.Open) m.Show(false);
+            if (_map.Open) _map.Toggle();
+            if (_interact.ShopOpen) _interact.CloseShop();
+        }
+
         private void OpenPanel(ModalView view, ModalView other)
         {
+            // Panels stack: the backpack and the character panel are meant
+            // to be open together (drag between them), and every panel
+            // drags to wherever the player keeps it. Nothing closes
+            // anything else; each key toggles its own.
             bool open = !view.Open;
             view.Show(open);
-            if (open)
-            {
-                other.Show(false);
-                _net.Send(Character.RefreshCmd(NextCmdSeq()));
-            }
+            if (open) _net.Send(Character.RefreshCmd(NextCmdSeq()));
         }
 
         /// <summary>

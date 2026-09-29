@@ -10,10 +10,13 @@ import (
 
 func testRegistry() *defs.Registry {
 	return &defs.Registry{
-		InvSlots: 2,
+		InvSlots:   2,
+		EquipSlots: []string{"head", "accessory1", "accessory2", "primary"},
 		Items: map[string]defs.Item{
 			"weapon.pulse": {ID: "weapon.pulse", Slot: "primary", StackMax: 1},
 			"ammo.cell":    {ID: "ammo.cell", Slot: "", StackMax: 300},
+			"armor.helmet": {ID: "armor.helmet", Slot: "head", StackMax: 1, Armor: &defs.Armor{Value: 5}},
+			"ring.lucky":   {ID: "ring.lucky", Slot: "accessory", StackMax: 1},
 		},
 	}
 }
@@ -243,5 +246,37 @@ func TestBuyAtDiscount(t *testing.T) {
 	}
 	if p.Credits != 1000-226 { // 250 × 0.902 = 225.5 → 226
 		t.Fatalf("Credits = %d, want 774", p.Credits)
+	}
+}
+
+// Phase 11.7: the slot set, accessories, unequip, and one item in one slot.
+func TestEquipSlots(t *testing.T) {
+	reg := testRegistry()
+	p := &store.Player{Inventory: []store.Stack{
+		{Item: "weapon.pulse", Qty: 1}, {Item: "armor.helmet", Qty: 1}, {Item: "ring.lucky", Qty: 1}}}
+
+	if err := Equip(p, "head", "armor.helmet", reg); err != nil {
+		t.Fatalf("helmet to head: %v", err)
+	}
+	if err := Equip(p, "chest", "armor.helmet", reg); err == nil {
+		t.Fatalf("chest is not a declared slot, want wrong_slot")
+	}
+	if err := Equip(p, "accessory2", "ring.lucky", reg); err != nil {
+		t.Fatalf("ring to accessory2: %v", err)
+	}
+	if err := Equip(p, "accessory1", "ring.lucky", reg); err != nil {
+		t.Fatalf("ring to accessory1: %v", err)
+	}
+	if _, still := p.Equipped["accessory2"]; still {
+		t.Fatalf("one ring in two slots: %v", p.Equipped)
+	}
+	if err := Equip(p, "head", "", reg); err != nil {
+		t.Fatalf("unequip head: %v", err)
+	}
+	if _, worn := p.Equipped["head"]; worn {
+		t.Fatalf("head still equipped after unequip: %v", p.Equipped)
+	}
+	if err := Equip(p, "primary", "ring.lucky", reg); err == nil {
+		t.Fatalf("a ring in the weapon slot, want wrong_slot")
 	}
 }

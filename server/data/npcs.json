@@ -21,6 +21,34 @@
     {
      "item": "ship.v1",
      "price": 600
+    },
+    {
+     "item": "armor.helmet.scout",
+     "price": 40
+    },
+    {
+     "item": "armor.suit.scout",
+     "price": 120
+    },
+    {
+     "item": "armor.legs.scout",
+     "price": 60
+    },
+    {
+     "item": "armor.gloves.scout",
+     "price": 25
+    },
+    {
+     "item": "armor.boots.scout",
+     "price": 35
+    },
+    {
+     "item": "pack.scout",
+     "price": 80
+    },
+    {
+     "item": "charm.rabbit",
+     "price": 150
     }
    ]
   },

@@ -71,6 +71,8 @@ for f in files:
         os.makedirs(os.path.join(out, os.path.dirname(f)), exist_ok=True)
         shutil.copy2(f, os.path.join(out, f))
 shutil.copy2("manifest.json", os.path.join(out, "manifest.json"))
+if os.path.isdir("icons"):
+    shutil.copytree("icons", os.path.join(out, "icons"), dirs_exist_ok=True)  # item icons (Phase 11.7)
 print("art: %d models -> %s" % (len(files) - len(missing), out))
 if missing:
     sys.stderr.write("art: MISSING %s\n" % missing)

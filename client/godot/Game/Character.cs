@@ -27,7 +27,26 @@ namespace SpaceAdventure.Game
         public ItemStack[] Inventory { get; private set; }
 
         /// <summary>The primary-slot item, from the `equipped` event. Empty when unarmed.</summary>
-        public string Primary { get; set; } = "";
+        /// <summary>Every worn slot, slot → item id (Phase 11.7). The server's map, verbatim.</summary>
+        public readonly System.Collections.Generic.Dictionary<string, string> Equipped =
+            new System.Collections.Generic.Dictionary<string, string>();
+
+        /// <summary>The weapon in hand: the primary slot, the one slot the rig and HUD care about.</summary>
+        public string Primary
+        {
+            get => Equipped.TryGetValue("primary", out string p) ? p : "";
+            set { if (string.IsNullOrEmpty(value)) Equipped.Remove("primary"); else Equipped["primary"] = value; }
+        }
+
+        /// <summary>The item worn in a slot, or "".</summary>
+        public string Worn(string slot) => Equipped.TryGetValue(slot, out string p) ? p : "";
+
+        /// <summary>Which slot holds this item, or "".</summary>
+        public string SlotHolding(string item)
+        {
+            foreach (var kv in Equipped) if (kv.Value == item) return kv.Key;
+            return "";
+        }
 
         /// <summary>The `defs` blob, for names and slots.</summary>
         public Defs Defs { get; set; } = Defs.Empty;
@@ -67,12 +86,10 @@ namespace SpaceAdventure.Game
         public static byte[] RefreshCmd(ushort seq) => Encode.Cmd(seq, Op.Inventory, "{}");
 
         /// <summary>The item an equip was last requested for, pending its result.</summary>
-        private string _pendingEquip;
 
         /// <summary>Builds an equip cmd and remembers what it asked for.</summary>
         public byte[] EquipCmd(ushort seq, string slot, string item)
         {
-            _pendingEquip = item;
             return Encode.Cmd(seq, Op.Equip, $"{{\"slot\":\"{slot}\",\"item\":\"{item}\"}}");
         }
 
@@ -85,11 +102,18 @@ namespace SpaceAdventure.Game
         /// that never learned the state has no other way to find out. An
         /// accepted result is the server agreeing, so it counts.
         /// </summary>
-        public void OnEquipAccepted()
+        /// <summary>An empty item clears the slot (PROTOCOL: equip).</summary>
+        public byte[] UnequipCmd(ushort seq, string slot) => EquipCmd(seq, slot, "");
+
+        /// <summary>The equip result carries the whole worn map; take it verbatim.</summary>
+        public void OnEquipResult(string body)
         {
-            if (!string.IsNullOrEmpty(_pendingEquip)) Primary = _pendingEquip;
-            _pendingEquip = null;
+            var r = JsonConvert.DeserializeObject<EquipResult>(body ?? "");
+            if (r?.equipped == null) return;
+            Equipped.Clear();
+            foreach (var kv in r.equipped) Equipped[kv.Key] = kv.Value;
         }
+        private class EquipResult { public System.Collections.Generic.Dictionary<string, string> equipped { get; set; } }
 
         /// <summary>
         /// Takes credits and inventory out of any reply that carries them —
@@ -101,6 +125,11 @@ namespace SpaceAdventure.Game
             if (w == null) return;
             Credits = w.credits;
             if (w.inventory != null) Inventory = w.inventory;
+            if (w.equipped != null)
+            {
+                Equipped.Clear();
+                foreach (var kv in w.equipped) Equipped[kv.Key] = kv.Value;
+            }
         }
 
     }

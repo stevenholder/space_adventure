@@ -5,7 +5,7 @@
   "type": "module",
   "description": "glTF 2.0 binary assets and manifest for Space Adventure; scripts verify them.",
   "scripts": {
-    "gen": "python3 tools/gen_ship.py && python3 tools/gen_target.py && python3 tools/gen_struct.py && python3 tools/gen_kit.py",
+    "gen": "python3 tools/gen_ship.py && python3 tools/gen_target.py && python3 tools/gen_struct.py && python3 tools/gen_kit.py && python3 tools/gen_icons.py",
     "verify": "node tools/verify.mjs",
     "render": "python3 tools/render_check.py",
     "test": "node tools/verify.mjs && node tools/import_pack.mjs --selftest",
