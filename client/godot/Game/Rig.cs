@@ -533,7 +533,7 @@ namespace SpaceAdventure.Game
             string panel = Arg("-uiPanel");
             if (panel != null)
             {
-                OpenUiPanel(panel);
+                foreach (string one in panel.Split(',')) OpenUiPanel(one); // a comma list opens several
                 await Wait(1.0); // refresh round trip
 
                 // -uiDragDemo: grab the open panel by its header and drag it
@@ -541,7 +541,7 @@ namespace SpaceAdventure.Game
                 // then report where it landed and what was saved.
                 if (Flag("-uiDragDemo"))
                 {
-                    UI.ModalView target = panel switch { "backpack" or "bags" => _bagsView, "journal" => _journalView, "skills" => _skillsView, "party" => _partyView, _ => _sheetView };
+                    UI.ModalView target = panel.Split(',')[0] switch { "backpack" or "bags" => _bagsView, "journal" => _journalView, "skills" => _skillsView, "party" => _partyView, _ => _sheetView };
                     Vector2 from = target.HeaderCentre, to = from + new Vector2(300, 120);
                     Vector2 before = target.Position;
                     Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = from, GlobalPosition = from });

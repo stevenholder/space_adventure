@@ -137,12 +137,12 @@ namespace SpaceAdventure.Game.UI
         private readonly Control _root;
         private readonly string _key;
 
-        protected ModalView(Control root, string title, float width, float top = 0.18f)
+        protected ModalView(Control root, string title, float width, float top = 0.18f, float left = 0.5f)
         {
             _root = root;
             _key = title.ToLowerInvariant().Replace(' ', '_');
             Box = Styles.Panel(Styles.SkewNone);
-            Styles.PinAt(Box, 0.5f, top, width);
+            Styles.PinAt(Box, left, top, width);
             Box.Visible = false;
             VBoxContainer stack = Styles.Body(Box);
             VBoxContainer header = Styles.Header(title);

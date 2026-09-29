@@ -1195,17 +1195,13 @@ namespace SpaceAdventure.Game
         /// </summary>
         private void OpenPanel(ModalView view, ModalView other)
         {
+            // Panels stack: the backpack and the character panel are meant
+            // to be open together (drag between them), and every panel
+            // drags to wherever the player keeps it. Nothing closes
+            // anything else; each key toggles its own.
             bool open = !view.Open;
             view.Show(open);
-            if (open)
-            {
-                // One modal at a time: the character panel over an open shop
-                // was two panels fighting for the same pixels.
-                foreach (ModalView m in new ModalView[] { other, _shopView, _journalView, _partyView, _skillsView, _accountView })
-                    if (m != null && m != view && m.Open) m.Show(false);
-                if (_interact.ShopOpen) _interact.CloseShop();
-                _net.Send(Character.RefreshCmd(NextCmdSeq()));
-            }
+            if (open) _net.Send(Character.RefreshCmd(NextCmdSeq()));
         }
 
         /// <summary>

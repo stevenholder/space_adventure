@@ -273,7 +273,7 @@ namespace SpaceAdventure.Game.UI
 
         public CharacterView(Control root, Character character, SkillSheet skills, Icons icons, AssetRegistry assets,
             Func<ushort> nextSeq, Action<byte[]> send)
-            : base(root, "Character", 560, 0.05f)
+            : base(root, "Character", 560, 0.05f, 0.30f) // left by default; the backpack sits right
         {
             _character = character;
             _skills = skills;
@@ -393,7 +393,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Action<byte[]> _send;
 
         public BackpackView(Control root, Character character, Icons icons, Func<ushort> nextSeq, Action<byte[]> send)
-            : base(root, "Backpack", 400)
+            : base(root, "Backpack", 400, 0.18f, 0.80f) // right by default, beside the character
         {
             _character = character;
             _icons = icons;

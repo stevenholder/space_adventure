@@ -1353,8 +1353,9 @@ the planet's sun), then STATS, then SKILLS. **B** opens the backpack: a
   health, armor (sum of worn `armor.value`), damage (weapon × Marksmanship),
   fire rate, sprint (× Athletics), rover/ship bonus, loot rolls, buy
   prices, discovery range, credits, bag. **SKILLS**: the ten, with level.
-- One modal at a time: opening C or B closes the shop, journal, party
-  and skills panels.
+- Panels stack. C and B are meant to be open together (that is what
+  dragging between them is for): the character sits left of centre by
+  default, the backpack right. No key closes another panel.
 - **Every panel drags by its header** and stays where it was put, per
   panel, across sessions (`user://sa.cfg` `[panels]`); at least the
   header always stays on screen.
