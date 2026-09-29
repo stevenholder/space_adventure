@@ -258,13 +258,12 @@ namespace SpaceAdventure.Game
 
                     var simDir = new Vec3(dir.X, dir.Y, dir.Z);
                     double sampled = terrain.SampleRadius(simDir);
-                    float h = Mathf.Clamp((float)((sampled - TerrainField.RadiusMin) /
-                                                  (TerrainField.RadiusMax - TerrainField.RadiusMin)), 0f, 1f);
                     float slope = Mathf.Clamp((float)(terrain.Slope(simDir) / TerrainField.MaxSlope), 0f, 1f);
 
-                    Color c = new Color(0.16f, 0.23f, 0.17f).Lerp(new Color(0.62f, 0.58f, 0.48f), h);
-                    // Steep ground is drawn darker, which is what turns a
-                    // height ramp into something you can read a route off.
+                    // The ground's own palette, so the map matches the view.
+                    Color c = TerrainMesh.Shade(terrain, simDir, Frame.ToGodot(simDir * sampled), 0); // one index: no per-pixel jitter on a map
+                    // Steep ground is drawn darker still, which is what turns
+                    // a height ramp into something you can read a route off.
                     c = c.Lerp(c * 0.45f, slope);
                     int i = (py * Resolution + px) * 4;
                     pixels[i] = (byte)(c.R * 255); pixels[i + 1] = (byte)(c.G * 255);

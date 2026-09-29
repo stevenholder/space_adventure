@@ -13,6 +13,7 @@
 // transforms to cull and re-evaluate every frame, for props that never move.
 // The transforms are set once at build; nothing runs per frame.
 
+using System;
 using System.Collections.Generic;
 using Godot;
 using SpaceAdventure.Sim;
@@ -65,19 +66,62 @@ namespace SpaceAdventure.Game
 
             _positions.Clear();
             var batches = new List<Transform3D>[] { new List<Transform3D>(), new List<Transform3D>(), new List<Transform3D>() };
-            foreach (RockPlacement p in RockScatter.Scatter(terrain, worldSeed))
+            var tints = new List<Color>[] { new List<Color>(), new List<Color>(), new List<Color>() };
+            List<RockPlacement> scatter = RockScatter.Scatter(terrain, worldSeed);
+
+            // The scatter's rng draw order is a contract (RockScatter.cs), so
+            // the variety is layered ON it from a second stream: a tint per
+            // rock, and 0-3 pebbles seated around each one. Same seed, same
+            // pebbles on every client; nothing here touches the first stream.
+            System.Func<double> rng = Rng.Mulberry32(worldSeed ^ 0x9ebb1eu);
+            void Place(int variant, Vec3 dir, double spin, Vec3 scale, Color tint)
             {
                 // Local +Y along the surface direction, spun about that same
                 // axis, scaled on the rock's own axes. Sim frame is Godot's,
                 // so `up` and the spin sense cross over unchanged.
+                Vector3 up = Frame.ToGodot(dir).Normalized();
+                Basis align = up.Dot(Vector3.Up) < -0.9999f
+                    ? new Basis(Vector3.Right, Mathf.Pi)
+                    : new Basis(new Quaternion(Vector3.Up, up));
+                Basis basis = align.Rotated(up, (float)spin) * Basis.FromScale(Frame.ToGodot(scale));
+                double surf = terrain.SampleRadius(dir);
+                batches[variant].Add(new Transform3D(basis, Frame.ToGodot(dir * (surf + scale.Y * 0.05))));
+                tints[variant].Add(tint);
+            }
+            Color Tint()
+            {
+                // Warm-to-cool greys over the model's own colours: same rock
+                // model, not the same rock.
+                float warm = (float)rng();
+                float value = 0.80f + 0.35f * (float)rng();
+                return new Color(value * (0.92f + 0.16f * warm), value, value * (1.08f - 0.16f * warm));
+            }
+
+            foreach (RockPlacement p in scatter)
+            {
                 Vector3 up = Frame.ToGodot(p.Dir).Normalized();
                 Basis align = up.Dot(Vector3.Up) < -0.9999f
                     ? new Basis(Vector3.Right, Mathf.Pi)
                     : new Basis(new Quaternion(Vector3.Up, up));
-                Basis basis = align.Rotated(up, (float)p.Spin)
-                            * Basis.FromScale(Frame.ToGodot(p.Scale));
+                Basis basis = align.Rotated(up, (float)p.Spin) * Basis.FromScale(Frame.ToGodot(p.Scale));
                 batches[p.Variant].Add(new Transform3D(basis, Frame.ToGodot(p.Pos)));
+                tints[p.Variant].Add(Tint());
                 _positions.Add(Frame.ToGodot(p.Pos));
+
+                int pebbles = (int)(rng() * 4); // 0..3
+                for (int k = 0; k < pebbles; k++)
+                {
+                    double ang = rng() * Math.PI * 2;
+                    double dist = 0.8 + rng() * 1.6; // metres along the ground
+                    double size = 0.15 + rng() * 0.30;
+                    // A tangent step from the rock, renormalised back onto the sphere.
+                    Vec3 tx = Math.Abs(p.Dir.Y) < 0.9 ? Vec3.Cross(new Vec3(0, 1, 0), p.Dir).Normalized() : Vec3.Cross(new Vec3(1, 0, 0), p.Dir).Normalized();
+                    Vec3 ty = Vec3.Cross(p.Dir, tx);
+                    Vec3 d = (p.Dir + (tx * Math.Cos(ang) + ty * Math.Sin(ang)) * (dist / TerrainField.PlanetRadius)).Normalized();
+                    if (terrain.Slope(d) > RockScatter.SlopeMax) continue;
+                    Place((int)(rng() * 3) % 3, d, rng() * Math.PI * 2,
+                          new Vec3(size * (0.8 + rng() * 0.4), size * (0.6 + rng() * 0.5), size * (0.8 + rng() * 0.4)), Tint());
+                }
             }
 
             for (int v = 0; v < 3; v++)
@@ -86,13 +130,19 @@ namespace SpaceAdventure.Game
                 List<Transform3D> batch = batches[v];
                 _assets.Mesh(VariantAssets[v], mesh =>
                 {
+                    List<Color> tint = tints[v];
                     var mm = new MultiMesh
                     {
                         TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+                        UseColors = true, // the instance colour multiplies the model's vertex colours
                         Mesh = mesh,
                         InstanceCount = batch.Count,
                     };
-                    for (int i = 0; i < batch.Count; i++) mm.SetInstanceTransform(i, batch[i]);
+                    for (int i = 0; i < batch.Count; i++)
+                    {
+                        mm.SetInstanceTransform(i, batch[i]);
+                        mm.SetInstanceColor(i, tint[i]);
+                    }
                     _root.AddChild(new MultiMeshInstance3D
                     {
                         Name = VariantAssets[v].Replace('.', '_'),
@@ -101,7 +151,7 @@ namespace SpaceAdventure.Game
                     });
                 });
             }
-            GD.Print($"rocks: {batches[0].Count}/{batches[1].Count}/{batches[2].Count}");
+            GD.Print($"rocks: {batches[0].Count}/{batches[1].Count}/{batches[2].Count} ({scatter.Count} placed + pebbles)");
         }
     }
 }
