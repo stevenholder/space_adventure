@@ -1327,6 +1327,20 @@ a bearing tape with `ink`-outlined markers (shop, rover, own ship, camp,
 spawn). Prompts ("E · talk", notices) stay bottom-center. The flight
 readout replaces the ammo cluster while seated in a ship.
 
+### Display and settings (Phase 13)
+
+The UI is laid out for **1920×1080** and the window scales it as one
+piece (Godot `canvas_items` stretch, `expand` aspect): a 1280×720
+window draws everything at two thirds, a 1440p window at 1.33×, a wider
+aspect gains margin rather than distortion. Nothing overlaps because
+the window shrank. Three display modes — **windowed**, **windowed
+fullscreen** (borderless at the desktop size, the default) and
+**fullscreen** (exclusive) — on a SETTINGS page off the Esc menu, with
+a **UI scale** slider (0.75–1.5×, on top of the window scaling) and
+**mouse sensitivity** (0.25–3×). All three persist in `user://sa.cfg`
+`[settings]` and apply at boot; the rig and the self-test own their own
+window and ignore the display mode.
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
@@ -1920,8 +1934,10 @@ magazine is clamped to the new size on the next reload, never emptied.
 #### The hotbar
 
 Ten cells across the bottom centre of the HUD, one row, keys **1 2 3 4
-5 Q E T Z X**. Holding **Shift** shows and fires a second row on the
-same keys (`⇧1` … `⇧X`): twenty slots. **F interacts** and **R
+5 Q E T Z X**. A second row on the same keys under **Shift** (`⇧1` …
+`⇧X`, twenty slots) is built and saved but **switched off for now**
+(`Hotbar.ShiftRow`): Shift is sprint, and a hotkey mid-sprint firing
+the second row read as a misfire in play. **F interacts** and **R
 reloads** (when a gun is worn); neither is on the bar. Shift is also sprint; a hotkey
 pressed while sprinting fires the shift row, which is what a modifier
 means. A slot holds a **reference**, not a thing:

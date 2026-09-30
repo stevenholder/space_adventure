@@ -31,6 +31,12 @@ namespace SpaceAdventure.Game.UI
     {
         public const int Row = 10;
         public const int Slots = 20;
+        /// <summary>
+        /// The Shift row is off for now: Shift is sprint, and a hotkey mid-
+        /// sprint firing the second row read as a misfire in play. The
+        /// twenty slots and their saves stay; flip this to bring it back.
+        /// </summary>
+        public const bool ShiftRow = false;
         public static readonly Key[] Keys = { Key.Key1, Key.Key2, Key.Key3, Key.Key4, Key.Key5, Key.Q, Key.E, Key.T, Key.Z, Key.X };
         private static readonly string[] Labels = { "1", "2", "3", "4", "5", "Q", "E", "T", "Z", "X" };
         private const string ConfigPath = "user://sa.cfg";

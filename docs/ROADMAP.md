@@ -1426,6 +1426,7 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
 | 15 | 3 | `t37-use.mjs`: buy medkits at the quartermaster (stocked, GDD); `use` at full → `no_effect`; walk t34's route into the camp, take a hit, `use` → +50 and `cooldown: 8`, a second inside 8 s → `cooldown` with `ready_in`, the bag count drops by one; the rifle → `unusable`, the unworn scanner → `not_owned`; `use` mid-channel at the pad ends the gather `cancel`. The scanner's pings and the mods' numbers are unit-tested and photographed (they are bench-made behind Engineering levels the harness cannot reach in one life) | `test/` | the test |
 | 16 | 3 | QA: C129–C136, gallery, docs | docs | criteria |
 | 17 | 2 | Selling as a bag gesture (WoW): right-click sells one, Shift the stack, while a shop is open; the SELL column goes | `UI/Inventory.cs`, `UI/Panels.cs` | shot |
+| 19 | 2 | Display and settings: 1080p canvas scaling in project.godot, SETTINGS off the Esc menu (display mode, UI scale, mouse sensitivity), `[settings]` in sa.cfg, applied at boot; Shift row gated off | `project.godot`, `UI/SettingsPanel.cs`, `Boot.cs` | shots at 1080 and 720 |
 | 18 | 2 | Buyback: per-connection sale log (12, newest last), `shop_list` carries it, `shop_buyback` returns the newest sale whole at the shop's price; BUYBACK tab on the shop | `server/shop.go`, `cmd.go`, `UI/Panels.cs` | `TestShopBuyback`, t36 |
 
 ### Acceptance criteria
@@ -1468,6 +1469,13 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
   for that price and removes the entry, refusals leave it, twelve kept,
   gone at logout; the shop's BUYBACK tab lists them with BUY BACK.
   (unit + t36 + shot)
+- **C139 Display and settings.** The UI is laid out for 1920×1080 and a
+  smaller window scales it down as one piece (no overlap), a larger one
+  up; SETTINGS off the Esc menu switches windowed / windowed fullscreen
+  / fullscreen, UI scale and mouse sensitivity, and they survive a
+  restart. (shots at 1920×1080 and 1280×720)
+- **C140 The Shift row is off.** Shift + key does nothing on the bar;
+  the twenty slots and their saves stay for later. (self-test)
 - **C136 Nothing else moved.** t14, t34, t36 and the whole sweep green;
   a fresh profile plays the game it had. (sweep)
 

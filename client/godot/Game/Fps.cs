@@ -62,7 +62,8 @@ namespace SpaceAdventure.Game
         private float _pitch;
 
         /// <summary>Radians per pixel of pointer delta (0.12°/px, as before).</summary>
-        public float Sensitivity { get; set; } = 0.12f * Mathf.Pi / 180f;
+        public const float BaseSensitivity = 0.12f * Mathf.Pi / 180f;
+        public float Sensitivity { get; set; } = BaseSensitivity;
 
         public bool MouseLookEnabled { get; set; } = true;
 

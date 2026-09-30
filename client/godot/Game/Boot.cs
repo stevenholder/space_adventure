@@ -178,6 +178,8 @@ namespace SpaceAdventure.Game
         private CombatFeed _combatFeed;
         private ShopView _shopView;
         private BenchView _benchView; // Phase 12
+        private Settings _settings;
+        private SettingsView _settingsView;
         private Hotbar _hotbar; // Phase 13
         private HotbarView _hotbarView;
         private readonly List<(string name, Vector3 pos, double until)> _scanPings = new List<(string, Vector3, double)>();
@@ -205,7 +207,7 @@ namespace SpaceAdventure.Game
             (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
             (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
-            (_benchView?.Open ?? false);
+            (_benchView?.Open ?? false) || (_settingsView?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -343,7 +345,14 @@ namespace SpaceAdventure.Game
             _partyFrames = new PartyFrames(_ui.Root);
             _skillsView = new SkillsView(_ui.Root, _skills, _character);
             _skillsFeed = new SkillsFeed(_ui.Root);
-            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0));
+            _settings = new Settings();
+            _settings.Load();
+            _settingsView = new SettingsView(_ui.Root, _settings, ApplySettings);
+            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0), () => _settingsView.Show(true));
+            // The rig fixes its own window (--resolution, headless shots), so
+            // the saved display mode is for a player's session only.
+            if (!Rigged) ApplySettings();
+            else GetTree().Root.ContentScaleFactor = _settings.UiScale;
             _accountView = new AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); _ = RedeemLinkCode(code); },
                 () => _accountView.Show(false));
@@ -444,7 +453,7 @@ namespace SpaceAdventure.Game
             // Phase 13: 1–5 Q E T Z X fire the hotbar; Shift picks the second
             // row (Shift is also sprint — a hotkey while sprinting fires the
             // shift row, which is what a modifier means).
-            _hotbarView.Shift = _input.Held(Key.Shift) || _rigShift;
+            _hotbarView.Shift = (Hotbar.ShiftRow && _input.Held(Key.Shift)) || _rigShift;
             foreach (Key k in Hotbar.Keys)
                 if (_input.Pressed(k)) FireHotbar(Hotbar.SlotFor(k, _hotbarView.Shift));
             if (_input.Pressed(Key.B)) OpenPanel(_bagsView, _sheetView);
@@ -1047,6 +1056,7 @@ namespace SpaceAdventure.Game
                 case "debug": _hud.DebugOpen = true; break;
                 case "menu": _gameMenu.Show(true); break;
                 case "bench": _benchView.Bench = 0; _benchView.Show(true); break;
+                case "settings": _settingsView.Show(true); break;
             }
         }
 
@@ -1267,6 +1277,16 @@ namespace SpaceAdventure.Game
         /// whatever was last seen.
         /// </summary>
         /// <summary>Escape's first job: every panel, the map and the shop.</summary>
+        /// <summary>The rig or a self-test owns the window; a player's settings do not apply.</summary>
+        private bool Rigged => Arg("-uiShot") != null || Arg("-quitAfter") != null || Flag("-selftest") || Flag("-dumpNodes");
+
+        /// <summary>Window mode, canvas scale and look speed from the settings.</summary>
+        private void ApplySettings()
+        {
+            _settings.Apply(GetTree().Root);
+            _fps.Sensitivity = FpsController.BaseSensitivity * _settings.MouseSensitivity;
+        }
+
         /// <summary>GDD "Interaction" `ui_close_dist`: how far from its NPC an open counter survives.</summary>
         private const float CounterCloseDist = 5.0f;
 
@@ -1405,7 +1425,7 @@ namespace SpaceAdventure.Game
 
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu, _benchView })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu, _benchView, _settingsView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();

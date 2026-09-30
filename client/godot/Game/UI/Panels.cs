@@ -428,12 +428,14 @@ namespace SpaceAdventure.Game.UI
     {
         private readonly System.Action _onAccount;
         private readonly System.Action _onQuit;
+        private readonly System.Action _onSettings;
 
-        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit)
+        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit, System.Action onSettings = null)
             : base(root, "Menu", 260, 0.30f)
         {
             _onAccount = onAccount;
             _onQuit = onQuit;
+            _onSettings = onSettings;
         }
 
         protected override void Fill(VBoxContainer body)
@@ -443,6 +445,11 @@ namespace SpaceAdventure.Game.UI
             body.AddChild(Styles.Gap(4));
             body.AddChild(Styles.Button("ACCOUNT", false, () => { Show(false); _onAccount(); }));
             body.AddChild(Styles.Gap(4));
+            if (_onSettings != null)
+            {
+                body.AddChild(Styles.Button("SETTINGS", false, () => { Show(false); _onSettings(); }));
+                body.AddChild(Styles.Gap(4));
+            }
             body.AddChild(Styles.Button("QUIT GAME", true, _onQuit));
             body.AddChild(Styles.Gap(6));
             Line(body, "Esc returns", Styles.Dust, 11);
