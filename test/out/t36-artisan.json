@@ -1,9 +1,9 @@
 {
- "when": "2026-09-30T01:48:49.390Z",
- "elapsedMs": 2964,
+ "when": "2026-09-30T15:01:04.334Z",
+ "elapsedMs": 2996,
  "xp": {
   "athletics": 14,
-  "commerce": 26,
+  "commerce": 30,
   "mining": 125,
   "recon": 250
  },
@@ -114,6 +114,22 @@
   },
   {
    "n": "C122 the worn drill refuses equipped",
+   "ok": true
+  },
+  {
+   "n": "C138 shop_list carries the sale as buyback",
+   "ok": true
+  },
+  {
+   "n": "C138 buyback returns the stack for the same 12 cr",
+   "ok": true
+  },
+  {
+   "n": "C138 a second buyback refuses no_buyback",
+   "ok": true
+  },
+  {
+   "n": "sold again for the bench act",
    "ok": true
   },
   {

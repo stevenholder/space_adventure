@@ -21,6 +21,8 @@
 //   -uiHotbarDemo           medkit on 1 (cooling), scanner on Q, from a faked bag (Phase 13)
 //   -uiShift                hold the hotbar's Shift row for the shot
 //   -uiHotbarDragDemo       with -uiPanel backpack: drag the first bag cell onto slot 4, report
+//   -uiSellDemo             with the shop open: sell the first -uiBuy item, report the buyback count
+//   -uiBuyback              show the shop's BUYBACK tab
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -542,6 +544,19 @@ namespace SpaceAdventure.Game
                 await Wait(0.3);
             }
 
+
+            // -uiSellDemo: with the shop open (after -uiBuy a,b — the first
+            // is unworn once the second is), sell the first the way a bag
+            // right-click does, wait for the reply; -uiBuyback then shows the
+            // shop's BUYBACK tab for the shot.
+            if (Flag("-uiSellDemo") && _shopView.Open)
+            {
+                string first = (Arg("-uiBuy") ?? "").Split(',')[0];
+                _net.Send(_interact.SellCmd(NextCmdSeq(), first, 1));
+                await Wait(1.0);
+                GD.Print($"ui: sold {first}: buyback={_interact.Buyback?.Length ?? 0} entries");
+            }
+            if (Flag("-uiBuyback") && _shopView.Open) { _shopView.ShowBuyback(true); await Wait(0.3); }
 
             // -uiShopScrollDemo: with the shop open (after -uiBuy), scroll the
             // stock to the bottom, buy a cell the way the button does, wait for

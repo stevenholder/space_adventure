@@ -1778,8 +1778,18 @@ grow by `floor(qty × value × sell_rate × (1 + sell_bonus))`, where
 `sell_bonus` is the resolved Scavenging→Commerce synergy — the synergy
 that has waited since Phase 11. Commerce trains on the credits moved
 (1 XP / 5 cr, as buying). Result: `{"credits", "inventory"}`, the same
-shape as `shop_buy`. The shop panel gains a SELL side listing every
-sellable stack in the bag with its unit price.
+shape as `shop_buy`.
+
+**Selling is a bag gesture, not a panel** (Phase 13, WoW's rule): with
+a shop open, right-click on a bag stack sells one, Shift-right-click
+the stack; the backpack's hint line says so while a shop is open. The
+shop panel has two tabs, STOCK and BUYBACK. **Buyback**: every sale of
+this connection goes on a list (newest last, twelve kept, gone at
+logout — the shop has moved it on) as `{item, qty, price}` with the
+credits the shop paid; `shop_list` carries the list, `shop_buyback
+{npc, item}` returns the newest sale of that item whole for exactly
+that price at any shop (`no_buyback` when none, else the buy
+refusals), and the entry leaves the list only on success.
 
 | param | value |
 |---|---|

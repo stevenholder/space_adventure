@@ -336,7 +336,7 @@ namespace SpaceAdventure.Game
             _hotbar = new Hotbar();
             _hotbar.Load();
             _hotbarView = new HotbarView(_ui.Root, _hotbar, _character, _icons);
-            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
+            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b), _interact);
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
             _journalView = new JournalView(_ui.Root, _missionLog, _partyState, NearestBoard, NextCmdSeq, b => _net.Send(b));
@@ -950,7 +950,7 @@ namespace SpaceAdventure.Game
                 {
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
-                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
+                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.ShopBuyback || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
                     if (r.Opcode == Op.Gather) OnGatherResult(r);
                     if (r.Opcode == Op.Use) OnUseResult(r);
                     if (r.Opcode == Op.Craft)
@@ -1381,6 +1381,7 @@ namespace SpaceAdventure.Game
                 "cooldown" => "not ready",
                 "unusable" => "cannot use that",
                 "no_effect" => "no need",
+                "no_buyback" => "nothing to buy back",
                 "dead" => "you are dead",
                 "" => "refused",
                 _ => code.Replace('_', ' '),

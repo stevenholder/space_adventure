@@ -407,14 +407,17 @@ namespace SpaceAdventure.Game.UI
         private readonly Func<ushort> _nextSeq;
         private readonly Action<byte[]> _send;
 
-        public BackpackView(Control root, Character character, Icons icons, Func<ushort> nextSeq, Action<byte[]> send)
+        public BackpackView(Control root, Character character, Icons icons, Func<ushort> nextSeq, Action<byte[]> send, Interaction interact = null)
             : base(root, "Backpack", 400, 0.18f, 0.80f) // right by default, beside the character
         {
             _character = character;
             _icons = icons;
             _nextSeq = nextSeq;
             _send = send;
+            _interact = interact;
         }
+
+        private readonly Interaction _interact;
 
         /// <summary>The slot an item goes to on a right-click: its own, or the first free accessory slot.</summary>
         private string TargetSlot(string item)
@@ -451,9 +454,18 @@ namespace SpaceAdventure.Game.UI
                 if (i < shown.Count) { cell.Item = shown[i].item; cell.Qty = shown[i].qty; }
                 if (i == 0) _firstCell = cell; // the rig's drag proof grabs it
                 string item = cell.Item;
+                int qty = cell.Qty;
                 cell.OnAlt = () =>
                 {
-                    // Phase 13: a consumable is used, everything else equipped.
+                    // Phase 13, WoW's rule: with a shop open, right-click sells
+                    // (one; Shift for the stack). Otherwise a consumable is
+                    // used, everything else equipped.
+                    if (_interact != null && _interact.ShopOpen)
+                    {
+                        if (_character.Defs.SellPrice(item) <= 0) { _interact.Notice = "no one buys that"; return; }
+                        _send(_interact.SellCmd(_nextSeq(), item, Input.IsKeyPressed(Key.Shift) ? qty : 1));
+                        return;
+                    }
                     if (_character.Defs.Item(item)?.Consumable != null) { _send(Character.UseCmd(_nextSeq(), item)); return; }
                     string slot = TargetSlot(item);
                     if (!string.IsNullOrEmpty(slot)) _send(_character.EquipCmd(_nextSeq(), slot, item));
@@ -466,7 +478,9 @@ namespace SpaceAdventure.Game.UI
             }
             body.AddChild(grid);
             body.AddChild(Styles.Gap(4));
-            Line(body, "B closes  ·  right-click equips or uses  ·  drag onto the character (C) or the bar", Styles.Dust, 11);
+            Line(body, _interact != null && _interact.ShopOpen
+                ? "right-click sells one  ·  shift right-click sells the stack  ·  B closes"
+                : "B closes  ·  right-click equips or uses  ·  drag onto the character (C) or the bar", Styles.Dust, 11);
         }
     }
 }

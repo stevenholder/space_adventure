@@ -21,7 +21,8 @@ using Newtonsoft.Json;
 namespace SpaceAdventure.Game
 {
     internal class StockEntry { public string item { get; set; } public int price { get; set; } }
-    internal class ShopStock { public StockEntry[] stock { get; set; } }
+    internal class BuybackEntry { public string item { get; set; } public int qty { get; set; } public int price { get; set; } }
+    internal class ShopStock { public StockEntry[] stock { get; set; } public BuybackEntry[] buyback { get; set; } }
     public class ItemStack { public string item; public int qty; }
     public class WalletResult { public int credits = -1; public ItemStack[] inventory; public System.Collections.Generic.Dictionary<string, string> equipped; }
     public class AmmoResult { public int magazine; public int reserve; }
@@ -48,6 +49,15 @@ namespace SpaceAdventure.Game
         // Phase 8: the UI Toolkit shop view reads state from here and builds
         // the SAME cmd bytes the IMGUI panel did (t14 stays byte-identical).
         internal StockEntry[] Stock => _stock;
+        internal BuybackEntry[] Buyback => _buyback;
+        private BuybackEntry[] _buyback;
+
+        /// <summary>Phase 13: re-buy the newest sale of item at what the shop paid.</summary>
+        public byte[] BuybackCmd(ushort seq, string item)
+        {
+            _status = "buying back...";
+            return Encode.Cmd(seq, Op.ShopBuyback, $"{{\"npc\":{_shopNpc},\"item\":\"{item}\"}}");
+        }
         public string Status => _status;
 
         /// <summary>Phase 12: sell qty of item at the open shop (mirror of BuyCmd).</summary>
@@ -231,9 +241,21 @@ namespace SpaceAdventure.Game
             switch (r.Opcode)
             {
                 case Op.ShopList:
-                    _stock = JsonConvert.DeserializeObject<ShopStock>(r.Body)?.stock;
+                {
+                    var listed = JsonConvert.DeserializeObject<ShopStock>(r.Body);
+                    _stock = listed?.stock;
+                    _buyback = listed?.buyback;
                     _status = _stock == null || _stock.Length == 0 ? "nothing for sale" : "";
                     return null;
+                }
+
+                case Op.ShopSell:
+                case Op.ShopBuyback:
+                    // The wallet is in the reply; the buyback list is not, so
+                    // ask for the shop again and the tab redraws from it.
+                    _character.OnWallet(r.Body);
+                    _status = r.Opcode == Op.ShopSell ? "sold" : "bought back";
+                    return ShopOpen ? Encode.Cmd(nextSeq(), Op.ShopList, $"{{\"npc\":{_shopNpc}}}") : null;
 
                 case Op.ShopBuy:
                 {

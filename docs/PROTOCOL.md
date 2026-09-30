@@ -164,7 +164,10 @@ Constants:
   `{"item", "effect": {…}, "cooldown": <s>}`, the effect shape is the
   item's (a medkit: `{"health"}`; the scanner: `{"pings": [{"id", "def",
   "pos", "health"}]}`).
-  `0x0014`+ still reserved.
+  `0x0014` `shop_buyback` `{"npc": <entity_id>, "item": "<id>"}` — the
+  newest sale of that item this session comes back whole at what the
+  shop paid; result is `shop_buy`'s shape.
+  `0x0015`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -376,7 +379,7 @@ Bodies per opcode:
 
 | opcode | request | success body |
 |---|---|---|
-| `shop_list` | `{"npc": <entity_id>}` | `{"stock":[{"item":"weapon.pulse","price":250}]}` |
+| `shop_list` | `{"npc": <entity_id>}` | `{"stock":[{"item":"weapon.pulse","price":250}],"buyback":[{"item":"mat.ore.iron","qty":4,"price":12}]}` — `buyback` (Phase 13) is this connection's sales, newest last |
 | `shop_buy` | `{"npc": <entity_id>, "item":"weapon.pulse", "qty":1}` | `{"credits":750,"inventory":[{"item":"weapon.pulse","qty":1}]}` |
 | `equip` | `{"slot":"primary","item":"weapon.pulse"}` — slot is one of `defs.equip_slots`; an `accessory` item fits `accessory1`/`accessory2`; an empty `item` clears the slot (Phase 11.7) | `{"equipped":{"primary":"weapon.pulse", …}}` — the WHOLE worn map, every slot |
 | `inventory` | `{}` | `{"credits":750,"inventory":[…],"equipped":{…}}` |
@@ -396,7 +399,8 @@ the node's `level` or a `craft` below the recipe's). Phase 12 adds
 `no_tool`, `depleted`, `no_space` (`gather`); `not_gathering`
 (`gather_cancel`); `unknown_recipe`, `missing_materials` (`craft`).
 Phase 13 adds `unusable`, `dead`, `no_effect` and `cooldown` (`use`; a
-`cooldown` refusal carries `"ready_in": <s>` beside the reason). The
+`cooldown` refusal carries `"ready_in": <s>` beside the reason) and
+`no_buyback` (`shop_buyback`). The
 client maps codes to text; the server never sends prose for display.
 
 ### `defs` — the data the client needs (Phase 2)

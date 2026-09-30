@@ -114,6 +114,10 @@ type client struct {
 	// cooldowns is Phase 13's per-item ready-at map for `use`, guarded by
 	// srv.mu; per connection, never persisted.
 	cooldowns map[string]time.Time
+	// buyback is what this connection sold, newest last, capped at
+	// buybackMax (shop.go); guarded by srv.mu, never persisted — WoW's
+	// rule: log out and the shop has moved it on.
+	buyback []buybackEntry
 
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the

@@ -1425,6 +1425,8 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
 | 14 | 2 | Rig: `-uiHotbarDemo` (fills the bar locally: a medkit on 1, scanner on Q, a cooldown sweep on 1), `-uiShift` (hold Shift for the shot) | `Rig.cs` | shots |
 | 15 | 3 | `t37-use.mjs`: buy medkits at the quartermaster (stocked, GDD); `use` at full → `no_effect`; walk t34's route into the camp, take a hit, `use` → +50 and `cooldown: 8`, a second inside 8 s → `cooldown` with `ready_in`, the bag count drops by one; the rifle → `unusable`, the unworn scanner → `not_owned`; `use` mid-channel at the pad ends the gather `cancel`. The scanner's pings and the mods' numbers are unit-tested and photographed (they are bench-made behind Engineering levels the harness cannot reach in one life) | `test/` | the test |
 | 16 | 3 | QA: C129–C136, gallery, docs | docs | criteria |
+| 17 | 2 | Selling as a bag gesture (WoW): right-click sells one, Shift the stack, while a shop is open; the SELL column goes | `UI/Inventory.cs`, `UI/Panels.cs` | shot |
+| 18 | 2 | Buyback: per-connection sale log (12, newest last), `shop_list` carries it, `shop_buyback` returns the newest sale whole at the shop's price; BUYBACK tab on the shop | `server/shop.go`, `cmd.go`, `UI/Panels.cs` | `TestShopBuyback`, t36 |
 
 ### Acceptance criteria
 
@@ -1456,6 +1458,15 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
 - **C135 Recipes exist.** Five new bench cards, medkit at Engineering
   3, scanner at 6, barrel and mag at 12, coil at 15; copper is spent
   for the first time. (defs audit + shot)
+- **C137 Selling is a bag gesture.** With a shop open, right-click on a
+  bag stack sells one and Shift-right-click the stack; the bag's hint
+  says so; with no shop open right-click equips or uses as before. (shot
+  + t36's `shop_sell`)
+- **C138 Buyback.** A sale lands on the list at what the shop paid,
+  `shop_list` carries it, `shop_buyback` returns the newest sale whole
+  for that price and removes the entry, refusals leave it, twelve kept,
+  gone at logout; the shop's BUYBACK tab lists them with BUY BACK.
+  (unit + t36 + shot)
 - **C136 Nothing else moved.** t14, t34, t36 and the whole sweep green;
   a fresh profile plays the game it had. (sweep)
 

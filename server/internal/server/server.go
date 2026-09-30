@@ -835,6 +835,21 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 				defer s.mu.Unlock()
 				return s.rng.Float64()
 			},
+			Buyback: func() []buybackEntry {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return append([]buybackEntry(nil), c.buyback...)
+			},
+			PushBuyback: func(e buybackEntry) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				c.pushBuyback(e)
+			},
+			PopBuyback: func(item string) (buybackEntry, bool) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return c.popBuyback(item)
+			},
 			Vitals: func() (int, bool) {
 				s.mu.Lock()
 				defer s.mu.Unlock()
@@ -875,7 +890,7 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	// Commerce trains on credits MOVED at a shop (Phase 11) — buys today,
 	// sells when selling exists.
 	if result.Status == protocol.StatusOK && creditsBefore != creditsAfter &&
-		(req.Opcode == protocol.OpShopBuy || req.Opcode == protocol.OpShopSell) {
+		(req.Opcode == protocol.OpShopBuy || req.Opcode == protocol.OpShopSell || req.Opcode == protocol.OpShopBuyback) {
 		if per := s.reg.Awards.CommerceXPPer5cr; per > 0 {
 			moved := creditsAfter - creditsBefore
 			if moved < 0 {

@@ -95,6 +95,7 @@ namespace SpaceAdventure.Net
         public const ushort GatherCancel = 0x0011;
         public const ushort Craft = 0x0012;
         public const ushort Use = 0x0013; // Phase 13: a consumable or a worn ability
+        public const ushort ShopBuyback = 0x0014; // Phase 13: re-buy a sale at what the shop paid
     }
 
     /// <summary>cmd_result status codes.</summary>
