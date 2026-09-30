@@ -266,14 +266,22 @@ namespace SpaceAdventure.Game.UI
             _send = send;
         }
 
+        /// <summary>
+        /// Where the stock list is scrolled to, kept across rebuilds. A buy
+        /// rebuilds the panel twice (the click, then the server's reply), so
+        /// this is fed by the scrollbar's own value changes -- never read
+        /// back from a fresh box, which starts at 0 -- and restored once the
+        /// new bar has a range to restore into.
+        /// </summary>
+        private int _scrollAt;
         private ScrollContainer _scrollBox;
+
+        /// <summary>The rig's scroll proof: where the list is, and a way to move it.</summary>
+        public int ScrollOffset => _scrollBox != null && GodotObject.IsInstanceValid(_scrollBox) ? _scrollBox.ScrollVertical : -1;
+        public void ScrollTo(int px) { if (_scrollBox != null && GodotObject.IsInstanceValid(_scrollBox)) _scrollBox.ScrollVertical = px; }
 
         protected override void Fill(VBoxContainer body)
         {
-            // A buy rebuilds the panel; the old scroll box is still alive
-            // here (freed at end of frame), so its offset carries over and
-            // the list does not jump back to the top.
-            int scrollAt = _scrollBox != null && GodotObject.IsInstanceValid(_scrollBox) ? _scrollBox.ScrollVertical : 0;
             long credits = _character.Credits;
             var head = Styles.Row(8);
             head.AddChild(Styles.Grow(Styles.Display_("stock", 12, Styles.Dust)));
@@ -288,7 +296,17 @@ namespace SpaceAdventure.Game.UI
                 // list scrolls inside a fixed height, the wallet stays put.
                 var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 400), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
                 _scrollBox = scroll;
-                Callable.From(() => { if (GodotObject.IsInstanceValid(scroll)) scroll.ScrollVertical = scrollAt; }).CallDeferred();
+                VScrollBar bar = scroll.GetVScrollBar();
+                int want = _scrollAt;
+                bool restored = want == 0;
+                void Restore()
+                {
+                    if (restored || bar.MaxValue <= bar.Page) return;
+                    restored = true;
+                    scroll.ScrollVertical = want;
+                }
+                bar.Changed += Restore;
+                bar.ValueChanged += v => { if (restored) _scrollAt = (int)v; };
                 var list = Styles.Column(4);
                 list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
                 scroll.AddChild(list);
