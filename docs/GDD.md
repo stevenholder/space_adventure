@@ -1591,8 +1591,8 @@ other (declared synergies), and the whole sheet is the character.
 ### The roster
 
 Ten skills. Seven train in Phase 11 against verbs the game already
-has; three are RESERVED for Phase 12's artisan loop and appear on the
-panel greyed at 1, so the sheet shows where the game is going.
+has; three were RESERVED (greyed at 1 on the panel) until Phase 12's
+artisan loop, contracted below, gave them verbs.
 
 | skill | trains by | efficacy (per level, linear to 99) | unlocks (data-driven) |
 |---|---|---|---|
@@ -1603,9 +1603,9 @@ panel greyed at 1, so the sheet shows where the game is going.
 | **Scavenging** | loot pickups (10 XP × qty) | +0.3% extra-roll chance on loot tables | rare-drop table at 30 |
 | **Commerce** | credits moved at shops (1 XP / 5 cr, buy or sell) | −0.2% buy prices (cap −19.6%) | future vendor stock tiers |
 | **Recon** | first discovery of each POI (+250, permanent per player), scout missions (+100) | +0.5% compass discovery range | — |
-| *Mining* | Phase 12: drilling nodes | ore tier access, yield speed | — |
-| *Salvaging* | Phase 12: cutting wrecks | scrap tier access, yield | — |
-| *Engineering* | Phase 12: crafting at the bench | recipe tiers | — |
+| **Mining** | Phase 12: node yields (node `xp`) | −0.5% channel time | nodes by `level` |
+| **Salvaging** | Phase 12: wreck yields (node `xp`) | −0.5% channel time | nodes by `level` |
+| **Engineering** | Phase 12: crafts (recipe `xp`) | +0.3% extra-output chance | recipes by `level` |
 
 ### The curve — RuneScape's, exactly
 
@@ -1639,6 +1639,8 @@ per-level bonus, and where it applies. Launch set:
   body drives harder.
 - **Scavenging → Commerce**: +0.1%/Scavenging-level better sell
   prices — knowing what junk is worth.
+- **Engineering → Mining** (Phase 12): +0.1%/Engineering-level faster
+  drill channels — a better hand with the drill.
 
 The skills panel draws the arrows; training one visibly moves its
 partner's tooltip.
@@ -1653,16 +1655,197 @@ discovered POIs) answers a `skills` cmd and persists beside inventory
 next, synergy arrows, multiplier tooltips. Reserved skills render
 greyed.
 
-### Phase 12 preview — the artisan loop (decided, not yet built)
+### Phase 12 — the artisan loop (contract, wave 0, 2026-09-29)
 
-Mining: E on an ore node starts a ~3 s server-timed drill channel;
-ore drops as loot; nodes deplete after N yields and respawn. Needs
-`tool.drill` (quartermaster). Salvaging mirrors it on wreck nodes
-with `tool.cutter`. Engineering crafts at the WORKBENCH at the relay
-— recipes (data) turn ore + scrap into ammo, medkits, weapon mods;
-travel is part of the loop. **Raw materials drop on death** as a
-lootable spill where you fell (equipment and credits stay) — the
-banked-versus-carried tension, without full RS brutality.
+The three reserved skills come alive. Mining drills ore out of nodes,
+Salvaging cuts scrap out of wrecks, Engineering turns both into things
+at a workbench, and `shop_sell` turns anything with a value into
+credits. **Travel is the loop**: ore lies in the rocks around the pad,
+wrecks lie inside the guarded scrapyard, the bench stands at the relay,
+the buyer stands at the pad. Raw materials — and only raw materials —
+spill where you die. Everything below is data; the verbs are
+`shop_sell`, `gather`, `gather_cancel`, `craft` (PROTOCOL).
+
+#### Nodes
+
+A **node** is a static world entity (`entity_type` node, PROTOCOL) placed
+by a zone file like an NPC (`{type:"node", def, pos, yaw}`), defined in
+`server/data/nodes.json`. Its snapshot `health` IS its remaining yields:
+`0` reads as depleted and the client draws it dark and shrunk. A node is
+interactable with the verb its skill names (`Drill` / `Cut`), under the
+ordinary interaction rules (`interact_dist`, `interact_cone`).
+
+| field | meaning |
+|---|---|
+| `id` | `node.ore.iron`, `node.ore.copper`, `node.wreck` |
+| `skill` | `mining` or `salvaging` — trained by, gated by |
+| `level` | minimum level in `skill`; below it `gather` refuses `locked` |
+| `tool` | item id that must sit in the `tool` equip slot; `tool.drill`, `tool.cutter`, `tool.drill.mk2` (mk2 satisfies any node asking for `tool.drill`) |
+| `channel` | seconds the drill channel takes at level 1 |
+| `yields` | yields before depletion (= spawn health) |
+| `respawn` | seconds depleted → full |
+| `loot` | loot table (`loot.json`) rolled once per yield |
+| `xp` | XP in `skill` per yield |
+
+| node | skill | level | tool | channel | yields | respawn | loot (guaranteed) | xp | where |
+|---|---|---|---|---|---|---|---|---|---|
+| `node.ore.iron` | mining | 1 | `tool.drill` | 3.0 s | 5 | 90 s | `mat.ore.iron` ×2 | 25 | spawn (×3) |
+| `node.ore.copper` | mining | 10 | `tool.drill.mk2` | 4.0 s | 4 | 120 s | `mat.ore.copper` ×2 | 60 | spawn (×1) |
+| `node.wreck` | salvaging | 1 | `tool.cutter` | 3.0 s | 4 | 120 s | `mat.scrap` ×3 | 30 | outpost (×2, inside the walls) |
+
+#### The channel
+
+`gather {node}` starts a **server-timed channel**; nothing is
+predicted. Validation, in order: node exists (status 5) → in range and
+cone (`out_of_range`) → not already channelling (`busy`) → alive → the
+node's `tool` (or a tool that supersedes it) is in the `tool` slot
+(`no_tool`) → `skill` level ≥ `level` (`locked`) → node `health > 0`
+(`depleted`) → the yield would fit the bag (`no_space`, checked again at
+the end). The result carries `{"node", "duration"}` — the channel
+length in seconds AFTER efficacy — and the client draws a bar for
+exactly that long. The channel ends when:
+
+- **`duration` elapses** → the yield: the node's `loot` table rolls once,
+  the items go straight into the bag (never on the ground — a mined ore
+  is yours), node `health −= 1`, `xp` is awarded in `skill`, and a
+  `gather_end` event (`reason: "done"`, with `item`/`qty`) is unicast.
+  At `health 0` the node starts its `respawn` timer; at zero it is full
+  again. Everyone sees the depletion through the snapshot.
+- **The player moves** more than `gather_move_tol` from where the channel
+  started, **takes damage**, **dies**, **disconnects**, or sends
+  `gather_cancel {}` → `gather_end` with `reason` `moved` / `hit` / `died`
+  / `cancel`; nothing is granted, the node is untouched. (Disconnect
+  sends nothing.)
+- Someone else depletes the node first → `reason: "depleted"`.
+
+Two players may channel the same node; each yield is a separate `−1`.
+Nothing in the sim reads gathering: no conformance case changes.
+
+| param | value | note |
+|---|---|---|
+| `gather_move_tol` | 0.5 m | measured from the channel's start position |
+| `gather_min_channel` | 1.0 s | floor after efficacy |
+
+#### Efficacy, unlocks, synergy
+
+| skill | trains by | efficacy (per level, linear) | unlocks (data) |
+|---|---|---|---|
+| **Mining** | yields (node `xp`) | −0.5% channel time (`gather_speed`) | nodes by `level` |
+| **Salvaging** | yields (node `xp`) | −0.5% channel time (`gather_speed`) | nodes by `level` |
+| **Engineering** | crafts (recipe `xp`) | +0.3% chance of one extra output unit (`craft_extra`) | recipes by `level`; `tool.drill.mk2` through `unlock_requirements` |
+
+The roster rows above lose their italics; `skills.json` drops the
+`reserved` flag on all three and gains their `efficacy` rows. Channel
+time = `channel × (1 − bonus)`, floored at `gather_min_channel`.
+
+One new synergy: **Engineering → Mining**, `gather_speed`
++0.1%/Engineering-level — a better hand with the drill. It appears on
+the panel like the other three.
+
+#### Materials, tools, and the bag
+
+New item `kind` **`material`** (`mat.ore.iron`, `mat.ore.copper`,
+`mat.scrap`): stackable, sellable, spills on death, crafts into things.
+New item `kind` **`tool`** with `slot: "tool"` — the first residents of
+that slot. Every item may carry a **`value`** (integer credits):
+`shop_sell` pays `value × sell_rate`, and an item without `value`
+cannot be sold (`unsellable`) — ships, mission rewards, and anything
+the design does not want liquid simply have none.
+
+| item | kind | slot | stack | value | price (quartermaster) | note |
+|---|---|---|---|---|---|---|
+| `tool.drill` | tool | tool | 1 | 40 | 120 | common; drills `node.ore.iron` |
+| `tool.cutter` | tool | tool | 1 | 60 | 180 | common; cuts `node.wreck` |
+| `tool.drill.mk2` | tool | tool | 1 | 150 | — (crafted) | uncommon; `supersedes: "tool.drill"` |
+| `mat.ore.iron` | material | — | 50 | 6 | — | common |
+| `mat.ore.copper` | material | — | 50 | 14 | — | uncommon |
+| `mat.scrap` | material | — | 50 | 8 | — | common |
+| `armor.plate.iron` | armor | chest | 1 | 90 | — (crafted) | rare, `armor 14` — beats the Scout Suit's 8 |
+
+Existing items gain a `value` too: `weapon.pulse` 80, the Scout pieces
+one third of their price rounded down, `charm.rabbit` 50. `ammo.cell`
+and `ship.v1` get none — cells are made, not sold, and a ship is not
+pocket change.
+
+#### `shop_sell`
+
+`shop_sell {npc, item, qty}` at any `shop` NPC (the quartermaster and
+the dispatcher both buy; the bench does not). Validation: NPC is a shop
+and in range → `qty` in 1..1000 (`bad_qty`) → item known → item has a
+`value` (`unsellable`) → `qty` owned in the bag (`not_owned`) → the item
+is not worn (`equipped`). Then, atomically: the stacks shrink, credits
+grow by `floor(qty × value × sell_rate × (1 + sell_bonus))`, where
+`sell_bonus` is the resolved Scavenging→Commerce synergy — the synergy
+that has waited since Phase 11. Commerce trains on the credits moved
+(1 XP / 5 cr, as buying). Result: `{"credits", "inventory"}`, the same
+shape as `shop_buy`. The shop panel gains a SELL side listing every
+sellable stack in the bag with its unit price.
+
+| param | value |
+|---|---|
+| `sell_rate` | 0.5 |
+
+#### The workbench and recipes
+
+The **workbench** is an NPC archetype (`npc.workbench`, `kind: "bench"`,
+verb `Use`, asset `prop.bench`) placed at the relay beside the
+dispatcher — shop-shaped, no health, no stock. It is the only place
+`craft` works. Recipes live in `server/data/recipes.json` and ship in
+`defs.recipes`:
+
+| field | meaning |
+|---|---|
+| `id` | `recipe.cells`, `recipe.plate.iron`, `recipe.drill.mk2` |
+| `level` | minimum Engineering level, else `locked` |
+| `inputs` | `[{item, qty}]`, all consumed |
+| `output` | `{item, qty}` |
+| `xp` | Engineering XP per craft |
+
+| recipe | level | inputs | output | xp |
+|---|---|---|---|---|
+| `recipe.cells` | 1 | `mat.ore.iron` ×2, `mat.scrap` ×1 | `ammo.cell` ×30 | 20 |
+| `recipe.plate.iron` | 5 | `mat.ore.iron` ×6, `mat.scrap` ×3 | `armor.plate.iron` ×1 | 120 |
+| `recipe.drill.mk2` | 10 | `mat.ore.iron` ×8, `mat.scrap` ×6, `tool.drill` ×1 | `tool.drill.mk2` ×1 | 300 |
+
+(`recipe.drill.mk2` consumes the old drill; copper is what the mk2
+mines, not what it costs.) `craft {npc, recipe, qty}` validates: bench
+in range (`out_of_range`) → recipe known (`unknown_recipe`) → level
+(`locked`) → every input × qty owned (`missing_materials`) → the output
+fits after the inputs leave (`no_space`). Crafting is **instant** — the
+travel to the bench is the time cost — and atomic per call; `qty` crafts
+happen as one transaction or none. Each craft rolls `craft_extra` once
+for one bonus output unit (stackable outputs only — a second chest
+plate has nowhere to go). Result: `{"inventory", "crafted": {item,
+qty}}`. Medkits and weapon mods wait for a `use` verb and a mod slot;
+not this phase.
+
+#### Death spills the raw
+
+Amends "Death and respawn": on death, every `material` stack leaves the
+bag and becomes a loot drop where the body fell — one drop per stack,
+ordinary `loot_dropped` events, ordinary walk-over pickup by **anyone**,
+ordinary `loot_lifetime` (120 s; this phase makes the lifetime real —
+drops have never expired). Equipment, credits, tools, ammo, everything
+else stays. Run back and you have it; someone else ran first and they
+have it. Scavenging XP applies to the re-pickup like any pickup.
+
+#### Client
+
+- Nodes render from `defs.nodes[].asset` (`prop.node.ore.iron`,
+  `prop.node.ore.copper`, `prop.wreck`); `health 0` draws the same model
+  at 0.6 scale in the depleted tint. Prompt: `E · drill` / `E · cut`;
+  bench: `E · use`.
+- A **channel bar** under the crosshair (`Styles.Progress`) fills over
+  `duration`; `gather_end` clears it and, on `done`, drips the yield
+  into the HUD like a pickup.
+- **Bench panel** (modal, same framework as the shop): one card per
+  recipe — icon, name, inputs with have/need in red when short, level
+  requirement greyed when locked, CRAFT button; the bag's material
+  counts along the top.
+- **Shop panel** gains a SELL column: sellable stacks with unit price
+  (synergy applied), click sells one, shift-click the stack.
+- Skills panel: the three rows un-grey, Engineering→Mining arrow.
+- Tool slot on the character doll shows the tool's icon like any slot.
 
 ## Phase 2 — items, weapons, combat, interaction
 
@@ -1674,8 +1857,8 @@ shooting a target range (`docs/ROADMAP.md`).
 ### Items and currency
 
 - **Credits** are a single integer on the player row. Starting balance
-  `start_credits`. There is no banking, no trading and no drop-on-death in
-  Phase 2 — credits only move through `shop_buy`.
+  `start_credits`. There is no banking or trading; credits move through
+  `shop_buy` and, from Phase 12, `shop_sell`.
 - An **item id** is a string defined in `server/data/items.json` (`weapon.pulse`,
   `ammo.cell`). The client never invents one; it learns the table from `defs`.
 - **Inventory** is a list of `{item, qty}` stacks on the player row, at most
@@ -2049,8 +2232,8 @@ encampment whose geometry can trap an NPC in a concave corner.
   stays where it fell for the delay — an instant vanish reads as a disconnect.
 - Respawn at the spawn point, full health, with `respawn_invuln` of immunity.
   Without it a camp that killed you once kills you again before you can move.
-- **Inventory and credits are kept on death.** Phase 3 has no way to recover a
-  dropped inventory, so dropping it is deletion, not risk.
+- **Inventory and credits are kept on death** — except raw materials, which
+  Phase 12 spills where you fell ("Death spills the raw" under Skills).
 - Regeneration starts `health_regen_delay` after the last damage TAKEN, and
   stops the moment damage lands again.
 

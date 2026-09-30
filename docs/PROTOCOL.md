@@ -89,7 +89,10 @@ Constants:
 
 - `entity_type`: `0x0001` player body; `0x0002` ship (Phase 5, manifest id
   `ship.v1`); `0x0003` NPC; `0x0004` target dummy; `0x0005` ground vehicle
-  (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3).
+  (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3);
+  `0x0008` node (Phase 12 — `spawn.data` is the node def id, e.g.
+  `node.ore.iron`; the snapshot `health` is yields remaining, `0` =
+  depleted).
 - `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
   boost (mode 1, Phase 5). Other bits ignored.
 - **`input`'s mode byte is trailing and optional** (landed in Phase 3.5;
@@ -145,7 +148,17 @@ Constants:
   Phase 11: `0x000E` `skills` `{}` — the whole sheet:
   `{"xp":{"<skill>":<n>...},"levels":{"<skill>":<L>...},"discovered":["<zone>"...]}`.
   Levels derive from XP through the curve both ends compute (GDD "Skills").
-  `0x0010`+ still reserved.
+  Phase 12 (GDD "Phase 12 — the artisan loop"):
+  `0x000F` `shop_sell` `{"npc": <entity_id>, "item": "<id>", "qty": <n>}` —
+  the mirror of `shop_buy`; pays `floor(qty × value × sell_rate × (1 +
+  sell_bonus))`;
+  `0x0010` `gather` `{"node": <entity_id>}` — starts the server-timed
+  channel on a node; result `{"node", "duration"}` (seconds, after
+  efficacy); the outcome arrives as a `gather_end` event;
+  `0x0011` `gather_cancel` `{}` — ends the channel with nothing granted;
+  `0x0012` `craft` `{"npc": <entity_id>, "recipe": "<id>", "qty": <n>}` —
+  at the workbench (`npc.workbench`), instant and atomic.
+  `0x0013`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -165,6 +178,10 @@ Constants:
   Phase 11: `0x000D` `skill_xp` `{"skill","xp","level","next_at","leveled"}`
   (to the trained player; awards batch server-side, at most one per skill per
   second; `leveled: true` raises the banner);
+  Phase 12: `0x000E` `gather_end` `{"node","reason","item","qty"}` (to the
+  channelling player; `reason` is `done` — then `item`/`qty` are the yield —
+  or `moved` / `hit` / `died` / `cancel` / `depleted`, with `item`/`qty`
+  absent; `entity_id` is the player);
   and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the player whose primary slot changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Broadcast when
@@ -358,12 +375,20 @@ Bodies per opcode:
 | `equip` | `{"slot":"primary","item":"weapon.pulse"}` — slot is one of `defs.equip_slots`; an `accessory` item fits `accessory1`/`accessory2`; an empty `item` clears the slot (Phase 11.7) | `{"equipped":{"primary":"weapon.pulse", …}}` — the WHOLE worn map, every slot |
 | `inventory` | `{}` | `{"credits":750,"inventory":[…],"equipped":{…}}` |
 | `reload` | `{}` | `{"magazine":30,"reserve":90}` |
+| `shop_sell` (Phase 12) | `{"npc": <entity_id>, "item":"mat.ore.iron", "qty":4}` | `{"credits":762,"inventory":[…]}` — same shape as `shop_buy` |
+| `gather` (Phase 12) | `{"node": <entity_id>}` | `{"node":1048577,"duration":2.85}` |
+| `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) |
+| `craft` (Phase 12) | `{"npc": <entity_id>, "recipe":"recipe.cells", "qty":1}` | `{"inventory":[…],"crafted":{"item":"ammo.cell","qty":30}}` — `qty` includes any `craft_extra` bonus |
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
 `insufficient_credits`, `out_of_range`, `unknown_item`, `no_stock`,
 `magazine_full`, `no_ammo`, `locked` (a `shop_buy` below the item's
-`unlock_requirements` level, GDD "Skills"). The client maps codes to text;
-the server never sends prose for display.
+`unlock_requirements` level, GDD "Skills"; Phase 12: also a `gather` below
+the node's `level` or a `craft` below the recipe's). Phase 12 adds
+`unsellable`, `equipped`, `not_owned`, `bad_qty` (`shop_sell`); `busy`,
+`no_tool`, `depleted`, `no_space` (`gather`); `not_gathering`
+(`gather_cancel`); `unknown_recipe`, `missing_materials` (`craft`). The
+client maps codes to text; the server never sends prose for display.
 
 ### `defs` — the data the client needs (Phase 2)
 
@@ -375,6 +400,13 @@ tooltips run the server's own arithmetic. It is the server's own `server/data/`
 content, filtered to what a client needs to render and predict.
 
 Phase 11.7 adds, additively: `equip_slots` (the ordered slot set the character panel draws and `equip` validates against), `inv_slots`, and per item `desc`, `armor:{value}`, `weapon:{damage,fire_interval,magazine,max_range,…}` for tooltips and the stats block.
+
+Phase 12 adds, additively: `nodes` (the `nodes.json` table — `id`, `name`,
+`asset`, `skill`, `level`, `tool`, `channel`, `yields`; the client draws
+prompts, models and the locked/no-tool hint from it), `recipes` (the
+`recipes.json` table verbatim), `constants.sell_rate`, and per item
+`value` (absent = unsellable) and `supersedes` (on a tool). `npcs[]`
+gains the workbench with `verb: "Use"`.
 
 The client **must not fire, predict damage, or draw an inventory before `defs`
 arrives** — the same rule as `terrain`, for the same reason: it has no data to
