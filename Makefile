@@ -51,7 +51,13 @@ LOGDIR := deploy/.logs
 # always pin the context: kubectl's current-context may point elsewhere
 KUBECTL := kubectl --context kind-$(CLUSTER)
 
-.PHONY: up down check cluster images apply forward test-pg
+.PHONY: up down check cluster images apply forward test-pg dashboards
+
+# The Grafana dashboard, upserted from code (deploy/observability/dashboards.py).
+# Needs GRAFANA_TOKEN in the environment; same dashboard reads both clusters,
+# the `env` variable picks kind, prod, or both.
+dashboards:
+	python3 deploy/observability/dashboards.py --push
 
 up: check cluster images apply forward
 	@echo "make up complete"

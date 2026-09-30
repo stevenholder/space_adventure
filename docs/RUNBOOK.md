@@ -175,7 +175,16 @@ kubectl --context default -n space-adventure port-forward deploy/alloy 12345 &
 curl -s localhost:12345/metrics | grep -E 'otelcol_exporter_(sent|send_failed)_metric_points'
 ```
 
-`sent` climbing and `send_failed` flat is healthy. The server's own series
+`sent` climbing and `send_failed` flat is healthy.
+
+The dashboard: `http://192.168.1.112:3000/d/space-adventure` — players,
+build, scrape health, tick rate, tick p50/p99 against the 5 ms / 50 ms
+lines, slow ticks, network, memory, CPU, goroutines; the `env` variable
+picks kind, prod, or both overlaid (kind blue, prod orange). It is code,
+`deploy/observability/dashboards.py`; edit, then `make dashboards` with
+`GRAFANA_TOKEN` set (a service-account token with Editor) to upsert it.
+
+The server's own series
 are `space_adventure_build_info{build=...}` (equals `/version`),
 `space_adventure_players_online`, and `space_adventure_tick_seconds`
 (histogram; the 50 ms budget of 20 Hz is the line that matters).
