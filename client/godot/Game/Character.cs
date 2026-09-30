@@ -123,7 +123,7 @@ namespace SpaceAdventure.Game
         {
             var w = JsonConvert.DeserializeObject<WalletResult>(body);
             if (w == null) return;
-            Credits = w.credits;
+            if (w.credits >= 0) Credits = w.credits; // a craft reply carries no credits
             if (w.inventory != null) Inventory = w.inventory;
             if (w.equipped != null)
             {

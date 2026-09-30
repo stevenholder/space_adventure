@@ -108,6 +108,12 @@ namespace SpaceAdventure.Game.UI
                 root.AddChild(bar);
             }
 
+            // ---- Phase 12 channel bar, under the crosshair -------------------
+            _channel = Styles.Progress(0f, Styles.Amber, "", 160f);
+            Styles.Pin(_channel, Control.LayoutPreset.Center, 0, 34);
+            _channel.Visible = false;
+            root.AddChild(_channel);
+
             // ---- health bars over the wounded (screen-projected) -------------
             _healthBarLayer = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
             _healthBarLayer.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -164,6 +170,24 @@ namespace SpaceAdventure.Game.UI
         {
             _debugPanel.Visible = !string.IsNullOrEmpty(text);
             _debug.Text = text ?? "";
+        }
+
+        private Control _channel;
+
+        /// <summary>
+        /// Phase 12: the gather channel. frac in [0,1] fills the bar with the
+        /// verb over it; a negative frac hides it.
+        /// </summary>
+        public void SetChannel(float frac, string label)
+        {
+            if (_channel == null) return;
+            _channel.Visible = frac >= 0f;
+            if (frac < 0f) return;
+            foreach (Node n in _channel.GetChildren())
+            {
+                if (n is ColorRect fill) Styles.SetFill(fill, Mathf.Clamp(frac, 0f, 1f));
+                if (n is Label l) l.Text = label;
+            }
         }
 
         /// <summary>

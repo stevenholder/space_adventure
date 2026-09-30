@@ -177,6 +177,10 @@ namespace SpaceAdventure.Game
         private HudView _hudView;
         private CombatFeed _combatFeed;
         private ShopView _shopView;
+        private BenchView _benchView; // Phase 12
+        // Phase 12 gather channel as drawn: the bar runs from start to end.
+        private double _channelStart = -1, _channelEnd = -1;
+        private string _channelLabel = "";
         private BackpackView _bagsView;
         private CharacterView _sheetView;
         private Icons _icons;
@@ -197,7 +201,8 @@ namespace SpaceAdventure.Game
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
             (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
-            (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false);
+            (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
+            (_benchView?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -323,6 +328,7 @@ namespace SpaceAdventure.Game
             _map = new MapView(_ui.Root);
             _icons = new Icons(_assets.Root);
             _shopView = new ShopView(_ui.Root, _character, _interact, _icons, NextCmdSeq, b => _net.Send(b));
+            _benchView = new BenchView(_ui.Root, _character, _skills, _icons, NextCmdSeq, b => _net.Send(b));
             _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
@@ -546,9 +552,22 @@ namespace SpaceAdventure.Game
                 return;
             }
             if (_interact.ShopOpen) { _interact.CloseShop(); _shopView.Show(false); return; }
+            if (_benchView.Open) { _benchView.Show(false); return; }
             if (_interact.Target == 0) return;
             switch (_interact.TargetType)
             {
+                case EntityType.Node:
+                    // Phase 12: the channel is the server's; the reply's
+                    // duration starts the bar, gather_end ends it.
+                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.Gather, $"{{\"node\":{_interact.Target}}}"));
+                    break;
+                case EntityType.Npc when _views.TryGet(_interact.Target, out var bv) && bv.Label == "npc.workbench":
+                    _benchView.Bench = _interact.Target;
+                    _benchView.Status = "";
+                    _benchView.Show(true);
+                    _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
+                    break;
                 case EntityType.Player:
                     // Look + E is the fast invite path (GDD "Parties").
                     _net.Send(Encode.Cmd(NextCmdSeq(), Op.PartyInvite, $"{{\"target\":{_interact.Target}}}"));
@@ -869,6 +888,10 @@ namespace SpaceAdventure.Game
                         case EventId.SkillXP:
                             _skills.OnXP(WireReader.Utf8.GetString(ev.Data), (float)Clock.Now);
                             if (_skillsView.Open) _skillsView.Rebuild();
+                            if (_benchView.Open) _benchView.Rebuild();
+                            break;
+                        case EventId.GatherEnd:
+                            OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;
                         case EventId.Equipped:
                         {
@@ -912,7 +935,14 @@ namespace SpaceAdventure.Game
                 {
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
-                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy)) _character.OnWallet(r.Body);
+                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
+                    if (r.Opcode == Op.Gather) OnGatherResult(r);
+                    if (r.Opcode == Op.Craft)
+                    {
+                        _benchView.Status = r.Ok ? "crafted" : Reason(r.Body);
+                        if (_benchView.Open) _benchView.Rebuild();
+                    }
+                    if (r.Opcode == Op.ShopSell && !r.Ok) { _interact.Notice = Reason(r.Body); _noticeUntil = Clock.Now + 2; }
                     if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipResult(r.Body);
                     if (r.Ok && (r.Opcode == Op.Equip || r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy))
                     {
@@ -992,6 +1022,7 @@ namespace SpaceAdventure.Game
                 case "account": _accountView.Show(true); break;
                 case "debug": _hud.DebugOpen = true; break;
                 case "menu": _gameMenu.Show(true); break;
+                case "bench": _benchView.Bench = 0; _benchView.Show(true); break;
             }
         }
 
@@ -1007,6 +1038,13 @@ namespace SpaceAdventure.Game
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
                 _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
             _hudView.SetCredits(_character.Credits);
+            if (_channelEnd > 0)
+            {
+                double span = _channelEnd - _channelStart;
+                float frac = span > 0 ? (float)((Clock.Now - _channelStart) / span) : 1f;
+                _hudView.SetChannel(Mathf.Clamp(frac, 0f, 1f), _channelLabel);
+            }
+            else _hudView.SetChannel(-1f, "");
 
             var me = _predictor.State;
             var markers = new List<(string, double)>();
@@ -1200,9 +1238,82 @@ namespace SpaceAdventure.Game
         /// whatever was last seen.
         /// </summary>
         /// <summary>Escape's first job: every panel, the map and the shop.</summary>
+        /// <summary>Phase 12: the gather reply — a duration starts the bar, a refusal explains itself.</summary>
+        private void OnGatherResult(CmdResult r)
+        {
+            if (!r.Ok) { _interact.Notice = Reason(r.Body); _noticeUntil = Clock.Now + 2; return; }
+            double dur = 0;
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(r.Body);
+                dur = (double?)o["duration"] ?? 0;
+            }
+            catch (Newtonsoft.Json.JsonException) { }
+            if (dur <= 0) return;
+            _channelStart = Clock.Now;
+            _channelEnd = Clock.Now + dur;
+            var nd = _views.TryGet(_interact.Target, out var tv) ? _character.Defs.Node(tv.Label) : null;
+            _channelLabel = nd?.Skill == "salvaging" ? "cutting" : "drilling";
+        }
+
+        /// <summary>Phase 12: gather_end — clear the bar, say why, refresh the bag on a yield.</summary>
+        private void OnGatherEnd(string json)
+        {
+            _channelStart = _channelEnd = -1;
+            string reason = "", item = "";
+            int qty = 0;
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(json);
+                reason = (string)o["reason"] ?? "";
+                item = (string)o["item"] ?? "";
+                qty = (int?)o["qty"] ?? 0;
+            }
+            catch (Newtonsoft.Json.JsonException) { }
+            if (reason == "done")
+            {
+                _interact.Notice = qty > 0 ? $"+{qty} {_character.Defs.ItemName(item)}" : "nothing came out";
+                _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+            }
+            else _interact.Notice = reason switch
+            {
+                "moved" => "you moved",
+                "hit" => "interrupted",
+                "died" => "",
+                "depleted" => "depleted",
+                "cancel" => "cancelled",
+                _ => reason,
+            };
+            _noticeUntil = Clock.Now + 2;
+        }
+
+        /// <summary>A refusal's {"reason"} as the words the HUD shows.</summary>
+        private static string Reason(string body)
+        {
+            string code = "";
+            try { code = (string)Newtonsoft.Json.Linq.JObject.Parse(body ?? "{}")["reason"] ?? ""; }
+            catch (Newtonsoft.Json.JsonException) { }
+            return code switch
+            {
+                "no_tool" => "needs the right tool in TOOL",
+                "locked" => "skill too low",
+                "depleted" => "depleted",
+                "busy" => "already working",
+                "no_space" => "no room in the bag",
+                "out_of_range" => "too far away",
+                "missing_materials" => "missing materials",
+                "unsellable" => "no one buys that",
+                "equipped" => "take it off first",
+                "not_owned" => "you do not have that",
+                "insufficient_credits" => "cannot afford that",
+                "" => "refused",
+                _ => code.Replace('_', ' '),
+            };
+        }
+
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu, _benchView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();

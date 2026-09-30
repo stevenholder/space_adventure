@@ -330,10 +330,61 @@ namespace SpaceAdventure.Game.UI
                 }
                 body.AddChild(scroll);
             }
+            FillSell(body);
             if (!string.IsNullOrEmpty(_interact.Status))
                 Line(body, _interact.Status, Styles.Dust);
             body.AddChild(Styles.Gap(4));
             Line(body, "hover for details  ·  B backpack  ·  E closes", Styles.Dust, 11);
+        }
+
+        /// <summary>
+        /// Phase 12 task 15: the SELL side. One compact row per carried
+        /// stack the shop will take (SellPrice > 0) that is not on the
+        /// body; click sells one, shift-click the whole stack. The price
+        /// shown is the BASE price -- the server may pay more (the
+        /// Scavenging→Commerce synergy), so the header says so.
+        /// </summary>
+        private void FillSell(VBoxContainer body)
+        {
+            body.AddChild(Styles.Gap(6));
+            var head = Styles.Row(8);
+            head.AddChild(Styles.Grow(Styles.Display_("sell  ·  base price", 12, Styles.Dust)));
+            head.AddChild(Styles.Display_("click one · shift-click all", 11, Styles.Dust));
+            body.AddChild(head);
+
+            SpaceAdventure.Net.Defs defs = _character.Defs;
+            var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 180), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+            var list = Styles.Column(4);
+            list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            scroll.AddChild(list);
+            int shown = 0;
+            foreach (var stack in _character.Inventory ?? System.Array.Empty<ItemStack>())
+            {
+                if (stack == null || string.IsNullOrEmpty(stack.item) || stack.qty <= 0) continue;
+                long unit = defs.SellPrice(stack.item);
+                if (unit <= 0 || _character.SlotHolding(stack.item) != "") continue;
+                string item = stack.item;
+                int qty = stack.qty;
+                var row = Styles.Row(6);
+                row.AddChild(new ItemSlot { Defs = defs, Icons = _icons, Static = true, Item = item, Qty = qty });
+                row.AddChild(Styles.Grow(Styles.Display_(defs.ItemName(item), 13, Styles.Rarity(defs.ItemRarity(item)))));
+                var priceLab = Styles.Display_($"{qty} × {unit} cr", 13, Styles.Amber);
+                priceLab.HorizontalAlignment = HorizontalAlignment.Right;
+                row.AddChild(priceLab);
+                var sell = Styles.Button("SELL", false, () =>
+                {
+                    int n = Input.IsKeyPressed(Key.Shift) ? qty : 1;
+                    _send(_interact.SellCmd(_nextSeq(), item, n));
+                    Rebuild();
+                });
+                sell.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+                row.AddChild(sell);
+                list.AddChild(row);
+                shown++;
+            }
+            if (shown == 0)
+                list.AddChild(Styles.Display_("nothing to sell", 12, Styles.Dust));
+            body.AddChild(scroll);
         }
     }
 

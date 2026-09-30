@@ -1,0 +1,148 @@
+{
+ "when": "2026-09-30T01:48:49.390Z",
+ "elapsedMs": 2964,
+ "xp": {
+  "athletics": 14,
+  "commerce": 26,
+  "mining": 125,
+  "recon": 250
+ },
+ "checks": [
+  {
+   "n": "C120 nodes spawn as type 8",
+   "ok": true
+  },
+  {
+   "n": "C120 iron health = yields (5)",
+   "ok": true
+  },
+  {
+   "n": "the bench stands in the world",
+   "ok": true
+  },
+  {
+   "n": "buy a drill (120 cr)",
+   "ok": true
+  },
+  {
+   "n": "C121 no tool worn refuses no_tool",
+   "ok": true
+  },
+  {
+   "n": "the drill goes in TOOL",
+   "ok": true
+  },
+  {
+   "n": "C121 gather answers a duration",
+   "ok": true
+  },
+  {
+   "n": "C121 a second gather is busy",
+   "ok": true
+  },
+  {
+   "n": "C121 the yield lands when promised (3.0 s ± 0.25)",
+   "ok": true
+  },
+  {
+   "n": "C121 two iron ore came out",
+   "ok": true
+  },
+  {
+   "n": "C125 Mining paid 25",
+   "ok": true
+  },
+  {
+   "n": "the ore is in the bag",
+   "ok": true
+  },
+  {
+   "n": "C120 the node lost one yield",
+   "ok": true
+  },
+  {
+   "n": "a channel restarts",
+   "ok": true
+  },
+  {
+   "n": "C121 stepping away ends it `moved`, nothing granted",
+   "ok": true
+  },
+  {
+   "n": "the interrupted node kept its yield",
+   "ok": true
+  },
+  {
+   "n": "gather_cancel ends it `cancel`",
+   "ok": true
+  },
+  {
+   "n": "cancel with nothing running is not_gathering",
+   "ok": true
+  },
+  {
+   "n": "C120 five yields dark the node (health 0)",
+   "ok": true
+  },
+  {
+   "n": "C121 a dark node refuses depleted",
+   "ok": true
+  },
+  {
+   "n": "ten ore in the bag",
+   "ok": true
+  },
+  {
+   "n": "C125 Mining paid per yield (125)",
+   "ok": true
+  },
+  {
+   "n": "C121 copper refuses the hand drill (no_tool)",
+   "ok": true
+  },
+  {
+   "n": "C122 four iron → 12 cr at sell_rate 0.5",
+   "ok": true
+  },
+  {
+   "n": "C122 Commerce moved on the sale",
+   "ok": true
+  },
+  {
+   "n": "C122 ammo is unsellable",
+   "ok": true
+  },
+  {
+   "n": "C122 the worn drill refuses equipped",
+   "ok": true
+  },
+  {
+   "n": "reached the workbench (107 m)",
+   "ok": true
+  },
+  {
+   "n": "C123 the plate is locked below Engineering 5",
+   "ok": true
+  },
+  {
+   "n": "C123 cells without scrap refuse missing_materials",
+   "ok": true
+  },
+  {
+   "n": "C123 a refused craft consumed nothing",
+   "ok": true
+  },
+  {
+   "n": "the quartermaster is no bench",
+   "ok": true
+  },
+  {
+   "n": "C125 Mining survives reconnect",
+   "ok": true
+  },
+  {
+   "n": "the ore survives reconnect",
+   "ok": true
+  }
+ ]
+}

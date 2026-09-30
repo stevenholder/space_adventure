@@ -17,6 +17,7 @@
 //   -uiFireNow <secs>       re-apply -uiPitch/-uiYaw, then hold the trigger that long
 //   -uiClaim                claim the priority bounty like the journal button, report the log
 //   -uiDeathDemo            show the death screen (local flag only) for a shot
+//   -uiGatherDemo           a local iron node + wreck ahead and the channel bar (Phase 12)
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -513,6 +514,27 @@ namespace SpaceAdventure.Game
                     AddChild(holder);
                     _assets.Attach(asset, holder, null);
                 }
+                await Wait(0.3);
+            }
+
+            // -uiGatherDemo: a local iron node 3 m ahead (never in a snapshot)
+            // and the channel bar half full, so C127's node model, prompt
+            // and bar can be photographed at spawn without a drill.
+            if (Flag("-uiGatherDemo"))
+            {
+                Vector3 eyeG = Eye, upG = eyeG.Normalized();
+                Vector3 fwdG = CameraForward.Slide(upG).Normalized();
+                Vector3 groundG = (eyeG + fwdG * 3f).Normalized();
+                groundG *= (float)_terrain.SampleRadius(Frame.ToSim(groundG));
+                var full = _views.SpawnLocalDemo(910001, EntityType.Node, "node.ore.iron", Frame.ToSim(groundG), Frame.ToSim(-fwdG));
+                full.Health = full.MaxHealth = 5; // a local view starts at 0 = depleted
+                Vector3 depletedG = (eyeG + fwdG * 4f + fwdG.Cross(upG).Normalized() * 2.2f).Normalized();
+                depletedG *= (float)_terrain.SampleRadius(Frame.ToSim(depletedG));
+                var dep = _views.SpawnLocalDemo(910002, EntityType.Node, "node.wreck", Frame.ToSim(depletedG), Frame.ToSim(-fwdG));
+                dep.Root.Scale = Vector3.One * 0.6f;
+                _channelStart = Clock.Now - 1.6;
+                _channelEnd = Clock.Now + 1.4;
+                _channelLabel = "drilling";
                 await Wait(0.3);
             }
 

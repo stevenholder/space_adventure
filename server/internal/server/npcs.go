@@ -279,6 +279,12 @@ func (s *Server) damagePlayer(victimID uint32, amount int, attacker uint32) {
 			EntityID: victimID, EventID: protocol.EventDeath,
 			Data: appendU32(nil, attacker),
 		}))
+		// The spill needs the identity, which never nests under s.mu:
+		// queue it for tick() to drain after the lock drops.
+		s.pendingSpills = append(s.pendingSpills, spill{c: c, pos: c.entity.State.Pos})
+		s.cancelGather(c, "died")
+	} else {
+		s.cancelGather(c, "hit")
 	}
 }
 

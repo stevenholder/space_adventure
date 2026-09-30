@@ -32,5 +32,5 @@
   "discovery_xp": 250,
   "scout_mission_xp": 100
  },
- "unlock_requirements": []
+ "unlock_requirements": [{"$note": "Phase 12: the mk2 drill is bench-made at Engineering 10; the gate keeps a future vendor honest", "item": "tool.drill.mk2", "skill": "engineering", "level": 10}]
 }

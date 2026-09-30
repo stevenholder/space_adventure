@@ -109,6 +109,8 @@ type client struct {
 	damageMult   float64
 	lootExtra    float64
 	lootExtraPOI float64
+	// gather is the Phase 12 channel, guarded by srv.mu (gather.go).
+	gather gatherState
 
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the

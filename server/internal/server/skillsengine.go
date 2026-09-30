@@ -266,6 +266,18 @@ func synergyBonus(reg *defs.Registry, p *store.Player, what, where string) float
 	return b
 }
 
+// synergyBonusFor is synergyBonus restricted to synergies aimed at
+// `target` — gather_speed from Engineering helps Mining, not Salvaging.
+func synergyBonusFor(reg *defs.Registry, p *store.Player, what, where, target string) float64 {
+	var b float64
+	for _, sy := range reg.Synergies {
+		if sy.What == what && sy.Where == where && sy.Target == target {
+			b += float64(skillLevel(p, sy.Source)-1) * sy.PerLevel
+		}
+	}
+	return b
+}
+
 // refreshSkillMults recomputes every cached multiplier from the player's
 // current levels and stores them under s.mu, where the tick loop reads them
 // without an identity lock. The movement step applies effMult's identity for

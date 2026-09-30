@@ -7,6 +7,7 @@
  *   2. the triangle count matches the manifest's `tris` exactly
  *   3. the triangle count is within the id-class budget
  *        char.* <= 1500, ship.* <= 2000, prop.* <= 500
+ *        (see BUDGETS below for the current table; tool.* is a hand tool)
  *   4. the node-name contract holds:
  *        char.player -> eye, head, torso, arm.l, arm.r, leg.l, leg.r
  *                       (eye and head must be siblings: the client hides
@@ -53,6 +54,7 @@ const BUDGETS = [
   [/^ship\./, 15000],
   [/^vehicle\./, 15000],
   [/^weapon\./, 3000],
+  [/^tool\./, 1000],
   [/^struct\./, 1500],
   [/^prop\./, 1000],
 ];
@@ -93,6 +95,10 @@ const NODE_CONTRACTS = {
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
   "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
   "weapon.pulse": { nodes: ["grip", "muzzle"] },
+  // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
+  // up with hand.r and the channel effect starts at `muzzle`.
+  "tool.drill": { nodes: ["grip", "muzzle"] },
+  "tool.cutter": { nodes: ["grip", "muzzle"] },
   "prop.target": { nodes: ["plate"] },
 };
 

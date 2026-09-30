@@ -85,6 +85,13 @@ type cmdWorld struct {
 	// FindNode resolves a resource node (Phase 12): its def, position and
 	// remaining yields. Nil in registries that place none.
 	FindNode func(entityID uint32) (node defs.Node, pos sim.Vec, health int, ok bool)
+	// Gather starts the channel (false = busy); CancelGather ends one
+	// (false = none running); Rand is the server RNG for craft_extra. All
+	// take s.mu themselves. Nil in fixtures that never gather or craft.
+	Busy         func() bool
+	Gather       func(node uint32, ticks int) bool
+	CancelGather func() bool
+	Rand         func() float64
 
 	// Ent is the requester's own server-side entity, for the rounds
 	// currently in the magazine.
@@ -317,8 +324,12 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return refuse(sim.ReasonUnknownRecipe)
 		}
-		// craft_extra (task 10) rolls here once efficacy lands; 0 today.
-		made, err := sim.Craft(w.Player, r, body.Qty, skillLevel(w.Player, "engineering"), w.Reg, 0)
+		// craft_extra: one roll per call for one bonus unit (GDD).
+		bonus := 0
+		if w.Rand != nil && w.Rand() < efficacyBonus(w.Reg, w.Player, "engineering") {
+			bonus = 1
+		}
+		made, err := sim.Craft(w.Player, r, body.Qty, skillLevel(w.Player, "engineering"), w.Reg, bonus)
 		if err != nil {
 			return refuseErr(err)
 		}
@@ -346,6 +357,9 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !inRange(w, pos) {
 			return refuse("out_of_range")
 		}
+		if w.Busy != nil && w.Busy() {
+			return refuse("busy")
+		}
 		if !toolSatisfies(w.Reg, w.Player.Equipped["tool"], nd.Tool) {
 			return refuse("no_tool")
 		}
@@ -355,14 +369,27 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if health <= 0 {
 			return refuse("depleted")
 		}
-		return refuse("not_implemented")
+		if !sim.CanFit(w.Player, w.Reg, nd.Loot) {
+			return refuse(sim.ReasonNoSpace)
+		}
+		if w.Gather == nil {
+			return refuse("busy")
+		}
+		duration := gatherDuration(w.Reg, w.Player, nd)
+		if !w.Gather(body.Node, int(math.Round(duration*sim.TickHz))) {
+			return refuse("busy")
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{"node": body.Node, "duration": duration}))
 
 	case protocol.OpGatherCancel:
 		var body struct{}
 		if !decodeStrict(req.Data, &body) {
 			return reply(protocol.StatusMalformed, nil)
 		}
-		return refuse("not_gathering")
+		if w.CancelGather == nil || !w.CancelGather() {
+			return refuse("not_gathering")
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{}))
 
 	default:
 		return reply(protocol.StatusUnknownOpcode, nil)

@@ -48,6 +48,9 @@ namespace SpaceAdventure.Game
         /// <summary>Occupancy from the snapshot; nonzero = seated, not drawn.</summary>
         public uint ParentId;
 
+        /// <summary>Phase 12: the tint last applied, so it is set once per change.</summary>
+        public bool DepletedDrawn;
+
         /// <summary>
         /// Where this body was drawn last frame, and how fast it is therefore
         /// moving. Speed comes from the drawn positions rather than from the
@@ -66,8 +69,11 @@ namespace SpaceAdventure.Game
 
         public float HealthFraction => MaxHealth == 0 ? 1f : Mathf.Clamp((float)Health / MaxHealth, 0f, 1f);
 
-        /// <summary>Health bars are for the wounded; a full bar is noise.</summary>
-        public bool ShowHealthBar => !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
+        /// <summary>Health bars are for the wounded; a full bar is noise. A node's health is yields, not wounds.</summary>
+        public bool ShowHealthBar => Type != EntityType.Node && !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
+
+        /// <summary>Phase 12: a node with no yields left (snapshot health 0).</summary>
+        public bool Depleted => Type == EntityType.Node && Health == 0;
     }
 
     /// <summary>
@@ -233,6 +239,20 @@ namespace SpaceAdventure.Game
                 if (kv.Value.Health > view.MaxHealth) view.MaxHealth = kv.Value.Health;
                 view.Dead = kv.Value.Dead;
                 Place(view.Root, kv.Value.Pos, kv.Value.Facing);
+                if (view.Type == EntityType.Node)
+                {
+                    // GDD "Nodes": depleted draws the same model at 0.6 in the
+                    // depleted tint; a node never dies, so this is the whole rule.
+                    bool dep = view.Depleted;
+                    view.Root.Scale = Vector3.One * (dep ? 0.6f : 1f);
+                    if (dep != view.DepletedDrawn)
+                    {
+                        view.DepletedDrawn = dep;
+                        foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(view.Root))
+                            g.Transparency = dep ? 0.45f : 0f;
+                    }
+                    continue;
+                }
 
                 // Speed as DRAWN, smoothed. A snapshot arrives every few
                 // frames and the pose between them is interpolated, so the
@@ -356,6 +376,7 @@ namespace SpaceAdventure.Game
             EntityType.Vehicle => Defs.EntityAsset("vehicle"),
             EntityType.Ship => Defs.EntityAsset("ship"),
             EntityType.Loot => "prop.loot.crate",
+            EntityType.Node => Defs.NodeAsset(def),
             _ => "",
         };
 
