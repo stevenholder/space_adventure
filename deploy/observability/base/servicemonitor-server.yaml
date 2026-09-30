@@ -1,11 +1,9 @@
 # What to scrape: the game server's metrics port (server/cmd/server
-# -metrics). Lives here, not with the server's own manifests, because
-# it needs the CRD above to exist first.
+# -metrics). Needs the CRD from bootstrap/ to exist first.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: server
-  namespace: space-adventure
   labels:
     app.kubernetes.io/name: server
     app.kubernetes.io/part-of: space-adventure

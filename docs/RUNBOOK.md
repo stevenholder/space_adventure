@@ -145,31 +145,33 @@ kubectl --context default -n space-adventure logs jobs/db-backup --tail=20   # l
 ## Metrics
 
 The server serves Prometheus `/metrics` on its own port, 9100 (never the
-ingress: that routes the whole public origin). Grafana Alloy in the
-`observability` namespace reads the `ServiceMonitor`, scrapes it, stamps
-`env="prod"` and `cluster="pandas"` on every series, and pushes OTLP to
-the LGTM box at `192.168.1.112:4317`. The kind stack does the same with
-`env="kind"`, `cluster="kind-space-adventure"` (`make observe`), so the
-two are one label apart in any query: `{env="prod"}` vs `{env="kind"}`.
+ingress: that routes the whole public origin). Grafana Alloy, in the same
+namespace, reads the `ServiceMonitor`, scrapes it, stamps `env="prod"`
+and `cluster="pandas"` on every series, and pushes OTLP to the LGTM box
+at `192.168.1.112:4317`. The kind stack does the same with `env="kind"`,
+`cluster="kind-space-adventure"` (part of `make up`), so the two are one
+label apart in any query: `{env="prod"}` vs `{env="kind"}`.
 
-Install, once, AFTER a server build with the metrics port is live (the
-ServiceMonitor names port `metrics` on the Service):
+CD deploys Alloy and the ServiceMonitor with everything else
+(`deploy/prod` includes `deploy/observability/prod`). What CD cannot do
+is the cluster-scoped half — the CRD, Alloy's ClusterRole, and widening
+its own Role — so that is a one-time bootstrap by hand, BEFORE the first
+deploy that carries it (the same category as the namespace, the CNPG
+operator and the ghcr-pull secret):
 
 ```sh
-kubectl --context default apply -f deploy/observability/base/crd-servicemonitor.yaml
+kubectl --context default apply -f deploy/prod/05-rbac.yaml        # CI's widened Role: admin-applied, or CD may not grant it to itself
+kubectl --context default apply -k deploy/observability/bootstrap  # CRD + Alloy's ClusterRole
 kubectl --context default wait --for condition=established crd/servicemonitors.monitoring.coreos.com
-kubectl --context default apply -k deploy/observability/prod
-kubectl --context default -n observability rollout status deploy/alloy
 ```
 
-Re-run the last two after editing `config.alloy`. Not part of CD on
-purpose: a ServiceMonitor in `deploy/prod` fails the whole apply on a
-cluster without the CRD.
+Re-run only if `bootstrap/` or the CI Role changes (a CRD bump, a new
+CI permission).
 
 Is it flowing? Alloy's own counters, before looking at Grafana:
 
 ```sh
-kubectl --context default -n observability port-forward deploy/alloy 12345 &
+kubectl --context default -n space-adventure port-forward deploy/alloy 12345 &
 curl -s localhost:12345/metrics | grep -E 'otelcol_exporter_(sent|send_failed)_metric_points'
 ```
 

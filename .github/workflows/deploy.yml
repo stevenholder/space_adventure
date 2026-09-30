@@ -90,6 +90,7 @@ jobs:
           EOF
           kubectl apply -k .
           kubectl -n space-adventure rollout status deploy/server --timeout=180s
+          kubectl -n space-adventure rollout status deploy/alloy --timeout=180s
 
       - name: Smoke — the cluster serves THIS build, or roll back
         run: |
