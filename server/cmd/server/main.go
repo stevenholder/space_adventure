@@ -27,6 +27,9 @@ import (
 	"space-adventure/server/internal/sim"
 	"space-adventure/server/internal/terrain"
 	"space-adventure/server/internal/web"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // buildID identifies the binary. Set at link time:
@@ -45,6 +48,11 @@ var buildID = "dev"
 
 const (
 	defaultListen = ":8080"
+	// defaultMetrics is a SEPARATE listener on purpose: the prod ingress
+	// routes the whole origin (deploy/prod/25-ingress.yaml) to -listen, so
+	// anything mounted there is on the public internet. Prometheus
+	// scrapes this port from inside the cluster; nothing routes it out.
+	defaultMetrics = ":9100"
 	// defaultSeed is fixed on purpose (ARCHITECTURE "Server"): a changing
 	// seed gives a different asteroid every restart, which makes movement
 	// iteration and bug reports unreproducible.
@@ -78,6 +86,7 @@ func run(args []string) error {
 func runServer(args []string) error {
 	fs := flag.NewFlagSet("server", flag.ContinueOnError)
 	listen := fs.String("listen", defaultListen, "HTTP listen address")
+	metrics := fs.String("metrics", defaultMetrics, "Prometheus /metrics listen address (empty disables)")
 	seed := fs.Uint("seed", defaultSeed, "world seed (terrain generation + world_seed on the wire)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -148,15 +157,39 @@ func runServer(args []string) error {
 
 	srv := &http.Server{Addr: *listen, Handler: mux}
 
+	// Which build, and how many players — the two questions a dashboard
+	// asks first. Registered here rather than in package server because
+	// the default registry is process-global and server.New runs many
+	// times in tests; runServer runs once.
+	prometheus.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name:        "space_adventure_build_info",
+		Help:        "Always 1; the build label is the git rev of server/ (same as /version).",
+		ConstLabels: prometheus.Labels{"build": buildID},
+	}, func() float64 { return 1 }))
+	prometheus.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "space_adventure_players_online",
+		Help: "Live WebSocket sessions.",
+	}, func() float64 { return float64(world.OnlineCount()) }))
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go world.Run(ctx)
 
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() {
 		fmt.Printf("listening on %s (seed %d, build %s)\n", *listen, *seed, buildID)
 		errCh <- srv.ListenAndServe()
 	}()
+	if *metrics != "" {
+		mm := http.NewServeMux()
+		mm.Handle("/metrics", promhttp.Handler())
+		msrv := &http.Server{Addr: *metrics, Handler: mm}
+		defer msrv.Close()
+		go func() {
+			log.Printf("metrics: %s/metrics", *metrics)
+			errCh <- msrv.ListenAndServe()
+		}()
+	}
 
 	select {
 	case err := <-errCh:

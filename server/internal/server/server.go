@@ -556,6 +556,7 @@ func (s *Server) tick() {
 	s.drainYields(yields)
 	s.drainSpills(spills)
 	step := time.Since(t0)
+	tickSeconds.Observe(step.Seconds())
 	if step > 5*time.Millisecond {
 		log.Printf("slow tick %d: step %s with %d entities", tick, step, len(s.list))
 	}

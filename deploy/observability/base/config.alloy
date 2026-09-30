@@ -1,0 +1,45 @@
+// ServiceMonitors -> scrape -> label with where we are -> OTLP to LGTM.
+//
+// DEPLOY_ENV and CLUSTER_NAME come from the overlay (kind/, prod/); they
+// are the whole answer to "is this the laptop or the pandas?" — plain
+// metric labels `env` and `cluster` on every series, so any query can
+// split or filter on them without depending on how the receiving end
+// promotes resource attributes.
+
+prometheus.operator.servicemonitors "all" {
+  forward_to = [prometheus.relabel.where.receiver]
+}
+
+prometheus.relabel "where" {
+  forward_to = [otelcol.receiver.prometheus.otlp.receiver]
+
+  rule {
+    target_label = "env"
+    replacement  = sys.env("DEPLOY_ENV")
+  }
+  rule {
+    target_label = "cluster"
+    replacement  = sys.env("CLUSTER_NAME")
+  }
+}
+
+otelcol.receiver.prometheus "otlp" {
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    metrics = [otelcol.exporter.otlp.lgtm.input]
+  }
+}
+
+otelcol.exporter.otlp "lgtm" {
+  client {
+    endpoint = sys.env("OTLP_ENDPOINT")
+    tls {
+      insecure = true
+    }
+  }
+}

@@ -51,7 +51,7 @@ LOGDIR := deploy/.logs
 # always pin the context: kubectl's current-context may point elsewhere
 KUBECTL := kubectl --context kind-$(CLUSTER)
 
-.PHONY: up down check cluster images apply forward test-pg
+.PHONY: up down check cluster images apply forward test-pg observe
 
 up: check cluster images apply forward
 	@echo "make up complete"
@@ -155,6 +155,19 @@ down:
 
 PG_TEST_CONTAINER := sa-test-pg
 PG_TEST_URL        := postgres://test:test@localhost:55432/test?sslmode=disable
+
+# Metrics: Alloy + the server ServiceMonitor, pushing OTLP to the LGTM box
+# with env=kind on every series (deploy/observability). Separate from
+# `up` so a plain dev loop does not report to the lab; run it once per
+# cluster, re-run after editing config.alloy. The CRD goes first and is
+# waited on: a fresh cluster's discovery cache does not know ServiceMonitor
+# yet, and a single apply -k dies on "no matches for kind" otherwise. Same
+# three steps by hand on the pandas: RUNBOOK "Metrics".
+observe:
+	$(KUBECTL) apply -f deploy/observability/base/crd-servicemonitor.yaml
+	$(KUBECTL) wait --for condition=established --timeout=60s crd/servicemonitors.monitoring.coreos.com
+	$(KUBECTL) apply -k deploy/observability/kind
+	$(KUBECTL) -n observability rollout status deploy/alloy --timeout=120s
 
 test-pg:
 	@docker rm -f $(PG_TEST_CONTAINER) >/dev/null 2>&1 || true

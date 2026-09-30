@@ -32,6 +32,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # Prometheus scrape target (deploy/observability). Its own
+            # listener so the ingress, which routes the whole origin,
+            # never exposes it.
+            - name: metrics
+              containerPort: 9100
           readinessProbe:
             httpGet:
               path: /healthz
@@ -73,3 +78,6 @@ spec:
       port: 8080
       nodePort: 30080
       targetPort: http
+    - name: metrics
+      port: 9100
+      targetPort: metrics

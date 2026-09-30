@@ -142,6 +142,42 @@ kubectl --context default -n space-adventure logs deploy/server --tail=100
 kubectl --context default -n space-adventure logs jobs/db-backup --tail=20   # last backup
 ```
 
+## Metrics
+
+The server serves Prometheus `/metrics` on its own port, 9100 (never the
+ingress: that routes the whole public origin). Grafana Alloy in the
+`observability` namespace reads the `ServiceMonitor`, scrapes it, stamps
+`env="prod"` and `cluster="pandas"` on every series, and pushes OTLP to
+the LGTM box at `192.168.1.112:4317`. The kind stack does the same with
+`env="kind"`, `cluster="kind-space-adventure"` (`make observe`), so the
+two are one label apart in any query: `{env="prod"}` vs `{env="kind"}`.
+
+Install, once, AFTER a server build with the metrics port is live (the
+ServiceMonitor names port `metrics` on the Service):
+
+```sh
+kubectl --context default apply -f deploy/observability/base/crd-servicemonitor.yaml
+kubectl --context default wait --for condition=established crd/servicemonitors.monitoring.coreos.com
+kubectl --context default apply -k deploy/observability/prod
+kubectl --context default -n observability rollout status deploy/alloy
+```
+
+Re-run the last two after editing `config.alloy`. Not part of CD on
+purpose: a ServiceMonitor in `deploy/prod` fails the whole apply on a
+cluster without the CRD.
+
+Is it flowing? Alloy's own counters, before looking at Grafana:
+
+```sh
+kubectl --context default -n observability port-forward deploy/alloy 12345 &
+curl -s localhost:12345/metrics | grep -E 'otelcol_exporter_(sent|send_failed)_metric_points'
+```
+
+`sent` climbing and `send_failed` flat is healthy. The server's own series
+are `space_adventure_build_info{build=...}` (equals `/version`),
+`space_adventure_players_online`, and `space_adventure_tick_seconds`
+(histogram; the 50 ms budget of 20 Hz is the line that matters).
+
 ## CD plumbing (when deploys stop arriving)
 
 - Actions joins the tailnet as `tag:ci` (ephemeral; devices self-remove).
