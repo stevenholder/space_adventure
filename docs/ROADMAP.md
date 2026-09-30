@@ -1252,13 +1252,100 @@ take it off.
 | 6 | Boot: one modal at a time, equip result redraws, rig `-uiPanel character|backpack`, `-uiBuy a,b,c` | `Boot.cs`, `Rig.cs` | shots |
 | 7 | Restyle shop, journal, party onto the framework (cards: `Styles.Card`/`Tile`/`Progress`), map gets the drag grip; skills already had bars | `Panels.cs`, `MissionPanels.cs`, `Map.cs` | C115–C117 |
 
-# Phase 12 — the artisan loop (queued behind Phase 11)
+# Phase 12 — the artisan loop (wave 0 landed 2026-09-29)
 
-Mining (3 s drill channels on depleting ore nodes), Salvaging (wreck
-nodes), Engineering (workbench recipes at the relay), tools at the
-quartermaster, raw materials dropping on death as a lootable spill.
-Trains the three reserved skills on the proven framework. Contracted in
-GDD "Skills — Phase 12 preview"; tasked when Phase 11 closes.
+The three reserved skills get their verbs. Ore in the rocks around the
+pad, wrecks inside the guarded scrapyard, a workbench at the relay, a
+buyer at the pad — and the loop is the walk between them. Raw materials
+spill where you die; nothing else does. Contract: GDD "Phase 12 — the
+artisan loop" (nodes, the channel, `shop_sell`, recipes, the spill,
+efficacy), PROTOCOL `shop_sell` / `gather` / `gather_cancel` / `craft`,
+entity type `node`, event `gather_end`, `defs.nodes` / `defs.recipes`.
+
+**Playable proof.** Buy a drill (120 cr), equip it in TOOL, walk to the
+rock pile east of the pad and press E on an ore node: a bar fills for
+three seconds and two iron ore land in the bag, the node's glow dims
+one step. Do it five times and it goes dark; come back in ninety
+seconds. Walk to the scrapyard with a cutter, clear the guards, cut the
+wrecks for scrap. Die on the way out and the ore and scrap lie where
+you fell for two minutes — run back, or lose them to whoever is
+closer; the rifle and the credits never left you. At the relay bench,
+two ore and a scrap become thirty cells; at Engineering 5 an iron
+chest plate out-armors the Scout Suit. Sell the rest to the
+quartermaster and watch Commerce pay Scavenging's synergy for the
+first time. On K, Mining, Salvaging and Engineering are no longer grey.
+
+**Contracts** (wave 0, this section): GDD "Phase 12 — the artisan
+loop" and the roster/synergy edits; PROTOCOL opcodes `0x000F`–`0x0012`,
+event `0x000E`, entity type `0x0008`, the new refusal codes, the `defs`
+additions. The task table below IS the brief set — every row is one
+dispatch with its contract in the GDD/PROTOCOL paragraph it names, as
+Phases 3–11.7 did (no `docs/tasks/` files since Phase 2).
+
+### Task list
+
+Wave 1 lands the wire and the data with no substance (every new verb
+answers, every node spawns, nothing yields); wave 2 fills it in
+parallel; wave 3 is `qa`.
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | Data: `nodes.json`, `recipes.json`; tools, materials, `armor.plate.iron`, per-item `value`/`supersedes` in items.json; `npc.workbench` + tool prices in npcs.json; node loot tables; skills.json un-reserves the three, adds their efficacy and Engineering→Mining; zone placements (spawn ×3 iron + ×1 copper, outpost ×2 wreck, relay bench) | `server/data` | defs audit test |
+| 2 | 1 | Registry + payload: parse nodes/recipes/value/supersedes, ship `nodes`, `recipes`, `constants.sell_rate`; still under 64 KiB | `internal/defs` | `go test ./internal/defs` |
+| 3 | 1 | Constants both ends: opcodes `0x000F`–`0x0012`, event `0x000E`, `EntityTypeNode` 8 | `protocol.go`, `Messages.cs` | `go build` + `dotnet build` |
+| 4 | 1 | Node entity: `sim.Ent` kind Node, `NodeState{Yields, RespawnTicks}`, zone spawn branch (`type:"node"`), registered step that respawns, `health` = yields | `internal/sim`, `server.go` | `TestNodeDepletesAndRespawns` |
+| 5 | 1 | Skeleton handlers: `gather` walks every pre-channel refusal and ends at `not_implemented`; `gather_cancel` answers `not_gathering` | `server/cmd.go` | `TestHandleCmdPhase12Skeleton` |
+| 6 | 1 | `sim.SellAt` (value, `sell_rate`, bonus, worn refusal, atomic) + handler + Commerce XP — landed with wave 1: it was smaller than its skeleton | `internal/sim`, `server/cmd.go` | `TestSellAt` |
+| 7 | 2 | The channel: `gatherNode`/`gatherTicks`/`gatherFrom` on the client struct, stepped in `tick()`; cancel on move/hit/death/disconnect/verb; yield roll + grant + node `−1` + XP + `gather_end` outside `s.mu` like pickups | `server/gather.go` | `TestGatherChannel` |
+| 8 | 1 | `sim.Craft` (inputs out, output in, atomic per call, bonus units) + handler + Engineering XP — landed with wave 1; the `craft_extra` roll waits for task 10 | `internal/sim`, `server/cmd.go` | `TestCraft` |
+| 9 | 2 | Death spill: materials → loot drops at the body (queued under `s.mu`, granted via Mutate, added after); register `StepLoot` so drops finally expire | `server/npcs.go`, `internal/sim/loot.go` | `TestDeathSpillsMaterials`, `TestLootExpires` |
+| 10 | 2 | Efficacy: `gather_speed` (floored), `craft_extra`, `sell_bonus` read, tool `supersedes`, `unlock_requirements` on `tool.drill.mk2` | `server/skillsengine.go` | unit |
+| 11 | 2 | Art: `gen_nodes.py` → `prop.node.ore.iron`, `prop.node.ore.copper`, `prop.wreck`, `prop.bench`, `tool.drill`, `tool.cutter` (manifest + icons) | `art/` | `verify.mjs` + icons exist |
+| 12 | 2 | Client: node entity type → model from `defs.nodes`, depleted state (0.6 scale, dark), prompts `drill`/`cut`/`use` | `Entities.cs`, `Interact.cs` | shot |
+| 13 | 2 | Client: E sends `gather` / opens the bench, channel bar under the crosshair for `duration`, `gather_end` clears it and drips the yield | `Boot.cs`, `HudView.cs` | shot |
+| 14 | 2 | Client: bench panel — recipe cards (have/need, locked, CRAFT), material counts | `UI/BenchPanel.cs` | shot |
+| 15 | 2 | Client: shop SELL column (unit price with synergy, click one, shift-click stack) | `UI/Panels.cs` | shot |
+| 16 | 2 | Client: skills rows un-grey + the new arrow; tool slot on the doll | `SkillsPanel.cs`, `Inventory.cs` | shot |
+| 17 | 2 | Rig: `-uiPanel bench`, `-uiGatherDemo`, `-uiSellDemo`, `-uiSpillDemo` | `Rig.cs`, `Boot.cs` | shots |
+| 18 | 3 | `t36-artisan.mjs`: buy + equip drill, gather (timing, move-cancel, no-tool, locked), sell (price, XP), craft (atomic, locked), die with ore → spill → recover, three skills persist across reconnect | `test/` | the test |
+| 19 | 3 | QA: C120–C128, gallery, docs | docs | criteria |
+
+### Acceptance criteria
+
+- **C120 Nodes exist and deplete.** Three iron and one copper node spawn
+  at the pad, two wrecks inside the outpost walls, all as type `0x0008`
+  with `health` = yields; five yields dark an iron node and ninety
+  seconds relight it. (t36)
+- **C121 The channel is server-timed.** `gather` returns `duration`; the
+  yield lands `duration` later (±1 tick), never before; moving 0.5 m
+  ends it `moved`, damage ends it `hit`, an empty tool slot refuses
+  `no_tool`, copper below Mining 10 refuses `locked`, a full bag refuses
+  `no_space` before the bar ever starts. (unit + t36)
+- **C122 Selling pays.** Four iron ore at the quartermaster → 12 cr at
+  `sell_rate` 0.5; Commerce XP moves; at Scavenging > 1 the unit price
+  is visibly higher — the synergy declared in Phase 11 finally applies.
+  Ammo has no value and refuses `unsellable`; a worn plate refuses
+  `equipped`. (unit + t36)
+- **C123 Crafting is atomic and gated.** `recipe.cells` consumes 2 ore +
+  1 scrap and yields 30 cells; short one scrap → `missing_materials`
+  with nothing consumed; the plate below Engineering 5 → `locked`;
+  `qty: 3` is three crafts or none. (unit + t36)
+- **C124 Death spills the raw.** Die holding ore and scrap: one loot
+  drop per stack at the body, bag empty of materials, rifle, tools,
+  credits and cells intact; walking back recovers them (Scavenging XP);
+  an untouched drop is gone at 120 s. (unit + t36)
+- **C125 Three skills move and stay.** Mining, Salvaging and
+  Engineering each raise `skill_xp`; levels survive reconnect. (t36)
+- **C126 Efficacy is real.** Channel time shortens per Mining level and
+  floors at 1.0 s; `craft_extra` rolls; Engineering→Mining shows on the
+  panel and shortens the bar; the mk2 drill satisfies an iron node.
+  (unit + shot)
+- **C127 Seen.** Node models with a depleted state, the channel bar, the
+  bench panel, the SELL column, three un-greyed rows and a fourth arrow
+  — via the rig. (shots)
+- **C128 Nothing else moved.** t14, t34, t35 and the whole `godot-*`
+  sweep green; a player who never touches a node plays exactly the
+  game they had. (sweep)
 
 ## Deferred — and what would earn each one a place
 
@@ -1273,7 +1360,7 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Multiple planets / star systems | one planet has enough content to leave |
 | Walking around inside a moving ship | Phase 5 ships and the seated version feels limiting |
 | PvP, player-vs-player collision | after NPC combat is fun; PvP changes every balance number |
-| Crafting, quests, chat, guilds | after Phase 5; none of them is on the critical path |
+| Chat, guilds | after Phase 5; not on the critical path (crafting landed in Phase 12, quests in Phase 10) |
 | A persistent world players mutate (bases, territory) | Phase 6 candidate — the persistence layer from Phase 2 is the seed |
 | Rig + animation clips | procedural motion stops carrying the fidelity |
 | UDP / WebTransport | WebSocket latency is measured as the limiter, not assumed to be |
@@ -1292,6 +1379,7 @@ lines, one verify command, per `.omp/AGENTS.md` "Task sizing". A row that turns
 out bigger than that is a main-thread task or a chain — split it, do not grow
 the dispatch.
 
-The dispatch-ready briefs live in `docs/tasks/` — one file per wave, each brief
-in the `.omp/AGENTS.md` TASK/FILES/CONTRACT/STEPS/VERIFY/REPORT/BUDGET format
-with the contract pasted in, since agents do not explore the repo.
+Phase 2's dispatch-ready briefs live in `docs/tasks/` in the `.omp/AGENTS.md`
+TASK/FILES/CONTRACT/STEPS/VERIFY/REPORT/BUDGET format. Every phase since has
+used its task table as the brief set, each row naming the contract paragraph
+it implements.

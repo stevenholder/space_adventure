@@ -12,6 +12,10 @@
       "def": "npc.quartermaster",
       "pos": [3.0, 0.0, 2.0],
       "yaw": -124.0
-    }
+    },
+    {"$note": "Phase 12 ore field, east of the pad inside the flat disc (GDD 'Nodes': iron x3, copper x1)", "type": "node", "def": "node.ore.iron", "pos": [16.0, 0.0, 4.0], "yaw": 20.0},
+    {"type": "node", "def": "node.ore.iron", "pos": [19.0, 0.0, -2.0], "yaw": 95.0},
+    {"type": "node", "def": "node.ore.iron", "pos": [14.5, 0.0, -6.0], "yaw": -40.0},
+    {"type": "node", "def": "node.ore.copper", "pos": [22.0, 0.0, 1.5], "yaw": 160.0}
   ]
 }

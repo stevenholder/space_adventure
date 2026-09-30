@@ -58,9 +58,37 @@ func TestLoad(t *testing.T) {
 	if err := json.Unmarshal(reg.Payload, &decoded); err != nil {
 		t.Fatalf("Payload does not decode as a JSON object: %v", err)
 	}
-	for _, key := range []string{"items", "entities", "npcs", "constants"} {
+	for _, key := range []string{"items", "entities", "npcs", "constants", "nodes", "recipes"} {
 		if _, ok := decoded[key]; !ok {
 			t.Errorf("Payload missing key %q", key)
+		}
+	}
+
+	// Phase 12 data audit: the three nodes, three recipes, the bench, the
+	// tools in stock, and the placements the GDD names.
+	if len(reg.Nodes) != 3 || len(reg.Recipes) != 3 {
+		t.Errorf("nodes=%d recipes=%d, want 3/3", len(reg.Nodes), len(reg.Recipes))
+	}
+	if reg.NPCs["npc.workbench"].Kind != "bench" {
+		t.Error("npc.workbench is not a bench")
+	}
+	if reg.Items["tool.drill.mk2"].Supersedes != "tool.drill" || reg.Items["mat.ore.iron"].Value != 6 || reg.Items["ammo.cell"].Value != 0 {
+		t.Error("Phase 12 item fields did not parse")
+	}
+	placed := map[string]int{}
+	for _, z := range reg.Zones {
+		for _, e := range z.Entities {
+			placed[e.Type+":"+e.Def]++
+		}
+	}
+	for def, want := range map[string]int{"node:node.ore.iron": 3, "node:node.ore.copper": 1, "node:node.wreck": 2, "npc:npc.workbench": 1} {
+		if placed[def] != want {
+			t.Errorf("%s placed %d times, want %d", def, placed[def], want)
+		}
+	}
+	for _, sk := range reg.Skills {
+		if sk.Reserved {
+			t.Errorf("skill %s still reserved", sk.ID)
 		}
 	}
 }

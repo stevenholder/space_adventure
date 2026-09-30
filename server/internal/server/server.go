@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -184,6 +185,13 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 					data = st
 				}
 			}
+			if p.Type == "node" {
+				// Phase 12: a node's health pool is its yields (defs audit
+				// guarantees the def exists).
+				kind = sim.EntityKind(protocol.EntityTypeNode)
+				nd := reg.Nodes[p.Def]
+				data = sim.NewNodeState(nd.Yields, nd.Respawn)
+			}
 			ent := &sim.Ent{
 				ID:     worldID,
 				Kind:   kind,
@@ -197,6 +205,9 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 				if h := reg.NPCs[p.Def].MaxHealth; h > 0 {
 					ent.Health = h
 				}
+			}
+			if kind == sim.EntityKind(protocol.EntityTypeNode) {
+				ent.Health = reg.Nodes[p.Def].Yields
 			}
 			world.Add(ent)
 			worldEnts = append(worldEnts, ent)
@@ -288,6 +299,8 @@ func entityDefKind(k sim.EntityKind) string {
 		return "vehicle"
 	case protocol.EntityTypeShip:
 		return "ship"
+	case protocol.EntityTypeNode:
+		return "node"
 	default:
 		return "player"
 	}
@@ -786,24 +799,45 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		creditsBefore = p.Credits
 		before = p.Equipped[slotPrimary]
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
-			Player:  p,
-			Reg:     s.reg,
-			Pos:     c.entity.State.Pos,
-			Up:      terrain.Normalize(c.entity.State.Pos),
-			Look:    c.lookDir(),
-			FindNPC: s.findNPC,
-			Ent:     c.entity,
+			Player:   p,
+			Reg:      s.reg,
+			Pos:      c.entity.State.Pos,
+			Up:       terrain.Normalize(c.entity.State.Pos),
+			Look:     c.lookDir(),
+			FindNPC:  s.findNPC,
+			FindNode: s.findNode,
+			Ent:      c.entity,
 		})
 		after = p.Equipped[slotPrimary]
 		creditsAfter = p.Credits
 	})
 	// Commerce trains on credits MOVED at a shop (Phase 11) — buys today,
 	// sells when selling exists.
-	if req.Opcode == protocol.OpShopBuy && result.Status == protocol.StatusOK && creditsBefore > creditsAfter {
+	if result.Status == protocol.StatusOK && creditsBefore != creditsAfter &&
+		(req.Opcode == protocol.OpShopBuy || req.Opcode == protocol.OpShopSell) {
 		if per := s.reg.Awards.CommerceXPPer5cr; per > 0 {
+			moved := creditsAfter - creditsBefore
+			if moved < 0 {
+				moved = -moved
+			}
 			s.mu.Lock()
-			c.awardLocked("commerce", (creditsBefore-creditsAfter)/5*per)
+			c.awardLocked("commerce", moved/5*per)
 			s.mu.Unlock()
+		}
+	}
+	// Engineering trains per craft (Phase 12): the recipe's xp × qty.
+	if req.Opcode == protocol.OpCraft && result.Status == protocol.StatusOK {
+		var body struct {
+			NPC    uint32 `json:"npc"`
+			Recipe string `json:"recipe"`
+			Qty    int    `json:"qty"`
+		}
+		if json.Unmarshal(req.Data, &body) == nil {
+			if r, ok := s.reg.Recipes[body.Recipe]; ok && r.XP > 0 {
+				s.mu.Lock()
+				c.awardLocked("engineering", r.XP*int64(body.Qty))
+				s.mu.Unlock()
+			}
 		}
 	}
 	// The primary slot is on no entity row, so a change reaches the other
@@ -908,6 +942,22 @@ func (s *Server) findNPC(entityID uint32) (defs.NPC, sim.Vec, bool) {
 		return defs.NPC{}, sim.Vec{}, false
 	}
 	return npc, sim.Vec(e.Pos), true
+}
+
+// findNode looks up a resource node's def, world position and remaining
+// yields by entity id — cmdWorld.FindNode (Phase 12).
+func (s *Server) findNode(entityID uint32) (defs.Node, sim.Vec, int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := s.world.Ents[entityID]
+	if e == nil || e.Kind != sim.EntityKind(protocol.EntityTypeNode) {
+		return defs.Node{}, sim.Vec{}, 0, false
+	}
+	nd, ok := s.reg.Nodes[e.Def]
+	if !ok {
+		return defs.Node{}, sim.Vec{}, 0, false
+	}
+	return nd, sim.Vec(e.Pos), e.Health, true
 }
 
 // weaponFor resolves id (a player's equipped primary item) to its weapon

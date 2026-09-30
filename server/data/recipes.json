@@ -1,0 +1,9 @@
+{
+  "$comment": "Phase 12 workbench recipes. Contract: docs/GDD.md 'The workbench and recipes'. `craft` at npc.workbench consumes every input x qty and grants output x qty, atomically; `level` is the Engineering level required; xp per craft.",
+  "version": 1,
+  "recipes": [
+    {"id": "recipe.cells", "name": "Energy Cells", "level": 1, "inputs": [{"item": "mat.ore.iron", "qty": 2}, {"item": "mat.scrap", "qty": 1}], "output": {"item": "ammo.cell", "qty": 30}, "xp": 20},
+    {"id": "recipe.plate.iron", "name": "Iron Chest Plate", "level": 5, "inputs": [{"item": "mat.ore.iron", "qty": 6}, {"item": "mat.scrap", "qty": 3}], "output": {"item": "armor.plate.iron", "qty": 1}, "xp": 120},
+    {"id": "recipe.drill.mk2", "name": "Drill Mk II", "level": 10, "inputs": [{"item": "mat.ore.iron", "qty": 8}, {"item": "mat.scrap", "qty": 6}, {"item": "tool.drill", "qty": 1}], "output": {"item": "tool.drill.mk2", "qty": 1}, "xp": 300}
+  ]
+}

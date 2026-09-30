@@ -50,6 +50,7 @@ const (
 	EntityTypeVehicle    uint16 = 0x0005 // Phase 4
 	EntityTypeLoot       uint16 = 0x0006 // Phase 3
 	EntityTypeProjectile uint16 = 0x0007 // Phase 3
+	EntityTypeNode       uint16 = 0x0008 // Phase 12: ore/wreck node; health = yields left
 )
 
 // action_mask bits (PROTOCOL.md constants).
@@ -85,6 +86,11 @@ const (
 	OpMissionTurnin  uint16 = 0x000C
 	OpMissionShare   uint16 = 0x000D
 	OpSkills         uint16 = 0x000E // Phase 11: the full sheet
+	// Phase 12 (PROTOCOL.md): the artisan loop.
+	OpShopSell     uint16 = 0x000F
+	OpGather       uint16 = 0x0010
+	OpGatherCancel uint16 = 0x0011
+	OpCraft        uint16 = 0x0012
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -113,6 +119,7 @@ const (
 	EventPartyInvited    uint16 = 0x000B
 	EventMissionShared   uint16 = 0x000C // data = the full mission template
 	EventSkillXP         uint16 = 0x000D // Phase 11: {skill,xp,level,next_at,leveled}
+	EventGatherEnd       uint16 = 0x000E // Phase 12: {node,reason,item,qty}, unicast
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

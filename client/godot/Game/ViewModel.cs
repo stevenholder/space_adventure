@@ -124,6 +124,18 @@ namespace SpaceAdventure.Game
             set => _weapon.Visible = value;
         }
 
+        /// <summary>
+        /// The local body, hidden while seated: the on-foot predictor is not
+        /// stepped in a vehicle, so the body would stand where you boarded
+        /// while the rover drives off. Same rule other clients apply to any
+        /// seated row (GDD "Seats and occupancy").
+        /// </summary>
+        public bool BodyVisible
+        {
+            get => _body.Visible;
+            set => _body.Visible = value;
+        }
+
         private void PoseRig(Vector3 bob, Vector2 swayDeg)
         {
             // Yaw positive turns the flipped rifle's −Z toward −X: inward.

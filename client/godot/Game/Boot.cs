@@ -511,6 +511,7 @@ namespace SpaceAdventure.Game
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
             _viewModel.WeaponVisible = _seat == 0 && !string.IsNullOrEmpty(_character.Primary);
+            _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
             _viewModel.Place(body.Pos, body.Facing);
             _viewModel.Tick(_fps.LookDelta, (float)body.Vel.Length, (float)delta);

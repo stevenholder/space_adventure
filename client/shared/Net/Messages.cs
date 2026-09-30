@@ -50,6 +50,7 @@ namespace SpaceAdventure.Net
         public const ushort Vehicle = 0x0005;  // Phase 4
         public const ushort Loot = 0x0006;
         public const ushort Projectile = 0x0007;
+        public const ushort Node = 0x0008;      // Phase 12: ore/wreck node; health = yields left
     }
 
     /// <summary>action_mask bits.</summary>
@@ -88,6 +89,11 @@ namespace SpaceAdventure.Net
         public const ushort MissionTurnin = 0x000C;
         public const ushort MissionShare = 0x000D;
         public const ushort Skills = 0x000E; // Phase 11: the full sheet
+        // Phase 12 (PROTOCOL.md): the artisan loop.
+        public const ushort ShopSell = 0x000F;
+        public const ushort Gather = 0x0010;
+        public const ushort GatherCancel = 0x0011;
+        public const ushort Craft = 0x0012;
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -118,6 +124,7 @@ namespace SpaceAdventure.Net
         public const ushort PartyInvited = 0x000B;
         public const ushort MissionShared = 0x000C; // data = the full template
         public const ushort SkillXP = 0x000D; // Phase 11: {skill,xp,level,next_at,leveled}
+        public const ushort GatherEnd = 0x000E; // Phase 12: {node,reason,item,qty}
     }
 
     /// <summary>collider kinds.</summary>
