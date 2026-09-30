@@ -799,6 +799,10 @@ namespace SpaceAdventure.Game
                     Defs defs = Decode.Defs(frame.Reader);
                     _character.Defs = defs;
                     _views.Defs = defs;
+                    // The wallet and the worn set are only ever pushed in a
+                    // reply, so ask once now: the credits and ammo boxes read
+                    // "—" until the first shop or reload otherwise.
+                    _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
                     break;
                 }
                 case Msg.Spawn:

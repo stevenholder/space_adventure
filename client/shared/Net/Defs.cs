@@ -136,6 +136,7 @@ namespace SpaceAdventure.Net
         [JsonProperty("fire_interval")] public double FireInterval { get; set; }
         [JsonProperty("magazine")] public int Magazine { get; set; }
         [JsonProperty("max_range")] public double MaxRange { get; set; }
+        [JsonProperty("ammo_item")] public string AmmoItem { get; set; } = "";
     }
 
     /// <summary>One entity type's render and hitbox def.</summary>
