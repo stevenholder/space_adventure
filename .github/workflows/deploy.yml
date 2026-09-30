@@ -159,7 +159,7 @@ jobs:
           Live now at **wss://game.stevenholder.info/ws** — server build \`$BUILD\`, commit \`${SHA:0:7}\`.
 
           ### Downloads
-          - **Windows** — \`SpaceAdventure-$TAG-windows-x86_64.zip\`: unzip, run \`SpaceAdventure.exe\`. It connects to the live server by itself.
+          - **Windows** — \`SpaceAdventure-$TAG-windows-x86_64.zip\`: unzip, run \`SpaceAdventure.exe\`. It connects to the live server by itself. The build is not code-signed yet, so SmartScreen shows "Windows protected your PC" the first time: click **More info → Run anyway**, or right-click the zip → Properties → **Unblock** before unzipping.
           - **Linux** — \`SpaceAdventure-$TAG-linux-x86_64.tar.gz\`: extract, run \`./SpaceAdventure.x86_64\`.
 
           Keep the \`art/\` folder beside the executable (it is inside the archive). Another server: \`SpaceAdventure.exe -- -serverUrl ws://host:port/ws\`. Move with WASD, look with the mouse, E interacts, K skills, M map, J journal, Esc frees the cursor.

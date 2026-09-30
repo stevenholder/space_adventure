@@ -1,0 +1,22 @@
+{
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "0.0.0.0",
+          "product_version": "0.0.0.0"
+        },
+        "info": {
+          "0409": {
+            "CompanyName": "Steven Holder",
+            "FileDescription": "Space Adventure — a low-poly first-person space MMO",
+            "InternalName": "SpaceAdventure",
+            "LegalCopyright": "© 2026 Steven Holder",
+            "OriginalFilename": "SpaceAdventure.exe",
+            "ProductName": "Space Adventure"
+          }
+        }
+      }
+    }
+  }
+}

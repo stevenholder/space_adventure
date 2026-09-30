@@ -130,7 +130,12 @@ namespace SpaceAdventure.Game
                 // same, and against a 1.8 m body at 2 m the difference is most
                 // of the cone.
                 Vector3 targetPos = v.Root.GlobalPosition;
-                Vector3 targetEye = targetPos + targetPos.Normalized() * EyeHeight;
+                // A node is a metre of rock and the bench a slab at 0.9 m:
+                // aim at those, not 1.7 m over them (server cmd.go aimHeight).
+                float aim = v.Type == EntityType.Node ? 0.6f
+                    : v.Type == EntityType.Npc && v.Label == "npc.workbench" ? 0.9f
+                    : EyeHeight;
+                Vector3 targetEye = targetPos + targetPos.Normalized() * aim;
                 Vector3 to = targetEye - eye;
                 float d = to.Length();
                 // A vehicle is boarded from board_dist (GDD, 8 m), not

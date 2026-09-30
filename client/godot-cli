@@ -141,6 +141,24 @@ case "$cmd" in
       exit 1
     fi
     stage_art "$out"
+    # Windows: stamp VERSIONINFO (product name, company, versions from git)
+    # onto the exe. An exe with blank metadata is what SmartScreen calls
+    # "unrecognized"; this does not replace signing, it just stops the
+    # binary being anonymous. go-winres patches PE resources in pure Go,
+    # so it works on the Linux export host where Godot's own
+    # application/* fields would need rcedit under wine.
+    if [[ "$preset" == Windows ]]; then
+      if command -v go >/dev/null 2>&1; then
+        fver="$(git -C "$here" log -1 --format=%cd --date=format:%Y.%-m.%-d).0"
+        pver="$(git -C "$here" describe --always --dirty --tags 2>/dev/null || git -C "$here" rev-parse --short HEAD)"
+        (cd "$here" && go run github.com/tc-hib/go-winres@v0.3.3 patch --in "$here/winres.json" --no-backup \
+          --file-version "$fver" --product-version "$pver" "$exe" >/dev/null) \
+          && echo "build: stamped $fver / $pver" \
+          || echo "godot-cli: version stamp failed (exe still runs, just unlabelled)" >&2
+      else
+        echo "godot-cli: no go on PATH, exe left unstamped" >&2
+      fi
+    fi
     echo "build: $exe ($(du -sh "$out" | cut -f1))"
     ;;
 

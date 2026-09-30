@@ -48,6 +48,16 @@ func artisanWorld(p *store.Player, npc defs.NPC, nodeHealth int) cmdWorld {
 	return w
 }
 
+// lookAt points the fixture's look at the target 2 m along +X raised by
+// `height`: a person's eye (1.7), the bench slab (0.9) or a node (0.6) —
+// the cone is measured against those points (cmd.go aimHeight).
+func lookAt(w *cmdWorld, height float64) {
+	target := sim.Vec{2, planetSurfaceY + height, 0}
+	eye := w.Pos.Add(w.Up.Scale(eyeHeightMeters))
+	to := target.Sub(eye)
+	w.Look = to.Scale(1 / to.Len())
+}
+
 func run(w cmdWorld, op uint16, body string) (uint8, map[string]any) {
 	res := handleCmd(newCmdRate(time.Now()), time.Now(), protocol.Cmd{Seq: 1, Opcode: op, Data: []byte(body)}, w)
 	var m map[string]any
@@ -78,19 +88,23 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 		t.Fatalf("sell at nobody: status=%d", st)
 	}
 
+	lookAt(&w, benchAimHeight)
 	if st, m := run(w, protocol.OpCraft, `{"npc":2,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusOK || m["crafted"].(map[string]any)["qty"].(float64) != 30 {
 		t.Fatalf("craft: status=%d body=%v", st, m)
 	}
 	if sim.CountItem(p, "mat.ore.iron") != 4 || sim.CountItem(p, "ammo.cell") != 30 {
 		t.Fatalf("craft aftermath: %v", p.Inventory)
 	}
+	lookAt(&w, eyeHeightMeters)
 	if st, m := run(w, protocol.OpCraft, `{"npc":1,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusRefused || m["reason"] != "unknown_recipe" {
 		t.Fatalf("craft at the shop: status=%d body=%v", st, m)
 	}
+	lookAt(&w, benchAimHeight)
 	if st, m := run(w, protocol.OpCraft, `{"npc":2,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusRefused || m["reason"] != "missing_materials" {
 		t.Fatalf("craft short: status=%d body=%v", st, m)
 	}
 
+	lookAt(&w, nodeAimHeight)
 	started := 0
 	w.Gather = func(node uint32, ticks int) bool { started++; return true }
 	gatherOK := func(node int, wantDur float64) {
@@ -123,6 +137,7 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 	// A bag that cannot take the yield refuses before the bar starts.
 	full := &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 50}}, Equipped: map[string]string{"tool": "tool.drill"}}
 	wf := artisanWorld(full, shopNPC(), 5)
+	lookAt(&wf, nodeAimHeight)
 	wf.Reg.Loot = map[string][]defs.LootEntry{"loot.node.iron": {{Item: "mat.ore.iron", Qty: 2, Chance: 1}}}
 	wf.Reg.InvSlots = 1
 	if st, m := run(wf, protocol.OpGather, `{"node":3}`); st != protocol.StatusRefused || m["reason"] != "no_space" {
@@ -132,6 +147,7 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 		t.Fatalf("gather nothing: status=%d", st)
 	}
 	w2 := artisanWorld(p, shopNPC(), 0)
+	lookAt(&w2, nodeAimHeight)
 	if st, m := run(w2, protocol.OpGather, `{"node":3}`); st != protocol.StatusRefused || m["reason"] != "depleted" {
 		t.Fatalf("gather depleted: status=%d body=%v", st, m)
 	}
