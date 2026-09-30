@@ -180,7 +180,6 @@ namespace SpaceAdventure.Game
         private BenchView _benchView; // Phase 12
         private Hotbar _hotbar; // Phase 13
         private HotbarView _hotbarView;
-        private bool _hotbarInteract; // the slot holding `interact` fired this frame
         private readonly List<(string name, Vector3 pos, double until)> _scanPings = new List<(string, Vector3, double)>();
         // Phase 12 gather channel as drawn: the bar runs from start to end.
         private double _channelStart = -1, _channelEnd = -1;
@@ -438,14 +437,16 @@ namespace SpaceAdventure.Game
                 _accountView.SetStatus("");
             }
             if (_input.Pressed(Key.M)) _map.Toggle();
-            // Phase 13: 1–5 Q E R T F fire the hotbar; Shift picks the second
+            // R reloads when a gun is worn; the server would refuse otherwise,
+            // and a refusal for pressing R with empty hands is noise.
+            if (_input.Pressed(Key.R) && _character.Defs.Item(_character.Primary)?.Weapon != null)
+                _net.Send(Character.ReloadCmd(NextCmdSeq()));
+            // Phase 13: 1–5 Q E T Z X fire the hotbar; Shift picks the second
             // row (Shift is also sprint — a hotkey while sprinting fires the
             // shift row, which is what a modifier means).
-            _hotbarInteract = false;
             _hotbarView.Shift = _input.Held(Key.Shift) || _rigShift;
             foreach (Key k in Hotbar.Keys)
                 if (_input.Pressed(k)) FireHotbar(Hotbar.SlotFor(k, _hotbarView.Shift));
-            _interact.InteractKey = _hotbar.KeyFor("interact") is { Length: > 0 } ik ? ik : "—";
             if (_input.Pressed(Key.B)) OpenPanel(_bagsView, _sheetView);
             if (_input.Pressed(Key.C)) OpenPanel(_sheetView, _bagsView);
             if (_input.Pressed(Key.J))
@@ -492,7 +493,6 @@ namespace SpaceAdventure.Game
                 else if (_rover.Ready) upPos = _rover.State.Pos;
             }
             LocalInput li = _fps.Sample(upPos.Normalized(), state.Facing);
-            li.InteractPressed = _hotbarInteract;
             RigInput(ref li);
 
             // Fixed 20 Hz input, matching the server's tick. Sending at frame
@@ -514,7 +514,11 @@ namespace SpaceAdventure.Game
                 _interact._selfId = _net.EntityId;
                 _interact.Update(eye, Frame.ToGodot(li.Look));
             }
-            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "E  ·  exit ship" : "E  ·  exit rover";
+            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "F  ·  exit ship" : "F  ·  exit rover";
+            // An NPC's panel closes when you walk away from the NPC (GDD
+            // `ui_close_dist`): the shop and the bench are somebody's counter.
+            if (_interact.ShopOpen && OutOfCounterRange(_interact.ShopNpc)) { _interact.CloseShop(); _shopView.Show(false); }
+            if (_benchView.Open && _benchView.Bench != 0 && OutOfCounterRange(_benchView.Bench)) _benchView.Show(false);
             else if (Clock.Now > _noticeUntil) _interact.Notice = "";
             if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open)) OnInteract();
 
@@ -1259,15 +1263,22 @@ namespace SpaceAdventure.Game
         /// whatever was last seen.
         /// </summary>
         /// <summary>Escape's first job: every panel, the map and the shop.</summary>
-        /// <summary>Phase 13: a hotbar slot fired. Actions do what their keys always did; items and abilities send `use`.</summary>
+        /// <summary>GDD "Interaction" `ui_close_dist`: how far from its NPC an open counter survives.</summary>
+        private const float CounterCloseDist = 5.0f;
+
+        private bool OutOfCounterRange(uint npc)
+        {
+            if (!_views.TryGet(npc, out var v) || v.Root == null) return true;
+            return Frame.ToGodot(_predictor.State.Pos).DistanceTo(v.Root.GlobalPosition) > CounterCloseDist;
+        }
+
+        /// <summary>Phase 13: a hotbar slot fired — an item or a worn ability sends `use`.</summary>
         private void FireHotbar(int slot)
         {
             if (slot < 0) return;
             var r = _hotbar.Refs[slot];
             switch (r.Kind)
             {
-                case "action" when r.Id == "interact": _hotbarInteract = true; break;
-                case "action" when r.Id == "reload": _net.Send(Character.ReloadCmd(NextCmdSeq())); break;
                 case "item":
                 case "ability":
                     if (_hotbarView.Cooling(r.Id, Clock.Now)) return; // the server would refuse; save the round trip
@@ -1497,10 +1508,12 @@ namespace SpaceAdventure.Game
             var verts = new[] { new Vector3(0, 150, 0), new Vector3(1, 150, 0), new Vector3(0, 150, -1) };
             // Phase 13: the hotbar's defaults and its save format.
             var hb = new UI.Hotbar();
-            Check("hotbar: E holds interact and R reload on a fresh profile", hb.Refs[6].ToString() == "action:interact" && hb.Refs[7].ToString() == "action:reload" && hb.Refs[0].Empty);
+            Check("hotbar: a fresh profile's bar is empty", Array.TrueForAll(hb.Refs, r => r.Empty));
             Check("hotbar: a reference round-trips through its string", UI.HotbarRef.Parse("item:consumable.medkit").Id == "consumable.medkit" && UI.HotbarRef.Parse("").Empty);
-            Check("hotbar: Shift+Q is slot 16", UI.Hotbar.SlotFor(Key.Q, true) == 15 && UI.Hotbar.SlotFor(Key.Q, false) == 5 && UI.Hotbar.SlotFor(Key.Z, false) == -1);
-            Check("hotbar: the prompt key follows interact", hb.KeyFor("interact") == "E");
+            Check("hotbar: an old action entry reads as empty", UI.HotbarRef.Parse("action:interact").Empty);
+            Check("hotbar: keys are 1–5 Q E T Z X; Shift+Q is slot 16; R and F are not on the bar",
+                UI.Hotbar.SlotFor(Key.Q, true) == 15 && UI.Hotbar.SlotFor(Key.Z, false) == 8 && UI.Hotbar.SlotFor(Key.X, false) == 9
+                && UI.Hotbar.SlotFor(Key.R, false) == -1 && UI.Hotbar.SlotFor(Key.F, false) == -1);
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));
             Check("the same triangle reversed is inward", TerrainMesh.FacesInward(verts, new[] { 0, 2, 1 }));
 

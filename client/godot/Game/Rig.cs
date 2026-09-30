@@ -23,6 +23,7 @@
 //   -uiHotbarDragDemo       with -uiPanel backpack: drag the first bag cell onto slot 4, report
 //   -uiSellDemo             with the shop open: sell the first -uiBuy item, report the buyback count
 //   -uiBuyback              show the shop's BUYBACK tab
+//   -uiRetreat <secs>       with the shop open, walk backwards that long; report whether it closed
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -557,6 +558,22 @@ namespace SpaceAdventure.Game
                 GD.Print($"ui: sold {first}: buyback={_interact.Buyback?.Length ?? 0} entries");
             }
             if (Flag("-uiBuyback") && _shopView.Open) { _shopView.ShowBuyback(true); await Wait(0.3); }
+
+            // -uiRetreat <secs>: with the shop open, walk backwards that long
+            // and report whether the counter closed behind you (ui_close_dist).
+            if (Arg("-uiRetreat") is string retreat)
+            {
+                double secs = double.Parse(retreat, CultureInfo.InvariantCulture);
+                bool before = _interact.ShopOpen;
+                uint counter = _interact.ShopNpc; // cleared by the close; keep it for the distance
+                float DistTo() => _views.TryGet(counter, out var qv) && qv.Root != null ? Frame.ToGodot(_predictor.State.Pos).DistanceTo(qv.Root.GlobalPosition) : -1f;
+                float d0 = DistTo();
+                _rigBack = true;
+                await Wait(secs);
+                _rigBack = false;
+                await Wait(0.3);
+                GD.Print($"ui: retreat {secs:0.#} s: shop open {before} -> {_interact.ShopOpen}, {d0:0.0} -> {DistTo():0.0} m from the counter");
+            }
 
             // -uiShopScrollDemo: with the shop open (after -uiBuy), scroll the
             // stock to the bottom, buy a cell the way the button does, wait for

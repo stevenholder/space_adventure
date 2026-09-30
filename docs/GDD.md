@@ -1920,8 +1920,9 @@ magazine is clamped to the new size on the next reload, never emptied.
 #### The hotbar
 
 Ten cells across the bottom centre of the HUD, one row, keys **1 2 3 4
-5 Q E R T F**. Holding **Shift** shows and fires a second row on the
-same keys (`⇧1` … `⇧F`): twenty slots. Shift is also sprint; a hotkey
+5 Q E T Z X**. Holding **Shift** shows and fires a second row on the
+same keys (`⇧1` … `⇧X`): twenty slots. **F interacts** and **R
+reloads** (when a gun is worn); neither is on the bar. Shift is also sprint; a hotkey
 pressed while sprinting fires the shift row, which is what a modifier
 means. A slot holds a **reference**, not a thing:
 
@@ -1929,11 +1930,8 @@ means. A slot holds a **reference**, not a thing:
 |---|---|---|---|
 | `item` | a consumable item id | `use {item}` | icon, bag count bottom-right; greyed at 0 |
 | `ability` | a worn item id whose def has `ability` | `use {item}` | icon; greyed when not worn |
-| `action` | `interact` or `reload` — the two keys the game already had | the old key's behaviour | glyph (E-hand, R-arrows) |
 
-Defaults on first run: `interact` in the E slot, `reload` in the R slot,
-every other slot empty — so nothing the player knows changes until they
-move it. Filling the bar: drag from the backpack (a consumable) or the
+Defaults on first run: every slot empty. Filling the bar: drag from the backpack (a consumable) or the
 character panel (worn gear with an ability) onto a cell; drag cell to
 cell moves; right-click clears; dropping onto an occupied cell replaces
 (the old reference is dropped, never swapped — a bar is not a bag).
@@ -1944,10 +1942,8 @@ with the defaults.
 A cell on cooldown draws a dark sweep draining over the `cooldown`
 seconds the result carried, and a key press during it does nothing
 locally (the server would refuse anyway). Keys fire with panels open
-except while a text field has focus; the `interact` action keeps its
-panel rules. The world prompt (`E · drill iron node`) still reads E,
-because E holds `interact` by default; a player who moves interact to F
-sees `F · drill iron node` — the prompt reads the bound key.
+except while a text field has focus. The world prompt reads
+`F · drill iron node`.
 
 #### Client
 
@@ -2115,6 +2111,7 @@ Phase 4/5.
 | Param | Value | Unit |
 |---|---|---|
 | `interact_dist` | 3.0 | m |
+| `ui_close_dist` | 5.0 | m — an NPC's panel (shop, bench) closes when the player is further than this from the NPC (Phase 13) |
 | `interact_cone` | 20 | deg (half-angle) |
 
 ### Shop NPCs

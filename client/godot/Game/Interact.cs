@@ -49,6 +49,8 @@ namespace SpaceAdventure.Game
         // Phase 8: the UI Toolkit shop view reads state from here and builds
         // the SAME cmd bytes the IMGUI panel did (t14 stays byte-identical).
         internal StockEntry[] Stock => _stock;
+        /// <summary>The NPC the open shop belongs to (0 when none), for the walk-away close.</summary>
+        public uint ShopNpc => _shopNpc;
         internal BuybackEntry[] Buyback => _buyback;
         private BuybackEntry[] _buyback;
 
@@ -175,8 +177,8 @@ namespace SpaceAdventure.Game
         /// <summary>Own entity id, so the cone never offers self-invites.</summary>
         public uint _selfId;
 
-        /// <summary>Phase 13: the key label that holds `interact` on the hotbar; the prompt reads it.</summary>
-        public string InteractKey = "E";
+        /// <summary>The interact key's label, as the prompt reads it.</summary>
+        public string InteractKey = "F";
 
         private string Nice(string def)
         {

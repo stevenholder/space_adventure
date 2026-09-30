@@ -1,7 +1,7 @@
 // The hotbar (Phase 13, docs/GDD.md "The hotbar"): twenty slots on ten
-// keys and a Shift row, each holding a REFERENCE — a consumable item id, a
-// worn item id with an ability, or one of the two built-in actions the game
-// already had on E and R. Client state only: user://sa.cfg [hotbar].
+// keys and a Shift row, each holding a REFERENCE — a consumable item id or
+// a worn item id with an ability. Interact (F) and reload (R) are their own
+// keys, not bar contents. Client state only: user://sa.cfg [hotbar].
 using System;
 using System.Collections.Generic;
 using Godot;
@@ -12,7 +12,7 @@ namespace SpaceAdventure.Game.UI
     /// <summary>What a hotbar slot points at.</summary>
     public struct HotbarRef
     {
-        public string Kind; // "item" | "ability" | "action" | ""
+        public string Kind; // "item" | "ability" | ""
         public string Id;
         public bool Empty => string.IsNullOrEmpty(Kind);
         public override string ToString() => Empty ? "" : Kind + ":" + Id;
@@ -20,9 +20,10 @@ namespace SpaceAdventure.Game.UI
         {
             int i = s?.IndexOf(':') ?? -1;
             if (i <= 0) return default;
-            return new HotbarRef { Kind = s.Substring(0, i), Id = s.Substring(i + 1) };
+            var r = new HotbarRef { Kind = s.Substring(0, i), Id = s.Substring(i + 1) };
+            // Only the two kinds that exist; an old "action:" entry reads as empty.
+            return r.Kind == "item" || r.Kind == "ability" ? r : default;
         }
-        public static HotbarRef Action(string id) => new HotbarRef { Kind = "action", Id = id };
     }
 
     /// <summary>The bar's contents and key table, saved between sessions.</summary>
@@ -30,31 +31,18 @@ namespace SpaceAdventure.Game.UI
     {
         public const int Row = 10;
         public const int Slots = 20;
-        public static readonly Key[] Keys = { Key.Key1, Key.Key2, Key.Key3, Key.Key4, Key.Key5, Key.Q, Key.E, Key.R, Key.T, Key.F };
-        private static readonly string[] Labels = { "1", "2", "3", "4", "5", "Q", "E", "R", "T", "F" };
+        public static readonly Key[] Keys = { Key.Key1, Key.Key2, Key.Key3, Key.Key4, Key.Key5, Key.Q, Key.E, Key.T, Key.Z, Key.X };
+        private static readonly string[] Labels = { "1", "2", "3", "4", "5", "Q", "E", "T", "Z", "X" };
         private const string ConfigPath = "user://sa.cfg";
 
         public readonly HotbarRef[] Refs = new HotbarRef[Slots];
 
         public Hotbar() { Defaults(); }
 
-        /// <summary>A fresh profile: interact on E, reload on R, nothing else — the game the player already knew.</summary>
-        public void Defaults()
-        {
-            Array.Clear(Refs, 0, Slots);
-            Refs[6] = HotbarRef.Action("interact");
-            Refs[7] = HotbarRef.Action("reload");
-        }
+        /// <summary>A fresh profile: an empty bar. Interact and reload are keys of their own.</summary>
+        public void Defaults() => Array.Clear(Refs, 0, Slots);
 
         public static string Label(int slot) => (slot >= Row ? "⇧" : "") + Labels[slot % Row];
-
-        /// <summary>The key label of the slot holding `action`, "E" style; "" when unbound.</summary>
-        public string KeyFor(string action)
-        {
-            for (int i = 0; i < Slots; i++)
-                if (Refs[i].Kind == "action" && Refs[i].Id == action) return Label(i);
-            return "";
-        }
 
         public void Load()
         {
@@ -169,9 +157,6 @@ namespace SpaceAdventure.Game.UI
                 case "ability":
                     greyed = Character.SlotHolding(r.Id) == "";
                     break;
-                case "action":
-                    _glyph.Text = r.Id == "interact" ? "✋" : r.Id == "reload" ? "⟳" : r.Id;
-                    break;
             }
             _count.Text = count >= 0 ? count.ToString() : "";
             _dim.Visible = greyed;
@@ -193,7 +178,7 @@ namespace SpaceAdventure.Game.UI
         {
             if (Bar.Refs[Index].Empty) return default;
             var r = Bar.Refs[Index];
-            var preview = new Label { Text = r.Kind == "action" ? r.Id : Character.Defs.ItemName(r.Id), Modulate = new Color(1, 1, 1, 0.85f) };
+            var preview = new Label { Text = Character.Defs.ItemName(r.Id), Modulate = new Color(1, 1, 1, 0.85f) };
             SetDragPreview(preview);
             return new Godot.Collections.Dictionary { { "hotbar", Index } };
         }
@@ -275,7 +260,7 @@ namespace SpaceAdventure.Game.UI
                 var r = _bar.Refs[slot];
                 _cells[i].Index = slot;
                 float left = -1f;
-                if (!r.Empty && r.Kind != "action" && _cooldowns.TryGetValue(r.Id, out var c) && now < c.end)
+                if (!r.Empty && _cooldowns.TryGetValue(r.Id, out var c) && now < c.end)
                     left = (float)((c.end - now) / Math.Max(1e-6, c.end - c.start));
                 _cells[i].Refresh(r, Hotbar.Label(slot), left);
             }

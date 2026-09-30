@@ -108,7 +108,7 @@ namespace SpaceAdventure.Game.UI
             if (!string.IsNullOrEmpty(Status))
                 Line(body, Status, Styles.Dust);
             body.AddChild(Styles.Gap(4));
-            Line(body, "E closes  ·  materials spill on death", Styles.Dust, 11);
+            Line(body, "F closes  ·  materials spill on death", Styles.Dust, 11);
         }
     }
 }

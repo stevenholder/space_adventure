@@ -341,7 +341,7 @@ namespace SpaceAdventure.Game.UI
             if (!string.IsNullOrEmpty(_interact.Status))
                 Line(body, _interact.Status, Styles.Dust);
             body.AddChild(Styles.Gap(4));
-            Line(body, "hover for details  ·  right-click a bag item to sell it  ·  E closes", Styles.Dust, 11);
+            Line(body, "hover for details  ·  right-click a bag item to sell it  ·  F closes", Styles.Dust, 11);
         }
 
         /// <summary>What was sold this session, newest first, each at what the shop paid.</summary>
@@ -375,7 +375,7 @@ namespace SpaceAdventure.Game.UI
             body.AddChild(scroll);
             if (!string.IsNullOrEmpty(_interact.Status)) Line(body, _interact.Status, Styles.Dust);
             body.AddChild(Styles.Gap(4));
-            Line(body, "twelve most recent sales  ·  gone when you log out  ·  E closes", Styles.Dust, 11);
+            Line(body, "twelve most recent sales  ·  gone when you log out  ·  F closes", Styles.Dust, 11);
         }
 
         /// <summary>

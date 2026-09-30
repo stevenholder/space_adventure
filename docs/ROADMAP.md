@@ -1444,10 +1444,11 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
   clamps to 30 on the next reload after the mod comes off, rounds never
   vanish; `mod.coil` deals 30; the sheet's DAMAGE / MAGAZINE / RANGE
   read the same numbers the server uses. (unit + t37 + shot)
-- **C132 The bar fires.** 1–5 Q E R T F fire their slots; Shift + key
-  fires the second row; E interacts and R reloads on a fresh profile;
-  moving interact to F makes the prompt read `F ·`. (t37 for the wire
-  half, shots for the rest)
+- **C132 The bar fires.** 1–5 Q E T Z X fire their slots; Shift + key
+  fires the second row; F interacts, R reloads only with a gun worn,
+  neither is on the bar; a shop or bench panel closes when the player
+  walks more than `ui_close_dist` from its NPC. (t37 for the wire half,
+  shots and the self-test for the rest)
 - **C133 The bar is filled by dragging.** Backpack → cell for a
   consumable, character panel → cell for a worn gadget, cell → cell
   moves, right-click clears, drop on occupied replaces; the layout
