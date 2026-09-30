@@ -1363,7 +1363,20 @@ parallel; wave 3 is `qa`.
   sweep green; a player who never touches a node plays exactly the
   game they had. (sweep)
 
-# Phase 13 — use, modify, and the hotbar (wave 0 landed 2026-09-30)
+# Phase 13 — use, modify, and the hotbar (2026-09-30)
+
+### Where Phase 13 stands (2026-09-30)
+
+Built and green on a bare server: C129–C136 recorded (docs/QA-STATUS.md
+"Phase 13"). Server: `use` with the GDD's order and per-connection
+cooldowns, the medkit and the scanner, mods applied wherever a weapon
+table is read, the mag clamp that hands rounds back. Client: the
+twenty-slot hotbar (references, defaults on E and R, `user://sa.cfg`),
+drag from the bag or the doll, right-click USE, cooldown sweeps, the
+shift row, the prompt reading whichever key holds interact, scan pings
+on the compass, MOD under WEAPON with live DAMAGE / MAGAZINE / RANGE.
+`t37` plays the medkit over the wire. Owed to humans: dragging on a
+real mouse, a barrel mod's 140 m hit, a scan in the scrapyard.
 
 Phase 12 put ore in the bag and a bench at the relay; this phase gives
 the bench things worth making and the player a bar to put them on. A

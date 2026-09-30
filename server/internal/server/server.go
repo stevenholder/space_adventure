@@ -835,6 +835,39 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 				defer s.mu.Unlock()
 				return s.rng.Float64()
 			},
+			Vitals: func() (int, bool) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return c.vitals.Health, c.vitals.DeadTicks > 0
+			},
+			Heal: func(n int) int {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				c.vitals.Health += n
+				if c.vitals.Health > sim.PlayerMaxHealth {
+					c.vitals.Health = sim.PlayerMaxHealth
+				}
+				c.entity.Health = c.vitals.Health
+				return c.vitals.Health
+			},
+			CoolingFor: func(item string) float64 {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return c.coolingFor(item, time.Now())
+			},
+			StartCooldown: func(item string, secs float64) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if c.cooldowns == nil {
+					c.cooldowns = map[string]time.Time{}
+				}
+				c.cooldowns[item] = time.Now().Add(time.Duration(secs * float64(time.Second)))
+			},
+			Scan: func(rng float64) []map[string]any {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.scanLocked(c, rng)
+			},
 		})
 		after = p.Equipped[slotPrimary]
 		creditsAfter = p.Credits
@@ -1021,8 +1054,9 @@ func (s *Server) fire(c *client, f protocol.Fire) {
 // fireLocked is fire's original body: everything that needs s.mu. It reports
 // a kill's attribution so the mission credit can run after release.
 func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, victimArch string, victimID uint32, killed bool) {
-	primary := c.ident.Snapshot().Equipped[slotPrimary]
-	wp, ok := s.weaponFor(primary)
+	snap := c.ident.Snapshot()
+	primary := snap.Equipped[slotPrimary]
+	wp, ok := sim.WeaponWith(s.reg, &snap)
 	if !ok {
 		return // nothing equipped, or an unknown item: drop the shot
 	}

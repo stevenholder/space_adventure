@@ -55,6 +55,37 @@ namespace SpaceAdventure.Net
         // the lesser tool this one stands in for.
         [JsonProperty("value")] public long Value { get; set; }
         [JsonProperty("supersedes")] public string Supersedes { get; set; } = "";
+
+        // Phase 13: what `use` does with it, and a mod's deltas.
+        [JsonProperty("consumable")] public ConsumableDef Consumable { get; set; }
+        [JsonProperty("ability")] public AbilityDef Ability { get; set; }
+        [JsonProperty("mod")] public ModDef Mod { get; set; }
+
+        /// <summary>Phase 13: something `use` accepts — a consumable or worn gear with an ability.</summary>
+        public bool Usable => Consumable != null || Ability != null;
+    }
+
+    public sealed class ConsumableDef
+    {
+        [JsonProperty("heal")] public int Heal { get; set; }
+        [JsonProperty("cooldown")] public double Cooldown { get; set; }
+    }
+
+    public sealed class AbilityDef
+    {
+        [JsonProperty("id")] public string Id { get; set; } = "";
+        [JsonProperty("range")] public double Range { get; set; }
+        [JsonProperty("cooldown")] public double Cooldown { get; set; }
+    }
+
+    /// <summary>Additive deltas onto the primary's weapon table (server sim.ApplyMod).</summary>
+    public sealed class ModDef
+    {
+        [JsonProperty("damage")] public int Damage { get; set; }
+        [JsonProperty("magazine")] public int Magazine { get; set; }
+        [JsonProperty("max_range")] public double MaxRange { get; set; }
+        [JsonProperty("falloff_start")] public double FalloffStart { get; set; }
+        [JsonProperty("falloff_end")] public double FalloffEnd { get; set; }
     }
 
     /// <summary>One resource node def (server/data/nodes.json, Phase 12).</summary>

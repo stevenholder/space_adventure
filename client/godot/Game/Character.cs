@@ -55,6 +55,17 @@ namespace SpaceAdventure.Game
 
         public int UsedSlots => Inventory?.Length ?? 0;
 
+        /// <summary>How many of an item the bag holds (Phase 13: hotbar counts).</summary>
+        public int Count(string item)
+        {
+            int n = 0;
+            if (Inventory != null) foreach (var st in Inventory) if (st.item == item) n += st.qty;
+            return n;
+        }
+
+        /// <summary>Phase 13: the `use` cmd for a consumable or a worn ability.</summary>
+        public static byte[] UseCmd(ushort seq, string item) => Encode.Cmd(seq, Op.Use, $"{{\"item\":\"{item}\"}}");
+
         /// <summary>Rounds in the magazine, and carried ammunition.</summary>
         public int Magazine { get; private set; } = -1;
         public int Reserve { get; private set; } = -1;

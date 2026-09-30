@@ -111,6 +111,9 @@ type client struct {
 	lootExtraPOI float64
 	// gather is the Phase 12 channel, guarded by srv.mu (gather.go).
 	gather gatherState
+	// cooldowns is Phase 13's per-item ready-at map for `use`, guarded by
+	// srv.mu; per connection, never persisted.
+	cooldowns map[string]time.Time
 
 	// cmdTicks records which input seq executed on which tick, for the last
 	// rewind_max of ticks. A `fire` names the seq that was in effect when the

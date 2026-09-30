@@ -1,0 +1,61 @@
+{
+ "when": "2026-09-30T14:36:29.511Z",
+ "checks": [
+  {
+   "n": "two medkits from the quartermaster (60 cr)",
+   "ok": true
+  },
+  {
+   "n": "a drill and a rifle for the road",
+   "ok": true
+  },
+  {
+   "n": "C129 use at full health refuses no_effect",
+   "ok": true
+  },
+  {
+   "n": "C129 nothing consumed by the refusal",
+   "ok": true
+  },
+  {
+   "n": "unknown item refuses unknown_item",
+   "ok": true
+  },
+  {
+   "n": "C129 the rifle refuses unusable",
+   "ok": true
+  },
+  {
+   "n": "C130 an unworn scanner refuses not_owned",
+   "ok": true
+  },
+  {
+   "n": "C129 use mid-channel: the channel started and the use answered",
+   "ok": true
+  },
+  {
+   "n": "a refused use leaves the channel running",
+   "ok": true
+  },
+  {
+   "n": "took a hit in the camp and lived",
+   "ok": true
+  },
+  {
+   "n": "C129 the medkit heals 50, capped, and cools 8",
+   "ok": true
+  },
+  {
+   "n": "C129 the snapshot shows the heal",
+   "ok": true
+  },
+  {
+   "n": "C129 a second use inside 8 s refuses cooldown with ready_in",
+   "ok": true
+  },
+  {
+   "n": "C129 one unit left the bag",
+   "ok": true
+  }
+ ]
+}

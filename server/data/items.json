@@ -220,6 +220,78 @@
         "value": 14
       },
       "desc": "Bench-made. Heavier than the suit and it shows."
+    },
+    {
+      "$comment": "Phase 13 consumable (GDD 'use'): one unit leaves the bag, +50 health capped, 8 s cooldown. Bench-made and stocked by the quartermaster.",
+      "id": "consumable.medkit",
+      "name": "Medkit",
+      "kind": "consumable",
+      "rarity": "common",
+      "stack_max": 10,
+      "value": 12,
+      "consumable": {
+        "heal": 50,
+        "cooldown": 8
+      },
+      "desc": "Gauze, gel and a shot of something. Fifty points of not dying."
+    },
+    {
+      "$comment": "Phase 13 gadget with the first ability: `use` while worn pings every node and drop within range onto the compass.",
+      "id": "gadget.scanner",
+      "name": "Ore Scanner",
+      "kind": "gadget",
+      "rarity": "rare",
+      "slot": "gadget",
+      "stack_max": 1,
+      "value": 120,
+      "ability": {
+        "id": "scan",
+        "range": 120.0,
+        "cooldown": 30
+      },
+      "desc": "Listens for metal. Worn on the belt, fired from the bar."
+    },
+    {
+      "$comment": "Phase 13 weapon mods (GDD 'Weapon mods'): slot `mod`, additive deltas applied to whatever primary is worn, one at a time.",
+      "id": "mod.barrel",
+      "name": "Long Barrel",
+      "kind": "mod",
+      "rarity": "rare",
+      "slot": "mod",
+      "stack_max": 1,
+      "value": 90,
+      "mod": {
+        "max_range": 40.0,
+        "falloff_start": 20.0,
+        "falloff_end": 40.0
+      },
+      "desc": "Forty more metres before the pulse forgets where it was going."
+    },
+    {
+      "id": "mod.mag",
+      "name": "Extended Magazine",
+      "kind": "mod",
+      "rarity": "rare",
+      "slot": "mod",
+      "stack_max": 1,
+      "value": 90,
+      "mod": {
+        "magazine": 10
+      },
+      "desc": "Ten more cells between reloads."
+    },
+    {
+      "id": "mod.coil",
+      "name": "Overcharged Coil",
+      "kind": "mod",
+      "rarity": "epic",
+      "slot": "mod",
+      "stack_max": 1,
+      "value": 160,
+      "mod": {
+        "damage": 5
+      },
+      "desc": "Five more points per pulse, and a smell of hot copper."
     }
   ],
   "entity_defs": [
@@ -301,6 +373,7 @@
     "primary",
     "secondary",
     "tool",
-    "gadget"
+    "gadget",
+    "mod"
   ]
 }

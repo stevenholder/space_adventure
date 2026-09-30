@@ -271,7 +271,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Action<byte[]> _send;
 
         private static readonly string[] LeftSlots = { "head", "chest", "legs", "hands", "feet", "back" };
-        private static readonly string[] RightSlots = { "accessory1", "accessory2", "primary", "secondary", "tool", "gadget" };
+        private static readonly string[] RightSlots = { "accessory1", "accessory2", "primary", "mod", "secondary", "tool", "gadget" }; // Phase 13: MOD under WEAPON
 
         public CharacterView(Control root, Character character, SkillSheet skills, Icons icons, AssetRegistry assets,
             Func<ushort> nextSeq, Action<byte[]> send)
@@ -353,11 +353,18 @@ namespace SpaceAdventure.Game.UI
             int armor = 0;
             foreach (var kv in _character.Equipped) armor += defs.Item(kv.Value)?.Armor?.Value ?? 0;
             ItemDef weapon = defs.Item(_character.Primary);
-            double dmg = (weapon?.Weapon?.Damage ?? 0) * (1 + Bonus("marksmanship"));
+            // Phase 13: the worn mod's deltas add onto the table, as the server's sim.ApplyMod does.
+            ModDef mod = defs.Item(_character.Worn("mod"))?.Mod;
+            int baseDmg = (weapon?.Weapon?.Damage ?? 0) + (mod?.Damage ?? 0);
+            int mag = (weapon?.Weapon?.Magazine ?? 0) + (mod?.Magazine ?? 0);
+            double range = (weapon?.Weapon?.MaxRange ?? 0) + (mod?.MaxRange ?? 0);
+            double dmg = baseDmg * (1 + Bonus("marksmanship"));
             Stat("health", $"{_character.Health} / 100", Styles.Danger);
             Stat("armor", armor.ToString(), Styles.Shield);
-            Stat("damage", weapon?.Weapon != null ? $"{dmg:0.#}" : "—", Styles.Cream);
+            Stat("damage", weapon?.Weapon != null ? $"{dmg:0.#}" : "—", mod?.Damage > 0 ? Styles.Good : Styles.Cream);
             Stat("fire rate", weapon?.Weapon != null ? $"{60.0 / Math.Max(0.01, weapon.Weapon.FireInterval):0} rpm" : "—", Styles.Cream);
+            Stat("magazine", weapon?.Weapon != null ? mag.ToString() : "—", mod?.Magazine > 0 ? Styles.Good : Styles.Cream);
+            Stat("range", weapon?.Weapon != null ? $"{range:0} m" : "—", mod?.MaxRange > 0 ? Styles.Good : Styles.Cream);
             Stat("sprint", $"{Sim.Rules.SprintSpeed * (1 + Bonus("athletics")):0.0} m/s", Styles.Cream);
             Stat("rover", $"+{Bonus("driving") * 100:0.#}%", Styles.Cream);
             Stat("ship", $"+{Bonus("piloting") * 100:0.#}%", Styles.Cream);
@@ -389,6 +396,12 @@ namespace SpaceAdventure.Game.UI
     /// <summary>B: the backpack — a 5x4 grid of what you carry and do not wear.</summary>
     public sealed class BackpackView : ModalView
     {
+        private ItemSlot _firstCell;
+        /// <summary>The first bag cell itself, for the rig to start a drag from.</summary>
+        public Control FirstCell => _firstCell != null && GodotObject.IsInstanceValid(_firstCell) ? _firstCell : null;
+        /// <summary>Screen centre of the first bag cell, for the rig's hotbar drag proof.</summary>
+        public Vector2 FirstCellCentre => _firstCell != null && GodotObject.IsInstanceValid(_firstCell)
+            ? _firstCell.GlobalPosition + _firstCell.Size / 2f : Vector2.Zero;
         private readonly Character _character;
         private readonly Icons _icons;
         private readonly Func<ushort> _nextSeq;
@@ -436,9 +449,12 @@ namespace SpaceAdventure.Game.UI
             {
                 var cell = new ItemSlot { Defs = _character.Defs, Icons = _icons };
                 if (i < shown.Count) { cell.Item = shown[i].item; cell.Qty = shown[i].qty; }
+                if (i == 0) _firstCell = cell; // the rig's drag proof grabs it
                 string item = cell.Item;
                 cell.OnAlt = () =>
                 {
+                    // Phase 13: a consumable is used, everything else equipped.
+                    if (_character.Defs.Item(item)?.Consumable != null) { _send(Character.UseCmd(_nextSeq(), item)); return; }
                     string slot = TargetSlot(item);
                     if (!string.IsNullOrEmpty(slot)) _send(_character.EquipCmd(_nextSeq(), slot, item));
                 };
@@ -450,7 +466,7 @@ namespace SpaceAdventure.Game.UI
             }
             body.AddChild(grid);
             body.AddChild(Styles.Gap(4));
-            Line(body, "B closes  ·  right-click equips  ·  drag onto the character (C)", Styles.Dust, 11);
+            Line(body, "B closes  ·  right-click equips or uses  ·  drag onto the character (C) or the bar", Styles.Dust, 11);
         }
     }
 }

@@ -91,6 +91,7 @@ const (
 	OpGather       uint16 = 0x0010
 	OpGatherCancel uint16 = 0x0011
 	OpCraft        uint16 = 0x0012
+	OpUse          uint16 = 0x0013 // Phase 13: a consumable or a worn ability
 )
 
 // cmd_result status codes (PROTOCOL.md constants).

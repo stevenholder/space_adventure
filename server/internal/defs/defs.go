@@ -51,6 +51,36 @@ type Item struct {
 	// (a node asking for tool.drill accepts tool.drill.mk2).
 	Value      int64  `json:"value,omitempty"`
 	Supersedes string `json:"supersedes,omitempty"`
+	// Phase 13 (GDD "use", "Weapon mods"): what `use` does with the item,
+	// and the deltas a worn mod adds to the primary's weapon table.
+	Consumable *Consumable `json:"consumable,omitempty"`
+	Ability    *Ability    `json:"ability,omitempty"`
+	Mod        *Mod        `json:"mod,omitempty"`
+}
+
+// Consumable is a one-shot: one unit leaves the bag, Heal lands, the item
+// id cools for Cooldown seconds.
+type Consumable struct {
+	Heal     int     `json:"heal,omitempty"`
+	Cooldown float64 `json:"cooldown"`
+}
+
+// Ability is what worn gear does on `use`. ID names the effect the server
+// implements ("scan"); Range is the effect's reach where it has one.
+type Ability struct {
+	ID       string  `json:"id"`
+	Range    float64 `json:"range,omitempty"`
+	Cooldown float64 `json:"cooldown"`
+}
+
+// Mod is a set of additive deltas onto a Weapon table. Every field is
+// optional; zero adds nothing.
+type Mod struct {
+	Damage       int     `json:"damage,omitempty"`
+	Magazine     int     `json:"magazine,omitempty"`
+	MaxRange     float64 `json:"max_range,omitempty"`
+	FalloffStart float64 `json:"falloff_start,omitempty"`
+	FalloffEnd   float64 `json:"falloff_end,omitempty"`
 }
 
 // Node is one resource node def (server/data/nodes.json, Phase 12, GDD
@@ -552,6 +582,32 @@ func auditArtisan(reg *Registry) error {
 			}
 			if in.Qty < 1 {
 				return fmt.Errorf("defs: recipe %s: qty for %q must be positive", r.ID, in.Item)
+			}
+		}
+	}
+	// Phase 13: a consumable or ability must cool for a positive time, a
+	// mod must change something, and both live on items of the right kind
+	// and slot; the mod slot must be declared.
+	for _, it := range reg.Items {
+		if it.Consumable != nil && (it.Consumable.Cooldown <= 0 || it.Kind != "consumable") {
+			return fmt.Errorf("defs: item %s: a consumable needs kind consumable and a positive cooldown", it.ID)
+		}
+		if it.Ability != nil && (it.Ability.Cooldown <= 0 || it.Ability.ID == "" || it.Slot == "") {
+			return fmt.Errorf("defs: item %s: an ability needs an id, a positive cooldown and a slot to be worn in", it.ID)
+		}
+		if it.Mod != nil {
+			m := it.Mod
+			if it.Slot != "mod" || (m.Damage == 0 && m.Magazine == 0 && m.MaxRange == 0 && m.FalloffStart == 0 && m.FalloffEnd == 0) {
+				return fmt.Errorf("defs: item %s: a mod sits in slot mod and changes something", it.ID)
+			}
+			slotOK := false
+			for _, sl := range reg.EquipSlots {
+				if sl == "mod" {
+					slotOK = true
+				}
+			}
+			if !slotOK {
+				return fmt.Errorf("defs: item %s: equip_slots does not declare mod", it.ID)
 			}
 		}
 	}

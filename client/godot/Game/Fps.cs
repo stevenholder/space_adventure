@@ -123,7 +123,9 @@ namespace SpaceAdventure.Game
             if (_input.Held(Key.W)) result.MoveY += 1;
             if (_input.Held(Key.Shift)) result.ActionMask |= Net.Action.Sprint;
             if (_input.Held(Key.Space)) result.ActionMask |= Net.Action.Jump;
-            result.InteractPressed = _input.Pressed(Key.E);
+            // Interact is a hotbar action (Phase 13): Boot sets InteractPressed
+            // from whichever key holds it. E by default.
+            result.InteractPressed = false;
             // A click with the cursor free is a UI click (a journal button, a
             // shop row), never a shot -- claiming a mission used to fire the
             // rifle. Captured pointer = the world has the mouse.

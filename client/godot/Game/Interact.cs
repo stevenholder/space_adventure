@@ -152,18 +152,21 @@ namespace SpaceAdventure.Game
                 TargetType = v.Type;
                 Prompt = v.Type switch
                 {
-                    EntityType.Loot => "E  ·  pick up",
-                    EntityType.Vehicle => "E  ·  drive",
-                    EntityType.Ship => "E  ·  fly",
-                    EntityType.Player => $"E  ·  invite {v.Label} to party",
+                    EntityType.Loot => $"{InteractKey}  ·  pick up",
+                    EntityType.Vehicle => $"{InteractKey}  ·  drive",
+                    EntityType.Ship => $"{InteractKey}  ·  fly",
+                    EntityType.Player => $"{InteractKey}  ·  invite {v.Label} to party",
                     EntityType.Node => NodePrompt(v),
-                    _ => $"E  ·  {Verb(v.Label)} {Nice(v.Label)}",
+                    _ => $"{InteractKey}  ·  {Verb(v.Label)} {Nice(v.Label)}",
                 };
             }
         }
 
         /// <summary>Own entity id, so the cone never offers self-invites.</summary>
         public uint _selfId;
+
+        /// <summary>Phase 13: the key label that holds `interact` on the hotbar; the prompt reads it.</summary>
+        public string InteractKey = "E";
 
         private string Nice(string def)
         {
@@ -196,8 +199,8 @@ namespace SpaceAdventure.Game
             string verb = nd?.Skill == "salvaging" ? "cut" : "drill";
             if (v.Depleted) return $"{Nice(nd?.Name ?? v.Label)}  ·  depleted";
             if (nd != null && !_character.Defs.ToolSatisfies(_character.Worn("tool"), nd.Tool))
-                return $"E  ·  {verb}  ·  needs {_character.Defs.ItemName(nd.Tool)}";
-            return $"E  ·  {verb} {nd?.Name?.ToLowerInvariant() ?? v.Label}";
+                return $"{InteractKey}  ·  {verb}  ·  needs {_character.Defs.ItemName(nd.Tool)}";
+            return $"{InteractKey}  ·  {verb} {nd?.Name?.ToLowerInvariant() ?? v.Label}";
         }
 
         /// <summary>Opens the shop on the current target. Returns the cmd to send, or null.</summary>

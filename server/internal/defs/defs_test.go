@@ -66,8 +66,30 @@ func TestLoad(t *testing.T) {
 
 	// Phase 12 data audit: the three nodes, three recipes, the bench, the
 	// tools in stock, and the placements the GDD names.
-	if len(reg.Nodes) != 3 || len(reg.Recipes) != 3 {
-		t.Errorf("nodes=%d recipes=%d, want 3/3", len(reg.Nodes), len(reg.Recipes))
+	if len(reg.Nodes) != 3 || len(reg.Recipes) != 8 {
+		t.Errorf("nodes=%d recipes=%d, want 3/8", len(reg.Nodes), len(reg.Recipes))
+	}
+	// Phase 13: the use verb's items and the mod slot.
+	if c := reg.Items["consumable.medkit"].Consumable; c == nil || c.Heal != 50 || c.Cooldown != 8 {
+		t.Errorf("medkit consumable block = %+v", c)
+	}
+	if a := reg.Items["gadget.scanner"].Ability; a == nil || a.ID != "scan" || a.Range != 120 {
+		t.Errorf("scanner ability block = %+v", a)
+	}
+	if m := reg.Items["mod.mag"].Mod; m == nil || m.Magazine != 10 || reg.Items["mod.mag"].Slot != "mod" {
+		t.Errorf("mag mod = %+v", m)
+	}
+	if reg.EquipSlots[len(reg.EquipSlots)-1] != "mod" {
+		t.Errorf("equip_slots does not end in mod: %v", reg.EquipSlots)
+	}
+	stocked := false
+	for _, st := range reg.NPCs["npc.quartermaster"].Stock {
+		if st.Item == "consumable.medkit" && st.Price == 30 {
+			stocked = true
+		}
+	}
+	if !stocked {
+		t.Error("the quartermaster does not stock medkits at 30")
 	}
 	if reg.NPCs["npc.workbench"].Kind != "bench" {
 		t.Error("npc.workbench is not a bench")

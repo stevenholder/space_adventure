@@ -94,6 +94,7 @@ namespace SpaceAdventure.Net
         public const ushort Gather = 0x0010;
         public const ushort GatherCancel = 0x0011;
         public const ushort Craft = 0x0012;
+        public const ushort Use = 0x0013; // Phase 13: a consumable or a worn ability
     }
 
     /// <summary>cmd_result status codes.</summary>

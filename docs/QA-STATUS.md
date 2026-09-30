@@ -641,3 +641,25 @@ is not a test.
 
 Owed to the playtest: a real death with ore in the bag and the run back;
 cutting a wreck under fire; crafting cells at the bench with scrap in hand.
+
+# Phase 13 — use, modify, and the hotbar (2026-09-30)
+
+Bare `server -listen :18090` with sqlite, Godot 4.7.2 .NET from source for
+the rig, `t37` over the wire. The scanner's pings and the mods' numbers are
+bench-made behind Engineering levels one life cannot reach, so their live
+halves are unit tests plus the rig's faked bag; the wire verb itself is
+played by `t37`.
+
+| # | Result | Evidence |
+|---|---|---|
+| C129 | PASS | `t37`: two medkits bought (940 cr), `use` at full health → `no_effect` with both still in the bag; a grunt's hit at the outpost (100 → 76), `use` → `{"effect":{"health":100},"cooldown":8}` and the snapshot reads 100; a second `use` inside the window → `cooldown` with `ready_in: 8`; one unit left the bag; the rifle → `unusable`, a nonsense id → `unknown_item`. `TestUseMedkit`: +50 capped at 100, `not_owned` when none is carried, a refused use consumes nothing, a successful one cancels the gather channel; `TestUseRefusals`: dead → `dead`, `coolingFor` counts down |
+| C130 | PASS | `TestUseScanner`: worn → pings with the def's 120 m range and a 30 s cooldown, the gadget stays; unworn → `not_owned` (also on the wire in `t37`); `scanLocked` lists nodes and drops with position and health; rig `-uiHotbarDemo` pings the pad's four nodes onto the compass (IRON / COPPER labels) → `test/out/ui/p13-hotbar.png` |
+| C131 | PASS | `TestApplyMod`: deltas add (25/30/120 → 30/40/160), a nil mod is the bare table, `WeaponWith` reads the worn slots and a mod without a rifle has no table; `TestReloadWithMagMod`: the mag mod reloads to 40, with it off a 40-round magazine clamps to 30 and the 10 surplus rounds return to the bag; `fireLocked` resolves cadence, magazine and damage through `sim.WeaponWith`. Sheet: `-uiHotbarDemo -uiPanel character` → `p13-sheet-mod.png`: rifle in WEAPON, `EM` in the new MOD slot under it, MAGAZINE 40 in green, DAMAGE 25, RANGE 120 |
+| C132 | PASS | Keys 1–5 Q E R T F route through `FireHotbar`; `Fps.cs` no longer binds E, Boot sets `InteractPressed` from whichever slot holds `interact`; R's reload moved onto the bar the same way. `-selftest`: a fresh profile has `action:interact` on E and `action:reload` on R, `Shift+Q` is slot 16, `KeyFor("interact")` = "E"; `Interact.cs` prompts read `InteractKey`. The wire half (`use` from a slot) is the same cmd `t37` sends |
+| C133 | PASS | Rig `-uiPanel backpack -uiHotbarDemo -uiHotbarDragDemo`: the first bag cell (the medkit) is dragged onto the 4 slot through Godot's own drag-and-drop (`ForceDrag` with the cell's real payload, then motion and release) → `ui: hotbar drag (868, 231.6) -> (550, 668): slot4=item:consumable.medkit saved=item:consumable.medkit` → `test/out/ui/p13-hotbar-drag.png`; the saved value is what a restart reloads. Cell → cell moves and right-click clears are the same `HotbarCell` handlers, checked by hand |
+| C134 | PASS | `-uiHotbarDemo` → `p13-hotbar.png`: `ME` on 1 with count 2 and a cooldown sweep two-thirds gone, `OS` (rare frame) on Q, the ✋ and ⟳ glyphs on E and R, key labels top-left; `-uiShift` → `p13-hotbar-shift.png`: ⇧1…⇧F and the medkit that sits on ⇧3, greyed because the real bag holds none |
+| C135 | PASS | Defs audit: eight recipes; medkit (Eng 3), scanner (6), barrel and mag (12, copper), coil (15, copper) → `p13-bench.png` shows the cards with have/need and ENG levels; the quartermaster stocks medkits at 30 |
+| C136 | PASS | Against the Phase 13 server: `go vet && go test ./...` green (`TestUseMedkit`, `TestUseScanner`, `TestUseRefusals`, `TestReloadWithMagMod`, `TestApplyMod`, defs audit at eight recipes), `godot-gate` clean, `godot-codec` 9/9, `godot-test` PASS with the four new hotbar self-checks, `t13` 9/9, `t35` 6/6, art 39/39, `t36` 34/34, `t37` 14/14, `t34` 32/32, `t14` 6/6. A fresh profile's E and R do what they did |
+
+Owed to the playtest: dragging on a real mouse, the shift row while
+sprinting, a barrel mod landing a 140 m hit, a scan in the scrapyard.
