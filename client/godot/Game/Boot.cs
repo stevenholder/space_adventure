@@ -321,8 +321,8 @@ namespace SpaceAdventure.Game
             _hudView = new HudView(_ui.Root);
             _combatFeed = new CombatFeed(_ui.Root);
             _map = new MapView(_ui.Root);
-            _shopView = new ShopView(_ui.Root, _character, _interact, NextCmdSeq, b => _net.Send(b));
             _icons = new Icons(_assets.Root);
+            _shopView = new ShopView(_ui.Root, _character, _interact, _icons, NextCmdSeq, b => _net.Send(b));
             _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
@@ -1044,7 +1044,9 @@ namespace SpaceAdventure.Game
             if (_interact.ShopOpen && !_shopView.Open) _shopView.Show(true);
             if (!_interact.ShopOpen && _shopView.Open) _shopView.Show(false);
 
-            _promptView.Set(!string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
+            // The world prompt (E · talk) belongs to the world: with a panel
+            // open it sat on top of the shop it had just opened.
+            _promptView.Set(ModalOpen || _map.Open ? "" : !string.IsNullOrEmpty(_interact.Notice) ? _interact.Notice : _interact.Prompt);
 
             double now = Clock.Now;
             if (_missionLog.PriorityMission != null && now < _missionLog.PriorityUntil)

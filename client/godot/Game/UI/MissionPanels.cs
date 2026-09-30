@@ -31,6 +31,16 @@ namespace SpaceAdventure.Game.UI
 
         private byte[] Cmd(ushort op, string body) => Encode.Cmd(_nextSeq(), op, body);
 
+        private static Color TypeColor(string type) => type switch
+        {
+            "kill" => Styles.Danger, "bounty" => Styles.Amber, "scout" => Styles.Shield, "fetch" => Styles.Good, _ => Styles.Dust,
+        };
+
+        private static string TypeGlyph(string type) => type switch
+        {
+            "kill" => "K", "bounty" => "B", "scout" => "S", "fetch" => "F", _ => "?",
+        };
+
         protected override void Fill(VBoxContainer body)
         {
             uint board = _boardNpc();
@@ -38,18 +48,19 @@ namespace SpaceAdventure.Game.UI
             // Priority offer first — it is the shout.
             if (_log.PriorityMission != null)
             {
-                var row = LabelRow(body, $"PRIORITY: warlord at {_log.PriorityPoi.ToUpperInvariant()}", 14, Styles.Amber);
                 string pid = _log.PriorityMission;
-                row.AddChild(Styles.Button("CLAIM", false, () =>
-                {
-                    _log.OnAcceptSent(pid);
-                    _send(Cmd(Op.MissionAccept, $"{{\"id\":\"{pid}\"}}"));
-                    Rebuild();
-                }));
+                body.AddChild(Styles.Card(Styles.Amber, Styles.Tile("!", Styles.Amber),
+                    $"Warlord sighted at {_log.PriorityPoi.ToUpperInvariant()}", Styles.Amber, "priority bounty · first party to claim it",
+                    Styles.Button("CLAIM", false, () =>
+                    {
+                        _log.OnAcceptSent(pid);
+                        _send(Cmd(Op.MissionAccept, $"{{\"id\":\"{pid}\"}}"));
+                        Rebuild();
+                    })));
             }
-            if (_log.ClaimNote != null) LabelRow(body, _log.ClaimNote, 12, Styles.Danger);
+            if (_log.ClaimNote != null) Line(body, _log.ClaimNote, Styles.Danger, 12);
 
-            // Active missions, with progress.
+            body.AddChild(Styles.Header("Active"));
             bool anyActive = false;
             foreach (var kv in _log.State)
             {
@@ -57,38 +68,29 @@ namespace SpaceAdventure.Game.UI
                 anyActive = true;
                 var offer = _log.Offers.Find(o => o.id == kv.Key);
                 string name = offer?.name ?? kv.Key;
-                string progress = offer != null && offer.count > 0 ? $"{kv.Value.count}/{offer.count}" : "";
-                var row = LabelRow(body, $"{name}  {progress}", 13, Styles.Cream);
+                string type = offer?.type ?? "";
                 string mid = kv.Key;
+                var trailing = new List<Control>();
+                if (offer != null && offer.count > 0)
+                    trailing.Add(Styles.Progress(Mathf.Clamp((float)kv.Value.count / offer.count, 0f, 1f), TypeColor(type), $"{kv.Value.count} / {offer.count}", 110));
                 if (_party.InParty && (offer == null || offer.type != "bounty"))
-                {
-                    row.AddChild(Styles.Button("SHARE", false, () =>
-                    {
-                        _send(Cmd(Op.MissionShare, $"{{\"id\":\"{mid}\"}}"));
-                        Rebuild();
-                    }));
-                }
+                    trailing.Add(Styles.Button("SHARE", false, () => { _send(Cmd(Op.MissionShare, $"{{\"id\":\"{mid}\"}}")); Rebuild(); }));
                 if (board != 0 && offer != null && offer.type == "fetch")
-                {
-                    row.AddChild(Styles.Button("TURN IN", false, () =>
-                    {
-                        _send(Cmd(Op.MissionTurnin, $"{{\"npc\":{board},\"id\":\"{mid}\"}}"));
-                        Rebuild();
-                    }));
-                }
-                row.AddChild(Styles.Button("DROP", true, () =>
+                    trailing.Add(Styles.Button("TURN IN", false, () => { _send(Cmd(Op.MissionTurnin, $"{{\"npc\":{board},\"id\":\"{mid}\"}}")); Rebuild(); }));
+                trailing.Add(Styles.Button("DROP", true, () =>
                 {
                     _send(Cmd(Op.MissionAbandon, $"{{\"id\":\"{mid}\"}}"));
                     if (_log.State.TryGetValue(mid, out var st)) { st.active = false; st.count = 0; }
                     Rebuild();
                 }));
+                string sub = offer == null ? "" : (string.IsNullOrEmpty(offer.text) ? $"{offer.reward} cr" : $"{offer.text}  ·  {offer.reward} cr");
+                body.AddChild(Styles.Card(TypeColor(type), Styles.Tile(TypeGlyph(type), TypeColor(type)), name, Styles.Cream, sub, trailing.ToArray()));
             }
             if (!anyActive) Line(body, "no active missions", Styles.Dust);
 
             // The board's offers, when standing at one.
             body.AddChild(Styles.Gap(4));
-            body.AddChild(Styles.Rule());
-            body.AddChild(Styles.Gap(4));
+            body.AddChild(Styles.Header("Board"));
             if (board == 0)
             {
                 Line(body, "visit the dispatcher at the relay for work", Styles.Dust, 12);
@@ -102,19 +104,18 @@ namespace SpaceAdventure.Game.UI
                 foreach (var o in _log.Offers)
                 {
                     bool active = _log.State.TryGetValue(o.id, out var st) && st.active;
-                    var row = LabelRow(body, $"{o.name}  ·  {o.reward} cr", 13, active ? Styles.Dust : Styles.Cream);
-                    if (!active)
-                    {
-                        string mid = o.id;
-                        row.AddChild(Styles.Button("ACCEPT", false, () =>
+                    if (active || o.type == "bounty") continue;
+                    string mid = o.id;
+                    body.AddChild(Styles.Card(TypeColor(o.type), Styles.Tile(TypeGlyph(o.type), TypeColor(o.type)), o.name, Styles.Cream,
+                        (string.IsNullOrEmpty(o.text) ? "" : o.text + "  ·  ") + $"{o.reward} cr",
+                        Styles.Button("ACCEPT", false, () =>
                         {
                             _log.OnAcceptSent(mid);
                             _send(Cmd(Op.MissionAccept, $"{{\"id\":\"{mid}\"}}"));
                             if (_log.State.TryGetValue(mid, out var st2)) st2.active = true;
                             else _log.State[mid] = new MissionStateRow { active = true };
                             Rebuild();
-                        }));
-                    }
+                        })));
                 }
             }
             body.AddChild(Styles.Gap(4));
@@ -143,34 +144,24 @@ namespace SpaceAdventure.Game.UI
 
         private byte[] Cmd(ushort op, string body) => Encode.Cmd(_nextSeq(), op, body);
 
+        private static Control Face(string name, Color c) => Styles.Tile(string.IsNullOrEmpty(name) ? "?" : name.Substring(0, 1).ToUpperInvariant(), c, 36);
+
         protected override void Fill(VBoxContainer body)
         {
             if (_party.PendingFrom != 0)
             {
-                var row = LabelRow(body, $"{_party.PendingName} invites you", 13, Styles.Amber);
-                row.AddChild(Styles.Button("ACCEPT", false, () =>
-                {
-                    _send(Cmd(Op.PartyRespond, "{\"accept\":true}"));
-                    _party.PendingFrom = 0;
-                    Rebuild();
-                }));
-                row.AddChild(Styles.Button("DECLINE", true, () =>
-                {
-                    _send(Cmd(Op.PartyRespond, "{\"accept\":false}"));
-                    _party.PendingFrom = 0;
-                    Rebuild();
-                }));
+                body.AddChild(Styles.Card(Styles.Amber, Face(_party.PendingName, Styles.Amber), $"{_party.PendingName} invites you", Styles.Amber, "to their party",
+                    Styles.Button("ACCEPT", false, () => { _send(Cmd(Op.PartyRespond, "{\"accept\":true}")); _party.PendingFrom = 0; Rebuild(); }),
+                    Styles.Button("DECLINE", true, () => { _send(Cmd(Op.PartyRespond, "{\"accept\":false}")); _party.PendingFrom = 0; Rebuild(); })));
+                body.AddChild(Styles.Gap(4));
             }
-
+            body.AddChild(Styles.Header("Members"));
             if (_party.InParty)
             {
-                foreach (var (id, name) in _party.Members) Line(body, name, Styles.Cream);
+                foreach (var (id, name) in _party.Members)
+                    body.AddChild(Styles.Card(Styles.Shield, Face(name, Styles.Shield), name, Styles.Cream, "in your party"));
                 body.AddChild(Styles.Gap(4));
-                var leave = Styles.Button("LEAVE PARTY", true, () =>
-                {
-                    _send(Cmd(Op.PartyLeave, "{}"));
-                    Rebuild();
-                });
+                var leave = Styles.Button("LEAVE PARTY", true, () => { _send(Cmd(Op.PartyLeave, "{}")); Rebuild(); });
                 leave.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
                 body.AddChild(leave);
             }
@@ -178,25 +169,18 @@ namespace SpaceAdventure.Game.UI
             {
                 Line(body, "not in a party", Styles.Dust);
             }
-
             body.AddChild(Styles.Gap(4));
-            body.AddChild(Styles.Rule());
-            body.AddChild(Styles.Gap(4));
-            Line(body, "NEARBY", Styles.Dust, 12);
+            body.AddChild(Styles.Header("Nearby"));
             var near = _nearby();
             if (near.Count == 0) Line(body, "nobody in sight", Styles.Dust, 12);
             foreach (var (id, name) in near)
             {
-                var row = LabelRow(body, name, 13, Styles.Cream);
                 uint pid = id;
-                row.AddChild(Styles.Button("INVITE", false, () =>
-                {
-                    _send(Cmd(Op.PartyInvite, $"{{\"target\":{pid}}}"));
-                    Rebuild();
-                }));
+                body.AddChild(Styles.Card(Styles.Dust, Face(name, Styles.Cream), name, Styles.Cream, "",
+                    Styles.Button("INVITE", false, () => { _send(Cmd(Op.PartyInvite, $"{{\"target\":{pid}}}")); Rebuild(); })));
             }
             body.AddChild(Styles.Gap(4));
-            Line(body, "P closes · look at a player and press E to invite", Styles.Dust, 12);
+            Line(body, "P closes", Styles.Dust, 12);
         }
     }
 }

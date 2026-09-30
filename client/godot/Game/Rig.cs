@@ -516,6 +516,20 @@ namespace SpaceAdventure.Game
                 await Wait(0.3);
             }
 
+            // -uiShopScrollDemo: with the shop open (after -uiBuy), scroll the
+            // stock to the bottom, buy a cell the way the button does, wait for
+            // the reply's rebuild, and report where the list is.
+            if (Flag("-uiShopScrollDemo") && _shopView.Open)
+            {
+                _shopView.ScrollTo(9999);
+                await Wait(0.3);
+                int before = _shopView.ScrollOffset;
+                _net.Send(_interact.BuyCmd(NextCmdSeq(), "ammo.cell", 0));
+                _shopView.Rebuild();
+                await Wait(1.0);
+                GD.Print($"ui: shop scroll {before} -> {_shopView.ScrollOffset}");
+            }
+
             // -uiDeathDemo: the death screen without dying -- local flag only,
             // the way -uiDemo stages grunts. Nothing is sent.
             if (Flag("-uiDeathDemo"))

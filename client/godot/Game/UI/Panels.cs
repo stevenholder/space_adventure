@@ -129,6 +129,44 @@ namespace SpaceAdventure.Game.UI
         }
     }
 
+    /// <summary>
+    /// Where a panel was left: user://sa.cfg [panels] key = position. Shared
+    /// by the modals and the map, which is not a modal.
+    /// </summary>
+    public static class PanelMemory
+    {
+        private const string ConfigPath = "user://sa.cfg";
+
+        /// <summary>Puts the title label's grip on a panel: drag + save.</summary>
+        public static void Grip(PanelContainer box, Control root, string key, VBoxContainer header)
+        {
+            var grip = new DragHandle { Target = box, Bounds = root, OnDropped = () => Save(box, key) };
+            header.GetChild<Control>(0).AddChild(grip);
+            grip.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        }
+
+        public static void Restore(Control box, Control root, string key, ref bool restored)
+        {
+            if (restored) { DragHandle.Clamp(box, root); return; }
+            restored = true;
+            var cf = new ConfigFile();
+            if (cf.Load(ConfigPath) != Error.Ok) return;
+            if (!cf.HasSectionKey("panels", key)) return;
+            Vector2 at = cf.GetValue("panels", key).AsVector2();
+            // Deferred: the panel's size is known only after a layout pass.
+            box.CallDeferred(Control.MethodName.SetPosition, at);
+            Callable.From(() => DragHandle.Clamp(box, root)).CallDeferred();
+        }
+
+        public static void Save(Control box, string key)
+        {
+            var cf = new ConfigFile();
+            cf.Load(ConfigPath);
+            cf.SetValue("panels", key, box.Position);
+            cf.Save(ConfigPath);
+        }
+    }
+
     public abstract class ModalView
     {
         protected readonly PanelContainer Box;
@@ -152,9 +190,7 @@ namespace SpaceAdventure.Game.UI
             // Parented to the title LABEL, not the header container: a
             // container lays its children out, and the grip would become a
             // zero-height row that nothing can press.
-            var grip = new DragHandle { Target = Box, Bounds = root, OnDropped = SavePosition };
-            header.GetChild<Control>(0).AddChild(grip);
-            grip.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            PanelMemory.Grip(Box, root, _key, header);
             _body = Styles.Column(2);
             stack.AddChild(_body);
             root.AddChild(Box);
@@ -172,31 +208,9 @@ namespace SpaceAdventure.Game.UI
             }
         }
 
-        // ---- position memory --------------------------------------------
-
-        private const string ConfigPath = "user://sa.cfg";
+        private void RestorePosition() => PanelMemory.Restore(Box, _root, _key, ref _restored);
         private bool _restored;
-
-        private void RestorePosition()
-        {
-            if (_restored) { DragHandle.Clamp(Box, _root); return; }
-            _restored = true;
-            var cf = new ConfigFile();
-            if (cf.Load(ConfigPath) != Error.Ok) return;
-            if (!cf.HasSectionKey("panels", _key)) return;
-            Vector2 at = cf.GetValue("panels", _key).AsVector2();
-            // Deferred: the panel's size is known only after a layout pass.
-            Box.CallDeferred(Control.MethodName.SetPosition, at);
-            Callable.From(() => DragHandle.Clamp(Box, _root)).CallDeferred();
-        }
-
-        private void SavePosition()
-        {
-            var cf = new ConfigFile();
-            cf.Load(ConfigPath);
-            cf.SetValue("panels", _key, Box.Position);
-            cf.Save(ConfigPath);
-        }
+        private void SavePosition() => PanelMemory.Save(Box, _key);
 
         /// <summary>Screen position, for the rig's drag proof.</summary>
         public Vector2 Position => Box.Position;
@@ -237,49 +251,92 @@ namespace SpaceAdventure.Game.UI
     {
         private readonly Character _character;
         private readonly Interaction _interact;
+        private readonly Icons _icons;
         private readonly Func<ushort> _nextSeq;
         private readonly Action<byte[]> _send;
 
-        public ShopView(Control root, Character character, Interaction interact,
+        public ShopView(Control root, Character character, Interaction interact, Icons icons,
             Func<ushort> nextSeq, Action<byte[]> send)
-            : base(root, "Quartermaster Vex", 380)
+            : base(root, "Quartermaster Vex", 440)
         {
             _character = character;
             _interact = interact;
+            _icons = icons;
             _nextSeq = nextSeq;
             _send = send;
         }
 
+        /// <summary>
+        /// Where the stock list is scrolled to, kept across rebuilds. A buy
+        /// rebuilds the panel twice (the click, then the server's reply), so
+        /// this is fed by the scrollbar's own value changes -- never read
+        /// back from a fresh box, which starts at 0 -- and restored once the
+        /// new bar has a range to restore into.
+        /// </summary>
+        private int _scrollAt;
+        private ScrollContainer _scrollBox;
+
+        /// <summary>The rig's scroll proof: where the list is, and a way to move it.</summary>
+        public int ScrollOffset => _scrollBox != null && GodotObject.IsInstanceValid(_scrollBox) ? _scrollBox.ScrollVertical : -1;
+        public void ScrollTo(int px) { if (_scrollBox != null && GodotObject.IsInstanceValid(_scrollBox)) _scrollBox.ScrollVertical = px; }
+
         protected override void Fill(VBoxContainer body)
         {
             long credits = _character.Credits;
-            Line(body, credits < 0 ? "credits: —" : $"credits: {credits}", Styles.Amber, 14);
+            var head = Styles.Row(8);
+            head.AddChild(Styles.Grow(Styles.Display_("stock", 12, Styles.Dust)));
+            head.AddChild(Styles.Display_(credits < 0 ? "— cr" : $"{credits} cr", 14, Styles.Amber));
+            body.AddChild(head);
             body.AddChild(Styles.Gap(4));
 
             var stock = _interact.Stock;
             if (stock != null)
             {
+                // Ten items of stock at 76 px each outrun a 720p frame: the
+                // list scrolls inside a fixed height, the wallet stays put.
+                var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 400), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+                _scrollBox = scroll;
+                VScrollBar bar = scroll.GetVScrollBar();
+                int want = _scrollAt;
+                bool restored = want == 0;
+                void Restore()
+                {
+                    if (restored || bar.MaxValue <= bar.Page) return;
+                    restored = true;
+                    scroll.ScrollVertical = want;
+                }
+                bar.Changed += Restore;
+                bar.ValueChanged += v => { if (restored) _scrollAt = (int)v; };
+                var list = Styles.Column(4);
+                list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+                scroll.AddChild(list);
                 foreach (var e in stock)
                 {
                     string item = e.item;
                     int price = e.price;
-                    body.AddChild(ItemCard.Make(_character.Defs.ItemName(item), 1,
-                        _character.Defs.ItemRarity(item), $"{price} cr",
-                        credits >= 0 && credits < price ? null : "BUY",
-                        () => { _send(_interact.BuyCmd(_nextSeq(), item, price)); Rebuild(); }));
+                    SpaceAdventure.Net.Defs defs = _character.Defs;
+                    var slot = new ItemSlot { Defs = defs, Icons = _icons, Static = true, Item = item, Qty = 1 };
+                    bool owned = _character.SlotHolding(item) != "";
+                    bool canAfford = credits < 0 || credits >= price;
+                    Control buy = canAfford
+                        ? Styles.Button("BUY", false, () => { _send(_interact.BuyCmd(_nextSeq(), item, price)); Rebuild(); })
+                        : Styles.Display_("—", 12, Styles.Dust);
+                    var priceLab = Styles.Display_($"{price} cr", 13, canAfford ? Styles.Amber : Styles.Dust);
+                    priceLab.CustomMinimumSize = new Vector2(60, 0);
+                    priceLab.HorizontalAlignment = HorizontalAlignment.Right;
+                    list.AddChild(Styles.Card(Styles.Rarity(defs.ItemRarity(item)), slot,
+                        defs.ItemName(item) + (owned ? "  ·  worn" : ""), Styles.Rarity(defs.ItemRarity(item)),
+                        defs.Item(item)?.Desc ?? "", priceLab, buy));
                 }
+                body.AddChild(scroll);
             }
-
             if (!string.IsNullOrEmpty(_interact.Status))
                 Line(body, _interact.Status, Styles.Dust);
-
             body.AddChild(Styles.Gap(4));
-            Line(body, $"carrying {_character.UsedSlots}/{Character.InventorySlots} slots  ·  B bags  ·  E closes",
-                Styles.Dust, 12);
+            Line(body, "hover for details  ·  B backpack  ·  E closes", Styles.Dust, 11);
         }
     }
 
-    /// <summary>Bags: the item-card list with equip actions.</summary>
     /// <summary>
     /// The F1 account panel: redeem a link code minted on the account site.
     /// The redeem request stays in Boot (it owns the network); this view

@@ -1250,7 +1250,7 @@ take it off.
 | 4 | `ItemSlot`, `Icons`, tooltips, drag/drop | `client/godot/Game/UI/Inventory.cs` | C107 |
 | 5 | `CharacterView` (doll, slots, stats, skills), `BackpackView` (grid) | same | C107, C108 |
 | 6 | Boot: one modal at a time, equip result redraws, rig `-uiPanel character|backpack`, `-uiBuy a,b,c` | `Boot.cs`, `Rig.cs` | shots |
-| 7 | Restyle shop, journal, skills, party, map onto the framework | later pass | — |
+| 7 | Restyle shop, journal, party onto the framework (cards: `Styles.Card`/`Tile`/`Progress`), map gets the drag grip; skills already had bars | `Panels.cs`, `MissionPanels.cs`, `Map.cs` | C115–C117 |
 
 # Phase 12 — the artisan loop (queued behind Phase 11)
 
