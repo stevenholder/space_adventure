@@ -25,6 +25,7 @@ func artisanWorld(p *store.Player, npc defs.NPC, nodeHealth int) cmdWorld {
 		Inputs: []defs.ItemQty{{Item: "mat.ore.iron", Qty: 2}, {Item: "mat.scrap", Qty: 1}},
 		Output: defs.ItemQty{Item: "ammo.cell", Qty: 30}}}
 	w.Reg.Synergies = []defs.Synergy{{Source: "scavenging", Target: "commerce", What: "sell_bonus", PerLevel: 0.001}}
+	w.Reg.Loot = map[string][]defs.LootEntry{"loot.node.iron": {{Item: "mat.ore.iron", Qty: 2, Chance: 1}}, "loot.node.copper": {{Item: "mat.ore.iron", Qty: 2, Chance: 1}}}
 	bench := defs.NPC{ID: "npc.workbench", Kind: "bench"}
 	inner := w.FindNPC
 	w.FindNPC = func(id uint32) (defs.NPC, sim.Vec, bool) {
@@ -33,8 +34,8 @@ func artisanWorld(p *store.Player, npc defs.NPC, nodeHealth int) cmdWorld {
 		}
 		return inner(id)
 	}
-	iron := defs.Node{ID: "node.ore.iron", Skill: "mining", Level: 1, Tool: "tool.drill", Channel: 3, Yields: 5}
-	copper := defs.Node{ID: "node.ore.copper", Skill: "mining", Level: 10, Tool: "tool.drill.mk2", Channel: 4, Yields: 4}
+	iron := defs.Node{ID: "node.ore.iron", Skill: "mining", Level: 1, Tool: "tool.drill", Channel: 3, Yields: 5, Loot: "loot.node.iron"}
+	copper := defs.Node{ID: "node.ore.copper", Skill: "mining", Level: 10, Tool: "tool.drill.mk2", Channel: 4, Yields: 4, Loot: "loot.node.copper"}
 	w.FindNode = func(id uint32) (defs.Node, sim.Vec, int, bool) {
 		switch id {
 		case 3:
@@ -56,10 +57,10 @@ func run(w cmdWorld, op uint16, body string) (uint8, map[string]any) {
 	return res.Status, m
 }
 
-// TestHandleCmdPhase12Skeleton pins the wave-1 wire: shop_sell pays and
-// refuses, craft consumes and gates on the bench, gather walks every
-// pre-channel refusal in the GDD's order and ends at not_implemented until
-// the channel lands, gather_cancel with no channel is not_gathering.
+// TestHandleCmdPhase12Skeleton pins the verbs' validation: shop_sell pays
+// and refuses, craft consumes and gates on the bench, gather walks every
+// pre-channel refusal in the GDD's order and then starts the channel with
+// its duration, gather_cancel answers by whether one is running.
 func TestHandleCmdPhase12Skeleton(t *testing.T) {
 	p := &store.Player{Credits: 100, Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 10}, {Item: "mat.scrap", Qty: 1}}, Equipped: map[string]string{}}
 	w := artisanWorld(p, shopNPC(), 5)
@@ -90,6 +91,15 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 		t.Fatalf("craft short: status=%d body=%v", st, m)
 	}
 
+	started := 0
+	w.Gather = func(node uint32, ticks int) bool { started++; return true }
+	gatherOK := func(node int, wantDur float64) {
+		t.Helper()
+		st, m := run(w, protocol.OpGather, `{"node":`+string(rune('0'+node))+`}`)
+		if st != protocol.StatusOK || m["duration"].(float64) != wantDur {
+			t.Fatalf("gather node %d: status=%d body=%v, want ok/%v", node, st, m, wantDur)
+		}
+	}
 	gather := func(node int, want string) {
 		t.Helper()
 		st, m := run(w, protocol.OpGather, `{"node":`+string(rune('0'+node))+`}`)
@@ -99,11 +109,25 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 	}
 	gather(3, "no_tool")
 	p.Equipped["tool"] = "tool.drill"
-	gather(3, "not_implemented")
+	gatherOK(3, 3.0)
 	gather(4, "no_tool")
 	p.Equipped["tool"] = "tool.drill.mk2"
-	gather(3, "not_implemented") // mk2 supersedes the drill
+	gatherOK(3, 3.0) // mk2 supersedes the drill
 	gather(4, "locked")
+	if started != 2 {
+		t.Fatalf("channels started = %d, want 2", started)
+	}
+	w.Busy = func() bool { return true }
+	gather(3, "busy")
+	w.Busy = nil
+	// A bag that cannot take the yield refuses before the bar starts.
+	full := &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 50}}, Equipped: map[string]string{"tool": "tool.drill"}}
+	wf := artisanWorld(full, shopNPC(), 5)
+	wf.Reg.Loot = map[string][]defs.LootEntry{"loot.node.iron": {{Item: "mat.ore.iron", Qty: 2, Chance: 1}}}
+	wf.Reg.InvSlots = 1
+	if st, m := run(wf, protocol.OpGather, `{"node":3}`); st != protocol.StatusRefused || m["reason"] != "no_space" {
+		t.Fatalf("gather with a full bag: status=%d body=%v", st, m)
+	}
 	if st, _ := run(w, protocol.OpGather, `{"node":8}`); st != protocol.StatusNotFound {
 		t.Fatalf("gather nothing: status=%d", st)
 	}
@@ -113,5 +137,9 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 	}
 	if st, m := run(w, protocol.OpGatherCancel, `{}`); st != protocol.StatusRefused || m["reason"] != "not_gathering" {
 		t.Fatalf("cancel: status=%d body=%v", st, m)
+	}
+	w.CancelGather = func() bool { return true }
+	if st, _ := run(w, protocol.OpGatherCancel, `{}`); st != protocol.StatusOK {
+		t.Fatalf("cancel running: status=%d", st)
 	}
 }

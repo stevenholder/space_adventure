@@ -32,6 +32,9 @@ namespace SpaceAdventure.Game.UI
             "loot_extra_roll" => $"+{Pct(bonus)} extra loot roll",
             "buy_discount" => $"−{Pct(bonus)} buy prices",
             "discovery_range" => $"+{Pct(bonus)} discovery range",
+            // Phase 12
+            "gather_speed" => $"−{Pct(bonus)} channel time",
+            "craft_extra" => $"+{Pct(bonus)} bonus craft output",
             _ => "",
         };
 
@@ -40,6 +43,7 @@ namespace SpaceAdventure.Game.UI
             "loot_extra_roll" => $"+{Pct(bonus)} loot rolls" + (sy.Where == "poi" ? " in discovered POIs" : ""),
             "drive_grip" => $"+{Pct(bonus)} rover grip",
             "sell_bonus" => $"+{Pct(bonus)} sell prices",
+            "gather_speed" => $"−{Pct(bonus)} drill time",
             _ => $"+{Pct(bonus)} {sy.What}",
         };
 

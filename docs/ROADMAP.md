@@ -1252,7 +1252,23 @@ take it off.
 | 6 | Boot: one modal at a time, equip result redraws, rig `-uiPanel character|backpack`, `-uiBuy a,b,c` | `Boot.cs`, `Rig.cs` | shots |
 | 7 | Restyle shop, journal, party onto the framework (cards: `Styles.Card`/`Tile`/`Progress`), map gets the drag grip; skills already had bars | `Panels.cs`, `MissionPanels.cs`, `Map.cs` | C115–C117 |
 
-# Phase 12 — the artisan loop (wave 0 landed 2026-09-29)
+# Phase 12 — the artisan loop (2026-09-29)
+
+### Where Phase 12 stands (2026-09-29)
+
+Built and green on a bare server: C120–C128 recorded (docs/QA-STATUS.md
+"Phase 12"). Server: nodes with health = yields and in-place respawn,
+the server-timed channel with every cancel reason, `shop_sell` with the
+synergy that waited since Phase 11, the bench and three recipes,
+materials spilling on death (and loot finally expiring), `gather_speed`
+/ `craft_extra` efficacy with the Engineering→Mining synergy. Art: two
+ore clusters, a wreck, a bench, a drill and a cutter. Client: node
+models with a depleted state, drill/cut/use prompts that name the
+missing tool, the channel bar, the bench panel, the shop's SELL column,
+the tool on the doll, the K panel's three new rows. `t36` plays the pad
+loop and the walk to the bench over the wire. Owed to humans: a real
+death with ore in the bag, a wreck cut under fire, cells crafted with
+scrap in hand. Medkits and weapon mods still wait for a `use` verb.
 
 The three reserved skills get their verbs. Ore in the rocks around the
 pad, wrecks inside the guarded scrapyard, a workbench at the relay, a

@@ -88,6 +88,60 @@ func DropLoot(w *World, reg *defs.Registry, table string, pos [3]float64,
 	}
 }
 
+func init() {
+	// Drops have carried LifeTicks since Phase 3 and never expired: the
+	// step was written but never registered. Phase 12 makes the lifetime
+	// real (GDD "Death spills the raw").
+	RegisterStep(EntityKind(protocol.EntityTypeLoot), StepLoot)
+}
+
+// DropStack places one loot entity holding qty of item at pos and emits
+// loot_dropped — the death spill's unit, and what DropLoot's roll builds
+// on. Returns the new entity id.
+func DropStack(w *World, item string, qty int, pos [3]float64, nextID func() uint32, ctx StepCtx) uint32 {
+	id := nextID()
+	w.Add(&Ent{
+		ID:   id,
+		Kind: EntityKind(protocol.EntityTypeLoot),
+		Pos:  pos,
+		Def:  item,
+		Data: &LootState{Item: item, Qty: qty, LifeTicks: LootLifetimeTicks},
+	})
+	if ctx.Events != nil {
+		*ctx.Events = append(*ctx.Events, protocol.Event{EntityID: id, EventID: protocol.EventLootDropped})
+	}
+	return id
+}
+
+// RollLoot rolls a table once and returns what dropped, for grants that go
+// straight into a bag (a node yield) rather than onto the ground.
+func RollLoot(reg *defs.Registry, table string, rng *rand.Rand) []defs.ItemQty {
+	var out []defs.ItemQty
+	for _, entry := range reg.Loot[table] {
+		if _, ok := reg.Items[entry.Item]; !ok {
+			continue
+		}
+		if rng.Float64() >= entry.Chance {
+			continue
+		}
+		out = append(out, defs.ItemQty{Item: entry.Item, Qty: entry.Qty})
+	}
+	return out
+}
+
+// CanFit reports whether every entry of a loot table would fit in p's bag
+// at once, chance ignored — the pre-channel no_space check (GDD "The
+// channel"), so a bar never fills for nothing.
+func CanFit(p *store.Player, reg *defs.Registry, table string) bool {
+	scratch := store.Player{Inventory: p.Inventory}
+	for _, entry := range reg.Loot[table] {
+		if AddItem(&scratch, entry.Item, entry.Qty, reg) != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // StepLoot ages one drop out. LifeTicks counts down once per tick
 // (integer, not accumulated dt — see LootLifetimeTicks); when it reaches 0
 // the drop is removed from the world.

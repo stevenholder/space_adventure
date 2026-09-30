@@ -23,7 +23,7 @@ namespace SpaceAdventure.Game
     internal class StockEntry { public string item { get; set; } public int price { get; set; } }
     internal class ShopStock { public StockEntry[] stock { get; set; } }
     public class ItemStack { public string item; public int qty; }
-    public class WalletResult { public int credits; public ItemStack[] inventory; public System.Collections.Generic.Dictionary<string, string> equipped; }
+    public class WalletResult { public int credits = -1; public ItemStack[] inventory; public System.Collections.Generic.Dictionary<string, string> equipped; }
     public class AmmoResult { public int magazine; public int reserve; }
 
     /// <summary>Look-at targeting, the E prompt, and the shop panel.</summary>
@@ -49,6 +49,14 @@ namespace SpaceAdventure.Game
         // the SAME cmd bytes the IMGUI panel did (t14 stays byte-identical).
         internal StockEntry[] Stock => _stock;
         public string Status => _status;
+
+        /// <summary>Phase 12: sell qty of item at the open shop (mirror of BuyCmd).</summary>
+        public byte[] SellCmd(ushort seq, string item, int qty)
+        {
+            _status = "selling...";
+            return Encode.Cmd(seq, Op.ShopSell,
+                $"{{\"npc\":{_shopNpc},\"item\":\"{item}\",\"qty\":{qty}}}");
+        }
 
         public byte[] BuyCmd(ushort seq, string item, int price)
         {
@@ -106,7 +114,7 @@ namespace SpaceAdventure.Game
                 if (v.Root == null || !v.Root.Visible) continue;
                 if (v.Type != EntityType.Npc && v.Type != EntityType.Loot &&
                     v.Type != EntityType.Vehicle && v.Type != EntityType.Ship &&
-                    v.Type != EntityType.Player) continue;
+                    v.Type != EntityType.Player && v.Type != EntityType.Node) continue;
                 if (v.Type == EntityType.Player && v.Id == _selfId) continue;
 
                 // A corpse is not a conversation. This used to be implied by
@@ -143,7 +151,8 @@ namespace SpaceAdventure.Game
                     EntityType.Vehicle => "E  ·  drive",
                     EntityType.Ship => "E  ·  fly",
                     EntityType.Player => $"E  ·  invite {v.Label} to party",
-                    _ => $"E  ·  talk to {Nice(v.Label)}",
+                    EntityType.Node => NodePrompt(v),
+                    _ => $"E  ·  {Verb(v.Label)} {Nice(v.Label)}",
                 };
             }
         }
@@ -151,13 +160,40 @@ namespace SpaceAdventure.Game
         /// <summary>Own entity id, so the cone never offers self-invites.</summary>
         public uint _selfId;
 
-        private static string Nice(string def) => def switch
+        private string Nice(string def)
         {
-            "npc.quartermaster" => "Quartermaster Vex",
-            "npc.dispatcher" => "Dispatcher Oru",
-            "" or null => "them",
-            _ => def,
-        };
+            if (string.IsNullOrEmpty(def)) return "them";
+            if (_character.Defs.Npcs != null && _character.Defs.Npcs.TryGetValue(def, out var n) && !string.IsNullOrEmpty(n.Name)) return n.Name;
+            return def switch
+            {
+                "npc.quartermaster" => "Quartermaster Vex",
+                "npc.dispatcher" => "Dispatcher Oru",
+                _ => def,
+            };
+        }
+
+        /// <summary>The NPC's own verb from defs ("talk to", "use"), lower-cased.</summary>
+        private string Verb(string def)
+        {
+            string v = _character.Defs.Npcs != null && _character.Defs.Npcs.TryGetValue(def ?? "", out var n) ? n.Verb : "";
+            v = (v ?? "").Trim().ToLowerInvariant();
+            return v == "" || v == "talk" ? "talk to" : v;
+        }
+
+        /// <summary>
+        /// Phase 12: the node's verb from its skill, with the reason it will
+        /// refuse shown up front — a bar that never starts needs no round trip
+        /// to explain itself. The server re-checks all of it.
+        /// </summary>
+        private string NodePrompt(EntityView v)
+        {
+            var nd = _character.Defs.Node(v.Label);
+            string verb = nd?.Skill == "salvaging" ? "cut" : "drill";
+            if (v.Depleted) return $"{Nice(nd?.Name ?? v.Label)}  ·  depleted";
+            if (nd != null && !_character.Defs.ToolSatisfies(_character.Worn("tool"), nd.Tool))
+                return $"E  ·  {verb}  ·  needs {_character.Defs.ItemName(nd.Tool)}";
+            return $"E  ·  {verb} {nd?.Name?.ToLowerInvariant() ?? v.Label}";
+        }
 
         /// <summary>Opens the shop on the current target. Returns the cmd to send, or null.</summary>
         public byte[] OpenShop(ushort seq)

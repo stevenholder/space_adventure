@@ -50,6 +50,48 @@ namespace SpaceAdventure.Net
         [JsonProperty("armor")] public ArmorDef Armor { get; set; }
         [JsonProperty("weapon")] public WeaponDef Weapon { get; set; }
         [JsonProperty("stack_max")] public int StackMax { get; set; } = 1;
+
+        // Phase 12: what a shop pays before sell_rate (0 = unsellable), and
+        // the lesser tool this one stands in for.
+        [JsonProperty("value")] public long Value { get; set; }
+        [JsonProperty("supersedes")] public string Supersedes { get; set; } = "";
+    }
+
+    /// <summary>One resource node def (server/data/nodes.json, Phase 12).</summary>
+    public sealed class NodeDef
+    {
+        [JsonProperty("id")] public string Id { get; set; } = "";
+        [JsonProperty("name")] public string Name { get; set; } = "";
+        [JsonProperty("asset")] public string Asset { get; set; } = "";
+        [JsonProperty("skill")] public string Skill { get; set; } = "";
+        [JsonProperty("level")] public int Level { get; set; }
+        [JsonProperty("tool")] public string Tool { get; set; } = "";
+        [JsonProperty("channel")] public double Channel { get; set; }
+        [JsonProperty("yields")] public int Yields { get; set; }
+    }
+
+    /// <summary>An item and a count, as recipes name them.</summary>
+    public sealed class ItemQtyDef
+    {
+        [JsonProperty("item")] public string Item { get; set; } = "";
+        [JsonProperty("qty")] public int Qty { get; set; }
+    }
+
+    /// <summary>One workbench recipe (server/data/recipes.json, Phase 12).</summary>
+    public sealed class RecipeDef
+    {
+        [JsonProperty("id")] public string Id { get; set; } = "";
+        [JsonProperty("name")] public string Name { get; set; } = "";
+        [JsonProperty("level")] public int Level { get; set; }
+        [JsonProperty("inputs")] public List<ItemQtyDef> Inputs { get; set; } = new List<ItemQtyDef>();
+        [JsonProperty("output")] public ItemQtyDef Output { get; set; } = new ItemQtyDef();
+        [JsonProperty("xp")] public long XP { get; set; }
+    }
+
+    /// <summary>The GDD constants the client mirrors for display.</summary>
+    public sealed class ConstantsDef
+    {
+        [JsonProperty("sell_rate")] public double SellRate { get; set; }
     }
 
     public sealed class ArmorDef
@@ -122,6 +164,10 @@ namespace SpaceAdventure.Net
         [JsonProperty("synergies")] public List<SynergyDef> Synergies { get; set; }
         [JsonProperty("entities")] public Dictionary<string, EntityDef> Entities { get; set; }
         [JsonProperty("npcs")] public Dictionary<string, NpcDef> Npcs { get; set; }
+        // Phase 12: nodes and recipes in file order, and the constants.
+        [JsonProperty("nodes")] public List<NodeDef> Nodes { get; set; } = new List<NodeDef>();
+        [JsonProperty("recipes")] public List<RecipeDef> Recipes { get; set; } = new List<RecipeDef>();
+        [JsonProperty("constants")] public ConstantsDef Constants { get; set; } = new ConstantsDef();
 
         /// <summary>
         /// The payload exactly as it arrived.
@@ -182,6 +228,40 @@ namespace SpaceAdventure.Net
 
         /// <summary>The item def, or null.</summary>
         public ItemDef Item(string id) => TryItem(id, out ItemDef it) ? it : null;
+
+        /// <summary>Phase 12: a node def by id, or null.</summary>
+        public NodeDef Node(string id)
+        {
+            if (Nodes == null || string.IsNullOrEmpty(id)) return null;
+            foreach (NodeDef n in Nodes) if (n.Id == id) return n;
+            return null;
+        }
+
+        /// <summary>Phase 12: a node's model id, or "" (boxes).</summary>
+        public string NodeAsset(string id) => Node(id)?.Asset ?? "";
+
+        /// <summary>
+        /// Phase 12: what one unit of an item sells for at the shop, before
+        /// the synergy the server applies; 0 = unsellable.
+        /// </summary>
+        public long SellPrice(string id)
+        {
+            ItemDef it = Item(id);
+            if (it == null || it.Value <= 0) return 0;
+            double rate = Constants?.SellRate ?? 0;
+            return (long)System.Math.Floor(it.Value * rate);
+        }
+
+        /// <summary>Phase 12: whether the worn tool is `want` or supersedes it.</summary>
+        public bool ToolSatisfies(string worn, string want)
+        {
+            for (int i = 0; !string.IsNullOrEmpty(worn) && i < 8; i++)
+            {
+                if (worn == want) return true;
+                worn = Item(worn)?.Supersedes ?? "";
+            }
+            return false;
+        }
 
         /// <summary>
         /// Mirrors the server's SlotAccepts: exact match, except an

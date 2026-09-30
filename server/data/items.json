@@ -148,6 +148,7 @@
       "name": "Hand Drill",
       "kind": "tool",
       "rarity": "common",
+      "asset": "tool.drill",
       "slot": "tool",
       "stack_max": 1,
       "value": 40,
@@ -158,6 +159,7 @@
       "name": "Plasma Cutter",
       "kind": "tool",
       "rarity": "common",
+      "asset": "tool.cutter",
       "slot": "tool",
       "stack_max": 1,
       "value": 60,
@@ -168,6 +170,7 @@
       "name": "Drill Mk II",
       "kind": "tool",
       "rarity": "uncommon",
+      "asset": "tool.drill",
       "slot": "tool",
       "stack_max": 1,
       "value": 150,
@@ -180,6 +183,7 @@
       "name": "Iron Ore",
       "kind": "material",
       "rarity": "common",
+      "asset": "prop.node.ore.iron",
       "stack_max": 50,
       "value": 6,
       "desc": "Raw iron. Heavy for what it is."
@@ -189,6 +193,7 @@
       "name": "Copper Ore",
       "kind": "material",
       "rarity": "uncommon",
+      "asset": "prop.node.ore.copper",
       "stack_max": 50,
       "value": 14,
       "desc": "Green-streaked and worth the walk."
@@ -198,6 +203,7 @@
       "name": "Scrap",
       "kind": "material",
       "rarity": "common",
+      "asset": "prop.wreck",
       "stack_max": 50,
       "value": 8,
       "desc": "Cut from a wreck. Somebody's ship, once."

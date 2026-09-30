@@ -89,6 +89,9 @@ type Server struct {
 	worldID uint32
 	history *sim.History
 	rng     *rand.Rand // ResolveShot's shared RNG; guarded by mu (fire() and tick() both hold it)
+	// pendingSpills are deaths whose material spill waits for the identity
+	// (gather.go); guarded by mu, drained by tick() after it unlocks.
+	pendingSpills []spill
 
 	// store is the persistence backend. It is nil until something wires a
 	// *store.Store into New (out of scope here: New's signature is shared
@@ -455,6 +458,9 @@ func (s *Server) tick() {
 	}
 	s.stepNPCs(tick)
 	s.stepPlayerVitals()
+	yields := s.stepGathers()
+	spills := s.pendingSpills
+	s.pendingSpills = nil
 
 	events := s.pendingEvents
 	s.pendingEvents = nil
@@ -547,6 +553,8 @@ func (s *Server) tick() {
 		}
 	}
 	s.mu.Unlock()
+	s.drainYields(yields)
+	s.drainSpills(spills)
 	step := time.Since(t0)
 	if step > 5*time.Millisecond {
 		log.Printf("slow tick %d: step %s with %d entities", tick, step, len(s.list))
@@ -807,6 +815,26 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			FindNPC:  s.findNPC,
 			FindNode: s.findNode,
 			Ent:      c.entity,
+			Busy: func() bool {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return c.gather.node != 0
+			},
+			Gather: func(node uint32, ticks int) bool {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.startGather(c, node, ticks)
+			},
+			CancelGather: func() bool {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.cancelGather(c, "cancel")
+			},
+			Rand: func() float64 {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.rng.Float64()
+			},
 		})
 		after = p.Equipped[slotPrimary]
 		creditsAfter = p.Credits
