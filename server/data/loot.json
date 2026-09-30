@@ -16,7 +16,10 @@
     "chance": 1.0
    }
   ],
-  "loot.warlord": [
+  "loot.node.iron": [{"item": "mat.ore.iron", "qty": 2, "chance": 1.0}],
+    "loot.node.copper": [{"item": "mat.ore.copper", "qty": 2, "chance": 1.0}],
+    "loot.node.wreck": [{"item": "mat.scrap", "qty": 3, "chance": 1.0}],
+    "loot.warlord": [
    {
     "item": "ammo.cell",
     "qty": 60,

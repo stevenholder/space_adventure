@@ -82,6 +82,9 @@ type cmdWorld struct {
 	Up      sim.Vec
 	Look    sim.Vec
 	FindNPC func(entityID uint32) (npc defs.NPC, pos sim.Vec, ok bool)
+	// FindNode resolves a resource node (Phase 12): its def, position and
+	// remaining yields. Nil in registries that place none.
+	FindNode func(entityID uint32) (node defs.Node, pos sim.Vec, health int, ok bool)
 
 	// Ent is the requester's own server-side entity, for the rounds
 	// currently in the magazine.
@@ -131,6 +134,15 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 	}
 	refuse := func(reason string) protocol.CmdResult {
 		return reply(protocol.StatusRefused, encodeJSON(map[string]string{"reason": reason}))
+	}
+	// refuseErr maps a sim refusal to its reason code, anything else to a
+	// bare "refused".
+	refuseErr := func(err error) protocol.CmdResult {
+		var re sim.RefusalError
+		if errors.As(err, &re) {
+			return refuse(re.Reason)
+		}
+		return refuse("refused")
 	}
 
 	if !rate.allow(now) {
@@ -258,9 +270,115 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 			"reserve":  reserve - take,
 		}))
 
+	case protocol.OpShopSell:
+		var body struct {
+			NPC  uint32 `json:"npc"`
+			Item string `json:"item"`
+			Qty  int    `json:"qty"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		npc, pos, ok := w.FindNPC(body.NPC)
+		if !ok {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRange(w, pos) {
+			return refuse("out_of_range")
+		}
+		bonus := synergyBonus(w.Reg, w.Player, "sell_bonus", "")
+		if _, err := sim.SellAt(w.Player, npc, body.Item, body.Qty, w.Reg, bonus); err != nil {
+			return refuseErr(err)
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"credits": w.Player.Credits, "inventory": w.Player.Inventory,
+		}))
+
+	case protocol.OpCraft:
+		var body struct {
+			NPC    uint32 `json:"npc"`
+			Recipe string `json:"recipe"`
+			Qty    int    `json:"qty"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		npc, pos, ok := w.FindNPC(body.NPC)
+		if !ok {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRange(w, pos) {
+			return refuse("out_of_range")
+		}
+		if npc.Kind != "bench" {
+			return refuse(sim.ReasonUnknownRecipe)
+		}
+		r, ok := w.Reg.Recipes[body.Recipe]
+		if !ok {
+			return refuse(sim.ReasonUnknownRecipe)
+		}
+		// craft_extra (task 10) rolls here once efficacy lands; 0 today.
+		made, err := sim.Craft(w.Player, r, body.Qty, skillLevel(w.Player, "engineering"), w.Reg, 0)
+		if err != nil {
+			return refuseErr(err)
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"inventory": w.Player.Inventory,
+			"crafted":   map[string]any{"item": r.Output.Item, "qty": made},
+		}))
+
+	case protocol.OpGather:
+		// Wave 1 skeleton: every refusal the GDD orders before the channel
+		// starts, then not_implemented where the channel (task 7) begins.
+		var body struct {
+			Node uint32 `json:"node"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		if w.FindNode == nil {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		nd, pos, health, ok := w.FindNode(body.Node)
+		if !ok {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRange(w, pos) {
+			return refuse("out_of_range")
+		}
+		if !toolSatisfies(w.Reg, w.Player.Equipped["tool"], nd.Tool) {
+			return refuse("no_tool")
+		}
+		if skillLevel(w.Player, nd.Skill) < nd.Level {
+			return refuse(sim.ReasonLocked)
+		}
+		if health <= 0 {
+			return refuse("depleted")
+		}
+		return refuse("not_implemented")
+
+	case protocol.OpGatherCancel:
+		var body struct{}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		return refuse("not_gathering")
+
 	default:
 		return reply(protocol.StatusUnknownOpcode, nil)
 	}
+}
+
+// toolSatisfies reports whether the worn tool is `want` or supersedes it
+// (GDD "Nodes": a drill mk2 stands in for a drill).
+func toolSatisfies(reg *defs.Registry, worn, want string) bool {
+	for i := 0; worn != "" && i < 8; i++ {
+		if worn == want {
+			return true
+		}
+		worn = reg.Items[worn].Supersedes
+	}
+	return false
 }
 
 // decodeStrict unmarshals data into v, rejecting unknown fields and

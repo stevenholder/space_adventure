@@ -1,5 +1,5 @@
 {
- "$comment": "The skill roster (docs/GDD.md 'Skills'). Trained BY DOING: the award table maps verbs to XP, the curve is RuneScape's exactly (internal/skills pins the landmarks), efficacy rows scale numbers per level, synergies are the declared cross-skill bonuses the panel draws, and unlock_requirements gate purchases by level (empty at launch: gates exist for FUTURE tiers, nothing shipped is gated). Reserved skills are Phase 12's artisan loop, greyed at 1 on the panel.",
+ "$comment": "The skill roster (docs/GDD.md 'Skills'). Trained BY DOING: the award table maps verbs to XP, the curve is RuneScape's exactly (internal/skills pins the landmarks), efficacy rows scale numbers per level, synergies are the declared cross-skill bonuses the panel draws, and unlock_requirements gate purchases by level (empty at launch: gates exist for FUTURE tiers, nothing shipped is gated). Phase 12 gave the three artisan skills their verbs (gather_speed shortens the channel, craft_extra rolls a bonus output); nothing is reserved any more.",
  "version": 1,
  "skills": [
   {"id": "marksmanship", "name": "Marksmanship", "efficacy": {"kind": "damage_mult", "per_level": 0.004}},
@@ -9,14 +9,15 @@
   {"id": "scavenging", "name": "Scavenging", "efficacy": {"kind": "loot_extra_roll", "per_level": 0.003}},
   {"id": "commerce", "name": "Commerce", "efficacy": {"kind": "buy_discount", "per_level": 0.002}},
   {"id": "recon", "name": "Recon", "efficacy": {"kind": "discovery_range", "per_level": 0.005}},
-  {"id": "mining", "name": "Mining", "reserved": true},
-  {"id": "salvaging", "name": "Salvaging", "reserved": true},
-  {"id": "engineering", "name": "Engineering", "reserved": true}
+  {"id": "mining", "name": "Mining", "efficacy": {"kind": "gather_speed", "per_level": 0.005}},
+  {"id": "salvaging", "name": "Salvaging", "efficacy": {"kind": "gather_speed", "per_level": 0.005}},
+  {"id": "engineering", "name": "Engineering", "efficacy": {"kind": "craft_extra", "per_level": 0.003}}
  ],
  "synergies": [
   {"$note": "knowing the ground pays", "source": "recon", "target": "scavenging", "what": "loot_extra_roll", "per_level": 0.002, "where": "poi"},
   {"$note": "a fit body drives harder", "source": "athletics", "target": "driving", "what": "drive_grip", "per_level": 0.001},
-  {"$note": "knowing what junk is worth", "source": "scavenging", "target": "commerce", "what": "sell_bonus", "per_level": 0.001}
+  {"$note": "knowing what junk is worth", "source": "scavenging", "target": "commerce", "what": "sell_bonus", "per_level": 0.001},
+    {"$note": "Phase 12: a better hand with the drill", "source": "engineering", "target": "mining", "what": "gather_speed", "per_level": 0.001}
  ],
  "awards": {
   "damage_xp_per_point": 2,

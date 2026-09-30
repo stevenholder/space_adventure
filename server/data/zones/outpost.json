@@ -143,7 +143,9 @@
     6.0
    ],
    "yaw": 180.0
-  }
+  },
+    {"$note": "Phase 12 wrecks, inside the walls: the guards are the price of scrap (GDD 'Nodes')", "type": "node", "def": "node.wreck", "pos": [5.5, 0.0, 3.0], "yaw": 140.0},
+    {"type": "node", "def": "node.wreck", "pos": [-5.0, 0.0, -3.5], "yaw": -20.0}
  ],
  "props": [
   {

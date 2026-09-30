@@ -46,7 +46,51 @@ type Item struct {
 	// line; armor is display-only until armor matters (GDD "Equipment").
 	Desc  string `json:"desc,omitempty"`
 	Armor *Armor `json:"armor,omitempty"`
+	// Phase 12: Value is what shop_sell pays before sell_rate; 0/absent is
+	// unsellable. Supersedes names a lesser tool this one stands in for
+	// (a node asking for tool.drill accepts tool.drill.mk2).
+	Value      int64  `json:"value,omitempty"`
+	Supersedes string `json:"supersedes,omitempty"`
 }
+
+// Node is one resource node def (server/data/nodes.json, Phase 12, GDD
+// "Nodes"). A placement's health pool is Yields; Channel and Respawn are
+// seconds; Loot is rolled once per yield; XP lands in Skill per yield.
+type Node struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Asset   string  `json:"asset"`
+	Skill   string  `json:"skill"`
+	Level   int     `json:"level"`
+	Tool    string  `json:"tool"`
+	Channel float64 `json:"channel"`
+	Yields  int     `json:"yields"`
+	Respawn float64 `json:"respawn"`
+	Loot    string  `json:"loot"`
+	XP      int64   `json:"xp"`
+}
+
+// Recipe is one workbench recipe (server/data/recipes.json, Phase 12, GDD
+// "The workbench and recipes"): every input × qty is consumed, the output ×
+// qty granted, atomically; Level gates on Engineering.
+type Recipe struct {
+	ID     string    `json:"id"`
+	Name   string    `json:"name"`
+	Level  int       `json:"level"`
+	Inputs []ItemQty `json:"inputs"`
+	Output ItemQty   `json:"output"`
+	XP     int64     `json:"xp"`
+}
+
+// ItemQty is an item id and a count.
+type ItemQty struct {
+	Item string `json:"item"`
+	Qty  int    `json:"qty"`
+}
+
+// SellRate is the fraction of an item's Value a shop pays (GDD
+// "shop_sell"). Shipped in defs.constants so the SELL column can show it.
+const SellRate = 0.5
 
 // Armor is a wearable's protective value. Summed over the worn slots into
 // the character panel's ARMOR stat; no combat effect yet.
@@ -168,7 +212,7 @@ type ZoneCollider struct {
 // ZoneEntity is one entity placement authored in a zone's local tangent
 // frame.
 type ZoneEntity struct {
-	Type string     `json:"type"` // "npc" | "target"
+	Type string     `json:"type"` // "npc" | "target" | "node" (Phase 12)
 	Def  string     `json:"def"`
 	Pos  [3]float64 `json:"pos"`
 	Yaw  float64    `json:"yaw"`
@@ -238,6 +282,12 @@ type Registry struct {
 	NPCs       map[string]NPC
 	Zones      map[string]Zone
 	Loot       map[string][]LootEntry
+	// Phase 12: nodes and recipes, indexed by id; the slices keep file order
+	// for the payload so every client lists them the same way.
+	Nodes      map[string]Node
+	Recipes    map[string]Recipe
+	nodeList   []Node
+	recipeList []Recipe
 	Payload    []byte
 }
 
@@ -336,6 +386,32 @@ func Load() (*Registry, error) {
 			reg.Missions[m.ID] = m
 		}
 	}
+	if raw, err := data.FS.ReadFile("nodes.json"); err == nil {
+		var nf struct {
+			Nodes []Node `json:"nodes"`
+		}
+		if err := json.Unmarshal(raw, &nf); err != nil {
+			return nil, fmt.Errorf("defs: parse nodes.json: %w", err)
+		}
+		reg.nodeList = nf.Nodes
+		reg.Nodes = make(map[string]Node, len(nf.Nodes))
+		for _, n := range nf.Nodes {
+			reg.Nodes[n.ID] = n
+		}
+	}
+	if raw, err := data.FS.ReadFile("recipes.json"); err == nil {
+		var rf struct {
+			Recipes []Recipe `json:"recipes"`
+		}
+		if err := json.Unmarshal(raw, &rf); err != nil {
+			return nil, fmt.Errorf("defs: parse recipes.json: %w", err)
+		}
+		reg.recipeList = rf.Recipes
+		reg.Recipes = make(map[string]Recipe, len(rf.Recipes))
+		for _, r := range rf.Recipes {
+			reg.Recipes[r.ID] = r
+		}
+	}
 	for _, it := range itemsF.Items {
 		reg.Items[it.ID] = it
 	}
@@ -358,6 +434,10 @@ func Load() (*Registry, error) {
 			return nil, fmt.Errorf("defs: %s: %w", zf, err)
 		}
 		reg.Zones[z.ID] = z
+	}
+
+	if err := auditArtisan(reg); err != nil {
+		return nil, err
 	}
 
 	payload, err := buildPayload(reg)
@@ -386,6 +466,7 @@ type payloadNPC struct {
 type payloadConstants struct {
 	InteractDist float64 `json:"interact_dist"`
 	InteractCone float64 `json:"interact_cone"`
+	SellRate     float64 `json:"sell_rate,omitempty"` // Phase 12
 }
 
 // payload is the JSON shape of the `defs` message body: what a client needs
@@ -403,6 +484,10 @@ type payload struct {
 	// Phase 11.7: the slot set and bag size, so the panels draw from data.
 	EquipSlots []string `json:"equip_slots,omitempty"`
 	InvSlots   int      `json:"inv_slots,omitempty"`
+	// Phase 12: nodes (prompts, models, the locked/no-tool hint) and recipes
+	// (the bench panel), verbatim from their files.
+	Nodes   []Node   `json:"nodes,omitempty"`
+	Recipes []Recipe `json:"recipes,omitempty"`
 }
 
 func buildPayload(reg *Registry) ([]byte, error) {
@@ -413,10 +498,13 @@ func buildPayload(reg *Registry) ([]byte, error) {
 		Synergies:  reg.Synergies,
 		EquipSlots: reg.EquipSlots,
 		InvSlots:   reg.InvSlots,
+		Nodes:      reg.nodeList,
+		Recipes:    reg.recipeList,
 		NPCs:       make(map[string]payloadNPC, len(reg.NPCs)),
 		Constants: payloadConstants{
 			InteractDist: 3.0,
 			InteractCone: 20.0,
+			SellRate:     SellRate,
 		},
 	}
 	for id, n := range reg.NPCs {
@@ -427,4 +515,54 @@ func buildPayload(reg *Registry) ([]byte, error) {
 		return nil, fmt.Errorf("defs: marshal payload: %w", err)
 	}
 	return b, nil
+}
+
+// auditArtisan is the load-time cross-check of the Phase 12 data: a node's
+// tool, loot table and skill must exist, a recipe's items must exist, and a
+// zone may only place node defs that exist. A typo here should kill the
+// server at startup with a name, not surface as a `gather` that always
+// refuses.
+func auditArtisan(reg *Registry) error {
+	skill := func(id string) bool {
+		for _, sk := range reg.Skills {
+			if sk.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+	for _, n := range reg.Nodes {
+		if _, ok := reg.Items[n.Tool]; !ok {
+			return fmt.Errorf("defs: node %s: tool %q is not an item", n.ID, n.Tool)
+		}
+		if _, ok := reg.Loot[n.Loot]; !ok {
+			return fmt.Errorf("defs: node %s: loot table %q missing", n.ID, n.Loot)
+		}
+		if !skill(n.Skill) {
+			return fmt.Errorf("defs: node %s: skill %q unknown", n.ID, n.Skill)
+		}
+		if n.Yields < 1 || n.Channel <= 0 {
+			return fmt.Errorf("defs: node %s: yields/channel must be positive", n.ID)
+		}
+	}
+	for _, r := range reg.Recipes {
+		for _, in := range append([]ItemQty{r.Output}, r.Inputs...) {
+			if _, ok := reg.Items[in.Item]; !ok {
+				return fmt.Errorf("defs: recipe %s: item %q unknown", r.ID, in.Item)
+			}
+			if in.Qty < 1 {
+				return fmt.Errorf("defs: recipe %s: qty for %q must be positive", r.ID, in.Item)
+			}
+		}
+	}
+	for zid, z := range reg.Zones {
+		for _, e := range z.Entities {
+			if e.Type == "node" {
+				if _, ok := reg.Nodes[e.Def]; !ok {
+					return fmt.Errorf("defs: zone %s places unknown node %q", zid, e.Def)
+				}
+			}
+		}
+	}
+	return nil
 }

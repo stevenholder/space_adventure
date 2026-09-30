@@ -49,6 +49,14 @@
     {
      "item": "charm.rabbit",
      "price": 150
+    },
+    {
+     "item": "tool.drill",
+     "price": 120
+    },
+    {
+     "item": "tool.cutter",
+     "price": 180
     }
    ]
   },
@@ -59,6 +67,14 @@
    "asset": "npc.shopkeeper",
    "kind": "shop",
    "verb": "talk"
+  },
+  {
+   "$comment": "Phase 12 workbench. Shop-shaped like the dispatcher (no move_speed, no health, no stock): findNPC/inRange resolve it, `craft` validates against kind 'bench'. Stands at the relay beside the dispatcher.",
+   "id": "npc.workbench",
+   "name": "Workbench",
+   "asset": "prop.bench",
+   "kind": "bench",
+   "verb": "Use"
   },
   {
    "id": "npc.grunt",
