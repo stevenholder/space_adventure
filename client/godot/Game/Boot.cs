@@ -1109,7 +1109,7 @@ namespace SpaceAdventure.Game
                 float chord = (pos - myPos).Length();
                 float surface = 2f * 150f * Mathf.Asin(Mathf.Clamp(chord / (2f * 150f), 0f, 1f));
                 if (surface > mastDiscovery) continue;
-                markers.Add((scrap ? "OUTPOST" : "RELAY", Bearing.To(me.Pos, me.Facing, Frame.ToSim(pos))));
+                markers.Add((PoiName(pos, scrap).ToUpperInvariant(), Bearing.To(me.Pos, me.Facing, Frame.ToSim(pos))));
             }
             // Phase 13: scanner pings for scan_show seconds.
             _scanPings.RemoveAll(p => Clock.Now > p.until);
@@ -1199,6 +1199,25 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
+        /// A mast's name from what stands under it: the client knows factions
+        /// (kit style) but not zone ids, and both factions built two sites.
+        /// The dispatcher marks the relay, the wrecks mark the outpost; the
+        /// other colony site is the range and the other scrap site the camp.
+        /// </summary>
+        private string PoiName(Vector3 mast, bool scrap)
+        {
+            const float near = 60f;
+            foreach (EntityView v in _views.All)
+            {
+                if (v.Root == null) continue;
+                if (v.Root.GlobalPosition.DistanceTo(mast) > near) continue;
+                if (!scrap && v.Type == EntityType.Npc && v.Label == "npc.dispatcher") return "Relay";
+                if (scrap && v.Type == EntityType.Node && v.Label == "node.wreck") return "Outpost";
+            }
+            return scrap ? "Camp" : "Range";
+        }
+
+        /// <summary>
         /// Everything on the map: the live entities, plus the spawn point. The
         /// map is heading-up with no compass rose, so one landmark that never
         /// moves is what turns "things near me" into "where am I".
@@ -1207,7 +1226,10 @@ namespace SpaceAdventure.Game
         {
             foreach (MapMarker m in _views.Markers()) yield return m;
             Vec3 dir = Step.SpawnDir.Normalized();
-            yield return new MapMarker(Frame.ToGodot(dir * _terrain.SampleRadius(dir)), EntityType.Ship, "Spawn");
+            yield return new MapMarker(Frame.ToGodot(dir * _terrain.SampleRadius(dir)), EntityType.Ship, "Spawn", "spawn");
+            // The POIs by their masts, named: a map is for finding places.
+            foreach (var (pos, scrap) in _structures.Masts)
+                yield return new MapMarker(pos, EntityType.Target, PoiName(pos, scrap), "poi");
         }
 
         /// <summary>
