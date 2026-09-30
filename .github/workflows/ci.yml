@@ -62,6 +62,9 @@ jobs:
           version: ${{ steps.godot.outputs.version }}
           use-dotnet: true
           include-templates: true
+      - uses: actions/setup-go@v5  # go-winres stamps VERSIONINFO onto the Windows exe (godot-cli build)
+        with:
+          go-version-file: server/go.mod
       - run: ./client/godot-cli build Linux
         env:
           GODOT: ${{ env.GODOT4 }}
