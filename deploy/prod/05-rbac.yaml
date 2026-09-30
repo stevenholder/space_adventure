@@ -5,9 +5,11 @@
 # workflow can redeploy the game and nothing else on the cluster.
 #
 # The Role covers what `kubectl apply -k deploy/prod` touches, including
-# the CNPG Cluster resource. Namespace creation and the CNPG operator
-# install are deliberately NOT here: both are one-time, done by hand, and
-# cluster-scoped power CI has no business holding.
+# the CNPG Cluster resource and the metrics half in deploy/observability.
+# Namespace creation, the CNPG operator install and the ServiceMonitor
+# CRD are deliberately NOT here: all one-time, done by hand
+# (deploy/observability/bootstrap for the last), and cluster-scoped power
+# CI has no business holding.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -28,6 +30,12 @@ rules:
       - ingresses
       - pods
       - pods/log
+      - serviceaccounts # Alloy's (deploy/observability)
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # The server ServiceMonitor (deploy/observability). The CRD it needs is
+  # cluster-scoped and stays out of CD's reach: bootstrap/, by hand.
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments/status", "replicasets"]

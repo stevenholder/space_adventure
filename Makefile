@@ -51,7 +51,7 @@ LOGDIR := deploy/.logs
 # always pin the context: kubectl's current-context may point elsewhere
 KUBECTL := kubectl --context kind-$(CLUSTER)
 
-.PHONY: up down check cluster images apply forward test-pg observe
+.PHONY: up down check cluster images apply forward test-pg
 
 up: check cluster images apply forward
 	@echo "make up complete"
@@ -107,6 +107,16 @@ apply:
 	# come up on the new build.
 	$(KUBECTL) -n $(NAMESPACE) rollout restart deploy/server
 	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/server --timeout=120s
+	# Metrics (deploy/observability): the cluster-scoped half first and
+	# waited on -- a fresh cluster's discovery cache does not know
+	# ServiceMonitor yet, and a single apply -k dies on "no matches for
+	# kind" otherwise. Alloy then pushes every series with env=kind to the
+	# LGTM box. Same split on the pandas: bootstrap by hand once, the rest
+	# by CD (RUNBOOK "Metrics").
+	$(KUBECTL) apply -k deploy/observability/bootstrap
+	$(KUBECTL) wait --for condition=established --timeout=60s crd/servicemonitors.monitoring.coreos.com
+	$(KUBECTL) apply -k deploy/observability/kind
+	$(KUBECTL) -n $(NAMESPACE) rollout status deploy/alloy --timeout=120s
 
 # No proxy process: deploy/kind.yaml maps the host ports straight onto the
 # NodePort services, so "forwarding" is now just waiting for the stack to
@@ -155,19 +165,6 @@ down:
 
 PG_TEST_CONTAINER := sa-test-pg
 PG_TEST_URL        := postgres://test:test@localhost:55432/test?sslmode=disable
-
-# Metrics: Alloy + the server ServiceMonitor, pushing OTLP to the LGTM box
-# with env=kind on every series (deploy/observability). Separate from
-# `up` so a plain dev loop does not report to the lab; run it once per
-# cluster, re-run after editing config.alloy. The CRD goes first and is
-# waited on: a fresh cluster's discovery cache does not know ServiceMonitor
-# yet, and a single apply -k dies on "no matches for kind" otherwise. Same
-# three steps by hand on the pandas: RUNBOOK "Metrics".
-observe:
-	$(KUBECTL) apply -f deploy/observability/base/crd-servicemonitor.yaml
-	$(KUBECTL) wait --for condition=established --timeout=60s crd/servicemonitors.monitoring.coreos.com
-	$(KUBECTL) apply -k deploy/observability/kind
-	$(KUBECTL) -n observability rollout status deploy/alloy --timeout=120s
 
 test-pg:
 	@docker rm -f $(PG_TEST_CONTAINER) >/dev/null 2>&1 || true

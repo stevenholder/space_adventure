@@ -11,3 +11,7 @@ resources:
   - 15-backup.yaml
   - 20-server.yaml
   - 25-ingress.yaml
+  # Metrics: Alloy + the server ServiceMonitor, env=prod. The cluster-scoped
+  # half (CRD, ClusterRole, the CI Role widened for it) is
+  # deploy/observability/bootstrap, applied once by hand — RUNBOOK "Metrics".
+  - ../observability/prod

@@ -1,11 +1,6 @@
 # Read-only discovery: which ServiceMonitors exist, and the Services /
-# Endpoints / Pods they select. Alloy scrapes pod IPs directly.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: alloy
-  namespace: observability
----
+# Endpoints / Pods they select. Alloy scrapes pod IPs directly. The
+# ServiceAccount it binds lives with the Deployment (base/alloy.yaml).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -32,4 +27,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: alloy
-    namespace: observability
+    namespace: space-adventure

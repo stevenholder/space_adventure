@@ -1,0 +1,18 @@
+# The cluster-scoped half of metrics: what CD is not allowed to create.
+# Applied once by hand on the pandas (RUNBOOK "Metrics"), by `make up` on
+# kind. After this, `kubectl apply -k deploy/prod` (CD) owns the rest.
+#
+#   - the ServiceMonitor CRD (vendored from prometheus-operator v0.94.1)
+#   - Alloy's ClusterRole: read-only discovery across namespaces
+#
+# The third piece, CD's own Role widened for serviceaccounts +
+# servicemonitors, is deploy/prod/05-rbac.yaml and is applied by hand
+# alongside this (kustomize will not load a file from outside its tree):
+# Kubernetes refuses to let an actor grant itself permissions it does not
+# hold, so the first apply of the wider Role must come from an admin;
+# CD re-applying the same file afterwards is a no-op.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - crd-servicemonitor.yaml
+  - alloy-clusterrbac.yaml
