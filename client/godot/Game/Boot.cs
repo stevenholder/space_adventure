@@ -1162,7 +1162,9 @@ namespace SpaceAdventure.Game
             }
             _partyFrames.Update(_framesScratch);
 
-            _hudView.SetLog(_hud.Lines);
+            // The raw event log (cmd results as JSON) is a developer's view:
+            // it rides with the F3 debug panel, not the player's screen.
+            _hudView.SetLog(_hud.DebugOpen ? _hud.Lines : System.Array.Empty<string>());
             _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
             _hudView.UpdateHealthBars(_camera, _views, !_map.Open);
 

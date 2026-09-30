@@ -113,11 +113,11 @@ namespace SpaceAdventure.Game.UI
             _sweep = new ColorRect { Color = new Color(0, 0, 0, 0.6f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
             _sweep.AnchorLeft = 0; _sweep.AnchorRight = 1; _sweep.AnchorBottom = 1; _sweep.AnchorTop = 0;
             AddChild(_sweep);
-            _key = Styles.Display_("", 10, Styles.Amber);
+            _key = Styles.Display_("", 12, Styles.Amber);
             _key.Position = new Vector2(4, 2);
             _key.MouseFilter = MouseFilterEnum.Ignore;
             AddChild(_key);
-            _count = Styles.Display_("", 11, Styles.Cream);
+            _count = Styles.Display_("", 12, Styles.Cream);
             _count.SetAnchorsPreset(LayoutPreset.BottomRight);
             _count.OffsetLeft = -28; _count.OffsetTop = -16; _count.OffsetRight = -4; _count.OffsetBottom = -1;
             _count.HorizontalAlignment = HorizontalAlignment.Right;

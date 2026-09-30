@@ -89,7 +89,7 @@ namespace SpaceAdventure.Game.UI
             _initials.SetAnchorsPreset(LayoutPreset.FullRect);
             _initials.MouseFilter = MouseFilterEnum.Ignore;
             AddChild(_initials);
-            _empty = Styles.Display_("", 10, Styles.Dust);
+            _empty = Styles.Display_("", 12, Styles.Dust);
             _empty.HorizontalAlignment = HorizontalAlignment.Center;
             _empty.VerticalAlignment = VerticalAlignment.Center;
             _empty.SetAnchorsPreset(LayoutPreset.FullRect);
@@ -192,7 +192,7 @@ namespace SpaceAdventure.Game.UI
             body.AddChild(name);
             string tier = string.IsNullOrEmpty(Defs.ItemRarity(Item)) ? "common" : Defs.ItemRarity(Item);
             string kind = def?.Kind ?? "";
-            body.AddChild(Styles.Display_($"{tier}  ·  {kind}" + (string.IsNullOrEmpty(def?.Slot) ? "" : $"  ·  {def.Slot}"), 11, Styles.Dust));
+            body.AddChild(Styles.Display_($"{tier}  ·  {kind}" + (string.IsNullOrEmpty(def?.Slot) ? "" : $"  ·  {def.Slot}"), 12, Styles.Dust));
             if (def?.Weapon != null)
             {
                 body.AddChild(Styles.Display_($"{def.Weapon.Damage} damage  ·  {60.0 / Math.Max(0.01, def.Weapon.FireInterval):0} rpm  ·  {def.Weapon.Magazine} rounds", 12, Styles.Cream));
@@ -207,7 +207,7 @@ namespace SpaceAdventure.Game.UI
                 desc.CustomMinimumSize = new Vector2(240, 0);
                 body.AddChild(desc);
             }
-            if (!Static) body.AddChild(Styles.Display_(SlotName == "" ? "right-click: equip  ·  drag to a slot" : "right-click: unequip  ·  drag to the bag", 10, Styles.Dust));
+            if (!Static) body.AddChild(Styles.Display_(SlotName == "" ? "right-click: equip  ·  drag to a slot" : "right-click: unequip  ·  drag to the bag", 12, Styles.Dust));
             return panel;
         }
     }
@@ -383,7 +383,7 @@ namespace SpaceAdventure.Game.UI
                 foreach (var s in defs.Skills)
                 {
                     var cell = Styles.Row(4);
-                    cell.AddChild(Styles.Display_(s.Name, 11, s.Reserved ? Styles.Dust : Styles.Cream));
+                    cell.AddChild(Styles.Display_(s.Name, 12, s.Reserved ? Styles.Dust : Styles.Cream));
                     cell.AddChild(Styles.Display_(_skills.Level(s.Id).ToString(), 13, Styles.Amber));
                     sk.AddChild(cell);
                 }
