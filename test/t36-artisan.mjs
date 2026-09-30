@@ -108,20 +108,27 @@ async function walkTo (target, close, timeoutMs = 30000) {
   }
   return dist(at(), me().pos)
 }
-/** Stand still and look at an entity's eye, so the cone check passes. */
-async function faceAt (pos) {
+/**
+ * Stand still and look at the target's aim point — a person's eye (1.7 m),
+ * the bench slab (0.9) or a node's middle (0.6), the same points the
+ * server's cone is measured against (cmd.go aimHeight).
+ */
+async function faceAt (pos, aim = 1.7) {
   for (let i = 0; i < 8; i++) {
-    const up = norm(me().pos), lk = norm(tangent(sub(pos, me().pos), up))
+    const up = norm(me().pos), tUp = norm(pos)
+    const eye = me().pos.map((x, i) => x + up[i] * 1.7)
+    const lk = norm(sub(pos.map((x, i) => x + tUp[i] * aim), eye))
     c.ws.send(input([0, 0, lk[0], lk[1], lk[2]], 0, c.seq++))
     await sleep(60)
   }
 }
-async function approach (id, close = 2.0) {
+async function approach (id, close = 2.0, aim = 1.7) {
   const at = () => c.ents.get(id).pos
   const d = await walkTo(at, close, 40000)
-  await faceAt(at())
+  await faceAt(at(), aim)
   return d
 }
+const NODE_AIM = 0.6, BENCH_AIM = 0.9
 
 // ---- act 0: the world ---------------------------------------------------------
 await wait(() => c.id && me() && c.spawns.size > 3, 10000)
@@ -139,14 +146,14 @@ await approach(qm, 2.2)
 const buy = await sendCmd(OP.BUY, { npc: qm, item: 'tool.drill', qty: 1 })
 check('buy a drill (120 cr)', buy?.status === 0 && buy.body.credits === 880, JSON.stringify(buy?.body?.credits))
 const node = iron[0]
-await approach(node)
+await approach(node, 2.0, NODE_AIM)
 const bare = await sendCmd(OP.GATHER, { node })
 check('C121 no tool worn refuses no_tool', bare?.status === 3 && bare.body.reason === 'no_tool', JSON.stringify(bare?.body))
 const eq = await sendCmd(OP.EQUIP, { slot: 'tool', item: 'tool.drill' })
 check('the drill goes in TOOL', eq?.status === 0 && eq.body.equipped?.tool === 'tool.drill')
 
 // ---- act 2: the channel ---------------------------------------------------------
-await faceAt(c.ents.get(node).pos)
+await faceAt(c.ents.get(node).pos, NODE_AIM)
 let endsBefore = c.ends.length
 const t0 = Date.now()
 const g = await sendCmd(OP.GATHER, { node })
@@ -174,7 +181,7 @@ check('C121 stepping away ends it `moved`, nothing granted', moved?.reason === '
 check('the interrupted node kept its yield', c.ents.get(node).health === 4, `${c.ents.get(node).health}`)
 
 // verb cancel
-await approach(node)
+await approach(node, 2.0, NODE_AIM)
 endsBefore = c.ends.length
 await sendCmd(OP.GATHER, { node })
 const cx = await sendCmd(OP.CANCEL, {})
@@ -185,7 +192,7 @@ check('cancel with nothing running is not_gathering', notG?.status === 3 && notG
 
 // drill it dark: four more yields
 for (let i = 0; i < 4; i++) {
-  await faceAt(c.ents.get(node).pos)
+  await faceAt(c.ents.get(node).pos, NODE_AIM)
   endsBefore = c.ends.length
   const r = await sendCmd(OP.GATHER, { node })
   if (r?.status !== 0) { check(`yield ${i + 2} started`, false, JSON.stringify(r?.body)); break }
@@ -201,7 +208,7 @@ await wait(() => lastXP('mining') === 125, 2500) // awards flush at most once a 
 check('C125 Mining paid per yield (125)', lastXP('mining') === 125, `${lastXP('mining')} xp`)
 
 // copper: the tool check comes before the level check
-await approach(copper[0])
+await approach(copper[0], 2.0, NODE_AIM)
 const cu = await sendCmd(OP.GATHER, { node: copper[0] })
 check('C121 copper refuses the hand drill (no_tool)', cu?.status === 3 && cu.body.reason === 'no_tool', JSON.stringify(cu?.body))
 
@@ -218,7 +225,7 @@ const worn = await sendCmd(OP.SELL, { npc: qm, item: 'tool.drill', qty: 1 })
 check('C122 the worn drill refuses equipped', worn?.status === 3 && worn.body.reason === 'equipped', JSON.stringify(worn?.body))
 
 // ---- act 4: the bench at the relay ------------------------------------------------
-const walked = await approach(bench, 2.2)
+const walked = await approach(bench, 2.2, BENCH_AIM)
 check('reached the workbench (107 m)', walked <= 2.5, `${walked.toFixed(1)} m`)
 const far = c.results.length
 const plate = await sendCmd(OP.CRAFT, { npc: bench, recipe: 'recipe.plate.iron', qty: 1 })

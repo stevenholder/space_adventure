@@ -117,9 +117,34 @@ type cmdWorld struct {
 // them. Measured as a live out_of_range refusal at 2.04 m against a 3.0 m
 // interact_dist. Raise the target to its own eye height along its own up.
 func inRange(w cmdWorld, target sim.Vec) bool {
+	return inRangeAt(w, target, eyeHeightMeters)
+}
+
+// Aim heights for things that are not a standing person (Phase 12): a
+// node is a metre of rock, a bench a slab at 0.9 m. Aiming at 1.7 m above
+// either means looking over it, and the middle of the rock falls outside
+// the 20° cone from conversation range. The client's Interact mirrors
+// these.
+const (
+	nodeAimHeight  = 0.6
+	benchAimHeight = 0.9
+)
+
+// aimHeight is where the cone check points on an NPC: a bench is aimed
+// at its top, anyone else at their eye.
+func aimHeight(npc defs.NPC) float64 {
+	if npc.Kind == "bench" {
+		return benchAimHeight
+	}
+	return eyeHeightMeters
+}
+
+// inRangeAt is inRange with the target raised by `height` instead of a
+// person's eye.
+func inRangeAt(w cmdWorld, target sim.Vec, height float64) bool {
 	eye := w.Pos.Add(w.Up.Scale(eyeHeightMeters))
 	targetUp := terrain.Normalize(terrain.Vec(target))
-	targetEye := target.Add(sim.Vec(targetUp).Scale(eyeHeightMeters))
+	targetEye := target.Add(sim.Vec(targetUp).Scale(height))
 	to := targetEye.Sub(eye)
 	d := to.Len()
 	if d > interactDist {
@@ -314,7 +339,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return reply(protocol.StatusNotFound, nil)
 		}
-		if !inRange(w, pos) {
+		if !inRangeAt(w, pos, aimHeight(npc)) {
 			return refuse("out_of_range")
 		}
 		if npc.Kind != "bench" {
@@ -354,7 +379,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return reply(protocol.StatusNotFound, nil)
 		}
-		if !inRange(w, pos) {
+		if !inRangeAt(w, pos, nodeAimHeight) {
 			return refuse("out_of_range")
 		}
 		if w.Busy != nil && w.Busy() {
