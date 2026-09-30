@@ -223,6 +223,15 @@ const ammo = await sendCmd(OP.SELL, { npc: qm, item: 'ammo.cell', qty: 1 })
 check('C122 ammo is unsellable', ammo?.status === 3 && ammo.body.reason === 'unsellable', JSON.stringify(ammo?.body))
 const worn = await sendCmd(OP.SELL, { npc: qm, item: 'tool.drill', qty: 1 })
 check('C122 the worn drill refuses equipped', worn?.status === 3 && worn.body.reason === 'equipped', JSON.stringify(worn?.body))
+// buyback (Phase 13): the sale is on the list at what the shop paid, and comes back whole
+const listed = await sendCmd(0x0001, { npc: qm })
+check('C138 shop_list carries the sale as buyback', listed?.status === 0 && listed.body.buyback?.length === 1 && listed.body.buyback[0].item === 'mat.ore.iron' && listed.body.buyback[0].qty === 4 && listed.body.buyback[0].price === 12, JSON.stringify(listed?.body?.buyback))
+const back = await sendCmd(0x0014, { npc: qm, item: 'mat.ore.iron' })
+check('C138 buyback returns the stack for the same 12 cr', back?.status === 0 && back.body.credits === 880 && count(back.body.inventory, 'mat.ore.iron') === 10, JSON.stringify(back?.body?.credits))
+const none = await sendCmd(0x0014, { npc: qm, item: 'mat.ore.iron' })
+check('C138 a second buyback refuses no_buyback', none?.status === 3 && none.body.reason === 'no_buyback', JSON.stringify(none?.body))
+const resell = await sendCmd(OP.SELL, { npc: qm, item: 'mat.ore.iron', qty: 4 })
+check('sold again for the bench act', resell?.status === 0 && resell.body.credits === 892)
 
 // ---- act 4: the bench at the relay ------------------------------------------------
 const walked = await approach(bench, 2.2, BENCH_AIM)

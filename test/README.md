@@ -30,7 +30,7 @@ them.
 
 ## What's here
 
-- `tNN-*.mjs` harnesses, `t2`–`t36` (t30–t33 were never written). Run as `node test/tNN-*.mjs` against the
+- `tNN-*.mjs` harnesses, `t2`–`t37` (t30–t33 were never written). Run as `node test/tNN-*.mjs` against the
   deployed stack (`make up`, then `make check-server`). No runner, no
   framework; each exits non-zero on failure. The per-criterion map lives in
   `docs/QA-STATUS.md` under "Harnesses, for the C43 re-run".

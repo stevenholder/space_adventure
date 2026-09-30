@@ -118,9 +118,28 @@ namespace SpaceAdventure.Game
             foreach (EntityView v in _views.Values)
             {
                 if (v.Root == null || !v.Root.Visible) continue;
-                yield return new MapMarker(v.Root.GlobalPosition, v.Type, MapLabel(v));
+                yield return new MapMarker(v.Root.GlobalPosition, v.Type, MapLabel(v), MapIcon(v), v.Depleted || v.Dead);
             }
         }
+
+        /// <summary>The glyph a thing gets on the map (Map.cs draws these).</summary>
+        private static string MapIcon(EntityView v) => v.Type switch
+        {
+            EntityType.Player => "player",
+            EntityType.Npc => v.Label switch
+            {
+                "npc.quartermaster" => "shop",
+                "npc.dispatcher" => "board",
+                "npc.workbench" => "bench",
+                _ => "hostile",
+            },
+            EntityType.Node => v.Label.Contains("copper") ? "copper" : v.Label.Contains("wreck") ? "wreck" : "iron",
+            EntityType.Loot => "loot",
+            EntityType.Vehicle => "rover",
+            EntityType.Ship => "ship",
+            EntityType.Target => "target",
+            _ => "",
+        };
 
         /// <summary>
         /// What to write beside a marker. Only things worth walking to get a
@@ -130,7 +149,8 @@ namespace SpaceAdventure.Game
         private static string MapLabel(EntityView v) => v.Type switch
         {
             EntityType.Player => v.Label,
-            EntityType.Npc => v.Label == "npc.quartermaster" ? "Quartermaster" : "",
+            EntityType.Npc => v.Label switch { "npc.quartermaster" => "Quartermaster", "npc.dispatcher" => "Dispatcher", "npc.workbench" => "Workbench", _ => "" },
+            EntityType.Node => v.Label.Contains("copper") ? "Copper" : "",
             _ => "",
         };
 
@@ -384,12 +404,19 @@ namespace SpaceAdventure.Game
             string.IsNullOrEmpty(first) ? second : first;
     }
 
-    /// <summary>A dot on the map: where, what kind, and (rarely) a name.</summary>
+    /// <summary>
+    /// A mark on the map: where, what kind, a name (rarely), and the glyph
+    /// the map draws — "shop", "board", "bench", "hostile", "iron", "copper",
+    /// "wreck", "loot", "rover", "ship", "player", "spawn", "poi", "target".
+    /// </summary>
     public readonly struct MapMarker
     {
         public readonly Vector3 Pos;
         public readonly ushort Type;
         public readonly string Label;
-        public MapMarker(Vector3 pos, ushort type, string label) { Pos = pos; Type = type; Label = label; }
+        public readonly string Icon;
+        public readonly bool Dim;
+        public MapMarker(Vector3 pos, ushort type, string label, string icon = "", bool dim = false)
+        { Pos = pos; Type = type; Label = label; Icon = icon; Dim = dim; }
     }
 }

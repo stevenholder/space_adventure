@@ -76,7 +76,7 @@ namespace SpaceAdventure.Game.UI
                     : EfficacyText(sk.Efficacy?.Kind ?? "", _sheet.EfficacyBonus(defs, sk.Id));
                 var head = Styles.Row(10);
                 head.AddChild(Styles.Display_(sk.Name, 14, ink));
-                head.AddChild(Styles.Grow(Styles.Display_(tip, 11, Styles.Dust)));
+                head.AddChild(Styles.Grow(Styles.Display_(tip, 12, Styles.Dust)));
                 head.AddChild(Styles.Display_($"LV {level}", 14, reserved ? Styles.Dust : Styles.Amber));
                 row.AddChild(head);
 
@@ -86,7 +86,7 @@ namespace SpaceAdventure.Game.UI
                 Styles.SetFill(fill, frac);
                 if (!reserved)
                 {
-                    var num = Styles.Display_(level >= SkillCurve.MaxLevel ? "99" : $"{xp - floor} / {next - floor}", 9, Styles.Cream);
+                    var num = Styles.Display_(level >= SkillCurve.MaxLevel ? "99" : $"{xp - floor} / {next - floor}", 12, Styles.Cream);
                     num.SetAnchorsPreset(Control.LayoutPreset.TopRight);
                     num.GrowHorizontal = Control.GrowDirection.Begin;
                     num.OffsetRight = -4; num.OffsetTop = -4;

@@ -178,6 +178,11 @@ namespace SpaceAdventure.Game
         private CombatFeed _combatFeed;
         private ShopView _shopView;
         private BenchView _benchView; // Phase 12
+        private Settings _settings;
+        private SettingsView _settingsView;
+        private Hotbar _hotbar; // Phase 13
+        private HotbarView _hotbarView;
+        private readonly List<(string name, Vector3 pos, double until)> _scanPings = new List<(string, Vector3, double)>();
         // Phase 12 gather channel as drawn: the bar runs from start to end.
         private double _channelStart = -1, _channelEnd = -1;
         private string _channelLabel = "";
@@ -202,7 +207,7 @@ namespace SpaceAdventure.Game
             (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
             (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
-            (_benchView?.Open ?? false);
+            (_benchView?.Open ?? false) || (_settingsView?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -329,7 +334,10 @@ namespace SpaceAdventure.Game
             _icons = new Icons(_assets.Root);
             _shopView = new ShopView(_ui.Root, _character, _interact, _icons, NextCmdSeq, b => _net.Send(b));
             _benchView = new BenchView(_ui.Root, _character, _skills, _icons, NextCmdSeq, b => _net.Send(b));
-            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
+            _hotbar = new Hotbar();
+            _hotbar.Load();
+            _hotbarView = new HotbarView(_ui.Root, _hotbar, _character, _icons);
+            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b), _interact);
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
             _journalView = new JournalView(_ui.Root, _missionLog, _partyState, NearestBoard, NextCmdSeq, b => _net.Send(b));
@@ -337,7 +345,14 @@ namespace SpaceAdventure.Game
             _partyFrames = new PartyFrames(_ui.Root);
             _skillsView = new SkillsView(_ui.Root, _skills, _character);
             _skillsFeed = new SkillsFeed(_ui.Root);
-            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0));
+            _settings = new Settings();
+            _settings.Load();
+            _settingsView = new SettingsView(_ui.Root, _settings, ApplySettings);
+            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0), () => _settingsView.Show(true));
+            // The rig fixes its own window (--resolution, headless shots), so
+            // the saved display mode is for a player's session only.
+            if (!Rigged) ApplySettings();
+            else GetTree().Root.ContentScaleFactor = _settings.UiScale;
             _accountView = new AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); _ = RedeemLinkCode(code); },
                 () => _accountView.Show(false));
@@ -431,7 +446,16 @@ namespace SpaceAdventure.Game
                 _accountView.SetStatus("");
             }
             if (_input.Pressed(Key.M)) _map.Toggle();
-            if (_input.Pressed(Key.R)) _net.Send(Character.ReloadCmd(NextCmdSeq()));
+            // R reloads when a gun is worn; the server would refuse otherwise,
+            // and a refusal for pressing R with empty hands is noise.
+            if (_input.Pressed(Key.R) && _character.Defs.Item(_character.Primary)?.Weapon != null)
+                _net.Send(Character.ReloadCmd(NextCmdSeq()));
+            // Phase 13: 1–5 Q E T Z X fire the hotbar; Shift picks the second
+            // row (Shift is also sprint — a hotkey while sprinting fires the
+            // shift row, which is what a modifier means).
+            _hotbarView.Shift = (Hotbar.ShiftRow && _input.Held(Key.Shift)) || _rigShift;
+            foreach (Key k in Hotbar.Keys)
+                if (_input.Pressed(k)) FireHotbar(Hotbar.SlotFor(k, _hotbarView.Shift));
             if (_input.Pressed(Key.B)) OpenPanel(_bagsView, _sheetView);
             if (_input.Pressed(Key.C)) OpenPanel(_sheetView, _bagsView);
             if (_input.Pressed(Key.J))
@@ -499,7 +523,11 @@ namespace SpaceAdventure.Game
                 _interact._selfId = _net.EntityId;
                 _interact.Update(eye, Frame.ToGodot(li.Look));
             }
-            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "E  ·  exit ship" : "E  ·  exit rover";
+            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "F  ·  exit ship" : "F  ·  exit rover";
+            // An NPC's panel closes when you walk away from the NPC (GDD
+            // `ui_close_dist`): the shop and the bench are somebody's counter.
+            if (_interact.ShopOpen && OutOfCounterRange(_interact.ShopNpc)) { _interact.CloseShop(); _shopView.Show(false); }
+            if (_benchView.Open && _benchView.Bench != 0 && OutOfCounterRange(_benchView.Bench)) _benchView.Show(false);
             else if (Clock.Now > _noticeUntil) _interact.Notice = "";
             if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open)) OnInteract();
 
@@ -780,6 +808,10 @@ namespace SpaceAdventure.Game
                     Defs defs = Decode.Defs(frame.Reader);
                     _character.Defs = defs;
                     _views.Defs = defs;
+                    // The wallet and the worn set are only ever pushed in a
+                    // reply, so ask once now: the credits and ammo boxes read
+                    // "—" until the first shop or reload otherwise.
+                    _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
                     break;
                 }
                 case Msg.Spawn:
@@ -935,8 +967,9 @@ namespace SpaceAdventure.Game
                 {
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
-                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
+                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.ShopBuyback || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
                     if (r.Opcode == Op.Gather) OnGatherResult(r);
+                    if (r.Opcode == Op.Use) OnUseResult(r);
                     if (r.Opcode == Op.Craft)
                     {
                         _benchView.Status = r.Ok ? "crafted" : Reason(r.Body);
@@ -1023,6 +1056,7 @@ namespace SpaceAdventure.Game
                 case "debug": _hud.DebugOpen = true; break;
                 case "menu": _gameMenu.Show(true); break;
                 case "bench": _benchView.Bench = 0; _benchView.Show(true); break;
+                case "settings": _settingsView.Show(true); break;
             }
         }
 
@@ -1038,6 +1072,7 @@ namespace SpaceAdventure.Game
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
                 _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
             _hudView.SetCredits(_character.Credits);
+            _hotbarView.Refresh(Clock.Now);
             if (_channelEnd > 0)
             {
                 double span = _channelEnd - _channelStart;
@@ -1074,8 +1109,12 @@ namespace SpaceAdventure.Game
                 float chord = (pos - myPos).Length();
                 float surface = 2f * 150f * Mathf.Asin(Mathf.Clamp(chord / (2f * 150f), 0f, 1f));
                 if (surface > mastDiscovery) continue;
-                markers.Add((scrap ? "OUTPOST" : "RELAY", Bearing.To(me.Pos, me.Facing, Frame.ToSim(pos))));
+                markers.Add((PoiName(pos, scrap).ToUpperInvariant(), Bearing.To(me.Pos, me.Facing, Frame.ToSim(pos))));
             }
+            // Phase 13: scanner pings for scan_show seconds.
+            _scanPings.RemoveAll(p => Clock.Now > p.until);
+            foreach (var (name, pos, _) in _scanPings)
+                markers.Add((name, Bearing.To(me.Pos, me.Facing, Frame.ToSim(pos))));
             _hudView.SetMarkers(markers);
 
             // The shop view mirrors Interaction's state: stock arriving opens
@@ -1123,7 +1162,9 @@ namespace SpaceAdventure.Game
             }
             _partyFrames.Update(_framesScratch);
 
-            _hudView.SetLog(_hud.Lines);
+            // The raw event log (cmd results as JSON) is a developer's view:
+            // it rides with the F3 debug panel, not the player's screen.
+            _hudView.SetLog(_hud.DebugOpen ? _hud.Lines : System.Array.Empty<string>());
             _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
             _hudView.UpdateHealthBars(_camera, _views, !_map.Open);
 
@@ -1158,6 +1199,25 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
+        /// A mast's name from what stands under it: the client knows factions
+        /// (kit style) but not zone ids, and both factions built two sites.
+        /// The dispatcher marks the relay, the wrecks mark the outpost; the
+        /// other colony site is the range and the other scrap site the camp.
+        /// </summary>
+        private string PoiName(Vector3 mast, bool scrap)
+        {
+            const float near = 60f;
+            foreach (EntityView v in _views.All)
+            {
+                if (v.Root == null) continue;
+                if (v.Root.GlobalPosition.DistanceTo(mast) > near) continue;
+                if (!scrap && v.Type == EntityType.Npc && v.Label == "npc.dispatcher") return "Relay";
+                if (scrap && v.Type == EntityType.Node && v.Label == "node.wreck") return "Outpost";
+            }
+            return scrap ? "Camp" : "Range";
+        }
+
+        /// <summary>
         /// Everything on the map: the live entities, plus the spawn point. The
         /// map is heading-up with no compass rose, so one landmark that never
         /// moves is what turns "things near me" into "where am I".
@@ -1166,7 +1226,10 @@ namespace SpaceAdventure.Game
         {
             foreach (MapMarker m in _views.Markers()) yield return m;
             Vec3 dir = Step.SpawnDir.Normalized();
-            yield return new MapMarker(Frame.ToGodot(dir * _terrain.SampleRadius(dir)), EntityType.Ship, "Spawn");
+            yield return new MapMarker(Frame.ToGodot(dir * _terrain.SampleRadius(dir)), EntityType.Ship, "Spawn", "spawn");
+            // The POIs by their masts, named: a map is for finding places.
+            foreach (var (pos, scrap) in _structures.Masts)
+                yield return new MapMarker(pos, EntityType.Target, PoiName(pos, scrap), "poi");
         }
 
         /// <summary>
@@ -1238,6 +1301,74 @@ namespace SpaceAdventure.Game
         /// whatever was last seen.
         /// </summary>
         /// <summary>Escape's first job: every panel, the map and the shop.</summary>
+        /// <summary>The rig or a self-test owns the window; a player's settings do not apply.</summary>
+        private bool Rigged => Arg("-uiShot") != null || Arg("-quitAfter") != null || Flag("-selftest") || Flag("-dumpNodes");
+
+        /// <summary>Window mode, canvas scale and look speed from the settings.</summary>
+        private void ApplySettings()
+        {
+            _settings.Apply(GetTree().Root);
+            _fps.Sensitivity = FpsController.BaseSensitivity * _settings.MouseSensitivity;
+        }
+
+        /// <summary>GDD "Interaction" `ui_close_dist`: how far from its NPC an open counter survives.</summary>
+        private const float CounterCloseDist = 5.0f;
+
+        private bool OutOfCounterRange(uint npc)
+        {
+            if (!_views.TryGet(npc, out var v) || v.Root == null) return true;
+            return Frame.ToGodot(_predictor.State.Pos).DistanceTo(v.Root.GlobalPosition) > CounterCloseDist;
+        }
+
+        /// <summary>Phase 13: a hotbar slot fired — an item or a worn ability sends `use`.</summary>
+        private void FireHotbar(int slot)
+        {
+            if (slot < 0) return;
+            var r = _hotbar.Refs[slot];
+            switch (r.Kind)
+            {
+                case "item":
+                case "ability":
+                    if (_hotbarView.Cooling(r.Id, Clock.Now)) return; // the server would refuse; save the round trip
+                    if (r.Kind == "item" && _character.Count(r.Id) <= 0) { _interact.Notice = "none left"; _noticeUntil = Clock.Now + 1.5; return; }
+                    if (r.Kind == "ability" && _character.SlotHolding(r.Id) == "") { _interact.Notice = "not worn"; _noticeUntil = Clock.Now + 1.5; return; }
+                    _net.Send(Character.UseCmd(NextCmdSeq(), r.Id));
+                    break;
+            }
+        }
+
+        /// <summary>Phase 13: the `use` reply — cooldown to the bar, pings to the compass, the bag refreshed.</summary>
+        private void OnUseResult(CmdResult r)
+        {
+            if (!r.Ok) { _interact.Notice = Reason(r.Body); _noticeUntil = Clock.Now + 2; return; }
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(r.Body);
+                string item = (string)o["item"] ?? "";
+                _hotbarView.SetCooldown(item, (double?)o["cooldown"] ?? 0, Clock.Now);
+                var effect = o["effect"] as Newtonsoft.Json.Linq.JObject;
+                if (effect?["health"] != null) { _interact.Notice = $"+{_character.Defs.ItemName(item)}"; _noticeUntil = Clock.Now + 1.5; }
+                if (effect?["pings"] is Newtonsoft.Json.Linq.JArray pings)
+                {
+                    int nodes = 0, drops = 0;
+                    foreach (var ping in pings)
+                    {
+                        string def = (string)ping["def"] ?? "";
+                        var pos = ping["pos"];
+                        if (pos == null) continue;
+                        Vector3 p = Frame.ToGodot(new Vec3((double)pos[0], (double)pos[1], (double)pos[2]));
+                        string name = def.StartsWith("node.ore.iron") ? "IRON" : def.StartsWith("node.ore.copper") ? "COPPER" : def.StartsWith("node.wreck") ? "WRECK" : "DROP";
+                        if (name == "DROP") drops++; else nodes++;
+                        _scanPings.Add((name, p, Clock.Now + 20));
+                    }
+                    _interact.Notice = $"scan: {nodes} node{(nodes == 1 ? "" : "s")}, {drops} drop{(drops == 1 ? "" : "s")}";
+                    _noticeUntil = Clock.Now + 3;
+                }
+                if (_character.Defs.Item(item)?.Consumable != null) _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+            }
+            catch (Newtonsoft.Json.JsonException) { }
+        }
+
         /// <summary>Phase 12: the gather reply — a duration starts the bar, a refusal explains itself.</summary>
         private void OnGatherResult(CmdResult r)
         {
@@ -1306,6 +1437,11 @@ namespace SpaceAdventure.Game
                 "equipped" => "take it off first",
                 "not_owned" => "you do not have that",
                 "insufficient_credits" => "cannot afford that",
+                "cooldown" => "not ready",
+                "unusable" => "cannot use that",
+                "no_effect" => "no need",
+                "no_buyback" => "nothing to buy back",
+                "dead" => "you are dead",
                 "" => "refused",
                 _ => code.Replace('_', ' '),
             };
@@ -1313,7 +1449,7 @@ namespace SpaceAdventure.Game
 
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu, _benchView })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu, _benchView, _settingsView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();
@@ -1418,6 +1554,14 @@ namespace SpaceAdventure.Game
             // Winding: a counter-clockwise triangle seen from outside the
             // planet is a front face and must NOT be flipped.
             var verts = new[] { new Vector3(0, 150, 0), new Vector3(1, 150, 0), new Vector3(0, 150, -1) };
+            // Phase 13: the hotbar's defaults and its save format.
+            var hb = new UI.Hotbar();
+            Check("hotbar: a fresh profile's bar is empty", Array.TrueForAll(hb.Refs, r => r.Empty));
+            Check("hotbar: a reference round-trips through its string", UI.HotbarRef.Parse("item:consumable.medkit").Id == "consumable.medkit" && UI.HotbarRef.Parse("").Empty);
+            Check("hotbar: an old action entry reads as empty", UI.HotbarRef.Parse("action:interact").Empty);
+            Check("hotbar: keys are 1–5 Q E T Z X; Shift+Q is slot 16; R and F are not on the bar",
+                UI.Hotbar.SlotFor(Key.Q, true) == 15 && UI.Hotbar.SlotFor(Key.Z, false) == 8 && UI.Hotbar.SlotFor(Key.X, false) == 9
+                && UI.Hotbar.SlotFor(Key.R, false) == -1 && UI.Hotbar.SlotFor(Key.F, false) == -1);
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));
             Check("the same triangle reversed is inward", TerrainMesh.FacesInward(verts, new[] { 0, 2, 1 }));
 

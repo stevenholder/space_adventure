@@ -251,7 +251,7 @@ namespace SpaceAdventure.Game.UI
             text.AddChild(Display_(title, 14, titleColor));
             if (!string.IsNullOrEmpty(sub))
             {
-                var subLab = Display_(sub, 11, Dust);
+                var subLab = Display_(sub, 12, Dust);
                 subLab.AutowrapMode = TextServer.AutowrapMode.Word;
                 text.AddChild(subLab);
             }
@@ -285,7 +285,7 @@ namespace SpaceAdventure.Game.UI
             var (bar, fill) = Bar(color, 12);
             bar.CustomMinimumSize = new Vector2(width, 12);
             SetFill(fill, frac);
-            var l = Display_(text, 9, Cream);
+            var l = Display_(text, 12, Cream);
             l.HorizontalAlignment = HorizontalAlignment.Center;
             l.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             l.MouseFilter = Control.MouseFilterEnum.Ignore;

@@ -18,6 +18,12 @@
 //   -uiClaim                claim the priority bounty like the journal button, report the log
 //   -uiDeathDemo            show the death screen (local flag only) for a shot
 //   -uiGatherDemo           a local iron node + wreck ahead and the channel bar (Phase 12)
+//   -uiHotbarDemo           medkit on 1 (cooling), scanner on Q, from a faked bag (Phase 13)
+//   -uiShift                hold the hotbar's Shift row for the shot
+//   -uiHotbarDragDemo       with -uiPanel backpack: drag the first bag cell onto slot 4, report
+//   -uiSellDemo             with the shop open: sell the first -uiBuy item, report the buyback count
+//   -uiBuyback              show the shop's BUYBACK tab
+//   -uiRetreat <secs>       with the shop open, walk backwards that long; report whether it closed
 //   -uiApproach <m>         then walk toward it until within that many metres
 //   -uiReface <kind>        re-pick a target on arrival
 //   -uiFire <secs>          reload and hold the trigger on it
@@ -46,6 +52,7 @@ namespace SpaceAdventure.Game
         private bool _rigArmed;
         private bool _rigInteract; // one frame of E
         private bool _rigDeathDemo; // -uiDeathDemo holds the dead flag against the snapshots
+        private bool _rigShift;     // -uiShift holds the hotbar's shift row for a shot
         private float _detourSign = 1f;
 
         private async Task Wait(double seconds) =>
@@ -538,6 +545,36 @@ namespace SpaceAdventure.Game
                 await Wait(0.3);
             }
 
+
+            // -uiSellDemo: with the shop open (after -uiBuy a,b — the first
+            // is unworn once the second is), sell the first the way a bag
+            // right-click does, wait for the reply; -uiBuyback then shows the
+            // shop's BUYBACK tab for the shot.
+            if (Flag("-uiSellDemo") && _shopView.Open)
+            {
+                string first = (Arg("-uiBuy") ?? "").Split(',')[0];
+                _net.Send(_interact.SellCmd(NextCmdSeq(), first, 1));
+                await Wait(1.0);
+                GD.Print($"ui: sold {first}: buyback={_interact.Buyback?.Length ?? 0} entries");
+            }
+            if (Flag("-uiBuyback") && _shopView.Open) { _shopView.ShowBuyback(true); await Wait(0.3); }
+
+            // -uiRetreat <secs>: with the shop open, walk backwards that long
+            // and report whether the counter closed behind you (ui_close_dist).
+            if (Arg("-uiRetreat") is string retreat)
+            {
+                double secs = double.Parse(retreat, CultureInfo.InvariantCulture);
+                bool before = _interact.ShopOpen;
+                uint counter = _interact.ShopNpc; // cleared by the close; keep it for the distance
+                float DistTo() => _views.TryGet(counter, out var qv) && qv.Root != null ? Frame.ToGodot(_predictor.State.Pos).DistanceTo(qv.Root.GlobalPosition) : -1f;
+                float d0 = DistTo();
+                _rigBack = true;
+                await Wait(secs);
+                _rigBack = false;
+                await Wait(0.3);
+                GD.Print($"ui: retreat {secs:0.#} s: shop open {before} -> {_interact.ShopOpen}, {d0:0.0} -> {DistTo():0.0} m from the counter");
+            }
+
             // -uiShopScrollDemo: with the shop open (after -uiBuy), scroll the
             // stock to the bottom, buy a cell the way the button does, wait for
             // the reply's rebuild, and report where the list is.
@@ -595,6 +632,52 @@ namespace SpaceAdventure.Game
                     GD.Print($"ui: dragged {panel} {before} -> {target.Position}, saved={cf.HasSection("panels")}");
                 }
             }
+
+            // -uiHotbarDemo: a medkit on 1 (two in a faked bag), the scanner on
+            // Q worn in GADGET, a cooldown sweep running on 1, nothing sent.
+            if (Flag("-uiHotbarDemo"))
+            {
+                await Wait(1.0); // after the join's and the panel's inventory replies, which would overwrite the faked bag
+                _character.OnWallet("{\"credits\":448,\"inventory\":[{\"item\":\"consumable.medkit\",\"qty\":2},{\"item\":\"gadget.scanner\",\"qty\":1},{\"item\":\"weapon.pulse\",\"qty\":1},{\"item\":\"mod.mag\",\"qty\":1},{\"item\":\"ammo.cell\",\"qty\":90}],\"equipped\":{\"gadget\":\"gadget.scanner\",\"primary\":\"weapon.pulse\",\"mod\":\"mod.mag\"}}");
+                // The scan's compass half, locally: every real node in view pinged for 20 s.
+                foreach (EntityView v in _views.All)
+                    if (v.Type == EntityType.Node && v.Root != null)
+                        _scanPings.Add((v.Label.Contains("copper") ? "COPPER" : v.Label.Contains("wreck") ? "WRECK" : "IRON", v.Root.GlobalPosition, Clock.Now + 20));
+                _hotbar.Refs[0] = new UI.HotbarRef { Kind = "item", Id = "consumable.medkit" };
+                _hotbar.Refs[5] = new UI.HotbarRef { Kind = "ability", Id = "gadget.scanner" };
+                _hotbar.Refs[12] = new UI.HotbarRef { Kind = "item", Id = "consumable.medkit" };
+                _hotbarView.SetCooldown("consumable.medkit", 8, Clock.Now - 3);
+                if (_sheetView.Open) _sheetView.Rebuild();
+                if (_bagsView.Open) _bagsView.Rebuild();
+                await Wait(0.2);
+
+                // -uiHotbarDragDemo (with -uiPanel backpack): drag the first bag
+                // cell (the medkit) onto the 4 slot through Godot's own drag and
+                // drop, then report the slot and what was saved.
+                if (Flag("-uiHotbarDragDemo") && _bagsView.Open)
+                {
+                    Vector2 from = _bagsView.FirstCellCentre, to = _hotbarView.CellCentre(3);
+                    Godot.Input.WarpMouse(from);
+                    // Godot's drag-and-drop starts on the viewport's own drag
+                    // threshold, which parsed events never trip; ForceDrag is
+                    // the engine's programmatic start, with the cell's own payload.
+                    Control cell = _bagsView.FirstCell;
+                    cell.ForceDrag(cell._GetDragData(Vector2.Zero), new Label { Text = "medkit" });
+                    await Wait(0.1);
+                    for (int i = 1; i <= 8; i++)
+                    {
+                        Vector2 at = from.Lerp(to, i / 8f);
+                        Godot.Input.WarpMouse(at);
+                        Godot.Input.ParseInputEvent(new InputEventMouseMotion { Position = at, GlobalPosition = at, ButtonMask = MouseButtonMask.Left });
+                        await Wait(0.05);
+                    }
+                    Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = to, GlobalPosition = to });
+                    await Wait(0.3);
+                    var cf = new ConfigFile(); cf.Load("user://sa.cfg");
+                    GD.Print($"ui: hotbar drag {from} -> {to}: slot4={_hotbar.Refs[3]} saved={cf.GetValue("hotbar", "slot3", "").AsString()}");
+                }
+            }
+            _rigShift = Flag("-uiShift");
 
             if (_rigLamp && _sun != null)
             {

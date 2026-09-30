@@ -1327,6 +1327,20 @@ a bearing tape with `ink`-outlined markers (shop, rover, own ship, camp,
 spawn). Prompts ("E · talk", notices) stay bottom-center. The flight
 readout replaces the ammo cluster while seated in a ship.
 
+### Display and settings (Phase 13)
+
+The UI is laid out for **1920×1080** and the window scales it as one
+piece (Godot `canvas_items` stretch, `expand` aspect): a 1280×720
+window draws everything at two thirds, a 1440p window at 1.33×, a wider
+aspect gains margin rather than distortion. Nothing overlaps because
+the window shrank. Three display modes — **windowed**, **windowed
+fullscreen** (borderless at the desktop size, the default) and
+**fullscreen** (exclusive) — on a SETTINGS page off the Esc menu, with
+a **UI scale** slider (0.75–1.5×, on top of the window scaling) and
+**mouse sensitivity** (0.25–3×). All three persist in `user://sa.cfg`
+`[settings]` and apply at boot; the rig and the self-test own their own
+window and ignore the display mode.
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
@@ -1778,8 +1792,18 @@ grow by `floor(qty × value × sell_rate × (1 + sell_bonus))`, where
 `sell_bonus` is the resolved Scavenging→Commerce synergy — the synergy
 that has waited since Phase 11. Commerce trains on the credits moved
 (1 XP / 5 cr, as buying). Result: `{"credits", "inventory"}`, the same
-shape as `shop_buy`. The shop panel gains a SELL side listing every
-sellable stack in the bag with its unit price.
+shape as `shop_buy`.
+
+**Selling is a bag gesture, not a panel** (Phase 13, WoW's rule): with
+a shop open, right-click on a bag stack sells one, Shift-right-click
+the stack; the backpack's hint line says so while a shop is open. The
+shop panel has two tabs, STOCK and BUYBACK. **Buyback**: every sale of
+this connection goes on a list (newest last, twelve kept, gone at
+logout — the shop has moved it on) as `{item, qty, price}` with the
+credits the shop paid; `shop_list` carries the list, `shop_buyback
+{npc, item}` returns the newest sale of that item whole for exactly
+that price at any shop (`no_buyback` when none, else the buy
+refusals), and the entry leaves the list only on success.
 
 | param | value |
 |---|---|
@@ -1816,8 +1840,8 @@ travel to the bench is the time cost — and atomic per call; `qty` crafts
 happen as one transaction or none. Each craft rolls `craft_extra` once
 for one bonus output unit (stackable outputs only — a second chest
 plate has nowhere to go). Result: `{"inventory", "crafted": {item,
-qty}}`. Medkits and weapon mods wait for a `use` verb and a mod slot;
-not this phase.
+qty}}`. Medkits, the scanner and weapon mods arrive with Phase 13's
+`use` verb and `mod` slot.
 
 #### Death spills the raw
 
@@ -1847,6 +1871,110 @@ have it. Scavenging XP applies to the re-pickup like any pickup.
 - Skills panel: the three rows un-grey, Engineering→Mining arrow.
 - Tool slot on the character doll shows the tool's icon like any slot.
 
+### Phase 13 — use, modify, and the hotbar (contract, wave 0, 2026-09-30)
+
+Three things Phase 12 left on the bench: a **`use` verb** for
+consumables and gear abilities, **weapon mods** that make Engineering's
+copper tiers worth reaching, and a **hotbar** across the bottom of the
+screen that the player fills by dragging. The first ability is a
+gadget, server-side and instant; abilities that enter the movement sim
+(a hover on a pair of boots) ride the same framework later, when both
+sims and the conformance suite are extended for them.
+
+#### `use`
+
+`use {item}` (PROTOCOL `0x0013`) does one of two things, decided by the
+item's def:
+
+- A **consumable** (`kind: "consumable"`, def carries `consumable`): one
+  unit leaves the bag and its effect applies. Refused `not_owned` when
+  none is carried.
+- **Worn gear with an ability** (def carries `ability`): the ability
+  fires. Refused `not_owned` unless the item sits in an equip slot.
+
+Common rules, in order: item known (`unknown_item`) → item has a
+`consumable` or `ability` block (`unusable`) → owned/worn as above →
+alive (`dead`) → not on cooldown (`cooldown`, with `"ready_in"` seconds
+in the refusal body) → effect-specific checks. Using anything ends a
+running gather channel (`gather_end` `cancel`). Cooldowns are
+per-connection, per item id, server-side; the result carries
+`"cooldown"` seconds so the bar can draw the sweep without a clock of
+its own. Result: `{"item", "effect": {…}, "cooldown": s}`; the `effect`
+shape is the item's.
+
+| item | kind | block | effect | cooldown | value | recipe (Eng level, inputs, xp) |
+|---|---|---|---|---|---|---|
+| `consumable.medkit` | consumable, stack 10, common | `consumable: {heal: 50, cooldown: 8}` | +50 health, capped at max; refused `no_effect` at full health; `effect: {"health": <after>}` | 8 s | 12 | 3: `mat.ore.iron` ×1, `mat.scrap` ×2 → ×2, xp 40; also stocked by the quartermaster at 30 cr — a shop sells bandages |
+| `gadget.scanner` | gadget, slot `gadget`, stack 1, rare | `ability: {id: "scan", range: 120, cooldown: 30}` | every node and loot drop within `range` of the player: `effect: {"pings": [{"id", "def", "pos": [x,y,z], "health"}]}` — the compass shows them for `scan_show` seconds | 30 s | 120 | 6: `mat.ore.iron` ×4, `mat.scrap` ×4 → ×1, xp 150 |
+
+| param | value |
+|---|---|
+| `scan_show` | 20 s (client) |
+
+#### Weapon mods
+
+A **mod** is an item of `kind: "mod"` with `slot: "mod"` — a new entry
+in `equip_slots`, drawn on the character panel under WEAPON — whose def
+carries `mod: {…}` deltas applied to whatever `primary` is worn. One
+mod at a time; the mod stays worn when the rifle comes off and applies
+to the next one. The server applies the deltas everywhere the weapon
+table is read (`ResolveShot`, `reload`, the fire-interval check), the
+client applies the same deltas to the DAMAGE / FIRE RATE / MAGAZINE /
+RANGE stats and its magazine display. Deltas add; nothing multiplies.
+
+| item | rarity | `mod` deltas | value | recipe (Eng level, inputs, xp) |
+|---|---|---|---|---|
+| `mod.barrel` | rare | `max_range +40`, `falloff_start +20`, `falloff_end +40` | 90 | 12: `mat.ore.copper` ×4, `mat.scrap` ×4, xp 250 |
+| `mod.mag` | rare | `magazine +10` | 90 | 12: `mat.ore.copper` ×3, `mat.scrap` ×6, xp 250 |
+| `mod.coil` | epic | `damage +5` | 160 | 15: `mat.ore.copper` ×6, `mat.ore.iron` ×4, xp 400 |
+
+A worn rifle keeps its loaded rounds when a mag mod comes off: the
+magazine is clamped to the new size on the next reload, never emptied.
+
+#### The hotbar
+
+Ten cells across the bottom centre of the HUD, one row, keys **1 2 3 4
+5 Q E T Z X**. A second row on the same keys under **Shift** (`⇧1` …
+`⇧X`, twenty slots) is built and saved but **switched off for now**
+(`Hotbar.ShiftRow`): Shift is sprint, and a hotkey mid-sprint firing
+the second row read as a misfire in play. **F interacts** and **R
+reloads** (when a gun is worn); neither is on the bar. Shift is also sprint; a hotkey
+pressed while sprinting fires the shift row, which is what a modifier
+means. A slot holds a **reference**, not a thing:
+
+| kind | what it points at | fires | drawn |
+|---|---|---|---|
+| `item` | a consumable item id | `use {item}` | icon, bag count bottom-right; greyed at 0 |
+| `ability` | a worn item id whose def has `ability` | `use {item}` | icon; greyed when not worn |
+
+Defaults on first run: every slot empty. Filling the bar: drag from the backpack (a consumable) or the
+character panel (worn gear with an ability) onto a cell; drag cell to
+cell moves; right-click clears; dropping onto an occupied cell replaces
+(the old reference is dropped, never swapped — a bar is not a bag).
+Layout persists in `user://sa.cfg` `[hotbar]` as twenty `kind:id`
+strings — client state, never on the wire; a second machine starts
+with the defaults.
+
+A cell on cooldown draws a dark sweep draining over the `cooldown`
+seconds the result carried, and a key press during it does nothing
+locally (the server would refuse anyway). Keys fire with panels open
+except while a text field has focus. The world prompt reads
+`F · drill iron node`.
+
+#### Client
+
+- HUD: the bar, key labels, counts, cooldown sweeps, the shift row
+  swap while Shift is held.
+- Backpack: consumables draggable to the bar (the existing `ItemSlot`
+  drag source with a new drop target); right-click USE on a consumable
+  as a keyboard-free path.
+- Character panel: MOD slot under WEAPON; DAMAGE / FIRE RATE /
+  MAGAZINE / RANGE stats reflect the worn mod; a worn gadget draggable
+  to the bar.
+- Compass: scan pings as node/drop markers for `scan_show` seconds,
+  one toast `scan: 3 nodes, 1 drop`.
+- Bench: five new recipes on the same cards.
+
 ## Phase 2 — items, weapons, combat, interaction
 
 Spec for `netcode` + `frontend`, same contract status as the on-foot rules
@@ -1867,7 +1995,8 @@ shooting a target range (`docs/ROADMAP.md`).
 - **Equipment** is one map, `{slot: item}`. The slot set is data
   (`items.json` `equip_slots`, Phase 11.7): `head`, `chest`, `legs`,
   `hands`, `feet`, `back`, `accessory1`, `accessory2`, `primary`,
-  `secondary`, `tool`, `gadget`. An item declares the slot it fits; an
+  `secondary`, `tool`, `gadget`, and from Phase 13 `mod` (a weapon mod,
+  applied to whatever `primary` is worn). An item declares the slot it fits; an
   `accessory` item fits either accessory slot; one stack of one sits in
   one slot at a time. `equip` with an empty item clears a slot. Only
   `primary` is visible on the body and on the wire to others; armor
@@ -1998,6 +2127,7 @@ Phase 4/5.
 | Param | Value | Unit |
 |---|---|---|
 | `interact_dist` | 3.0 | m |
+| `ui_close_dist` | 5.0 | m — an NPC's panel (shop, bench) closes when the player is further than this from the NPC (Phase 13) |
 | `interact_cone` | 20 | deg (half-angle) |
 
 ### Shop NPCs

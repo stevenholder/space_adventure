@@ -280,15 +280,23 @@ namespace SpaceAdventure.Game.UI
         public int ScrollOffset => _scrollBox != null && GodotObject.IsInstanceValid(_scrollBox) ? _scrollBox.ScrollVertical : -1;
         public void ScrollTo(int px) { if (_scrollBox != null && GodotObject.IsInstanceValid(_scrollBox)) _scrollBox.ScrollVertical = px; }
 
+        /// <summary>Phase 13: STOCK or BUYBACK, WoW's two tabs.</summary>
+        private bool _buybackTab;
+        /// <summary>The rig's tab switch.</summary>
+        public void ShowBuyback(bool on) { _buybackTab = on; if (Open) Rebuild(); }
+
         protected override void Fill(VBoxContainer body)
         {
             long credits = _character.Credits;
             var head = Styles.Row(8);
-            head.AddChild(Styles.Grow(Styles.Display_("stock", 12, Styles.Dust)));
+            head.AddChild(Styles.Button("STOCK", !_buybackTab, () => { _buybackTab = false; Rebuild(); }));
+            head.AddChild(Styles.Button("BUYBACK", _buybackTab, () => { _buybackTab = true; Rebuild(); }));
+            head.AddChild(Styles.Grow(new Control()));
             head.AddChild(Styles.Display_(credits < 0 ? "— cr" : $"{credits} cr", 14, Styles.Amber));
             body.AddChild(head);
             body.AddChild(Styles.Gap(4));
 
+            if (_buybackTab) { FillBuyback(body); return; }
             var stock = _interact.Stock;
             if (stock != null)
             {
@@ -330,11 +338,44 @@ namespace SpaceAdventure.Game.UI
                 }
                 body.AddChild(scroll);
             }
-            FillSell(body);
             if (!string.IsNullOrEmpty(_interact.Status))
                 Line(body, _interact.Status, Styles.Dust);
             body.AddChild(Styles.Gap(4));
-            Line(body, "hover for details  ·  B backpack  ·  E closes", Styles.Dust, 11);
+            Line(body, "hover for details  ·  right-click a bag item to sell it  ·  F closes", Styles.Dust, 11);
+        }
+
+        /// <summary>What was sold this session, newest first, each at what the shop paid.</summary>
+        private void FillBuyback(VBoxContainer body)
+        {
+            var entries = _interact.Buyback;
+            var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 400), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+            var list = Styles.Column(4);
+            list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            scroll.AddChild(list);
+            if (entries == null || entries.Length == 0)
+                list.AddChild(Styles.Display_("nothing sold yet", 12, Styles.Dust));
+            else
+                for (int i = entries.Length - 1; i >= 0; i--)
+                {
+                    var e = entries[i];
+                    string item = e.item;
+                    SpaceAdventure.Net.Defs defs = _character.Defs;
+                    var slot = new ItemSlot { Defs = defs, Icons = _icons, Static = true, Item = item, Qty = e.qty };
+                    bool canAfford = _character.Credits < 0 || _character.Credits >= e.price;
+                    Control back = canAfford
+                        ? Styles.Button("BUY BACK", false, () => { _send(_interact.BuybackCmd(_nextSeq(), item)); Rebuild(); })
+                        : Styles.Display_("—", 12, Styles.Dust);
+                    var priceLab = Styles.Display_($"{e.price} cr", 13, canAfford ? Styles.Amber : Styles.Dust);
+                    priceLab.CustomMinimumSize = new Vector2(60, 0);
+                    priceLab.HorizontalAlignment = HorizontalAlignment.Right;
+                    list.AddChild(Styles.Card(Styles.Rarity(defs.ItemRarity(item)), slot,
+                        defs.ItemName(item) + (e.qty > 1 ? $"  ×{e.qty}" : ""), Styles.Rarity(defs.ItemRarity(item)),
+                        "sold this session  ·  the shop's price, no markup", priceLab, back));
+                }
+            body.AddChild(scroll);
+            if (!string.IsNullOrEmpty(_interact.Status)) Line(body, _interact.Status, Styles.Dust);
+            body.AddChild(Styles.Gap(4));
+            Line(body, "twelve most recent sales  ·  gone when you log out  ·  F closes", Styles.Dust, 11);
         }
 
         /// <summary>
@@ -344,48 +385,6 @@ namespace SpaceAdventure.Game.UI
         /// shown is the BASE price -- the server may pay more (the
         /// Scavenging→Commerce synergy), so the header says so.
         /// </summary>
-        private void FillSell(VBoxContainer body)
-        {
-            body.AddChild(Styles.Gap(6));
-            var head = Styles.Row(8);
-            head.AddChild(Styles.Grow(Styles.Display_("sell  ·  base price", 12, Styles.Dust)));
-            head.AddChild(Styles.Display_("click one · shift-click all", 11, Styles.Dust));
-            body.AddChild(head);
-
-            SpaceAdventure.Net.Defs defs = _character.Defs;
-            var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 180), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-            var list = Styles.Column(4);
-            list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            scroll.AddChild(list);
-            int shown = 0;
-            foreach (var stack in _character.Inventory ?? System.Array.Empty<ItemStack>())
-            {
-                if (stack == null || string.IsNullOrEmpty(stack.item) || stack.qty <= 0) continue;
-                long unit = defs.SellPrice(stack.item);
-                if (unit <= 0 || _character.SlotHolding(stack.item) != "") continue;
-                string item = stack.item;
-                int qty = stack.qty;
-                var row = Styles.Row(6);
-                row.AddChild(new ItemSlot { Defs = defs, Icons = _icons, Static = true, Item = item, Qty = qty });
-                row.AddChild(Styles.Grow(Styles.Display_(defs.ItemName(item), 13, Styles.Rarity(defs.ItemRarity(item)))));
-                var priceLab = Styles.Display_($"{qty} × {unit} cr", 13, Styles.Amber);
-                priceLab.HorizontalAlignment = HorizontalAlignment.Right;
-                row.AddChild(priceLab);
-                var sell = Styles.Button("SELL", false, () =>
-                {
-                    int n = Input.IsKeyPressed(Key.Shift) ? qty : 1;
-                    _send(_interact.SellCmd(_nextSeq(), item, n));
-                    Rebuild();
-                });
-                sell.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-                row.AddChild(sell);
-                list.AddChild(row);
-                shown++;
-            }
-            if (shown == 0)
-                list.AddChild(Styles.Display_("nothing to sell", 12, Styles.Dust));
-            body.AddChild(scroll);
-        }
     }
 
     /// <summary>
@@ -429,12 +428,14 @@ namespace SpaceAdventure.Game.UI
     {
         private readonly System.Action _onAccount;
         private readonly System.Action _onQuit;
+        private readonly System.Action _onSettings;
 
-        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit)
+        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit, System.Action onSettings = null)
             : base(root, "Menu", 260, 0.30f)
         {
             _onAccount = onAccount;
             _onQuit = onQuit;
+            _onSettings = onSettings;
         }
 
         protected override void Fill(VBoxContainer body)
@@ -444,6 +445,11 @@ namespace SpaceAdventure.Game.UI
             body.AddChild(Styles.Gap(4));
             body.AddChild(Styles.Button("ACCOUNT", false, () => { Show(false); _onAccount(); }));
             body.AddChild(Styles.Gap(4));
+            if (_onSettings != null)
+            {
+                body.AddChild(Styles.Button("SETTINGS", false, () => { Show(false); _onSettings(); }));
+                body.AddChild(Styles.Gap(4));
+            }
             body.AddChild(Styles.Button("QUIT GAME", true, _onQuit));
             body.AddChild(Styles.Gap(6));
             Line(body, "Esc returns", Styles.Dust, 11);

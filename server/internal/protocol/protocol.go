@@ -91,6 +91,8 @@ const (
 	OpGather       uint16 = 0x0010
 	OpGatherCancel uint16 = 0x0011
 	OpCraft        uint16 = 0x0012
+	OpUse          uint16 = 0x0013 // Phase 13: a consumable or a worn ability
+	OpShopBuyback  uint16 = 0x0014 // Phase 13: re-buy something sold this session, at what the shop paid
 )
 
 // cmd_result status codes (PROTOCOL.md constants).

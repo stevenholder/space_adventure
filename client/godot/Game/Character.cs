@@ -55,6 +55,17 @@ namespace SpaceAdventure.Game
 
         public int UsedSlots => Inventory?.Length ?? 0;
 
+        /// <summary>How many of an item the bag holds (Phase 13: hotbar counts).</summary>
+        public int Count(string item)
+        {
+            int n = 0;
+            if (Inventory != null) foreach (var st in Inventory) if (st.item == item) n += st.qty;
+            return n;
+        }
+
+        /// <summary>Phase 13: the `use` cmd for a consumable or a worn ability.</summary>
+        public static byte[] UseCmd(ushort seq, string item) => Encode.Cmd(seq, Op.Use, $"{{\"item\":\"{item}\"}}");
+
         /// <summary>Rounds in the magazine, and carried ammunition.</summary>
         public int Magazine { get; private set; } = -1;
         public int Reserve { get; private set; } = -1;
@@ -110,8 +121,11 @@ namespace SpaceAdventure.Game
         {
             var r = JsonConvert.DeserializeObject<EquipResult>(body ?? "");
             if (r?.equipped == null) return;
+            string before = Primary;
             Equipped.Clear();
             foreach (var kv in r.equipped) Equipped[kv.Key] = kv.Value;
+            if (Primary != before) Magazine = -1; // a new gun: full on its first shot
+            SyncAmmo();
         }
         private class EquipResult { public System.Collections.Generic.Dictionary<string, string> equipped { get; set; } }
 
@@ -130,6 +144,21 @@ namespace SpaceAdventure.Game
                 Equipped.Clear();
                 foreach (var kv in w.equipped) Equipped[kv.Key] = kv.Value;
             }
+            SyncAmmo();
+        }
+
+        /// <summary>
+        /// The ammo box from the bag: the reserve is the carried ammo, and a
+        /// magazine the server has not reported yet (join, or an equip) is
+        /// full — the server hands a freshly equipped weapon a full magazine
+        /// on its first shot (fireLocked), so this is the number it will use.
+        /// </summary>
+        public void SyncAmmo()
+        {
+            ItemDef weapon = Defs.Item(Primary);
+            if (weapon?.Weapon == null) { Magazine = -1; Reserve = -1; return; }
+            Reserve = Count(weapon.Weapon.AmmoItem);
+            if (Magazine < 0) Magazine = weapon.Weapon.Magazine + (Defs.Item(Worn("mod"))?.Mod?.Magazine ?? 0);
         }
 
     }

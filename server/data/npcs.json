@@ -57,6 +57,10 @@
     {
      "item": "tool.cutter",
      "price": 180
+    },
+    {
+     "item": "consumable.medkit",
+     "price": 30
     }
    ]
   },

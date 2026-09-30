@@ -41,7 +41,7 @@ namespace SpaceAdventure.Game.UI
                 var name = Styles.Display_("", 13, Styles.Cream);
                 row.AddChild(name);
                 var (trough, fill) = Styles.Bar(Styles.Danger, 9);
-                var num = Styles.Display_("", 10, Styles.Cream);
+                var num = Styles.Display_("", 12, Styles.Cream);
                 num.SetAnchorsPreset(Control.LayoutPreset.TopRight);
                 num.GrowHorizontal = Control.GrowDirection.Begin;
                 num.OffsetRight = -4; num.OffsetTop = -3;

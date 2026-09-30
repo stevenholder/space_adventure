@@ -92,6 +92,17 @@ type cmdWorld struct {
 	Gather       func(node uint32, ticks int) bool
 	CancelGather func() bool
 	Rand         func() float64
+	// Phase 13 (use.go): the connection's vitals and cooldowns live under
+	// s.mu, and the scan reads the world. All take s.mu themselves.
+	// Phase 13 buyback (shop.go): the connection's sale log, under s.mu.
+	Buyback       func() []buybackEntry
+	PushBuyback   func(buybackEntry)
+	PopBuyback    func(item string) (buybackEntry, bool)
+	Vitals        func() (health int, dead bool)
+	Heal          func(n int) (after int)
+	CoolingFor    func(item string) (readyIn float64)
+	StartCooldown func(item string, secs float64)
+	Scan          func(rng float64) []map[string]any
 
 	// Ent is the requester's own server-side entity, for the rounds
 	// currently in the magazine.
@@ -199,7 +210,15 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !inRange(w, pos) {
 			return refuse("out_of_range")
 		}
-		return reply(protocol.StatusOK, encodeJSON(map[string]any{"stock": npc.Stock}))
+		out := map[string]any{"stock": npc.Stock}
+		if w.Buyback != nil {
+			bb := w.Buyback()
+			if bb == nil {
+				bb = []buybackEntry{}
+			}
+			out["buyback"] = bb
+		}
+		return reply(protocol.StatusOK, encodeJSON(out))
 
 	case protocol.OpShopBuy:
 		var body struct {
@@ -270,21 +289,28 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if w.Ent == nil {
 			return refuse("refused")
 		}
-		weapon := w.Player.Equipped[slotPrimary]
-		def, ok := w.Reg.Items[weapon]
-		if !ok || def.Weapon == nil {
+		wp, ok := sim.WeaponWith(w.Reg, w.Player)
+		if !ok {
 			return refuse(sim.ReasonNotOwned)
 		}
 
-		capacity := def.Weapon.Magazine
+		capacity := wp.Magazine
 		if w.Ent.Magazine >= capacity {
+			// A mag mod that came off leaves more rounds loaded than the
+			// bare rifle holds: clamp on this reload and hand the surplus
+			// back to the bag (best effort — a full bag loses them), never
+			// empty the magazine (GDD "Weapon mods").
+			if surplus := w.Ent.Magazine - capacity; surplus > 0 {
+				w.Ent.Magazine = capacity
+				_ = sim.AddItem(w.Player, wp.AmmoItem, surplus, w.Reg)
+			}
 			return reply(protocol.StatusOK, encodeJSON(map[string]any{
 				"magazine": w.Ent.Magazine,
-				"reserve":  sim.CountItem(w.Player, def.Weapon.AmmoItem),
+				"reserve":  sim.CountItem(w.Player, wp.AmmoItem),
 			}))
 		}
 
-		reserve := sim.CountItem(w.Player, def.Weapon.AmmoItem)
+		reserve := sim.CountItem(w.Player, wp.AmmoItem)
 		take := capacity - w.Ent.Magazine
 		if take > reserve {
 			take = reserve
@@ -292,7 +318,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if take <= 0 {
 			return refuse("no_ammo")
 		}
-		if err := sim.TakeItem(w.Player, def.Weapon.AmmoItem, take); err != nil {
+		if err := sim.TakeItem(w.Player, wp.AmmoItem, take); err != nil {
 			return refuse("refused")
 		}
 		w.Ent.Magazine += take
@@ -319,9 +345,50 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 			return refuse("out_of_range")
 		}
 		bonus := synergyBonus(w.Reg, w.Player, "sell_bonus", "")
-		if _, err := sim.SellAt(w.Player, npc, body.Item, body.Qty, w.Reg, bonus); err != nil {
+		paid, err := sim.SellAt(w.Player, npc, body.Item, body.Qty, w.Reg, bonus)
+		if err != nil {
 			return refuseErr(err)
 		}
+		if w.PushBuyback != nil {
+			w.PushBuyback(buybackEntry{Item: body.Item, Qty: body.Qty, Price: paid})
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"credits": w.Player.Credits, "inventory": w.Player.Inventory,
+		}))
+
+	case protocol.OpShopBuyback:
+		// The newest sale of that item comes back whole, at what the shop
+		// paid; a refusal puts the entry back where it was.
+		var body struct {
+			NPC  uint32 `json:"npc"`
+			Item string `json:"item"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		npc, pos, ok := w.FindNPC(body.NPC)
+		if !ok {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRange(w, pos) {
+			return refuse("out_of_range")
+		}
+		if npc.Kind != "shop" || w.PopBuyback == nil {
+			return refuse(sim.ReasonNoStock)
+		}
+		e, ok := w.PopBuyback(body.Item)
+		if !ok {
+			return refuse("no_buyback")
+		}
+		if e.Price > w.Player.Credits {
+			w.PushBuyback(e)
+			return refuse(sim.ReasonInsufficientCredits)
+		}
+		if err := sim.AddItem(w.Player, e.Item, e.Qty, w.Reg); err != nil {
+			w.PushBuyback(e)
+			return refuseErr(err)
+		}
+		w.Player.Credits -= e.Price
 		return reply(protocol.StatusOK, encodeJSON(map[string]any{
 			"credits": w.Player.Credits, "inventory": w.Player.Inventory,
 		}))
@@ -405,6 +472,15 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 			return refuse("busy")
 		}
 		return reply(protocol.StatusOK, encodeJSON(map[string]any{"node": body.Node, "duration": duration}))
+
+	case protocol.OpUse:
+		var body struct {
+			Item string `json:"item"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		return handleUse(w, body.Item, reply, refuse)
 
 	case protocol.OpGatherCancel:
 		var body struct{}
