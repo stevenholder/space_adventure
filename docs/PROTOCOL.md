@@ -158,7 +158,13 @@ Constants:
   `0x0011` `gather_cancel` `{}` — ends the channel with nothing granted;
   `0x0012` `craft` `{"npc": <entity_id>, "recipe": "<id>", "qty": <n>}` —
   at the workbench (`npc.workbench`), instant and atomic.
-  `0x0013`+ still reserved.
+  Phase 13 (GDD "Phase 13 — use, modify, and the hotbar"):
+  `0x0013` `use` `{"item": "<id>"}` — a carried consumable (one unit
+  leaves the bag) or a worn item with an `ability`; result
+  `{"item", "effect": {…}, "cooldown": <s>}`, the effect shape is the
+  item's (a medkit: `{"health"}`; the scanner: `{"pings": [{"id", "def",
+  "pos", "health"}]}`).
+  `0x0014`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -378,6 +384,7 @@ Bodies per opcode:
 | `shop_sell` (Phase 12) | `{"npc": <entity_id>, "item":"mat.ore.iron", "qty":4}` | `{"credits":762,"inventory":[…]}` — same shape as `shop_buy` |
 | `gather` (Phase 12) | `{"node": <entity_id>}` | `{"node":1048577,"duration":2.85}` |
 | `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) |
+| `use` (Phase 13) | `{"item":"consumable.medkit"}` | `{"item":"consumable.medkit","effect":{"health":100},"cooldown":8}` |
 | `craft` (Phase 12) | `{"npc": <entity_id>, "recipe":"recipe.cells", "qty":1}` | `{"inventory":[…],"crafted":{"item":"ammo.cell","qty":30}}` — `qty` includes any `craft_extra` bonus |
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
@@ -387,7 +394,9 @@ A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
 the node's `level` or a `craft` below the recipe's). Phase 12 adds
 `unsellable`, `equipped`, `not_owned`, `bad_qty` (`shop_sell`); `busy`,
 `no_tool`, `depleted`, `no_space` (`gather`); `not_gathering`
-(`gather_cancel`); `unknown_recipe`, `missing_materials` (`craft`). The
+(`gather_cancel`); `unknown_recipe`, `missing_materials` (`craft`).
+Phase 13 adds `unusable`, `dead`, `no_effect` and `cooldown` (`use`; a
+`cooldown` refusal carries `"ready_in": <s>` beside the reason). The
 client maps codes to text; the server never sends prose for display.
 
 ### `defs` — the data the client needs (Phase 2)
@@ -407,6 +416,11 @@ prompts, models and the locked/no-tool hint from it), `recipes` (the
 `recipes.json` table verbatim), `constants.sell_rate`, and per item
 `value` (absent = unsellable) and `supersedes` (on a tool). `npcs[]`
 gains the workbench with `verb: "Use"`.
+
+Phase 13 adds, additively: per item `consumable: {heal, cooldown}`,
+`ability: {id, range, cooldown}`, `mod: {damage, magazine, max_range,
+falloff_start, falloff_end}` (each key optional, a delta), and `mod`
+in `equip_slots`. Nothing about the hotbar is on the wire.
 
 The client **must not fire, predict damage, or draw an inventory before `defs`
 arrives** — the same rule as `terrain`, for the same reason: it has no data to

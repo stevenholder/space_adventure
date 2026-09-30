@@ -1363,6 +1363,89 @@ parallel; wave 3 is `qa`.
   sweep green; a player who never touches a node plays exactly the
   game they had. (sweep)
 
+# Phase 13 — use, modify, and the hotbar (wave 0 landed 2026-09-30)
+
+Phase 12 put ore in the bag and a bench at the relay; this phase gives
+the bench things worth making and the player a bar to put them on. A
+`use` verb for consumables and gear abilities, weapon mods that spend
+the copper tier, and a twenty-slot hotbar the player fills by dragging.
+Contract: GDD "Phase 13 — use, modify, and the hotbar", PROTOCOL `use`
+(`0x0013`), `defs` `consumable` / `ability` / `mod` blocks, `mod` in
+`equip_slots`. The hotbar is client state and never on the wire.
+
+**Playable proof.** Craft two medkits and a scanner at the bench. Open
+the backpack and drag a medkit onto the hotbar's 1; drag the scanner,
+worn in GADGET, onto Q. Walk into the scrapyard, take a hit, press 1:
+health jumps 50, the cell darkens and sweeps back over eight seconds,
+its count reads 1. Press Q: three ore markers and a drop light the
+compass for twenty seconds. Hold Shift and the bar shows the other
+row. E still drills and R still reloads, because they are on the bar
+too, and moving interact to F makes the world prompt say `F · drill`.
+At Engineering 12, a barrel mod on the rifle reads RANGE 160 on the
+sheet and lands hits at 140 m that used to miss.
+
+**Contracts** (wave 0, this section): GDD "Phase 13 — use, modify, and
+the hotbar" and the `mod` slot line under Equipment; PROTOCOL opcode
+`0x0013`, the four refusal codes, the `defs` additions. Task table is
+the brief set, as before.
+
+### Task list
+
+Wave 1 lands the verb, the data and the mod slot (a medkit heals, a mod
+changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | Data: `consumable.medkit`, `gadget.scanner`, `mod.barrel` / `mod.mag` / `mod.coil` with their blocks and values; `mod` in `equip_slots`; five recipes in recipes.json | `server/data` | defs audit test |
+| 2 | 1 | Registry + payload: `Consumable`, `Ability`, `Mod` on `Item`; audit that a consumable's cooldown and a mod's deltas are sane; `equip_slots` carries `mod` | `internal/defs` | `go test ./internal/defs` |
+| 3 | 1 | Constants both ends: `OpUse` `0x0013` | `protocol.go`, `Messages.cs` | build |
+| 4 | 1 | `sim.ApplyMod(weapon, mod) defs.Weapon` (deltas add) and every weapon-table read goes through the worn mod: `ResolveShot`, `reload` (clamp, never empty), fire-interval check | `internal/sim`, `server/` | `TestApplyMod`, `TestReloadWithMagMod` |
+| 5 | 1 | `use` handler: the GDD's validation order, per-connection cooldown map, gather channel cancelled, `consumable.medkit` heals through `sim.Heal` (capped, `no_effect` at full), `gadget.scanner` pings nodes and drops within range | `server/use.go`, `internal/sim` | `TestUseMedkit`, `TestUseScanner`, `TestUseRefusals` |
+| 6 | 2 | Client defs: `ConsumableDef`, `AbilityDef`, `ModDef` on `ItemDef`; `Character` stats apply the worn mod (DAMAGE / FIRE RATE / MAGAZINE / RANGE) and the magazine display clamps | `Defs.cs`, `Character.cs` | `dotnet build` + sheet shot |
+| 7 | 2 | `Hotbar` model: twenty `HotbarRef {kind, id}`, defaults (E interact, R reload), `user://sa.cfg [hotbar]` load/save, key table `1 2 3 4 5 Q E R T F` × Shift | `UI/Hotbar.cs` | `TestHotbarDefaults` in the headless self-test |
+| 8 | 2 | `HotbarView`: ten cells bottom centre, key labels, icons via `Icons`, counts from the bag, greyed when empty/unworn, cooldown sweep from the `use` result, shift row swap while Shift is held | `UI/Hotbar.cs` | shot |
+| 9 | 2 | Firing: keys route through the bar — `item`/`ability` send `use`, `interact`/`reload` call the old paths; the world prompt reads the key that holds `interact`; `use` results and refusals to the HUD | `Boot.cs`, `Interact.cs` | shot + t37 |
+| 10 | 2 | Drag: `ItemSlot` drags from the backpack (consumables) and the character panel (gear with `ability`) drop onto a cell; cell → cell moves; right-click clears; right-click USE on a bag consumable | `UI/Inventory.cs`, `UI/Hotbar.cs` | shot |
+| 11 | 2 | Character panel: MOD slot under WEAPON; bench cards for the five recipes (no new code expected — verify) | `UI/Inventory.cs` | shot |
+| 12 | 2 | Compass: scan pings as markers for `scan_show`, one toast | `Hud.cs`, `UI/HudView.cs` | shot |
+| 13 | 2 | Art: `gen_icons` covers the new items (medkit, scanner and mods get small models or initials tiles — decide by what reads at 96 px) | `art/` | icons exist or initials fall back |
+| 14 | 2 | Rig: `-uiHotbarDemo` (fills the bar locally: a medkit on 1, scanner on Q, a cooldown sweep on 1), `-uiShift` (hold Shift for the shot) | `Rig.cs` | shots |
+| 15 | 3 | `t37-use.mjs`: buy medkits at the quartermaster (stocked, GDD); `use` at full → `no_effect`; walk t34's route into the camp, take a hit, `use` → +50 and `cooldown: 8`, a second inside 8 s → `cooldown` with `ready_in`, the bag count drops by one; the rifle → `unusable`, the unworn scanner → `not_owned`; `use` mid-channel at the pad ends the gather `cancel`. The scanner's pings and the mods' numbers are unit-tested and photographed (they are bench-made behind Engineering levels the harness cannot reach in one life) | `test/` | the test |
+| 16 | 3 | QA: C129–C136, gallery, docs | docs | criteria |
+
+### Acceptance criteria
+
+- **C129 `use` heals and cools.** A carried medkit heals 50 capped at
+  max, one unit leaves the bag, the result carries `cooldown: 8`; a
+  second `use` inside 8 s refuses `cooldown` with `ready_in`; at full
+  health `no_effect` and nothing consumed; dead → `dead`; a medkit not
+  carried → `not_owned`; the rifle → `unusable`. (unit + t37)
+- **C130 The scanner pings.** Worn in GADGET, `use` returns every node
+  and drop within 120 m with positions and node health; unworn →
+  `not_owned`; 30 s cooldown; the compass draws them for 20 s. (unit +
+  t37 + shot)
+- **C131 Mods change the numbers everywhere.** `mod.barrel` lands a hit
+  at 140 m that misses bare; `mod.mag` reloads to 40 and a mag of 40
+  clamps to 30 on the next reload after the mod comes off, rounds never
+  vanish; `mod.coil` deals 30; the sheet's DAMAGE / MAGAZINE / RANGE
+  read the same numbers the server uses. (unit + t37 + shot)
+- **C132 The bar fires.** 1–5 Q E R T F fire their slots; Shift + key
+  fires the second row; E interacts and R reloads on a fresh profile;
+  moving interact to F makes the prompt read `F ·`. (t37 for the wire
+  half, shots for the rest)
+- **C133 The bar is filled by dragging.** Backpack → cell for a
+  consumable, character panel → cell for a worn gadget, cell → cell
+  moves, right-click clears, drop on occupied replaces; the layout
+  survives a restart through `user://sa.cfg`. (rig drag demo + shot)
+- **C134 The bar draws its state.** Key labels, icons, bag counts,
+  greyed at 0 or unworn, a cooldown sweep for exactly the result's
+  seconds, the shift row while Shift is held. (shots)
+- **C135 Recipes exist.** Five new bench cards, medkit at Engineering
+  3, scanner at 6, barrel and mag at 12, coil at 15; copper is spent
+  for the first time. (defs audit + shot)
+- **C136 Nothing else moved.** t14, t34, t36 and the whole sweep green;
+  a fresh profile plays the game it had. (sweep)
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
@@ -1379,6 +1462,7 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Chat, guilds | after Phase 5; not on the critical path (crafting landed in Phase 12, quests in Phase 10) |
 | A persistent world players mutate (bases, territory) | Phase 6 candidate — the persistence layer from Phase 2 is the seed |
 | Rig + animation clips | procedural motion stops carrying the fidelity |
+| Gear abilities in the movement sim (hover boots, a dash) | Phase 13's `use`/ability framework and hotbar exist; the first sim ability needs both sims stepped identically plus conformance cases, like Phase 11's multipliers — build it when a second ability wants the sim, not the first |
 | UDP / WebTransport | WebSocket latency is measured as the limiter, not assumed to be |
 
 ## Dispatch pattern (unchanged from Phase 1, because it worked)
