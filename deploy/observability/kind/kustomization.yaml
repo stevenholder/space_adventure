@@ -1,0 +1,16 @@
+# The laptop. Every series from here carries env=kind, cluster=kind-space-adventure.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - target:
+      kind: Deployment
+      name: alloy
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: kind
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: kind-space-adventure

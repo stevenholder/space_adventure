@@ -1,0 +1,20 @@
+# Metrics plumbing, one copy per cluster (kind/, prod/ overlays). Grafana
+# Alloy reads ServiceMonitors, scrapes, stamps env + cluster on every
+# series, and pushes OTLP to the LGTM box. Not part of deploy/manifests
+# or deploy/prod on purpose: those are applied by `make up` and CD, and a
+# ServiceMonitor in them would fail the whole apply on any cluster where
+# the CRD is not installed yet. `make observe` / RUNBOOK "Metrics" apply
+# this after the CRD is established.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - crd-servicemonitor.yaml
+  - namespace.yaml
+  - alloy-rbac.yaml
+  - alloy.yaml
+  - servicemonitor-server.yaml
+configMapGenerator:
+  - name: alloy-config
+    namespace: observability
+    files:
+      - config.alloy

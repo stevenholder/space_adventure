@@ -1,0 +1,16 @@
+# The pandas. Every series from here carries env=prod, cluster=pandas.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+patches:
+  - target:
+      kind: Deployment
+      name: alloy
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: prod
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: pandas
