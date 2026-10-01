@@ -137,6 +137,8 @@ namespace SpaceAdventure.Net
         [JsonProperty("magazine")] public int Magazine { get; set; }
         [JsonProperty("max_range")] public double MaxRange { get; set; }
         [JsonProperty("ammo_item")] public string AmmoItem { get; set; } = "";
+        /// <summary>Seconds a reload takes (server-authoritative; the client only times the arms to it).</summary>
+        [JsonProperty("reload_time")] public double ReloadTime { get; set; }
     }
 
     /// <summary>One entity type's render and hitbox def.</summary>

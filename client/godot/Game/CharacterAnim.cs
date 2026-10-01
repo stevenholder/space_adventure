@@ -29,8 +29,11 @@ namespace SpaceAdventure.Game
         /// exactly, and the walk cut is low enough that a body nudged by
         /// interpolation jitter does not twitch into a walk while standing.
         /// </summary>
-        private const float WalkAt = 0.35f;
-        private const float SprintAt = 6.0f;
+        internal const float WalkAt = 0.35f;
+        internal const float SprintAt = 6.0f;
+
+        /// <summary>Clips that play once and hold: dying, and the first-person fire and reload.</summary>
+        internal static bool OneShot(string name) => name == "die" || name == "fp_fire" || name == "fp_reload";
 
         /// <summary>Long enough not to snap, short enough not to moonwalk.</summary>
         private const double Fade = 0.15;
@@ -45,7 +48,7 @@ namespace SpaceAdventure.Game
             // body that loops its own death animation is a bug you cannot unsee.
             foreach (string name in _player.GetAnimationList())
                 _player.GetAnimation(name).LoopMode =
-                    name == "die" ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
+                    OneShot(name) ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
         }
 
         /// <summary>
@@ -66,6 +69,12 @@ namespace SpaceAdventure.Game
         public float DeathLength =>
             _player.HasAnimation("die") ? (float)_player.GetAnimation("die").Length : 0f;
 
+        /// <summary>
+        /// Something in hand: the gaits switch to their "_armed" variants (arms
+        /// in the aim pose) when the model carries them.
+        /// </summary>
+        public bool Armed;
+
         /// <summary>Call every frame with the body's observed ground speed.</summary>
         public void Drive(float speed, bool dead)
         {
@@ -73,6 +82,7 @@ namespace SpaceAdventure.Game
                         : speed > SprintAt ? "sprint"
                         : speed > WalkAt ? "walk"
                         : "idle";
+            if (Armed && !dead && _player.HasAnimation(want + "_armed")) want += "_armed";
             if (want == _current) return;
             if (!_player.HasAnimation(want)) return;
             _player.Play(want, Fade);

@@ -321,7 +321,7 @@ namespace SpaceAdventure.Game
             _structures = new Structures(this, _material, _assets);
             _rocks = new Rocks(this, _material, _assets);
             _viewModel = new ViewModel(_camera, _material, VmLayer, this, _assets);
-            _viewModel.WeaponVisible = false; // until the server says we are holding one
+            _viewModel.ArmsVisible = false; // until the world is up
             _fx = new CombatFx(this);
             _hud = new Hud();
             _character = new Character();
@@ -449,7 +449,13 @@ namespace SpaceAdventure.Game
             // R reloads when a gun is worn; the server would refuse otherwise,
             // and a refusal for pressing R with empty hands is noise.
             if (_input.Pressed(Key.R) && _character.Defs.Item(_character.Primary)?.Weapon != null)
+            {
                 _net.Send(Character.ReloadCmd(NextCmdSeq()));
+                // Cosmetic and local, like the muzzle flash: the arms time
+                // themselves to the weapon's reload_time.
+                double rt = _character.Defs.Item(_character.Primary).Weapon.ReloadTime;
+                _viewModel.Reload(rt > 0 ? rt : 2.0);
+            }
             // Phase 13: 1–5 Q E T Z X fire the hotbar; Shift picks the second
             // row (Shift is also sprint — a hotkey while sprinting fires the
             // shift row, which is what a modifier means).
@@ -544,11 +550,18 @@ namespace SpaceAdventure.Game
             // -rigArmed: show the rig without a purchase (screenshot rig).
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
-            _viewModel.WeaponVisible = _seat == 0 && !string.IsNullOrEmpty(_character.Primary);
+            _viewModel.ArmsVisible = _seat == 0;
+            _viewModel.Hold(_seat == 0 && !string.IsNullOrEmpty(_character.Primary) ? _views.Defs.ItemAsset(_character.Primary) : "");
             _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
             _viewModel.Place(body.Pos, body.Facing);
-            _viewModel.Tick(_fps.LookDelta, (float)body.Vel.Length, (float)delta);
+            // Right mouse aims, only while the world has the pointer (a free
+            // cursor's right-click belongs to the bags and the hotbar).
+            bool aiming = _rigAim || (_seat == 0 && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
+            float clear = _rigLowered ? 0f
+                : _seat == 0 ? ViewModel.Blocked(_camera.GlobalPosition, -_camera.GlobalBasis.Z, ViewModel.Reach, _colliders, _terrain)
+                : float.PositiveInfinity;
+            _viewModel.Tick(_fps.LookDelta, (float)body.Vel.Length, (float)delta, aiming, clear);
             _fx.Tick();
 
             UpdateHudView();
@@ -738,11 +751,12 @@ namespace SpaceAdventure.Game
             // DROPPED, so hold to the weapon's own interval. The shot names
             // the input that was in effect when the trigger went down; the
             // server rewinds by how far back that input executed.
-            if (li.FirePressed && _viewModel.WeaponVisible && Clock.Now >= _nextFireAt)
+            if (li.FirePressed && _viewModel.Armed && _seat == 0 && Clock.Now >= _nextFireAt)
             {
                 _nextFireAt = Clock.Now + FireIntervalSeconds;
                 _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));
                 _fx.OnLocalFire(_viewModel.Muzzle, _viewModel.Layers);
+                _viewModel.Fire(); // the arms kick; the camera never does
             }
         }
 
@@ -925,6 +939,20 @@ namespace SpaceAdventure.Game
                         case EventId.GatherEnd:
                             OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;
+                        case EventId.Worn:
+                        {
+                            // "slot=item" (PROTOCOL event_id 0x000F); armor on
+                            // any body, our own included.
+                            string data = WireReader.Utf8.GetString(ev.Data);
+                            int eq = data.IndexOf('=');
+                            if (eq > 0)
+                            {
+                                string slot = data.Substring(0, eq), item = data.Substring(eq + 1);
+                                _views.OnWorn(ev.EntityId, slot, item);
+                                if (ev.EntityId == _net.EntityId) _viewModel.Wear(slot, string.IsNullOrEmpty(item) ? "" : _views.Defs.ItemAsset(item));
+                            }
+                            break;
+                        }
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
@@ -1025,6 +1053,8 @@ namespace SpaceAdventure.Game
             _rocks.Build(_terrain, _net.WorldSeed);
             _worldBuilt = true;
             _rigArmed = Flag("-rigArmed");
+            _rigAim = Flag("-uiAim");
+            _rigLowered = Flag("-uiLowered");
             // The sheet up front, so the first drip and the K panel already
             // know the levels a reconnecting player arrives with.
             _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
@@ -1550,6 +1580,22 @@ namespace SpaceAdventure.Game
             Check("orientation basis: +Z is the facing", (b * Vector3.Back).DistanceTo(Frame.ToGodot(f)) < 1e-5f);
             Check("orientation basis: +Y is up", (b * Vector3.Up).DistanceTo(Vector3.Up) < 1e-5f);
             Check("model flip turns −Z into the facing", (Frame.ModelFlip * Vector3.Forward).DistanceTo(Vector3.Back) < 1e-5f);
+
+            // First-person arms: the holder puts the body's eye on the camera
+            // and the model's forward (+Z after Attach's flip) down −Z.
+            Transform3D fp = ViewModel.FpHolder(Basis.Identity, Vector3.Zero);
+            Check("fp arms: the body's eye sits on the camera", (fp * (Frame.ModelFlip * new Vector3(0, FpsController.EyeHeight, 0))).Length() < 1e-4f);
+            Check("fp arms: the model faces down the camera's −Z", (fp.Basis * Vector3.Back).DistanceTo(Vector3.Forward) < 1e-5f);
+            Check("fp clips: unarmed beats lowered beats aiming beats the gait",
+                FirstPersonAnim.Pick(9f, false, true, true) == "fp_unarmed" && FirstPersonAnim.Pick(9f, true, true, true) == "fp_lower"
+                && FirstPersonAnim.Pick(9f, true, true, false) == "fp_ads" && FirstPersonAnim.Pick(9f, true, false, false) == "fp_sprint"
+                && FirstPersonAnim.Pick(1f, true, false, false) == "fp_walk" && FirstPersonAnim.Pick(0f, true, false, false) == "fp_idle");
+            var wall = new[] { new Sim.Collider { Kind = Sim.ColliderKind.Box, Center = new Vec3(0, 151, -0.8), Half = new Vec3(1, 1, 0.1), Rot = new Quat(0, 0, 0, 1) } };
+            var ball = new[] { new Sim.Collider { Kind = Sim.ColliderKind.Sphere, Center = new Vec3(2, 151, -0.8), Half = new Vec3(0.5, 0, 0), Rot = new Quat(0, 0, 0, 1) } };
+            var eyeAt = new Vector3(0, 151, 0);
+            Check("fp lower: a wall 0.8 m ahead is in the way", ViewModel.Blocked(eyeAt, Vector3.Forward, ViewModel.Reach, wall, null) < ViewModel.LowerAt);
+            Check("fp lower: the same wall behind is not", float.IsPositiveInfinity(ViewModel.Blocked(eyeAt, Vector3.Back, ViewModel.Reach, wall, null)));
+            Check("fp lower: a ball off to the side is not", float.IsPositiveInfinity(ViewModel.Blocked(eyeAt, Vector3.Forward, ViewModel.Reach, ball, null)));
 
             // Winding: a counter-clockwise triangle seen from outside the
             // planet is a front face and must NOT be flipped.

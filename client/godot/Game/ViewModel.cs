@@ -1,29 +1,27 @@
-// The first-person rig: what you see of yourself.
+// The first-person view: what you see of yourself.
 //
-// Two separate things, and they are separate on purpose.
+// Two instances of the same body, on purpose.
 //
-// THE VIEWMODEL — arms and weapon — is parented to the camera on its own
-// render layer, so the rig light (Boot) can reach it and nothing else. It
-// is drawn by the main camera: the transparent-SubViewport overlay pass the
-// Unity build had rendered unlit under gl_compatibility, so it went (see
-// Boot). A wall closer than the rig will clip it.
+// THE FIRST-PERSON ARMS are a second `char.player` hung under the camera with
+// its eye (0, 1.70, 0 in body space) on the camera and its forward down the
+// camera's −Z. Only its `arms` mesh is drawn (body and head hidden), on the
+// rig layer, lit by the rig light alone (Boot), casting no shadow. It plays
+// the `fp_*` clips from art/tools/bpy/body.py and holds the real weapon in
+// its own `hand.r` -- the same model, the same grip and muzzle other players
+// see. Worn armor that covers the arms (sleeves, gloves) is dressed on it
+// too, so what you wear is what you see. Sway, bob and recoil move the arms
+// about the EYE; the camera itself never kicks (GDD "First-person body").
+// A wall closer than the rifle lowers it (fp_lower) instead of clipping it.
 //
-// THE BODY is the opposite: a real object at the player's feet, on the normal
-// layer, casting a normal shadow — so looking down shows your chest and legs
-// where they actually are, and other players see exactly the same model.
-//
-// The models START as the box meshes in Models.cs and are replaced by the real
-// ones from art/ as they load. The boxes are what the real models are FITTED
-// TO: the rest pose, the hand placement and the muzzle marker are all measured
-// against the box rifle's frame (+Z forward, origin at the grip).
-// AssetRegistry.AttachFitted reconciles the two by bounding box rather than by
-// a hardcoded offset. The Attach path already flips the −Z glTF model to +Z,
-// so no yaw is needed here.
-//
-// Camera space: a Camera3D looks down −Z, and the box rifle points +Z, so the
-// rig carries Frame.ModelFlip; its rest offsets are the Unity build's with Z
-// negated (in front of the eye is −Z here).
+// THE BODY is the opposite: a real object at the player's feet on the normal
+// layer, so looking down shows your chest and legs where they are and other
+// players see exactly the same model. Its head, its arms, the armor on them
+// and its held weapon are shadows-only: the eye is inside the head and the
+// arms it should see are the first-person ones -- but the ground shadow
+// keeps all of them, so it holds the gun the way everyone else's does.
 
+using System;
+using System.Collections.Generic;
 using Godot;
 using SpaceAdventure.Sim;
 
@@ -31,97 +29,220 @@ namespace SpaceAdventure.Game
 {
     public sealed class ViewModel
     {
-        // Held roughly where a rifle sits at the low ready: right of centre,
-        // below the sightline, canted inward and nose-up so the barrel
-        // climbs toward the crosshair. Tuned by 1280x720 -uiShot against the
-        // main camera's 60° FOV (2026-09-28): the rear of the fitted Kenney
-        // rifle (0.55 × 0.30 m) sits 0.63 m out, its top 0.15 m below the
-        // sightline, so the receiver top and the barrel show and the stock
-        // falls off the bottom edge.
-        private static readonly Vector3 RestPosition = new Vector3(0.24f, -0.30f, -0.80f);
-        private const float RestYawDeg = 8f;   // canted inward, toward the centre
-        private const float RestRollDeg = 2f;
-        private const float RestPitchDeg = 6f;  // nose up, so the barrel climbs into frame
-
-        private const float SwayDegrees = 0.9f;   // how far the rig lags a fast turn
+        private const float SwayDegrees = 0.9f;   // how far the arms lag a fast turn
         private const float SwaySmoothing = 12f;
         private const float BobSpeed = 9f;
-        private const float BobAmount = 0.014f;
+        private const float BobAmount = 0.010f;
 
-        private readonly Node3D _rig;          // arms + weapon, parented to the camera
-        private readonly MeshInstance3D _weapon;
-        private readonly Node3D _muzzle;       // barrel tip: where shots LOOK like they leave
+        public const float BaseFov = 60f;
+        public const float AdsFov = 45f;
+        private const float AdsSway = 0.3f;       // sway and bob while aiming
+        public const float LowerAt = 1.0f;        // obstruction closer than this lowers the rifle
+        public const float RaiseAt = 1.25f;       // and it comes up again past this
+        public const float Reach = 1.3f;          // how far ahead Blocked looks
+        private const float KickMetres = 0.025f;  // recoil: the arms come back...
+        private const float KickPitchDeg = 2.0f;  // ...and the muzzle climbs
+        private const float SightAboveGrip = 0.095f; // rear-sight notch over the grip node (gen_weapon.py)
+        // Camera-space targets for the rear sight (+Y up, +X right; depth is
+        // left where the arms put it).
+        private static readonly Vector3 HoldSight = new Vector3(0.12f, -0.12f, 0f);
+        private static readonly Vector3 AdsSight = new Vector3(0f, -0.01f, 0f);
+        private static readonly Vector3 UnarmedHand = new Vector3(0.20f, -0.20f, 0f);
+
+        /// <summary>
+        /// The shared vertex-colour shading, with the depth squeezed into the
+        /// nearest 2 % of the range: the first-person arms and rifle always
+        /// draw in front of the world -- your own chest included, which sits
+        /// nearer the eye than the rifle when you look down -- but still sort
+        /// correctly against each other. The one-camera way to do what a
+        /// second, depth-cleared camera would (a SubViewport overlay renders
+        /// unlit under gl_compatibility). Godot 4.7 uses REVERSED depth even in
+        /// the compatibility renderer: +1 is near (the −1-near form made the
+        /// whole set vanish behind the far plane).
+        /// </summary>
+        public static readonly ShaderMaterial FpMaterial = new ShaderMaterial
+        {
+            Shader = new Shader
+            {
+                Code = @"shader_type spatial;
+render_mode specular_disabled;
+void vertex() {
+    POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+    POSITION.z = (1.0 - (1.0 - POSITION.z / POSITION.w) * 0.02) * POSITION.w;
+}
+void fragment() {
+    ALBEDO = COLOR.rgb;
+    ROUGHNESS = 1.0;
+    METALLIC = 0.0;
+}",
+            },
+        };
+
+        private readonly Camera3D _eye;
+        private readonly Node3D _fp;           // first-person arms holder, under the camera
+        private readonly Node3D _muzzle;       // proxy, copied from the held weapon's muzzle
         private readonly Node3D _body;         // the real body, in the world
         private readonly uint _layers;
+        private readonly AssetRegistry _assets;
+
+        private Node3D _fpModel, _fpHeld, _fpMuzzle, _fpGrip;
+        private FirstPersonAnim _fpAnim;
+        private Node3D _bodyModel, _held;
+        private CharacterAnim _bodyAnim;
+        private string _heldAsset = "", _fpHeldAsset = "";
+
+        private readonly Dictionary<string, string> _worn = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> _wornDrawn = new Dictionary<string, string>();
+        private readonly Dictionary<string, Node3D> _wornNodes = new Dictionary<string, Node3D>();
+        private readonly Dictionary<string, string> _fpWornDrawn = new Dictionary<string, string>();
+        private readonly Dictionary<string, Node3D> _fpWornNodes = new Dictionary<string, Node3D>();
 
         private Vector2 _sway;
-        private float _bobPhase;
+        private float _bobPhase, _kick;
+        private Vector3 _ads;                  // camera-space shift that frames the rifle (see Tick)
+        private bool _lowered;
 
         public ViewModel(Camera3D eye, Material material, uint layers, Node worldParent, AssetRegistry assets)
         {
+            _eye = eye;
             _layers = layers;
+            _assets = assets;
 
-            // ---- viewmodel: arms and weapon, on the overlay layer ----
-            _rig = new Node3D { Name = "ViewModel" };
-            eye.AddChild(_rig);
-            PoseRig(Vector3.Zero, Vector2.Zero);
+            // ---- first-person arms, under the camera ----
+            _fp = new Node3D { Name = "FpArms" };
+            eye.AddChild(_fp);
+            PoseFp(Vector2.Zero, Vector3.Zero, 0f);
+            _muzzle = new Node3D { Name = "muzzle", Position = new Vector3(0.1f, -0.15f, -0.6f) };
+            eye.AddChild(_muzzle);
 
-            _weapon = BoxMesh.Attach(_rig, "rifle", Models.Rifle(), material, layers);
-            assets.AttachFitted("weapon.pulse", _weapon, Models.Rifle(), 0f, layers,
-                _ => _weapon.Mesh = null); // the box goes; its children (hands, model) stay
-
-            // Hands are placed ON the rifle, in the rifle's own space, so they
-            // stay put if its proportions change: forward hand on the
-            // handguard, rear hand at the grip.
-            var forward = BoxMesh.Attach(_weapon, "hand-forward", Models.Hand(), material, layers);
-            forward.Transform = new Transform3D(Basis.FromEuler(new Vector3(Mathf.DegToRad(10f), 0, 0)), new Vector3(-0.005f, -0.055f, 0.30f));
-            var rear = BoxMesh.Attach(_weapon, "hand-rear", Models.Hand(), material, layers);
-            rear.Transform = new Transform3D(Basis.FromEuler(new Vector3(Mathf.DegToRad(24f), 0, 0)), new Vector3(0.005f, -0.075f, -0.075f));
-
-            // Parented to the RIG, not to the weapon, so its offsets stay in
-            // metres. The fitted rifle's barrel ends near z 0.38 in rig space.
-            _muzzle = new Node3D { Name = "muzzle", Position = new Vector3(0f, 0.012f, 0.40f) };
-            _rig.AddChild(_muzzle);
+            assets.Attach("char.player", _fp, model =>
+            {
+                _fpModel = model;
+                foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
+                    if (mi.Name == "body" || mi.Name == "head") mi.Visible = false;
+                AssetRegistry.SetLayers(model, _layers);
+                AssetRegistry.OverrideMaterial(model, FpMaterial);
+                foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(model))
+                    g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                _fpAnim = FirstPersonAnim.For(model);
+                DressFp();
+                HoldFp(_heldAsset);
+            });
 
             // ---- body: a real object in the world, seen when you look down ----
             _body = new Node3D { Name = "LocalBody" };
             worldParent.AddChild(_body);
             BoxMesh.Attach(_body, "model", Models.PlayerLocal(), material, 0);
-
             // The head casts but does not draw. Without it the shadow on the
             // ground in front of you is headless.
             MeshInstance3D head = BoxMesh.Attach(_body, "head-shadow", Models.PlayerHead(), material, 0);
             head.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
 
-            // The real body, over the boxes: your own legs, animated, when you
-            // look down. The model is segmented -- separate nodes per limb --
-            // so `head`, the one part the camera is inside, goes shadows-only
-            // while the torso (which carries the hips) stays drawn.
             assets.Attach("char.player", _body, model =>
             {
-                Node3D headNode = AssetRegistry.FindNode(model, "head");
-                if (headNode != null)
-                    foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(headNode))
-                        g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+                _bodyModel = model;
+                foreach (string part in new[] { "head", "arms" })
+                {
+                    Node3D n = AssetRegistry.FindNode(model, part);
+                    if (n != null)
+                        foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(n))
+                            g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+                }
                 _bodyAnim = CharacterAnim.For(model);
+                EntityViews.Dress(_assets, a => a, _bodyModel, _worn, _wornDrawn, _wornNodes, local: true);
+                string want = _heldAsset; _heldAsset = "\u0000"; Hold(want);
                 foreach (Node3D n in AssetRegistry.Descendants<Node3D>(_body))
                     if (n.Name == "model" || n.Name == "head-shadow") n.Visible = false;
             });
         }
 
-        /// <summary>Drives the local body's legs. Null until the model lands.</summary>
-        private CharacterAnim _bodyAnim;
+        /// <summary>Armor on our own body, and the arm pieces of it on the first-person arms. Takes the ASSET id.</summary>
+        public void Wear(string slot, string asset)
+        {
+            _worn[slot] = asset ?? "";
+            EntityViews.Dress(_assets, a => a, _bodyModel, _worn, _wornDrawn, _wornNodes, local: true);
+            DressFp();
+        }
+
+        private void DressFp() =>
+            EntityViews.Dress(_assets, a => a, _fpModel, _worn, _fpWornDrawn, _fpWornNodes,
+                keep: a => EntityViews.CoversArms(_assets, a), layers: _layers, material: FpMaterial);
 
         /// <summary>The barrel tip, in world space. Shots are DRAWN from here.</summary>
         public Vector3 MuzzlePosition => _muzzle.GlobalPosition;
         public Node3D Muzzle => _muzzle;
         public uint Layers => _layers;
 
-        /// <summary>Shows or hides the weapon (and the hands on it).</summary>
-        public bool WeaponVisible
+        /// <summary>Something in hand: the fire gate.</summary>
+        public bool Armed => _heldAsset != "" && _heldAsset != "\u0000";
+
+        /// <summary>
+        /// The equipped weapon, by ASSET id ("" for empty hands): in the
+        /// first-person hand, drawn, and in the body's hand, shadows-only,
+        /// with both instances on their armed clips.
+        /// </summary>
+        public void Hold(string asset)
         {
-            get => _weapon.Visible;
-            set => _weapon.Visible = value;
+            asset ??= "";
+            if (asset == _heldAsset) return;
+            _heldAsset = asset;
+            HoldFp(asset);
+            if (_bodyModel == null) return;
+            if (_held != null) { _held.QueueFree(); _held = null; }
+            if (_bodyAnim != null) _bodyAnim.Armed = asset != "";
+            if (asset == "") return;
+            Node3D hand = AssetRegistry.FindNode(_bodyModel, "hand.r");
+            if (hand == null) return;
+            _assets.Attach(asset, hand, weapon =>
+            {
+                _held = weapon;
+                foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(weapon))
+                    g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+                float sc = hand.GlobalBasis.Scale.X;
+                if (sc > 1e-4f) weapon.Scale = Vector3.One / sc;
+                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = _bodyModel });
+            });
+        }
+
+        private void HoldFp(string asset)
+        {
+            if (_fpModel == null || asset == _fpHeldAsset) return;
+            _fpHeldAsset = asset;
+            if (_fpHeld != null) { _fpHeld.QueueFree(); _fpHeld = null; _fpMuzzle = null; _fpGrip = null; }
+            if (_fpAnim != null) _fpAnim.Armed = asset != "";
+            if (asset == "") return;
+            Node3D hand = AssetRegistry.FindNode(_fpModel, "hand.r");
+            if (hand == null) return;
+            _assets.Attach(asset, hand, weapon =>
+            {
+                _fpHeld = weapon;
+                AssetRegistry.SetLayers(weapon, _layers);
+                AssetRegistry.OverrideMaterial(weapon, FpMaterial);
+                foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(weapon))
+                    g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                float sc = hand.GlobalBasis.Scale.X;
+                if (sc > 1e-4f) weapon.Scale = Vector3.One / sc;
+                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = _fpModel });
+                _fpMuzzle = AssetRegistry.FindNode(weapon, "muzzle");
+                _fpGrip = AssetRegistry.FindNode(weapon, "grip");
+            });
+        }
+
+        /// <summary>The trigger went down: kick the arms, play the recoil clip.</summary>
+        public void Fire()
+        {
+            _kick = KickMetres;
+            _fpAnim?.Fire(Clock.Now);
+        }
+
+        /// <summary>R was pressed with a gun in hand: the reload motion, stretched to the weapon's time.</summary>
+        public void Reload(double seconds) => _fpAnim?.Reload(seconds, Clock.Now);
+
+        /// <summary>The first-person arms and weapon (hidden while seated).</summary>
+        public bool ArmsVisible
+        {
+            get => _fp.Visible;
+            set => _fp.Visible = value;
         }
 
         /// <summary>
@@ -136,36 +257,86 @@ namespace SpaceAdventure.Game
             set => _body.Visible = value;
         }
 
-        private void PoseRig(Vector3 bob, Vector2 swayDeg)
+        /// <summary>
+        /// The arms holder's rest: the body's eye (0, 1.7, 0) on the camera
+        /// and its forward down −Z. `Attach` already turned the glTF model to
+        /// +Z (one ModelFlip); the camera looks down −Z, so the holder flips
+        /// it back. Rotations pivot about the EYE, not the feet 1.7 m below.
+        /// </summary>
+        public static Transform3D FpHolder(Basis r, Vector3 offset) =>
+            new Transform3D(r * Frame.ModelFlip, r * new Vector3(0f, -FpsController.EyeHeight, 0f) + offset);
+
+        private void PoseFp(Vector2 swayDeg, Vector3 bob, float kick)
         {
-            // Yaw positive turns the flipped rifle's −Z toward −X: inward.
-            // The sway lags the turn: mouse-right (sway.X < 0) yaws left.
-            var euler = new Vector3(
-                Mathf.DegToRad(RestPitchDeg - swayDeg.Y),
-                Mathf.DegToRad(RestYawDeg - swayDeg.X),
-                Mathf.DegToRad(RestRollDeg));
-            _rig.Transform = new Transform3D(Basis.FromEuler(euler) * Frame.ModelFlip, RestPosition + bob);
+            float kickPitch = kick / KickMetres * KickPitchDeg;
+            Basis r = Basis.FromEuler(new Vector3(
+                Mathf.DegToRad(-swayDeg.Y + kickPitch), Mathf.DegToRad(-swayDeg.X), 0f));
+            _fp.Transform = FpHolder(r, bob + _ads + new Vector3(0f, 0f, kick));
         }
 
         /// <summary>
-        /// Sways the rig against the turn and bobs it with the stride.
-        /// `speed` is the body's actual speed from the simulation, not the
-        /// input: bobbing on input alone keeps bobbing while you walk into a wall.
+        /// Once a frame. `speed` is the body's actual speed from the
+        /// simulation, not the input: bobbing on input alone keeps bobbing
+        /// while you walk into a wall. `aheadClear` is the distance to the
+        /// nearest obstruction along the view (Blocked).
         /// </summary>
-        public void Tick(Vector2 lookDelta, float speed, float dt)
+        public void Tick(Vector2 lookDelta, float speed, float dt, bool aiming, float aheadClear)
         {
-            _sway = _sway.Lerp(-lookDelta * SwayDegrees, 1f - Mathf.Exp(-SwaySmoothing * dt));
+            if (_lowered) _lowered = aheadClear < RaiseAt;
+            else _lowered = aheadClear < LowerAt;
+            bool ads = aiming && Armed && !_lowered;
 
+            float scale = ads ? AdsSway : 1f;
+            _sway = _sway.Lerp(-lookDelta * SwayDegrees * scale, 1f - Mathf.Exp(-SwaySmoothing * dt));
             float moving = Mathf.Clamp(speed / 4.5f, 0f, 1f);
             _bobPhase += dt * BobSpeed * moving;
-            float bobX = Mathf.Cos(_bobPhase) * BobAmount * moving;
-            float bobY = Mathf.Abs(Mathf.Sin(_bobPhase)) * -BobAmount * moving;
-            PoseRig(new Vector3(bobX, bobY, 0f), _sway);
+            var bob = new Vector3(Mathf.Cos(_bobPhase), -Mathf.Abs(Mathf.Sin(_bobPhase)), 0f) * BobAmount * moving * scale;
+            _kick = Mathf.Lerp(_kick, 0f, 1f - Mathf.Exp(-18f * dt));
 
-            // Same speed the weapon bob already runs on, so your legs and your
-            // gun cannot disagree about whether you are moving.
+            // Framing: the shoulders are 0.25 m under the eye, so no arm pose
+            // alone puts a rifle where a first-person view wants it. Every
+            // frame the arms holder is shifted (camera space, without the
+            // shift already applied) so the rear sight lands on a target:
+            // low and right for the hold, dead centre 30 cm out for ADS.
+            // Empty hands get a fixed lift instead. Measured off the weapon,
+            // so any rifle with a `grip` frames itself.
+            Vector3 want = Vector3.Zero;
+            Node3D hand = _fpModel != null ? AssetRegistry.FindNode(_fpModel, "hand.r") : null;
+            if (!Armed && hand != null && IsInstanceValidNode(hand))
+            {
+                // Empty hands: the right hand to the lower right of the view.
+                Vector3 un = _eye.GlobalTransform.AffineInverse() * hand.GlobalPosition - _ads;
+                want = UnarmedHand - un;
+                want.Z = 0f;
+            }
+            else if (Armed && _fpGrip != null && IsInstanceValidNode(_fpGrip))
+            {
+                Vector3 sight = _eye.GlobalTransform.AffineInverse() * (_fpGrip.GlobalPosition + _fpGrip.GlobalBasis.Y.Normalized() * SightAboveGrip);
+                Vector3 un = sight - _ads;
+                want = (ads ? AdsSight : HoldSight) - un;
+                // Sideways and up only. Pushing the sight further out drags the
+                // whole body forward and its shoulders into the frame; a real
+                // rear sight sits 15-20 cm from the eye anyway.
+                want.Z = 0f;
+            }
+            _ads = _ads.Lerp(want, 1f - Mathf.Exp(-14f * dt));
+            _eye.Fov = Mathf.Lerp(_eye.Fov, ads ? AdsFov : BaseFov, 1f - Mathf.Exp(-12f * dt));
+
+            PoseFp(_sway, bob, _kick);
+            _fpAnim?.Drive(speed, ads, _lowered, Clock.Now);
+
+            // Same speed the arms bob on, so your legs and your gun cannot
+            // disagree about whether you are moving.
             _bodyAnim?.Drive(speed, false);
+
+            if (_fpMuzzle != null && IsInstanceValidNode(_fpMuzzle))
+            {
+                _muzzle.GlobalPosition = _fpMuzzle.GlobalPosition;
+                _muzzle.GlobalBasis = _fpMuzzle.GlobalBasis.Orthonormalized();
+            }
         }
+
+        private static bool IsInstanceValidNode(Node n) => GodotObject.IsInstanceValid(n) && n.IsInsideTree();
 
         /// <summary>
         /// Stands the body at the player's feet, facing where the body faces —
@@ -173,5 +344,123 @@ namespace SpaceAdventure.Game
         /// body that pitches with the view lies on its back when you look up.
         /// </summary>
         public void Place(Vec3 feet, Vec3 facing) => EntityViews.Place(_body, feet, facing);
+
+        /// <summary>
+        /// Distance along `fwd` from `eye` to the nearest collider or the
+        /// ground, up to `reach`; +∞ when clear. Boxes by a slab test in
+        /// their own frame (+5 cm), spheres by ray-sphere, terrain sampled at
+        /// the reach point. Game-side only: the shared Sim colliders are the
+        /// C40 reference and stay untouched.
+        /// </summary>
+        public static float Blocked(Vector3 eye, Vector3 fwd, float reach, Collider[] colliders, TerrainField terrain)
+        {
+            const float margin = 0.05f;
+            float best = float.PositiveInfinity;
+            foreach (Collider c in colliders ?? Array.Empty<Collider>())
+            {
+                Vector3 centre = Frame.ToGodot(c.Center);
+                if ((centre - eye).Length() > reach + (float)Math.Max(c.Half.X, Math.Max(c.Half.Y, c.Half.Z)) + 1f) continue;
+                float t;
+                if (c.Kind == ColliderKind.Sphere)
+                {
+                    float r = (float)c.Half.X + margin;
+                    Vector3 oc = eye - centre;
+                    float b = oc.Dot(fwd), cc = oc.Dot(oc) - r * r, disc = b * b - cc;
+                    if (disc < 0) continue;
+                    t = -b - Mathf.Sqrt(disc);
+                    if (t < 0) t = cc < 0 ? 0 : float.PositiveInfinity;
+                }
+                else
+                {
+                    var q = new Quaternion((float)c.Rot.X, (float)c.Rot.Y, (float)c.Rot.Z, (float)c.Rot.W);
+                    Basis inv = new Basis(q).Inverse();
+                    Vector3 o = inv * (eye - centre), d = inv * fwd;
+                    Vector3 h = new Vector3((float)c.Half.X, (float)c.Half.Y, (float)c.Half.Z) + Vector3.One * margin;
+                    float tmin = 0f, tmax = reach;
+                    bool hit = true;
+                    for (int i = 0; i < 3 && hit; i++)
+                    {
+                        if (Mathf.Abs(d[i]) < 1e-6f) { if (Mathf.Abs(o[i]) > h[i]) hit = false; continue; }
+                        float t1 = (-h[i] - o[i]) / d[i], t2 = (h[i] - o[i]) / d[i];
+                        if (t1 > t2) (t1, t2) = (t2, t1);
+                        tmin = Mathf.Max(tmin, t1); tmax = Mathf.Min(tmax, t2);
+                        if (tmin > tmax) hit = false;
+                    }
+                    if (!hit) continue;
+                    t = tmin;
+                }
+                if (t <= reach) best = Mathf.Min(best, t);
+            }
+            if (terrain != null)
+            {
+                Vector3 p = eye + fwd * reach;
+                if (terrain.SampleRadius(Frame.ToSim(p.Normalized())) > p.Length()) best = Mathf.Min(best, reach);
+            }
+            return best;
+        }
+    }
+
+    /// <summary>
+    /// The first-person clip picker: `fp_*` clips on the arms instance.
+    /// Gaits and poses cross-fade; fire and reload are one-shots that hold
+    /// the arms until they end.
+    /// </summary>
+    public sealed class FirstPersonAnim
+    {
+        private readonly AnimationPlayer _player;
+        private string _current;
+        private double _oneShotUntil;
+        public bool Armed;
+
+        private FirstPersonAnim(AnimationPlayer player)
+        {
+            _player = player;
+            foreach (string name in _player.GetAnimationList())
+                _player.GetAnimation(name).LoopMode =
+                    CharacterAnim.OneShot(name) ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;
+        }
+
+        public static FirstPersonAnim For(Node model)
+        {
+            foreach (AnimationPlayer ap in AssetRegistry.Descendants<AnimationPlayer>(model))
+                return ap.HasAnimation("fp_idle") ? new FirstPersonAnim(ap) : null;
+            return null;
+        }
+
+        /// <summary>Unarmed beats lowered beats aiming beats the gait.</summary>
+        public static string Pick(float speed, bool armed, bool aiming, bool lowered) =>
+            !armed ? "fp_unarmed"
+            : lowered ? "fp_lower"
+            : aiming ? "fp_ads"
+            : speed > CharacterAnim.SprintAt ? "fp_sprint"
+            : speed > CharacterAnim.WalkAt ? "fp_walk"
+            : "fp_idle";
+
+        public void Drive(float speed, bool aiming, bool lowered, double now)
+        {
+            if (now < _oneShotUntil) return;
+            string want = Pick(speed, Armed, aiming, lowered);
+            if (want == _current || !_player.HasAnimation(want)) return;
+            _player.Play(want, aiming ? 0.10 : 0.15);
+            _current = want;
+        }
+
+        public void Fire(double now)
+        {
+            if (!Armed || !_player.HasAnimation("fp_fire") || now < _oneShotUntil && _current == "fp_reload") return;
+            _player.Play("fp_fire", 0.02);
+            _player.Seek(0, true);
+            _oneShotUntil = now + _player.GetAnimation("fp_fire").Length;
+            _current = "fp_fire";
+        }
+
+        public void Reload(double seconds, double now)
+        {
+            if (!Armed || !_player.HasAnimation("fp_reload") || seconds <= 0) return;
+            double len = _player.GetAnimation("fp_reload").Length;
+            _player.Play("fp_reload", 0.1, (float)(len / seconds));
+            _oneShotUntil = now + seconds;
+            _current = "fp_reload";
+        }
     }
 }

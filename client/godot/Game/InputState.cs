@@ -38,6 +38,7 @@ namespace SpaceAdventure.Game
         public bool Pressed(Key k) => _pressedThisFrame.Contains(k);
 
         public bool LeftButtonHeld => Input.IsMouseButtonPressed(MouseButton.Left);
+        public bool RightButtonHeld => Input.IsMouseButtonPressed(MouseButton.Right);
 
         public void EndFrame()
         {

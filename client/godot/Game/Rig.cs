@@ -30,6 +30,9 @@
 //   -uiQuest                accept the starter mission at the board, wait for a party invite
 //   -uiLamp                 swing the sun onto whatever the camera ends up looking at
 //   -rigArmed               show the rig without a purchase
+//   -uiAim                  hold aim-down-sights for the shot
+//   -uiReload <secs>        start the reload motion and shoot that far into it
+//   -uiLowered              lower the rifle as if a wall were in the way
 
 using System;
 using System.Collections.Generic;
@@ -50,6 +53,8 @@ namespace SpaceAdventure.Game
         private bool _rigAutoParty; // accept any party invite
         private bool _rigBack;      // step backwards
         private bool _rigArmed;
+        private bool _rigAim;       // -uiAim: hold the aim (right mouse) for the shot
+        private bool _rigLowered;   // -uiLowered: pretend a wall is in the way
         private bool _rigInteract; // one frame of E
         private bool _rigDeathDemo; // -uiDeathDemo holds the dead flag against the snapshots
         private bool _rigShift;     // -uiShift holds the hotbar's shift row for a shot
@@ -678,6 +683,14 @@ namespace SpaceAdventure.Game
                 }
             }
             _rigShift = Flag("-uiShift");
+
+            // -uiReload <secs>: start the reload motion, shoot that far into it.
+            string reloadArg = Arg("-uiReload");
+            if (reloadArg != null)
+            {
+                _viewModel.Reload(2.0);
+                await Wait(double.Parse(reloadArg, CultureInfo.InvariantCulture));
+            }
 
             if (_rigLamp && _sun != null)
             {
