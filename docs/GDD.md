@@ -247,18 +247,29 @@ inside. That is cheap to say and has four consequences that are not:
   pitch is not applied to the body. This is already why remote head pitch is
   not transmitted, and it is what makes looking at your own feet work.
 
-**Animation: procedural, no rig.** The character is a handful of separately
-named nodes (`torso`, `arm.l`, `arm.r`, `leg.l`, `leg.r`) that the client
-rotates in code — a sine-driven walk cycle whose frequency and amplitude follow
-horizontal speed, arms counter-swinging to legs, everything settling to rest
-when stopped. No skeleton, no skinning, no animation clips, no `.glb`
-animation import.
+**Animation: skinned, clip-driven (since 2026-09-30).** The character is one
+skinned body on an armature built by `art/tools/bpy/body.py`, in three meshes
+(`body`, `arms`, `head`) with clips for the gaits, the armed gaits, death and
+first person. Armor dresses the same skeleton (art/README.md).
 
-A static body seen from the inside while sprinting looks broken, so *some*
-motion is mandatory; a rig and clip pipeline is a large amount of machinery for
-a low-poly figure whose joints are hidden by flat shading. Procedural motion is
-roughly thirty lines and looks right at this fidelity. Revisit when characters
-need to do something more expressive than walk.
+**First-person arms.** What the eye sees of its own arms and weapon is a
+SECOND instance of the same `char.player`, hung under the camera with its eye
+on the camera, drawing only its `arms` mesh and the armor that covers it,
+playing the `fp_*` clips, holding the real weapon in its own `hand.r` -- the
+same model other players see. It draws with a depth-squeezed material so it is
+never cut by the world or your own chest, and casts no shadow. The local
+body's head, arms, arm armor and held weapon are shadows-only: the ground
+shadow holds the gun, the eye never sees two pairs of arms.
+
+- Hold: the client frames the rifle by its rear sight (lower right of the
+  view); empty hands frame by the right hand.
+- Aim (right mouse, pointer captured): `fp_ads`, the rear sight on the eye
+  line, FOV 60→45, sway and bob ×0.3.
+- Recoil kicks the ARMS (back and muzzle-up) and plays `fp_fire`; the camera
+  never kicks.
+- Reload (R) plays `fp_reload`, stretched to the weapon's `reload_time`.
+- Within 1.0 m of a collider or the ground along the view the rifle lowers
+  (`fp_lower`), and comes back past 1.25 m.
 
 **No head bob in M1.** Camera bob coupled to a walk cycle is a known nausea
 source and this is a first-person game on a world with a 23 m horizon and a
@@ -1998,10 +2009,11 @@ shooting a target range (`docs/ROADMAP.md`).
   `secondary`, `tool`, `gadget`, and from Phase 13 `mod` (a weapon mod,
   applied to whatever `primary` is worn). An item declares the slot it fits; an
   `accessory` item fits either accessory slot; one stack of one sits in
-  one slot at a time. `equip` with an empty item clears a slot. Only
-  `primary` is visible on the body and on the wire to others; armor
-  values are summed for the character panel and have no combat effect
-  yet. Equipping an item you do not own is refused.
+  one slot at a time. `equip` with an empty item clears a slot. `primary`
+  and the worn slots (`head`, `chest`, `legs`, `hands`, `feet`, `back`) are
+  visible on the body and on the wire to others (`equipped` and `worn`
+  events, PROTOCOL.md); armor values are summed for the character panel and
+  have no combat effect yet. Equipping an item you do not own is refused.
 - Ammunition is an item like any other. The weapon's `magazine` is *not* in the
   inventory — it is loaded rounds, held per equipped weapon; `reload` moves
   rounds from the `ammo.cell` stack into the magazine.

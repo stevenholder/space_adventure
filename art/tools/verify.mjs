@@ -49,7 +49,7 @@ const CELL = 4.0;
 const CELL_MARGIN = 0.45;
 
 const BUDGETS = [
-  [/^char\./, 6000],
+  [/^char\./, 9000],
   [/^npc\./, 6000],
   [/^ship\./, 15000],
   [/^vehicle\./, 15000],
@@ -57,6 +57,8 @@ const BUDGETS = [
   [/^tool\./, 1000],
   [/^struct\./, 1500],
   [/^prop\./, 1000],
+  [/^armor\./, 5000],
+  [/^pack\./, 800],
 ];
 
 // Node-name contracts: the client mounts things by these names, so a rename
@@ -69,32 +71,42 @@ const BUDGETS = [
 // clips that animate nothing, and a body that slides instead of walking looks
 // exactly like a body that was never animated.
 const CLIP_CONTRACTS = {
-  animated: ["idle", "walk", "sprint", "die"],
+  // Gaits for every body, armed gaits, death, and the first-person set the
+  // client plays on a second instance under the camera (ViewModel).
+  animated: ["idle", "walk", "sprint", "die",
+    "idle_armed", "walk_armed", "sprint_armed",
+    "fp_idle", "fp_walk", "fp_sprint", "fp_ads", "fp_lower", "fp_unarmed", "fp_fire", "fp_reload"],
 };
 
 const NODE_CONTRACTS = {
+  // The MakeHuman body (tools/bpy/human.py): game-engine bone names, both
+  // hand mounts (grip in the right, barrel toward the left).
   "char.player": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    eyeHeadSiblings: true,
+  },
+  "npc.dispatcher": {
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   // The hostiles carry the same layout on purpose: the client's nametag,
   // health-bar and animation code walks these names and does not care which
   // archetype it is looking at.
   "npc.grunt": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "npc.gunner": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
   "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
-  "weapon.pulse": { nodes: ["grip", "muzzle"] },
+  "weapon.pulse": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
   // up with hand.r and the channel effect starts at `muzzle`.
   "tool.drill": { nodes: ["grip", "muzzle"] },

@@ -46,6 +46,14 @@ namespace SpaceAdventure.Game
         public string id { get; set; }
         public string file { get; set; }
         public string rig { get; set; }
+        /// <summary>Surface names per mesh, in surface order (import_pack records them before the bake).</summary>
+        public Dictionary<string, string[]> surfaces { get; set; }
+        /// <summary>"mesh/surface" entries of the WEARER this piece covers; the client hides them.</summary>
+        public string[] covers { get; set; }
+        /// <summary>Real materials (roughness, metallic): drawn as imported, not with the shared vertex-colour one.</summary>
+        public bool pbr { get; set; }
+        /// <summary>A worn piece with parts on the arms: the first-person arms wear it too.</summary>
+        public bool arms { get; set; }
     }
 
     internal class Manifest
@@ -62,6 +70,18 @@ namespace SpaceAdventure.Game
     public sealed class AssetRegistry
     {
         private readonly Dictionary<string, string> _paths = new Dictionary<string, string>();
+        private readonly Dictionary<string, ManifestAsset> _rows = new Dictionary<string, ManifestAsset>();
+
+        /// <summary>The surface names of one of an asset's meshes, in surface order, or null.</summary>
+        public string[] Surfaces(string assetId, string mesh) =>
+            _rows.TryGetValue(assetId ?? "", out var r) && r.surfaces != null && r.surfaces.TryGetValue(mesh, out var names) ? names : null;
+
+        /// <summary>The wearer surfaces a piece covers ("mesh/surface"), or an empty list.</summary>
+        public bool IsPbr(string assetId) => _rows.TryGetValue(assetId ?? "", out var r) && r.pbr;
+        public bool OnArms(string assetId) => _rows.TryGetValue(assetId ?? "", out var r) && r.arms;
+
+        public string[] Covers(string assetId) =>
+            _rows.TryGetValue(assetId ?? "", out var r) && r.covers != null ? r.covers : System.Array.Empty<string>();
         private readonly Dictionary<string, GltfState> _loaded = new Dictionary<string, GltfState>();
         private readonly Material _material;
         private readonly string _root;
@@ -93,6 +113,45 @@ namespace SpaceAdventure.Game
             return Path.Combine(Path.GetDirectoryName(OS.GetExecutablePath()) ?? ".", "art");
         }
 
+        /// <summary>
+        /// Hangs a skinned piece (armor) on a body: the piece keeps its own
+        /// Skeleton3D (the same armature the body was built on) and a
+        /// BoneMirror copies the wearer's bone poses into it every frame, so
+        /// it follows every clip the wearer plays. Returns the holder to free
+        /// when the piece comes off, or null when there is nothing to hang.
+        /// </summary>
+        public Node3D AttachSkinned(string assetId, Skeleton3D wearer)
+        {
+            if (!Has(assetId) || wearer == null) return null;
+            try
+            {
+                GltfState state = LoadOnce(assetId);
+                if (state == null) return null;
+                Node scene = Generate(state);
+                if (scene == null) return null;
+                Skeleton3D own = null;
+                foreach (Skeleton3D sk in Descendants<Skeleton3D>(scene)) { own = sk; break; }
+                if (own == null || own.GetBoneCount() != wearer.GetBoneCount())
+                {
+                    scene.QueueFree();
+                    GD.PushWarning($"asset {assetId}: no skeleton, or not the wearer's ({own?.GetBoneCount()} vs {wearer.GetBoneCount()} bones)");
+                    return null;
+                }
+                var holder = new Node3D { Name = assetId.Replace('.', '_') };
+                holder.AddChild(scene);
+                holder.AddChild(new BoneMirror { Source = wearer, Target = own });
+                // Beside the wearer's skeleton, under the same fit/flip parents.
+                wearer.GetParent().AddChild(holder);
+                ApplyMaterials(holder, IsPbr(assetId));
+                return holder;
+            }
+            catch (Exception e)
+            {
+                GD.PushWarning($"asset {assetId} failed to wear: {e.Message}");
+                return null;
+            }
+        }
+
         /// <summary>True when an id has a .glb behind it at all.</summary>
         public bool Has(string assetId) =>
             !string.IsNullOrEmpty(assetId) && _paths.ContainsKey(assetId);
@@ -114,13 +173,14 @@ namespace SpaceAdventure.Game
                 if (state == null) return;
 
                 holder = new Node3D { Name = assetId.Replace('.', '_') };
+                holder.SetMeta("asset", assetId); // so a dresser can look the wearer's surfaces up
                 var flip = new Node3D { Name = "flip", Basis = Frame.ModelFlip };
                 Node scene = Generate(state);
                 if (scene == null) { holder.QueueFree(); return; }
                 flip.AddChild(scene);
                 holder.AddChild(flip);
                 parent.AddChild(holder);
-                ApplyMaterials(holder);
+                ApplyMaterials(holder, IsPbr(assetId));
                 onAttached?.Invoke(holder);
             }
             catch (Exception e)
@@ -135,8 +195,9 @@ namespace SpaceAdventure.Game
         /// BLEND surface keeps the importer's, drawn both-sided and unlit
         /// (the canopy glass — a lit, culled pane read as a black slab).
         /// </summary>
-        private void ApplyMaterials(Node root)
+        private void ApplyMaterials(Node root, bool pbr = false)
         {
+            if (pbr) return;   // imported materials as they are (art recipe `pbr`)
             foreach (MeshInstance3D mi in Descendants<MeshInstance3D>(root))
             {
                 if (mi.Mesh == null) continue;
@@ -154,83 +215,13 @@ namespace SpaceAdventure.Game
             }
         }
 
-        /// <summary>
-        /// Drops a loaded model into the space its fallback box mesh already
-        /// occupies, and onto its render layers.
-        ///
-        /// The rig around a model is tuned to the model. The first-person
-        /// rifle is the case that forced it: the box rifle points +Z with its
-        /// origin at the grip, and the hands, the muzzle marker and the rest
-        /// pose are all measured against that. The imported one points −Z with
-        /// a centred origin, because that is what art/README.md asks every
-        /// weapon for. So the model is fitted to the BOUNDS of the box it
-        /// replaces: same volume, same centre. `yaw` (radians) is the one thing
-        /// a bounding box cannot recover — a box does not know which end is
-        /// the barrel. Scale is uniform, from the volume ratio.
-        /// </summary>
-        public void AttachFitted(string assetId, Node3D parent, ArrayMesh fallback,
-                                 float yaw, uint layers, Action<Node3D> onAttached)
+        /// <summary>Every surface under `root` draws with `material` (first-person set).</summary>
+        public static void OverrideMaterial(Node root, Material material)
         {
-            Attach(assetId, parent, holder =>
-            {
-                SetLayers(holder, layers);
-                holder.Basis = new Basis(Vector3.Up, yaw);
-
-                if (!LocalBounds(holder, parent, out Aabb loaded) || loaded.Size.LengthSquared() < 1e-12f)
-                {
-                    onAttached?.Invoke(holder);
-                    return;
-                }
-
-                // Same VOLUME, uniform scale: a model whose proportions differ
-                // from the box (the Kenney rifle is five times as tall) lands
-                // at a believable size rather than stretched to one axis.
-                Aabb target = fallback.GetAabb();
-                float from = loaded.Volume;
-                float to = target.Volume;
-                Vector3 loadedCentre = loaded.GetCenter();
-                if (from > 1e-9f && to > 1e-9f)
-                {
-                    float k = Mathf.Pow(to / from, 1f / 3f);
-                    // A fitted model is a REPLACEMENT for its fallback, so k
-                    // should land near 1. A wild ratio means the bounds were
-                    // measured wrong; refuse it rather than fill the screen.
-                    if (k < 0.2f || k > 5f)
-                    {
-                        GD.PushWarning($"asset {assetId}: fit ratio {k:F2} is out of range " +
-                                       $"(model {loaded.Size} vs fallback {target.Size}); leaving it unscaled");
-                    }
-                    else
-                    {
-                        holder.Scale = new Vector3(k, k, k);
-                        loadedCentre *= k;
-                    }
-                }
-                holder.Position += target.GetCenter() - loadedCentre;
-                GD.Print($"fit {assetId}: {loaded.Size} into {target.Size}, scale {holder.Scale.X:F2}");
-                onAttached?.Invoke(holder);
-            });
-        }
-
-        /// <summary>Bounds of every mesh under `node`, in `space`'s local frame.</summary>
-        private static bool LocalBounds(Node3D node, Node3D space, out Aabb bounds)
-        {
-            bounds = default;
-            bool any = false;
-            Transform3D toSpace = space.GlobalTransform.AffineInverse();
-            foreach (MeshInstance3D mi in Descendants<MeshInstance3D>(node))
-            {
-                if (mi.Mesh == null) continue;
-                Aabb local = mi.GetAabb();
-                Transform3D t = toSpace * mi.GlobalTransform;
-                for (int i = 0; i < 8; i++)
-                {
-                    Vector3 p = t * local.GetEndpoint(i);
-                    if (!any) { bounds = new Aabb(p, Vector3.Zero); any = true; }
-                    else bounds = bounds.Expand(p);
-                }
-            }
-            return any;
+            foreach (MeshInstance3D mi in Descendants<MeshInstance3D>(root))
+                if (mi.Mesh != null)
+                    for (int i = 0; i < mi.Mesh.GetSurfaceCount(); i++)
+                        mi.SetSurfaceOverrideMaterial(i, material);
         }
 
         public static void SetLayers(Node root, uint layers)
@@ -339,10 +330,17 @@ namespace SpaceAdventure.Game
             {
                 var mi = new MeshInstance3D
                 {
+                    // No automatic LOD: Godot simplifies imported meshes and
+                    // swaps the simplified one in when an object is small on
+                    // screen. On a model made of separate boxes (the rifle) that
+                    // fused them into long stray triangles. Our budgets are set
+                    // per asset, so LOD0 is always the one to draw.
+                    LodBias = 1000f,
                     Name = imi.Name,
                     Transform = imi.Transform,
                     Mesh = imi.Mesh?.GetMesh(),
                     Skin = imi.Skin,
+                    Skeleton = imi.SkeletonPath, // a skinned mesh (char.player) deforms on its Skeleton3D
                     Visible = imi.Visible,
                 };
                 Node parent = imi.GetParent();
@@ -410,8 +408,31 @@ namespace SpaceAdventure.Game
             {
                 if (string.IsNullOrEmpty(a.id) || string.IsNullOrEmpty(a.file)) continue;
                 _paths[a.id] = Path.Combine(_root, a.file);
+                _rows[a.id] = a;
             }
             GD.Print($"art manifest: {_paths.Count} assets");
+        }
+    }
+
+    /// <summary>
+    /// Copies bone poses from one Skeleton3D to another of the same layout,
+    /// every frame: how a worn piece follows the body it is on.
+    /// </summary>
+    public partial class BoneMirror : Node
+    {
+        public Skeleton3D Source;
+        public Skeleton3D Target;
+
+        public override void _Process(double delta)
+        {
+            if (Source == null || Target == null || !IsInstanceValid(Source)) return;
+            int n = Math.Min(Source.GetBoneCount(), Target.GetBoneCount());
+            for (int i = 0; i < n; i++)
+            {
+                Target.SetBonePosePosition(i, Source.GetBonePosePosition(i));
+                Target.SetBonePoseRotation(i, Source.GetBonePoseRotation(i));
+                Target.SetBonePoseScale(i, Source.GetBonePoseScale(i));
+            }
         }
     }
 }

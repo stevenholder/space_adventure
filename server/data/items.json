@@ -65,7 +65,8 @@
         "value": 3
       },
       "desc": "Sealed visor, cracked in one corner. Keeps the dust out.",
-      "value": 13
+      "value": 13,
+      "asset": "armor.helmet.scout"
     },
     {
       "id": "armor.suit.scout",
@@ -78,7 +79,8 @@
         "value": 8
       },
       "desc": "Patched pressure suit. Most of the patches are yours.",
-      "value": 40
+      "value": 40,
+      "asset": "armor.suit.scout"
     },
     {
       "id": "armor.legs.scout",
@@ -91,7 +93,8 @@
         "value": 5
       },
       "desc": "Reinforced at the knees, where you land.",
-      "value": 20
+      "value": 20,
+      "asset": "armor.legs.scout"
     },
     {
       "id": "armor.gloves.scout",
@@ -104,7 +107,8 @@
         "value": 2
       },
       "desc": "Grip on the palms, no feeling in the fingertips.",
-      "value": 8
+      "value": 8,
+      "asset": "armor.gloves.scout"
     },
     {
       "id": "armor.boots.scout",
@@ -117,7 +121,8 @@
         "value": 3
       },
       "desc": "Magnetic soles, switched off. They squeak.",
-      "value": 11
+      "value": 11,
+      "asset": "armor.boots.scout"
     },
     {
       "id": "pack.scout",
@@ -130,7 +135,8 @@
         "value": 2
       },
       "desc": "A frame pack with room for everything you have not found yet.",
-      "value": 26
+      "value": 26,
+      "asset": "pack.scout"
     },
     {
       "id": "charm.rabbit",
@@ -219,7 +225,8 @@
       "armor": {
         "value": 14
       },
-      "desc": "Bench-made. Heavier than the suit and it shows."
+      "desc": "Bench-made. Heavier than the suit and it shows.",
+      "asset": "armor.plate.iron"
     },
     {
       "$comment": "Phase 13 consumable (GDD 'use'): one unit leaves the bag, +50 health capped, 8 s cooldown. Bench-made and stocked by the quartermaster.",

@@ -685,6 +685,18 @@ func (s *Server) join(c *client, h protocol.Hello) {
 			EntityType: uint16(e.Kind),
 			Data:       []byte(e.Def),
 		})})
+		// An NPC archetype can wear armor (npcs.json `worn`): same event as
+		// a player's, right after the spawn it belongs to.
+		if a, ok := s.reg.NPCs[e.Def]; ok {
+			if a.Primary != "" {
+				others = append(others, msg{data: equippedFrame(e.ID, a.Primary)})
+			}
+			for _, slot := range wornSlots {
+				if item := a.Worn[slot]; item != "" {
+					others = append(others, msg{data: wornFrame(e.ID, slot, item)})
+				}
+			}
+		}
 	}
 	for _, oc := range s.clients {
 		others = append(others, msg{data: protocol.EncodeSpawn(protocol.Spawn{
@@ -803,10 +815,12 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	}
 	var result protocol.CmdResult
 	var before, after string
+	var wornBefore, wornAfter map[string]string
 	var creditsBefore, creditsAfter int64
 	c.ident.Mutate(func(p *store.Player) {
 		creditsBefore = p.Credits
 		before = p.Equipped[slotPrimary]
+		wornBefore = wornOf(p.Equipped)
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
 			Player:   p,
 			Reg:      s.reg,
@@ -886,6 +900,7 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			},
 		})
 		after = p.Equipped[slotPrimary]
+		wornAfter = wornOf(p.Equipped)
 		creditsAfter = p.Credits
 	})
 	// Commerce trains on credits MOVED at a shop (Phase 11) — buys today,
@@ -928,6 +943,16 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		s.broadcast(f)
 		s.mu.Unlock()
 	}
+	// Armor is visible on the body too (PROTOCOL.md event_id 0x000F): one
+	// `worn` event per changed slot, the same way and for the same reason.
+	for _, slot := range wornSlots {
+		if wornAfter[slot] != wornBefore[slot] {
+			f := wornFrame(c.entity.ID, slot, wornAfter[slot])
+			s.mu.Lock()
+			s.broadcast(f)
+			s.mu.Unlock()
+		}
+	}
 	// A successful buy may have put a ship in the inventory; make the world
 	// agree (GDD "Ownership": spawn on purchase). Idempotent.
 	if req.Opcode == protocol.OpShopBuy && result.Status == protocol.StatusOK {
@@ -939,6 +964,31 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 // slotPrimary is the equipment slot the `equipped` event reports. Only the
 // slot that is visible in another player's hands goes on the wire.
 const slotPrimary = "primary"
+
+// wornSlots are the equipment slots drawn ON the body (GDD "Equipment"), the
+// ones the `worn` event reports. Accessories, tools, gadgets and mods are
+// not visible and stay off the wire.
+var wornSlots = []string{"head", "chest", "legs", "hands", "feet", "back"}
+
+// wornOf copies the visible slots out of a worn map.
+func wornOf(equipped map[string]string) map[string]string {
+	out := make(map[string]string, len(wornSlots))
+	for _, slot := range wornSlots {
+		out[slot] = equipped[slot]
+	}
+	return out
+}
+
+// wornFrame renders the `worn` event: data is "slot=item", item empty when
+// the slot was cleared. The slot rides along because a clear has no item to
+// look it up from.
+func wornFrame(entityID uint32, slot, item string) []byte {
+	return protocol.EncodeEvent(protocol.Event{
+		EntityID: entityID,
+		EventID:  protocol.EventWorn,
+		Data:     []byte(slot + "=" + item),
+	})
+}
 
 // equippedFrame renders the `equipped` event for a player's primary slot:
 // entity_id is the player, data is the item id as UTF-8, empty for "nothing
@@ -972,14 +1022,34 @@ func (s *Server) syncEquipped(c *client) {
 
 	frames := make([][]byte, 0, len(peers))
 	for _, oc := range peers {
-		if item := oc.ident.Snapshot().Equipped[slotPrimary]; item != "" {
+		eq := oc.ident.Snapshot().Equipped
+		if item := eq[slotPrimary]; item != "" {
 			frames = append(frames, equippedFrame(oc.entity.ID, item))
 		}
+		for _, slot := range wornSlots {
+			if item := eq[slot]; item != "" {
+				frames = append(frames, wornFrame(oc.entity.ID, slot, item))
+			}
+		}
 	}
-	self := c.ident.Snapshot().Equipped[slotPrimary]
+	selfEq := c.ident.Snapshot().Equipped
+	self := selfEq[slotPrimary]
 
 	for _, f := range frames {
 		c.send(msg{data: f})
+	}
+	// The joiner's own armor, to everyone including itself (same reasoning
+	// as the weapon below).
+	for _, slot := range wornSlots {
+		if item := selfEq[slot]; item != "" {
+			wf := wornFrame(c.entity.ID, slot, item)
+			c.send(msg{data: wf})
+			s.mu.Lock()
+			for _, oc := range peers {
+				oc.send(msg{data: wf})
+			}
+			s.mu.Unlock()
+		}
 	}
 	if self == "" {
 		return

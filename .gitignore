@@ -8,6 +8,7 @@ coverage.out
 
 # Art
 art/cache/
+art/build/
 
 # Deploy / cluster state
 deploy/cluster-state/

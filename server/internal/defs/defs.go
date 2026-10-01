@@ -209,7 +209,13 @@ type NPC struct {
 	Asset string `json:"asset"`
 	Kind  string `json:"kind"`
 	Verb  string `json:"verb"`
-	Stock []struct {
+	// Armor drawn on the body (item ids by worn slot), replayed to a joiner
+	// as `worn` events right after the NPC's spawn. Cosmetic only.
+	Worn map[string]string `json:"worn"`
+	// Weapon in hand (item id), replayed as an `equipped` event after the
+	// spawn. Cosmetic: NPC combat does not read it.
+	Primary string `json:"primary"`
+	Stock   []struct {
 		Item  string `json:"item"`
 		Price int64  `json:"price"`
 	} `json:"stock"`

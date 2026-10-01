@@ -57,7 +57,7 @@ const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]]
 // at 750 and the buy assertion fails against a player who already owns it.
 // This test is about a first purchase; it has to start as a new player.
 const token = 'e2e-loop-' + Date.now()
-const ws = new WebSocket('ws://127.0.0.1:18080/ws'); ws.binaryType = 'arraybuffer'
+const ws = new WebSocket(`ws://127.0.0.1:${process.env.SA_PORT ?? 18080}/ws`); ws.binaryType = 'arraybuffer'
 let myId = 0, ents = new Map(), spawns = new Map(), results = [], events = [], defs = null
 ws.addEventListener('open', () => ws.send(hello('shopper', token)))
 ws.addEventListener('message', (ev) => {
@@ -72,7 +72,7 @@ ws.addEventListener('message', (ev) => {
       ents.set(pv.getUint32(o, true), { pos: [pv.getFloat32(o+4,true), pv.getFloat32(o+8,true), pv.getFloat32(o+12,true)], health: pv.getUint16(o+50,true) }) }
   }
   else if (t === 0x000f) results.push({ seq: pv.getUint16(0,true), op: pv.getUint16(2,true), status: pv.getUint8(4), body: JSON.parse(dec.decode(p.subarray(9)) || '{}') })
-  else if (t === 0x0007) events.push({ id: pv.getUint32(0,true), ev: pv.getUint16(4,true) })
+  else if (t === 0x0007) events.push({ id: pv.getUint32(0,true), ev: pv.getUint16(4,true), data: Buffer.from(p.slice(6 + 4)).toString('utf8') })
 })
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const wait = async (fn, ms = 4000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = fn(); if (v) return v; await sleep(25) } return null }
@@ -109,6 +109,13 @@ ws.send(cmd(++seq, 0x0002, { npc: npcId, item: 'weapon.pulse', qty: 1 })); const
 console.log('shop_buy  ->', buy?.status === 0 ? `OK credits=${buy.body.credits} inv=${JSON.stringify(buy.body.inventory)}` : `REFUSED ${JSON.stringify(buy?.body)}`)
 ws.send(cmd(++seq, 0x0003, { slot: 'primary', item: 'weapon.pulse' })); const eq = await wait(() => results.find(r => r.op === 3))
 console.log('equip     ->', eq?.status === 0 ? JSON.stringify(eq.body.equipped) : `REFUSED ${JSON.stringify(eq?.body)}`)
+
+// --- wear armor: the chest slot rides the wire as a `worn` event (0x000F) ---
+ws.send(cmd(++seq, 0x0002, { npc: npcId, item: 'armor.suit.scout', qty: 1 })); const buyArmor = await wait(() => results.find(r => r.op === 2 && r.seq === seq))
+ws.send(cmd(++seq, 0x0003, { slot: 'chest', item: 'armor.suit.scout' })); const eqArmor = await wait(() => results.find(r => r.op === 3 && r.seq === seq))
+await sleep(200)
+const worn = events.find(e => e.ev === 0x000F && e.id === myId && e.data === 'chest=armor.suit.scout')
+console.log('wear      ->', eqArmor?.status === 0 ? JSON.stringify(eqArmor.body.equipped) : `REFUSED ${JSON.stringify(eqArmor?.body)}`, worn ? 'worn event seen' : 'NO worn event')
 
 // --- shoot a target ------------------------------------------------------
 const tid = targetIds[0]
@@ -148,6 +155,8 @@ const checks = [
   ['shop_list returned stock', list?.status === 0 && Array.isArray(list.body.stock) && list.body.stock.length > 0],
   ['shop_buy granted the rifle', buy?.status === 0 && buy.body.credits === 750],
   ['equip set primary', eq?.status === 0 && eq.body.equipped?.primary === 'weapon.pulse'],
+  ['equip set chest', eqArmor?.status === 0 && eqArmor.body.equipped?.chest === 'armor.suit.scout'],
+  ['worn event announced the chest slot', !!worn],
   ['fire produced a shot_fired event', shot > 0],
   ['the shot hit the target', hits > 0],
   ['the target lost health', after < before],

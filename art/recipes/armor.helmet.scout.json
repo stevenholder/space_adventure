@@ -1,0 +1,15 @@
+{
+  "$comment": "Scout set for the MakeHuman body: hard plates wrapped onto a smoothed copy of the body and rigid on one bone, gloves/boots skinned (tools/bpy/armor.py). Real materials (pbr).",
+  "id": "armor.helmet.scout",
+  "src": "build/armor.helmet.scout.raw.glb",
+  "out": "armor/helmet_scout.glb",
+  "fit": false,
+  "budget": 5000,
+  "pbr": true,
+  "covers": [
+    "head/hair"
+  ],
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/armor.py"
+}

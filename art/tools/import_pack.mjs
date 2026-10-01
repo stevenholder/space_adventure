@@ -460,8 +460,22 @@ export async function importPack(recipe) {
   //              fine and mounts nothing.
   await doc.transform(dedup(), prune({ keepLeaves: true }));
 
-  const baked = bakeVertexColors(doc, recipe.tint);
-  const { scale } = fit(doc, recipe);
+  // Surface names BEFORE the bake collapses every material into one: the
+  // client hides a body's covered surfaces (`covers` on a worn piece) by
+  // index, and this is the only record of which index is which. Godot keeps
+  // a glTF mesh's primitive order as its surface order.
+  const surfaces = {};
+  for (const mesh of doc.getRoot().listMeshes()) {
+    const names = mesh.listPrimitives().map((p) => p.getMaterial()?.getName() ?? "");
+    if (names.some((n) => n)) surfaces[mesh.getName()] = names;
+  }
+
+  // `pbr`: the model carries real materials (roughness, metallic) and the
+  // client draws them as they are -- nothing is baked to vertex colour.
+  const baked = recipe.pbr ? 0 : bakeVertexColors(doc, recipe.tint);
+  // `fit: false`: the model is authored in the wearer's frame (armor over the
+  // humanoid skeleton) and must stay exactly there -- no rescale, no centring.
+  const { scale } = recipe.fit === false ? { scale: 1 } : fit(doc, recipe);
   const renamed = renameNodes(doc, recipe.rename);
   const mounted = addMounts(doc, recipe.mounts);
   // After the renames: the map in a recipe is written in terms of this
@@ -498,7 +512,7 @@ export async function importPack(recipe) {
   mkdirSync(path.dirname(out), { recursive: true });
   await io.write(out, doc);
 
-  return { id: recipe.id, out: recipe.out, tris, scale, baked, renamed, mounted, anim };
+  return { id: recipe.id, out: recipe.out, tris, scale, baked, renamed, mounted, anim, surfaces };
 }
 
 /**
@@ -515,6 +529,16 @@ export function updateManifest(result, recipe) {
 
   row.file = recipe.out;
   row.tris = result.tris;
+  if (result.surfaces && Object.keys(result.surfaces).length) row.surfaces = result.surfaces;
+  else delete row.surfaces;
+  if (recipe.covers) row.covers = recipe.covers;
+  else delete row.covers;
+  if (recipe.pbr) row.pbr = true;
+  else delete row.pbr;
+  // `arms`: a worn piece with parts on the arms (pauldrons, bracers) that the
+  // first-person arms should wear too, whether or not it hides anything.
+  if (recipe.arms) row.arms = true;
+  else delete row.arms;
   if (recipe.license) row.license = recipe.license;
   if (recipe.source_url) row.source_url = recipe.source_url;
   if (recipe.author) row.author = recipe.author;
@@ -563,7 +587,7 @@ async function selftest() {
     out: path.relative(artDir, tmp),
     height: 1.8,
     ground: true,
-    rename: { torso: "chest" },
+    rename: { spine_03: "chest" },
     mounts: { probe: [0, 1.7, 0] },
   });
 
@@ -591,7 +615,7 @@ async function selftest() {
   check("feet sit on Y=0", Math.abs(min[1]) < 1e-3, `got ${min[1].toFixed(4)}`);
 
   const names = root.listNodes().map((n) => n.getName());
-  check("rename applied", names.includes("chest") && !names.includes("torso"));
+  check("rename applied", names.includes("chest") && !names.includes("spine_03"));
 
   // The regression this catches: prune's default deletes childless meshless
   // nodes, and every mount point in this project is one. `eye` going missing

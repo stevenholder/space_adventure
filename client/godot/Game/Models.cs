@@ -233,49 +233,5 @@ namespace SpaceAdventure.Game
 
         // ---- first person -------------------------------------------------
 
-        /// <summary>
-        /// The pulse rifle, origin at the grip, muzzle down +Z. Held in the
-        /// viewmodel and, later, in a remote player's hands.
-        /// </summary>
-        public static ArrayMesh Rifle() => Get("rifle", () =>
-        {
-            var body = new Color(0.26f, 0.28f, 0.32f);
-            var metal = new Color(0.17f, 0.18f, 0.21f);
-            var accent = new Color(0.32f, 0.56f, 0.72f);
-            var grip = new Color(0.14f, 0.13f, 0.13f);
-            return new List<Box>
-            {
-                new Box(new Vector3(0f, 0f, 0.02f), new Vector3(0.070f, 0.095f, 0.34f), body),      // receiver
-                new Box(new Vector3(0f, 0.012f, 0.30f), new Vector3(0.055f, 0.060f, 0.20f), metal), // handguard
-                new Box(new Vector3(0f, 0.012f, 0.44f), new Vector3(0.030f, 0.030f, 0.16f), metal), // barrel
-                new Box(new Vector3(0f, 0.012f, 0.53f), new Vector3(0.044f, 0.044f, 0.05f), metal), // muzzle brake
-                new Box(new Vector3(0f, 0.030f, 0.32f), new Vector3(0.016f, 0.016f, 0.13f), accent),// charge rail
-                new Box(new Vector3(0f, 0.066f, 0.06f), new Vector3(0.030f, 0.040f, 0.09f), metal), // rear sight
-                new Box(new Vector3(0f, 0.070f, 0.28f), new Vector3(0.020f, 0.030f, 0.04f), metal), // front post
-                new Box(new Vector3(0f, -0.115f, 0.02f), new Vector3(0.048f, 0.17f, 0.085f), metal, new Vector3(-8f, 0f, 0f)), // magazine
-                new Box(new Vector3(0f, -0.095f, -0.10f), new Vector3(0.042f, 0.14f, 0.06f), grip, new Vector3(14f, 0f, 0f)),  // pistol grip
-                new Box(new Vector3(0f, -0.005f, -0.20f), new Vector3(0.055f, 0.085f, 0.14f), body), // stock throat
-                new Box(new Vector3(0f, -0.020f, -0.31f), new Vector3(0.065f, 0.130f, 0.07f), grip), // butt plate
-            };
-        });
-
-        /// <summary>
-        /// A gloved hand with a thumb, plus the forearm behind it. Two of
-        /// these carry the rifle. Fingers are one box, not four: at this
-        /// distance the thumb is the only one whose absence you notice.
-        /// </summary>
-        public static ArrayMesh Hand() => Get("hand", () =>
-        {
-            var glove = new Color(0.24f, 0.25f, 0.28f);
-            var cuff = new Color(0.30f, 0.52f, 0.80f);
-            return new List<Box>
-            {
-                new Box(new Vector3(0f, 0f, 0f), new Vector3(0.085f, 0.055f, 0.105f), glove),        // palm
-                new Box(new Vector3(0f, -0.012f, 0.062f), new Vector3(0.080f, 0.042f, 0.045f), glove * 0.9f), // fingers
-                new Box(new Vector3(0.048f, 0.010f, 0.020f), new Vector3(0.028f, 0.032f, 0.070f), glove * 1.1f, new Vector3(0f, -18f, 0f)), // thumb
-                new Box(new Vector3(0f, 0.005f, -0.115f), new Vector3(0.075f, 0.075f, 0.16f), glove * 0.85f), // forearm
-                new Box(new Vector3(0f, 0.005f, -0.055f), new Vector3(0.090f, 0.090f, 0.04f), cuff), // cuff
-            };
-        });
     }
 }

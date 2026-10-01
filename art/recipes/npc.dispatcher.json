@@ -1,0 +1,22 @@
+{
+  "$comment": "The dispatcher: an android on the shared skeleton (tools/bpy/body.py RACES/VARIANTS): synthetic pale skin, lit cyan eyes, a scalp seam, white suit. Same bones, weights and clips as every humanoid.",
+  "id": "npc.dispatcher",
+  "src": "build/npc.dispatcher.raw.glb",
+  "out": "chars/dispatcher.glb",
+  "height": 1.8,
+  "axis": "y",
+  "ground": true,
+  "yaw": 0,
+  "budget": 6000,
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ]
+  },
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/body.py",
+  "rig": "animated"
+}

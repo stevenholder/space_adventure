@@ -122,6 +122,7 @@ const (
 	EventMissionShared   uint16 = 0x000C // data = the full mission template
 	EventSkillXP         uint16 = 0x000D // Phase 11: {skill,xp,level,next_at,leveled}
 	EventGatherEnd       uint16 = 0x000E // Phase 12: {node,reason,item,qty}, unicast
+	EventWorn            uint16 = 0x000F // armor: data = "slot=item" UTF-8 (item empty = cleared), broadcast + replayed at join
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

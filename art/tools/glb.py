@@ -69,8 +69,10 @@ def box(cx, cy, cz, sx, sy, sz, color, angle=0.0):
          (4, 5, 6), (4, 6, 7),   # +Z
          (0, 4, 7), (0, 7, 3),   # -X
          (1, 2, 6), (1, 6, 5),   # +X
-         (0, 1, 4), (0, 4, 5),   # -Y
-         (2, 3, 6), (2, 6, 7)]   # +Y
+         (0, 1, 5), (0, 5, 4),   # -Y  (was (0,1,4),(0,4,5): the second
+         (2, 3, 7), (2, 7, 6)]   # +Y   triangle of each wound inward, so a
+                                 #      culled half-quad showed a dark wedge
+                                 #      into every box seen from above/below)
     return [(v[i0], v[i1], v[i2], color) for i0, i1, i2 in t]
 
 
@@ -306,3 +308,15 @@ def out_path(*parts):
     """Path relative to art/ (one level above tools/)."""
     return os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), *parts)
+
+
+if __name__ == "__main__":
+    # Self-check: every box triangle faces OUT of the box (Godot culls the
+    # rest, and an inward half-quad reads as a dark wedge).
+    inward = 0
+    for a, b, c, _ in box(0.3, -0.2, 0.1, 1.0, 2.0, 3.0, (1, 1, 1), angle=0.4):
+        n = _cross([b[i] - a[i] for i in range(3)], [c[i] - a[i] for i in range(3)])
+        m = [(a[i] + b[i] + c[i]) / 3 - (0.3, -0.2, 0.1)[i] for i in range(3)]
+        inward += sum(n[i] * m[i] for i in range(3)) <= 0
+    assert inward == 0, f"{inward} box triangles wound inward"
+    print("glb.py selftest: box winding OK")

@@ -1,3 +1,4 @@
+using System;
 // Remote entity views, and the render clock they are drawn on.
 //
 // THE RULE THIS FILE OWES THE SERVER: remotes are drawn at
@@ -42,6 +43,11 @@ namespace SpaceAdventure.Game
         public Node3D Held;
         public string HeldItem = "";
 
+        /// <summary>Armor by slot: what the wire says is worn, and what is drawn.</summary>
+        public readonly Dictionary<string, string> Worn = new Dictionary<string, string>();
+        public readonly Dictionary<string, Node3D> WornNodes = new Dictionary<string, Node3D>();
+        public readonly Dictionary<string, string> WornDrawn = new Dictionary<string, string>();
+
         /// <summary>When this body was first seen dead, for the death fade.</summary>
         public double DiedAt = -1;
 
@@ -85,6 +91,12 @@ namespace SpaceAdventure.Game
         private readonly Dictionary<uint, EntityView> _views = new Dictionary<uint, EntityView>();
         private readonly Dictionary<uint, string> _pendingLabels = new Dictionary<uint, string>();
         private readonly Dictionary<uint, ushort> _pendingTypes = new Dictionary<uint, ushort>();
+        // Equipment that arrived before the view existed. A view is created on
+        // the first SNAPSHOT row, but the join replay sends `equipped` and
+        // `worn` right after the spawn, before any snapshot -- so without this
+        // every peer's weapon and every NPC's armor would be dropped at join.
+        private readonly Dictionary<uint, string> _pendingEquipped = new Dictionary<uint, string>();
+        private readonly Dictionary<uint, Dictionary<string, string>> _pendingWorn = new Dictionary<uint, Dictionary<string, string>>();
         private readonly Node _parent;
         private readonly Material _material;
         private readonly AssetRegistry _assets;
@@ -172,12 +184,129 @@ namespace SpaceAdventure.Game
             }
             _pendingTypes.Remove(id);
             _pendingLabels.Remove(id);
+            _pendingEquipped.Remove(id);
+            _pendingWorn.Remove(id);
         }
+
+        /// <summary>Records a `worn` event ("slot=item") so a body can show its armor.</summary>
+        public void OnWorn(uint id, string slot, string item)
+        {
+            if (!_views.TryGetValue(id, out var v))
+            {
+                if (!_pendingWorn.TryGetValue(id, out var pending)) _pendingWorn[id] = pending = new Dictionary<string, string>();
+                pending[slot] = item ?? "";
+                return;
+            }
+            v.Worn[slot] = item ?? "";
+            Dress(v);
+        }
+
+        /// <summary>
+        /// Hangs each worn slot's model on the body's skeleton, taking down
+        /// whatever that slot showed before. Called from the worn event and
+        /// from the model load, because either can arrive first.
+        /// </summary>
+        private void Dress(EntityView view) => Dress(_assets, Defs.ItemAsset, view.Model, view.Worn, view.WornDrawn, view.WornNodes);
+
+        /// <summary>
+        /// The one dressing rule, shared with the local body (ViewModel).
+        /// `asset` maps an item id to its model id (the local body is handed
+        /// asset ids already and passes identity).
+        /// </summary>
+        public static void Dress(AssetRegistry assets, Func<string, string> asset, Node3D model, Dictionary<string, string> worn,
+                                 Dictionary<string, string> drawn, Dictionary<string, Node3D> nodes, bool local = false,
+                                 Func<string, bool> keep = null, uint layers = 0, Material material = null)
+        {
+            if (model == null) return;
+            Skeleton3D skeleton = null;
+            foreach (Skeleton3D sk in AssetRegistry.Descendants<Skeleton3D>(model)) { skeleton = sk; break; }
+            if (skeleton == null) return;
+            bool changed = false;
+            foreach (var kv in worn)
+            {
+                drawn.TryGetValue(kv.Key, out string was);
+                if (was == kv.Value) continue;
+                changed = true;
+                if (nodes.TryGetValue(kv.Key, out Node3D old)) { old.QueueFree(); nodes.Remove(kv.Key); }
+                drawn[kv.Key] = kv.Value;
+                if (string.IsNullOrEmpty(kv.Value)) continue;
+                string id = asset(kv.Value);
+                if (keep != null && !keep(id)) continue;   // recorded in `drawn`, not hung (first-person arms)
+                Node3D piece = assets.AttachSkinned(id, skeleton);
+                if (piece == null) continue;
+                nodes[kv.Key] = piece;
+                // The local body: the camera is inside the head, and the arms
+                // the eye should see are the first-person ones. A helmet or a
+                // sleeve drawn here is a box over the view or a second pair of
+                // arms -- shadows-only, exactly like the head and arms.
+                if (local && (kv.Key == "head" || CoversArms(assets, id)))
+                    foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(piece))
+                        g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+                if (material != null) ViewModel.FpOverride(piece);
+                if (layers != 0)
+                {
+                    AssetRegistry.SetLayers(piece, layers);
+                    foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(piece))
+                        g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                }
+            }
+            if (changed) Cover(assets, asset, model, drawn);
+        }
+
+        /// <summary>A worn piece that covers the arms ("arms/…" in its manifest `covers`).</summary>
+        public static bool CoversArms(AssetRegistry assets, string asset) =>
+            assets.OnArms(asset) || Array.Exists(assets.Covers(asset), c => c.StartsWith("arms/"));
+
+        /// <summary>
+        /// WoW's rule: the body is not drawn under what it wears. A worn
+        /// piece's manifest row says which of the wearer's surfaces it covers
+        /// ("body/suit"); those surfaces get a collapse shader. Recomputed
+        /// from the whole worn set on every change, so taking a piece off
+        /// uncovers exactly what nothing else still covers.
+        /// </summary>
+        private static void Cover(AssetRegistry assets, Func<string, string> asset, Node3D model, Dictionary<string, string> drawn)
+        {
+            string wearer = model.HasMeta("asset") ? (string)model.GetMeta("asset") : null;
+            if (wearer == null) return;
+            var covered = new HashSet<string>();
+            foreach (string item in drawn.Values)
+                if (!string.IsNullOrEmpty(item))
+                    foreach (string c in assets.Covers(asset(item))) covered.Add(c);
+            foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
+            {
+                string[] names = assets.Surfaces(wearer, mi.Name);
+                if (names == null || mi.Mesh == null) continue;
+                for (int i = 0; i < mi.Mesh.GetSurfaceCount() && i < names.Length; i++)
+                {
+                    // Remember what the surface drew with before it was ever
+                    // hidden, and put exactly that back: null would fall back
+                    // to the importer's material, not the shared one (or the
+                    // first-person one) the registry and the view model set.
+                    string key = "sa_base_" + i;
+                    // Setting a meta to null DELETES it (imported pbr surfaces
+                    // have no override), so "none" is stored as false.
+                    if (!mi.HasMeta(key))
+                    {
+                        Material had = mi.GetSurfaceOverrideMaterial(i);
+                        mi.SetMeta(key, had != null ? (Variant)had : false);
+                    }
+                    Variant v = mi.GetMeta(key);
+                    var baseMat = v.VariantType == Variant.Type.Object ? v.As<Material>() : null;
+                    mi.SetSurfaceOverrideMaterial(i, covered.Contains(mi.Name + "/" + names[i]) ? Hidden : baseMat);
+                }
+            }
+        }
+
+        /// <summary>Collapses a surface off-screen: cheaper than transparency, and casts no shadow.</summary>
+        private static readonly ShaderMaterial Hidden = new ShaderMaterial
+        {
+            Shader = new Shader { Code = "shader_type spatial; void vertex() { POSITION = vec4(2.0, 2.0, 2.0, 1.0); }" },
+        };
 
         /// <summary>Records an `equipped` event so a body can show its weapon.</summary>
         public void OnEquipped(uint id, string item)
         {
-            if (!_views.TryGetValue(id, out var v)) return;
+            if (!_views.TryGetValue(id, out var v)) { _pendingEquipped[id] = item; return; }
             v.EquippedItem = item;
             Equip(v);
         }
@@ -195,6 +324,7 @@ namespace SpaceAdventure.Game
 
             if (view.Held != null) { view.Held.QueueFree(); view.Held = null; }
             view.HeldItem = view.EquippedItem;
+            if (view.Anim != null) view.Anim.Armed = false;
             if (string.IsNullOrEmpty(view.EquippedItem)) return;
 
             string asset = Defs.ItemAsset(view.EquippedItem);
@@ -206,6 +336,13 @@ namespace SpaceAdventure.Game
             _assets.Attach(asset, hand, weapon =>
             {
                 view.Held = weapon;
+                if (view.Anim != null) view.Anim.Armed = true;
+
+                // Point the barrel down the forearm -- two frames from now.
+                // The mount is a BoneAttachment3D, and it is not posed until
+                // the skeleton has updated; aligned at attach time the barrel
+                // landed wherever the unposed mount happened to be (up, once).
+                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = view.Model });
 
                 // Undo the body's scale: `hand.r` lives inside the model, under
                 // the wrapper that fits the character to 1.8 m, and a child
@@ -213,7 +350,11 @@ namespace SpaceAdventure.Game
                 // body; only the weapon's own size should not.
                 float s = hand.GlobalBasis.Scale.X;
                 if (s > 1e-4f) weapon.Scale = Vector3.One / s;
-
+                // A held weapon casts no shadow: under a low sun its sights and
+                // rail threw long thin wedges back along the receiver, which
+                // read as broken geometry. It still receives the body's shadow.
+                foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(weapon))
+                    g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
                 // Line the weapon's `grip` node up with the hand rather than
                 // its origin (art/README.md puts `grip` where the hand holds
                 // it; the model's origin is its centre). In WORLD space: the
@@ -223,6 +364,16 @@ namespace SpaceAdventure.Game
                 if (grip != null)
                     weapon.GlobalPosition += hand.GlobalPosition - grip.GlobalPosition;
             });
+        }
+
+        /// <summary>The right elbow in world space: the forearm bone's origin, or null without a skeleton.</summary>
+        internal static Vector3? ElbowOf(Node3D model)
+        {
+            foreach (Skeleton3D sk in AssetRegistry.Descendants<Skeleton3D>(model))
+                for (int i = 0; i < sk.GetBoneCount(); i++)
+                    if (sk.GetBoneName(i) is var n && (n.StartsWith("forearm.r") || n.StartsWith("forearm_r") || n.StartsWith("lowerarm_r")))
+                        return sk.GlobalTransform * sk.GetBoneGlobalPose(i).Origin;
+            return null;
         }
 
         /// <summary>
@@ -347,15 +498,23 @@ namespace SpaceAdventure.Game
             MeshInstance3D box = BoxMesh.Attach(root, "model", MeshFor(type, label), _material, 0);
 
             var view = new EntityView { Id = id, Type = type, Label = label ?? "", Root = root };
+            if (_pendingEquipped.TryGetValue(id, out string held)) { view.EquippedItem = held; _pendingEquipped.Remove(id); }
+            if (_pendingWorn.TryGetValue(id, out var wornEarly))
+            {
+                foreach (var kv in wornEarly) view.Worn[kv.Key] = kv.Value;
+                _pendingWorn.Remove(id);
+            }
 
             _assets.Attach(AssetFor(type, label), root, model =>
             {
                 box?.QueueFree();
                 view.Anim = CharacterAnim.For(model);
+                if (view.Anim != null) view.Anim.Armed = view.Held != null;
                 view.Model = model;
                 // The equip event usually beats the model here, so the weapon
                 // is mounted once the thing to mount it ON exists.
                 Equip(view);
+                Dress(view);
             });
 
             return view;
@@ -418,5 +577,150 @@ namespace SpaceAdventure.Game
         public readonly bool Dim;
         public MapMarker(Vector3 pos, ushort type, string label, string icon = "", bool dim = false)
         { Pos = pos; Type = type; Label = label; Icon = icon; Dim = dim; }
+    }
+
+        /// <summary>
+    /// Turns a held weapon so its `grip` -> `muzzle` line runs along the
+    /// wearer's elbow -> wrist line, once the bone attachment carrying it
+    /// has been posed. Assumes nothing about either model's axes: the
+    /// mount's frame turned out not to be the bone's, and two guessed
+    /// fixed turns put the barrel vertical. Frees itself when done.
+    /// </summary>
+    public sealed partial class AlignToForearm : Node
+    {
+        public Node3D Weapon, Hand, Model;
+        /// <summary>
+        /// First-person aim: the camera, a weight 0..1 (blends hip -> aimed)
+        /// and the recoil kick in metres. When set and the weight is above
+        /// zero the rifle is placed by its SIGHTS on the eye line, not by the
+        /// hands; the view model then pulls the arms to the gun.
+        /// </summary>
+        public Func<(Transform3D eye, float w, float kick)?> Ads;
+
+        /// <summary>Rear sight's distance in front of the eye when aimed.</summary>
+        public const float SightDistance = 0.20f;
+
+        /// <summary>Hip fire: the bore converges on the crosshair this far out.</summary>
+        public const float Converge = 15f;
+        private int _frames;
+        private Node3D _left;
+
+        /// <summary>
+        /// Every frame: the barrel (grip -> muzzle) runs from the right hand
+        /// toward the LEFT hand (`hand.l`, the fore-end) when the body has
+        /// one -- a two-handed hold whatever the clip does -- or along the
+        /// forearm (elbow -> wrist) when it does not. Then the weapon's top
+        /// is rolled to the wearer's up and its grip seated in the hand.
+        /// </summary>
+        /// <summary>
+        /// Blend from where the hands put the gun to the aimed placement: the
+        /// line of sight (rear notch -> front post) down the view, nudged up
+        /// by the kick, the rear sight SightDistance ahead of the eye (back by
+        /// the kick), the gun's top to the camera's up.
+        /// </summary>
+        private void Aim()
+        {
+            var a = Ads?.Invoke();
+            if (!a.HasValue) return;
+            Node3D sightN = AssetRegistry.FindNode(Weapon, "sight");
+            Node3D frontN = AssetRegistry.FindNode(Weapon, "front");
+            Node3D gripN = AssetRegistry.FindNode(Weapon, "grip");
+            if (sightN == null || frontN == null || gripN == null) return;
+            Transform3D eye = a.Value.eye;
+            Vector3 fwd = -eye.Basis.Z.Normalized(), up = eye.Basis.Y.Normalized();
+
+            // Hip: converge. Turn the gun about its grip (the right hand keeps
+            // it) so the bore points at the spot under the crosshair, Converge
+            // metres out -- shots leave the muzzle toward where the crosshair
+            // says they go. A small turn: the hip pose already points ahead.
+            Vector3 pivot = gripN.GlobalPosition;
+            Vector3 aimAt = eye.Origin + fwd * Converge;
+            Vector3 bore = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
+            Vector3 toAim = (aimAt - frontN.GlobalPosition).Normalized();
+            Vector3 cax = bore.Cross(toAim);
+            if (cax.LengthSquared() > 1e-10f)
+            {
+                var turn = new Basis(cax.Normalized(), bore.AngleTo(toAim));
+                Weapon.GlobalBasis = turn * Weapon.GlobalBasis;
+                Weapon.GlobalPosition = pivot + turn * (Weapon.GlobalPosition - pivot);
+            }
+            if (a.Value.w <= 0.001f) return;
+            Transform3D hip = Weapon.GlobalTransform;
+            Vector3 want = (fwd + up * a.Value.kick * 1.2f).Normalized();
+            Vector3 los = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
+            Vector3 ax = los.Cross(want);
+            if (ax.LengthSquared() > 1e-8f)
+                Weapon.GlobalBasis = new Basis(ax.Normalized(), los.AngleTo(want)) * Weapon.GlobalBasis;
+            Vector3 w1 = (up - want * up.Dot(want)).Normalized();
+            Vector3 h1 = Weapon.GlobalBasis.Y.Normalized();
+            h1 = (h1 - want * h1.Dot(want)).Normalized();
+            if (w1.LengthSquared() > 0.5f && h1.LengthSquared() > 0.5f)
+                Weapon.GlobalBasis = new Basis(want, h1.SignedAngleTo(w1, want)) * Weapon.GlobalBasis;
+            Vector3 target = eye.Origin + fwd * (SightDistance - a.Value.kick) - up * 0.012f;
+            Weapon.GlobalPosition += target - sightN.GlobalPosition;
+            Transform3D aimed = Weapon.GlobalTransform;
+            Weapon.GlobalTransform = hip.InterpolateWith(aimed, a.Value.w);
+        }
+
+        public override void _Process(double delta)
+        {
+            if (++_frames < 3) return;
+            if (!IsInstanceValid(Weapon) || !IsInstanceValid(Model)) { QueueFree(); return; }
+            Node3D grip = AssetRegistry.FindNode(Weapon, "grip");
+            Node3D muzzle = AssetRegistry.FindNode(Weapon, "muzzle");
+            if (grip == null || muzzle == null) { QueueFree(); return; }
+            if (_frames == 3) _left = AssetRegistry.FindNode(Model, "hand.l");
+            Vector3 arm;
+            // Two contact points when the gun has a `fore` and the body a left
+            // hand: grip -> fore runs to hand.r -> hand.l, so the rifle sits in
+            // BOTH hands, not just pointed between them.
+            Node3D fore = _left != null ? AssetRegistry.FindNode(Weapon, "fore") : null;
+            if (fore != null)
+            {
+                Vector3 hands = _left.GlobalPosition - Hand.GlobalPosition;
+                Vector3 gun = fore.GlobalPosition - grip.GlobalPosition;
+                if (hands.LengthSquared() < 1e-6f || gun.LengthSquared() < 1e-6f) return;
+                // Turn the gun's grip->fore onto the hands' line; the barrel
+                // follows at whatever angle it makes with that line.
+                Vector3 hn = hands.Normalized(), gn = gun.Normalized();
+                Vector3 ax = gn.Cross(hn);
+                if (ax.LengthSquared() > 1e-8f)
+                    Weapon.GlobalBasis = new Basis(ax.Normalized(), gn.AngleTo(hn)) * Weapon.GlobalBasis;
+                // Roll about that line so the gun's top faces the wearer's up.
+                Vector3 up0 = Model.GlobalBasis.Y.Normalized();
+                Vector3 want0 = (up0 - hn * up0.Dot(hn)).Normalized();
+                Vector3 have0 = Weapon.GlobalBasis.Y.Normalized();
+                have0 = (have0 - hn * have0.Dot(hn)).Normalized();
+                if (want0.LengthSquared() > 0.5f && have0.LengthSquared() > 0.5f)
+                    Weapon.GlobalBasis = new Basis(hn, have0.SignedAngleTo(want0, hn)) * Weapon.GlobalBasis;
+                Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
+                Aim();
+                return;
+            }
+            else if (_left != null)
+                arm = _left.GlobalPosition - Hand.GlobalPosition;
+            else
+            {
+                Vector3? elbow = EntityViews.ElbowOf(Model);
+                if (!elbow.HasValue) { QueueFree(); return; }
+                arm = Hand.GlobalPosition - elbow.Value;
+            }
+            if (arm.LengthSquared() < 1e-6f) return;
+            arm = arm.Normalized();
+            Vector3 barrel = (muzzle.GlobalPosition - grip.GlobalPosition).Normalized();
+            Vector3 axis = barrel.Cross(arm);
+            if (axis.LengthSquared() > 1e-8f)
+                Weapon.GlobalBasis = new Basis(axis.Normalized(), barrel.AngleTo(arm)) * Weapon.GlobalBasis;
+            else if (barrel.Dot(arm) < 0)
+                Weapon.GlobalBasis = new Basis(Hand.GlobalBasis.Y.Normalized(), Mathf.Pi) * Weapon.GlobalBasis;
+            Vector3 up = Model.GlobalBasis.Y.Normalized();
+            Vector3 want = (up - arm * up.Dot(arm)).Normalized();
+            Vector3 have = Weapon.GlobalBasis.Y.Normalized();
+            have = (have - arm * have.Dot(arm)).Normalized();
+            if (want.LengthSquared() > 0.5f && have.LengthSquared() > 0.5f)
+                Weapon.GlobalBasis = new Basis(arm, have.SignedAngleTo(want, arm)) * Weapon.GlobalBasis;
+            Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
+            if (_left == null) QueueFree();   // one-handed (old bodies): once is enough
+        }
     }
 }

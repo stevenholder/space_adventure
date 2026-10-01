@@ -199,6 +199,12 @@ Constants:
   client learns what someone is holding: the entity row has no weapon field,
   because a value that changes a few times a session has no business costing
   bytes on every entity on every tick.
+  And `0x000F` `worn` (own art, 2026-09-30) — `entity_id` is the player whose
+  armor changed and `data` is `slot=item` as UTF-8 (`slot` one of `head`,
+  `chest`, `legs`, `hands`, `feet`, `back`; `item` empty when the slot was
+  cleared). Broadcast per changed slot, and replayed per worn slot when a
+  client joins, exactly like `equipped`. The client resolves the model from
+  the item's `asset` in `defs` and hangs it on the wearer's skeleton.
 
 ## Semantics
 

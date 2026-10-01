@@ -1,60 +1,22 @@
 {
-  "$comment": "The alien, tinted purple, so it is told apart from the grunt at a distance -- they fight differently and you need to know which is which before it reaches you.",
+  "$comment": "Ranged raider: the shared skeleton, lean, plum jacket. Built by tools/bpy/body.py (VARIANTS) with the player's bones, weights and clips; only palette and bulk differ, so one armor piece fits all of them.",
   "id": "npc.gunner",
-  "src": "vendor/kenney-space-kit/Models/GLTF format/alien.glb",
+  "src": "build/npc.gunner.raw.glb",
   "out": "chars/gunner.glb",
   "height": 1.8,
   "axis": "y",
   "ground": true,
   "yaw": 0,
   "budget": 6000,
-  "rename": {
-    "armLeft": "arm.l",
-    "armRight": "arm.r",
-    "body": "torso",
-    "legLeft": "leg.l",
-    "legRight": "leg.r"
-  },
   "mounts": {
     "eye": [
       0,
       1.7,
       0
-    ],
-    "hand.r": {
-      "parent": "arm.r",
-      "pos": [
-        0.05,
-        -0.3,
-        -0.05
-      ]
-    }
-  },
-  "tint": [
-    0.78,
-    0.45,
-    1.0
-  ],
-  "license": "CC0",
-  "author": "Kenney",
-  "source_url": "https://kenney.nl/assets/space-kit",
-  "animations": {
-    "$comment": "Clips come off Kenney's Blocky Characters, whose rig uses the same joint-pivot convention as the Space Kit astronaut -- checked before relying on it. Mapped in terms of THIS project's node names, since the renames above have already run. Only rotations survive the retarget; see import_pack.mjs.",
-    "src": "vendor/kenney-blocky-characters/Models/GLB format/character-a.glb",
-    "map": {
-      "leg-left": "leg.l",
-      "leg-right": "leg.r",
-      "arm-left": "arm.l",
-      "arm-right": "arm.r",
-      "head": "head",
-      "torso": "torso"
-    },
-    "keep": [
-      "idle",
-      "walk",
-      "sprint",
-      "die"
     ]
   },
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/body.py",
   "rig": "animated"
 }
