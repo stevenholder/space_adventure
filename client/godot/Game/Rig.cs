@@ -31,6 +31,8 @@
 //   -uiLamp                 swing the sun onto whatever the camera ends up looking at
 //   -rigArmed               show the rig without a purchase
 //   -uiAim                  hold aim-down-sights for the shot
+//   -uiWalk                 walk forward through the shot
+//   -uiFaceHeight <m>       with -uiFace: aim that far above the target's feet
 //   -uiReload <secs>        start the reload motion and shoot that far into it
 //   -uiLowered              lower the rifle as if a wall were in the way
 
@@ -330,6 +332,10 @@ namespace SpaceAdventure.Game
                     // A FIXED copy of the goal: a kill-and-respawn cycle can
                     // move or recycle the live Root mid-walk.
                     Vector3 goal = best.Root.GlobalPosition;
+                    // -uiFaceHeight <m>: aim that far above the target's feet.
+                    if (Arg("-uiFaceHeight") is string fh)
+                        _fps.FaceToward(Eye, goal + goal.Normalized() * float.Parse(fh, CultureInfo.InvariantCulture));
+                    else
                     _fps.FaceToward(Eye, goal);
                     GD.Print($"ui: facing {wantArg} {best.Id} at {Mathf.Sqrt(bestD):F0} m");
 
@@ -683,6 +689,8 @@ namespace SpaceAdventure.Game
                 }
             }
             _rigShift = Flag("-uiShift");
+            // -uiWalk: hold W through the shot (gait / aimed-while-moving checks).
+            if (Flag("-uiWalk")) { _rigWalk = true; await Wait(1.0); }
 
             // -uiReload <secs>: start the reload motion, shoot that far into it.
             string reloadArg = Arg("-uiReload");

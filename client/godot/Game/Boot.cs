@@ -751,7 +751,10 @@ namespace SpaceAdventure.Game
             // DROPPED, so hold to the weapon's own interval. The shot names
             // the input that was in effect when the trigger went down; the
             // server rewinds by how far back that input executed.
-            if (li.FirePressed && _viewModel.Armed && _seat == 0 && Clock.Now >= _nextFireAt)
+            // An empty magazine does not fire: the server drops the shot anyway
+            // (server.go fireLocked), and drawing a flash and recoil for it
+            // made an empty gun look like it was shooting. -1 = not known yet.
+            if (li.FirePressed && _viewModel.Armed && _seat == 0 && _character.Magazine != 0 && Clock.Now >= _nextFireAt)
             {
                 _nextFireAt = Clock.Now + FireIntervalSeconds;
                 _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));

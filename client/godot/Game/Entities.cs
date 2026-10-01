@@ -242,7 +242,7 @@ namespace SpaceAdventure.Game
                 if (local && (kv.Key == "head" || CoversArms(assets, id)))
                     foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(piece))
                         g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
-                if (material != null) AssetRegistry.OverrideMaterial(piece, material);
+                if (material != null) ViewModel.FpOverride(piece);
                 if (layers != 0)
                 {
                     AssetRegistry.SetLayers(piece, layers);
@@ -255,7 +255,7 @@ namespace SpaceAdventure.Game
 
         /// <summary>A worn piece that covers the arms ("arms/…" in its manifest `covers`).</summary>
         public static bool CoversArms(AssetRegistry assets, string asset) =>
-            Array.Exists(assets.Covers(asset), c => c.StartsWith("arms/"));
+            assets.OnArms(asset) || Array.Exists(assets.Covers(asset), c => c.StartsWith("arms/"));
 
         /// <summary>
         /// WoW's rule: the body is not drawn under what it wears. A worn
@@ -283,8 +283,15 @@ namespace SpaceAdventure.Game
                     // to the importer's material, not the shared one (or the
                     // first-person one) the registry and the view model set.
                     string key = "sa_base_" + i;
-                    if (!mi.HasMeta(key)) mi.SetMeta(key, mi.GetSurfaceOverrideMaterial(i));
-                    var baseMat = mi.GetMeta(key).As<Material>();
+                    // Setting a meta to null DELETES it (imported pbr surfaces
+                    // have no override), so "none" is stored as false.
+                    if (!mi.HasMeta(key))
+                    {
+                        Material had = mi.GetSurfaceOverrideMaterial(i);
+                        mi.SetMeta(key, had != null ? (Variant)had : false);
+                    }
+                    Variant v = mi.GetMeta(key);
+                    var baseMat = v.VariantType == Variant.Type.Object ? v.As<Material>() : null;
                     mi.SetSurfaceOverrideMaterial(i, covered.Contains(mi.Name + "/" + names[i]) ? Hidden : baseMat);
                 }
             }
@@ -343,7 +350,11 @@ namespace SpaceAdventure.Game
                 // body; only the weapon's own size should not.
                 float s = hand.GlobalBasis.Scale.X;
                 if (s > 1e-4f) weapon.Scale = Vector3.One / s;
-
+                // A held weapon casts no shadow: under a low sun its sights and
+                // rail threw long thin wedges back along the receiver, which
+                // read as broken geometry. It still receives the body's shadow.
+                foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(weapon))
+                    g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
                 // Line the weapon's `grip` node up with the hand rather than
                 // its origin (art/README.md puts `grip` where the hand holds
                 // it; the model's origin is its centre). In WORLD space: the
@@ -360,7 +371,7 @@ namespace SpaceAdventure.Game
         {
             foreach (Skeleton3D sk in AssetRegistry.Descendants<Skeleton3D>(model))
                 for (int i = 0; i < sk.GetBoneCount(); i++)
-                    if (sk.GetBoneName(i).StartsWith("forearm.r") || sk.GetBoneName(i).StartsWith("forearm_r"))
+                    if (sk.GetBoneName(i) is var n && (n.StartsWith("forearm.r") || n.StartsWith("forearm_r") || n.StartsWith("lowerarm_r")))
                         return sk.GlobalTransform * sk.GetBoneGlobalPose(i).Origin;
             return null;
         }
@@ -578,38 +589,138 @@ namespace SpaceAdventure.Game
     public sealed partial class AlignToForearm : Node
     {
         public Node3D Weapon, Hand, Model;
+        /// <summary>
+        /// First-person aim: the camera, a weight 0..1 (blends hip -> aimed)
+        /// and the recoil kick in metres. When set and the weight is above
+        /// zero the rifle is placed by its SIGHTS on the eye line, not by the
+        /// hands; the view model then pulls the arms to the gun.
+        /// </summary>
+        public Func<(Transform3D eye, float w, float kick)?> Ads;
+
+        /// <summary>Rear sight's distance in front of the eye when aimed.</summary>
+        public const float SightDistance = 0.20f;
+
+        /// <summary>Hip fire: the bore converges on the crosshair this far out.</summary>
+        public const float Converge = 15f;
         private int _frames;
-        private bool _aligned;
+        private Node3D _left;
+
+        /// <summary>
+        /// Every frame: the barrel (grip -> muzzle) runs from the right hand
+        /// toward the LEFT hand (`hand.l`, the fore-end) when the body has
+        /// one -- a two-handed hold whatever the clip does -- or along the
+        /// forearm (elbow -> wrist) when it does not. Then the weapon's top
+        /// is rolled to the wearer's up and its grip seated in the hand.
+        /// </summary>
+        /// <summary>
+        /// Blend from where the hands put the gun to the aimed placement: the
+        /// line of sight (rear notch -> front post) down the view, nudged up
+        /// by the kick, the rear sight SightDistance ahead of the eye (back by
+        /// the kick), the gun's top to the camera's up.
+        /// </summary>
+        private void Aim()
+        {
+            var a = Ads?.Invoke();
+            if (!a.HasValue) return;
+            Node3D sightN = AssetRegistry.FindNode(Weapon, "sight");
+            Node3D frontN = AssetRegistry.FindNode(Weapon, "front");
+            Node3D gripN = AssetRegistry.FindNode(Weapon, "grip");
+            if (sightN == null || frontN == null || gripN == null) return;
+            Transform3D eye = a.Value.eye;
+            Vector3 fwd = -eye.Basis.Z.Normalized(), up = eye.Basis.Y.Normalized();
+
+            // Hip: converge. Turn the gun about its grip (the right hand keeps
+            // it) so the bore points at the spot under the crosshair, Converge
+            // metres out -- shots leave the muzzle toward where the crosshair
+            // says they go. A small turn: the hip pose already points ahead.
+            Vector3 pivot = gripN.GlobalPosition;
+            Vector3 aimAt = eye.Origin + fwd * Converge;
+            Vector3 bore = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
+            Vector3 toAim = (aimAt - frontN.GlobalPosition).Normalized();
+            Vector3 cax = bore.Cross(toAim);
+            if (cax.LengthSquared() > 1e-10f)
+            {
+                var turn = new Basis(cax.Normalized(), bore.AngleTo(toAim));
+                Weapon.GlobalBasis = turn * Weapon.GlobalBasis;
+                Weapon.GlobalPosition = pivot + turn * (Weapon.GlobalPosition - pivot);
+            }
+            if (a.Value.w <= 0.001f) return;
+            Transform3D hip = Weapon.GlobalTransform;
+            Vector3 want = (fwd + up * a.Value.kick * 1.2f).Normalized();
+            Vector3 los = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
+            Vector3 ax = los.Cross(want);
+            if (ax.LengthSquared() > 1e-8f)
+                Weapon.GlobalBasis = new Basis(ax.Normalized(), los.AngleTo(want)) * Weapon.GlobalBasis;
+            Vector3 w1 = (up - want * up.Dot(want)).Normalized();
+            Vector3 h1 = Weapon.GlobalBasis.Y.Normalized();
+            h1 = (h1 - want * h1.Dot(want)).Normalized();
+            if (w1.LengthSquared() > 0.5f && h1.LengthSquared() > 0.5f)
+                Weapon.GlobalBasis = new Basis(want, h1.SignedAngleTo(w1, want)) * Weapon.GlobalBasis;
+            Vector3 target = eye.Origin + fwd * (SightDistance - a.Value.kick) - up * 0.012f;
+            Weapon.GlobalPosition += target - sightN.GlobalPosition;
+            Transform3D aimed = Weapon.GlobalTransform;
+            Weapon.GlobalTransform = hip.InterpolateWith(aimed, a.Value.w);
+        }
 
         public override void _Process(double delta)
         {
-            _frames++;
-            if (_frames < 3) return;
+            if (++_frames < 3) return;
+            if (!IsInstanceValid(Weapon) || !IsInstanceValid(Model)) { QueueFree(); return; }
             Node3D grip = AssetRegistry.FindNode(Weapon, "grip");
             Node3D muzzle = AssetRegistry.FindNode(Weapon, "muzzle");
-            Vector3? elbow = EntityViews.ElbowOf(Model);
-            if (grip == null || muzzle == null || !elbow.HasValue) { QueueFree(); return; }
-            Vector3 barrel = (muzzle.GlobalPosition - grip.GlobalPosition).Normalized();
-            Vector3 arm = (Hand.GlobalPosition - elbow.Value).Normalized();
+            if (grip == null || muzzle == null) { QueueFree(); return; }
+            if (_frames == 3) _left = AssetRegistry.FindNode(Model, "hand.l");
+            Vector3 arm;
+            // Two contact points when the gun has a `fore` and the body a left
+            // hand: grip -> fore runs to hand.r -> hand.l, so the rifle sits in
+            // BOTH hands, not just pointed between them.
+            Node3D fore = _left != null ? AssetRegistry.FindNode(Weapon, "fore") : null;
+            if (fore != null)
             {
-                Vector3 axis = barrel.Cross(arm);
-                if (axis.LengthSquared() > 1e-8f)
-                    Weapon.GlobalBasis = new Basis(axis.Normalized(), barrel.AngleTo(arm)) * Weapon.GlobalBasis;
-                else if (barrel.Dot(arm) < 0)
-                    Weapon.GlobalBasis = new Basis(Hand.GlobalBasis.Y.Normalized(), Mathf.Pi) * Weapon.GlobalBasis;
-                // Roll about the barrel so the weapon's top (+Y) faces the
-                // wearer's up: the minimal turn above leaves the roll wherever
-                // it lands, which was upside down.
-                Vector3 up = Model.GlobalBasis.Y.Normalized();
-                Vector3 want = (up - arm * up.Dot(arm)).Normalized();
-                Vector3 have = Weapon.GlobalBasis.Y.Normalized();
-                have = (have - arm * have.Dot(arm)).Normalized();
-                if (want.LengthSquared() > 0.5f && have.LengthSquared() > 0.5f)
-                    Weapon.GlobalBasis = new Basis(arm, have.SignedAngleTo(want, arm)) * Weapon.GlobalBasis;
+                Vector3 hands = _left.GlobalPosition - Hand.GlobalPosition;
+                Vector3 gun = fore.GlobalPosition - grip.GlobalPosition;
+                if (hands.LengthSquared() < 1e-6f || gun.LengthSquared() < 1e-6f) return;
+                // Turn the gun's grip->fore onto the hands' line; the barrel
+                // follows at whatever angle it makes with that line.
+                Vector3 hn = hands.Normalized(), gn = gun.Normalized();
+                Vector3 ax = gn.Cross(hn);
+                if (ax.LengthSquared() > 1e-8f)
+                    Weapon.GlobalBasis = new Basis(ax.Normalized(), gn.AngleTo(hn)) * Weapon.GlobalBasis;
+                // Roll about that line so the gun's top faces the wearer's up.
+                Vector3 up0 = Model.GlobalBasis.Y.Normalized();
+                Vector3 want0 = (up0 - hn * up0.Dot(hn)).Normalized();
+                Vector3 have0 = Weapon.GlobalBasis.Y.Normalized();
+                have0 = (have0 - hn * have0.Dot(hn)).Normalized();
+                if (want0.LengthSquared() > 0.5f && have0.LengthSquared() > 0.5f)
+                    Weapon.GlobalBasis = new Basis(hn, have0.SignedAngleTo(want0, hn)) * Weapon.GlobalBasis;
                 Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
-                _aligned = true;
+                Aim();
+                return;
             }
-            QueueFree();
+            else if (_left != null)
+                arm = _left.GlobalPosition - Hand.GlobalPosition;
+            else
+            {
+                Vector3? elbow = EntityViews.ElbowOf(Model);
+                if (!elbow.HasValue) { QueueFree(); return; }
+                arm = Hand.GlobalPosition - elbow.Value;
+            }
+            if (arm.LengthSquared() < 1e-6f) return;
+            arm = arm.Normalized();
+            Vector3 barrel = (muzzle.GlobalPosition - grip.GlobalPosition).Normalized();
+            Vector3 axis = barrel.Cross(arm);
+            if (axis.LengthSquared() > 1e-8f)
+                Weapon.GlobalBasis = new Basis(axis.Normalized(), barrel.AngleTo(arm)) * Weapon.GlobalBasis;
+            else if (barrel.Dot(arm) < 0)
+                Weapon.GlobalBasis = new Basis(Hand.GlobalBasis.Y.Normalized(), Mathf.Pi) * Weapon.GlobalBasis;
+            Vector3 up = Model.GlobalBasis.Y.Normalized();
+            Vector3 want = (up - arm * up.Dot(arm)).Normalized();
+            Vector3 have = Weapon.GlobalBasis.Y.Normalized();
+            have = (have - arm * have.Dot(arm)).Normalized();
+            if (want.LengthSquared() > 0.5f && have.LengthSquared() > 0.5f)
+                Weapon.GlobalBasis = new Basis(arm, have.SignedAngleTo(want, arm)) * Weapon.GlobalBasis;
+            Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
+            if (_left == null) QueueFree();   // one-handed (old bodies): once is enough
         }
     }
 }

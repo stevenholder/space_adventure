@@ -78,6 +78,59 @@ void fragment() {
             },
         };
 
+        /// <summary>
+        /// The same depth squeeze for a real (pbr) material: albedo,
+        /// roughness and metallic copied off the imported material.
+        /// </summary>
+        private static readonly Shader FpPbrShader = new Shader
+        {
+            Code = @"shader_type spatial;
+uniform vec4 albedo : source_color = vec4(1.0);
+uniform float roughness = 0.6;
+uniform float metallic = 0.0;
+void vertex() {
+    POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+    POSITION.z = (1.0 - (1.0 - POSITION.z / POSITION.w) * 0.02) * POSITION.w;
+}
+void fragment() {
+    ALBEDO = albedo.rgb;
+    ROUGHNESS = roughness;
+    METALLIC = metallic;
+}",
+        };
+
+        private static readonly Dictionary<Material, Material> FpCopies = new Dictionary<Material, Material>();
+
+        /// <summary>
+        /// Every surface under `root` draws with its first-person twin: the
+        /// vertex-colour FpMaterial for baked models, a per-material copy of
+        /// the depth-squeezed shader for pbr ones.
+        /// </summary>
+        public static void FpOverride(Node root)
+        {
+            foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(root))
+            {
+                if (mi.Mesh == null) continue;
+                for (int i = 0; i < mi.Mesh.GetSurfaceCount(); i++)
+                {
+                    Material src = mi.GetActiveMaterial(i);
+                    Material fp = FpMaterial;
+                    if (src is BaseMaterial3D bm && !bm.VertexColorUseAsAlbedo)
+                    {
+                        if (!FpCopies.TryGetValue(src, out fp))
+                        {
+                            var sm = new ShaderMaterial { Shader = FpPbrShader };
+                            sm.SetShaderParameter("albedo", bm.AlbedoColor);
+                            sm.SetShaderParameter("roughness", bm.Roughness);
+                            sm.SetShaderParameter("metallic", bm.Metallic);
+                            FpCopies[src] = fp = sm;
+                        }
+                    }
+                    mi.SetSurfaceOverrideMaterial(i, fp);
+                }
+            }
+        }
+
         private readonly Camera3D _eye;
         private readonly Node3D _fp;           // first-person arms holder, under the camera
         private readonly Node3D _muzzle;       // proxy, copied from the held weapon's muzzle
@@ -100,7 +153,8 @@ void fragment() {
         private Vector2 _sway;
         private float _bobPhase, _kick;
         private Vector3 _ads;                  // camera-space shift that frames the rifle (see Tick)
-        private bool _lowered;
+        private bool _lowered, _aiming;
+        private float _adsW;   // 0 hip .. 1 aimed: how far the gun is on the sight line
 
         public ViewModel(Camera3D eye, Material material, uint layers, Node worldParent, AssetRegistry assets)
         {
@@ -121,7 +175,7 @@ void fragment() {
                 foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
                     if (mi.Name == "body" || mi.Name == "head") mi.Visible = false;
                 AssetRegistry.SetLayers(model, _layers);
-                AssetRegistry.OverrideMaterial(model, FpMaterial);
+                FpOverride(model);
                 foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(model))
                     g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
                 _fpAnim = FirstPersonAnim.For(model);
@@ -164,9 +218,22 @@ void fragment() {
             DressFp();
         }
 
-        private void DressFp() =>
+        private void DressFp()
+        {
             EntityViews.Dress(_assets, a => a, _fpModel, _worn, _fpWornDrawn, _fpWornNodes,
                 keep: a => EntityViews.CoversArms(_assets, a), layers: _layers, material: FpMaterial);
+            // The first-person arms wear only what is ON the forearms and
+            // hands. Armor parts are separate meshes named "<bone>__<part>"
+            // (art/tools/bpy/armor.py); a suit's chest plate and pauldrons sit
+            // right under the camera and, drawn always-in-front, covered the
+            // bottom of the view.
+            foreach (Node3D piece in _fpWornNodes.Values)
+                foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(piece))
+                {
+                    string n = mi.Name.ToString();
+                    mi.Visible = n.StartsWith("lowerarm") || n.StartsWith("hand");
+                }
+        }
 
         /// <summary>The barrel tip, in world space. Shots are DRAWN from here.</summary>
         public Vector3 MuzzlePosition => _muzzle.GlobalPosition;
@@ -217,12 +284,18 @@ void fragment() {
             {
                 _fpHeld = weapon;
                 AssetRegistry.SetLayers(weapon, _layers);
-                AssetRegistry.OverrideMaterial(weapon, FpMaterial);
+                FpOverride(weapon);
                 foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(weapon))
                     g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
                 float sc = hand.GlobalBasis.Scale.X;
                 if (sc > 1e-4f) weapon.Scale = Vector3.One / sc;
-                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = _fpModel });
+                weapon.AddChild(new AlignToForearm
+                {
+                    Weapon = weapon, Hand = hand, Model = _fpModel,
+                    // Aiming: the barrel down the line of sight, so the front
+                    // post sits on the crosshair whatever the arms manage.
+                    Ads = () => (_eye.GlobalTransform, _adsW, _kick),
+                });
                 _fpMuzzle = AssetRegistry.FindNode(weapon, "muzzle");
                 _fpGrip = AssetRegistry.FindNode(weapon, "grip");
             });
@@ -232,7 +305,9 @@ void fragment() {
         public void Fire()
         {
             _kick = KickMetres;
-            _fpAnim?.Fire(Clock.Now);
+            // The recoil clip is built on the hip hold; aimed, the gun rides
+            // the sight line and only the kick moves it (and the arms follow).
+            if (!_aiming) _fpAnim?.Fire(Clock.Now);
         }
 
         /// <summary>R was pressed with a gun in hand: the reload motion, stretched to the weapon's time.</summary>
@@ -285,6 +360,7 @@ void fragment() {
             if (_lowered) _lowered = aheadClear < RaiseAt;
             else _lowered = aheadClear < LowerAt;
             bool ads = aiming && Armed && !_lowered;
+            _aiming = ads;
 
             float scale = ads ? AdsSway : 1f;
             _sway = _sway.Lerp(-lookDelta * SwayDegrees * scale, 1f - Mathf.Exp(-SwaySmoothing * dt));
@@ -309,9 +385,20 @@ void fragment() {
                 want = UnarmedHand - un;
                 want.Z = 0f;
             }
+            else if (Armed && _fpGrip != null && IsInstanceValidNode(_fpGrip) && _adsW > 0.5f)
+            {
+                // Aimed: the gun sits on the sight line by itself, so pull
+                // the arms to it -- the right hand onto the grip.
+                Vector3 gripCam = _eye.GlobalTransform.AffineInverse() * _fpGrip.GlobalPosition;
+                Vector3 handCam = _eye.GlobalTransform.AffineInverse() * hand.GlobalPosition;
+                want = _ads + (gripCam - handCam);
+            }
             else if (Armed && _fpGrip != null && IsInstanceValidNode(_fpGrip))
             {
-                Vector3 sight = _eye.GlobalTransform.AffineInverse() * (_fpGrip.GlobalPosition + _fpGrip.GlobalBasis.Y.Normalized() * SightAboveGrip);
+                Node3D sightNode = AssetRegistry.FindNode(_fpHeld, "sight");
+                Vector3 sightAt = sightNode != null ? sightNode.GlobalPosition
+                    : _fpGrip.GlobalPosition + _fpGrip.GlobalBasis.Y.Normalized() * SightAboveGrip;
+                Vector3 sight = _eye.GlobalTransform.AffineInverse() * sightAt;
                 Vector3 un = sight - _ads;
                 want = (ads ? AdsSight : HoldSight) - un;
                 // Sideways and up only. Pushing the sight further out drags the
@@ -320,6 +407,8 @@ void fragment() {
                 want.Z = 0f;
             }
             _ads = _ads.Lerp(want, 1f - Mathf.Exp(-14f * dt));
+            _adsW = Mathf.MoveToward(_adsW, ads ? 1f : 0f, dt / 0.18f);   // 0.18 s in or out
+
             _eye.Fov = Mathf.Lerp(_eye.Fov, ads ? AdsFov : BaseFov, 1f - Mathf.Exp(-12f * dt));
 
             PoseFp(_sway, bob, _kick);

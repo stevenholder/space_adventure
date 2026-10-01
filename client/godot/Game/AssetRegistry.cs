@@ -50,6 +50,10 @@ namespace SpaceAdventure.Game
         public Dictionary<string, string[]> surfaces { get; set; }
         /// <summary>"mesh/surface" entries of the WEARER this piece covers; the client hides them.</summary>
         public string[] covers { get; set; }
+        /// <summary>Real materials (roughness, metallic): drawn as imported, not with the shared vertex-colour one.</summary>
+        public bool pbr { get; set; }
+        /// <summary>A worn piece with parts on the arms: the first-person arms wear it too.</summary>
+        public bool arms { get; set; }
     }
 
     internal class Manifest
@@ -73,6 +77,9 @@ namespace SpaceAdventure.Game
             _rows.TryGetValue(assetId ?? "", out var r) && r.surfaces != null && r.surfaces.TryGetValue(mesh, out var names) ? names : null;
 
         /// <summary>The wearer surfaces a piece covers ("mesh/surface"), or an empty list.</summary>
+        public bool IsPbr(string assetId) => _rows.TryGetValue(assetId ?? "", out var r) && r.pbr;
+        public bool OnArms(string assetId) => _rows.TryGetValue(assetId ?? "", out var r) && r.arms;
+
         public string[] Covers(string assetId) =>
             _rows.TryGetValue(assetId ?? "", out var r) && r.covers != null ? r.covers : System.Array.Empty<string>();
         private readonly Dictionary<string, GltfState> _loaded = new Dictionary<string, GltfState>();
@@ -135,7 +142,7 @@ namespace SpaceAdventure.Game
                 holder.AddChild(new BoneMirror { Source = wearer, Target = own });
                 // Beside the wearer's skeleton, under the same fit/flip parents.
                 wearer.GetParent().AddChild(holder);
-                ApplyMaterials(holder);
+                ApplyMaterials(holder, IsPbr(assetId));
                 return holder;
             }
             catch (Exception e)
@@ -173,7 +180,7 @@ namespace SpaceAdventure.Game
                 flip.AddChild(scene);
                 holder.AddChild(flip);
                 parent.AddChild(holder);
-                ApplyMaterials(holder);
+                ApplyMaterials(holder, IsPbr(assetId));
                 onAttached?.Invoke(holder);
             }
             catch (Exception e)
@@ -188,8 +195,9 @@ namespace SpaceAdventure.Game
         /// BLEND surface keeps the importer's, drawn both-sided and unlit
         /// (the canopy glass — a lit, culled pane read as a black slab).
         /// </summary>
-        private void ApplyMaterials(Node root)
+        private void ApplyMaterials(Node root, bool pbr = false)
         {
+            if (pbr) return;   // imported materials as they are (art recipe `pbr`)
             foreach (MeshInstance3D mi in Descendants<MeshInstance3D>(root))
             {
                 if (mi.Mesh == null) continue;
@@ -322,6 +330,12 @@ namespace SpaceAdventure.Game
             {
                 var mi = new MeshInstance3D
                 {
+                    // No automatic LOD: Godot simplifies imported meshes and
+                    // swaps the simplified one in when an object is small on
+                    // screen. On a model made of separate boxes (the rifle) that
+                    // fused them into long stray triangles. Our budgets are set
+                    // per asset, so LOD0 is always the one to draw.
+                    LodBias = 1000f,
                     Name = imi.Name,
                     Transform = imi.Transform,
                     Mesh = imi.Mesh?.GetMesh(),
