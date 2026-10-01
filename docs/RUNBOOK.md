@@ -67,6 +67,15 @@ gh release download v2026.09.29-abc1234 -p '*Setup.exe'   # a specific build
 
 Flip `--prerelease` off in the workflow when a build should become "Latest".
 
+The landing page's download buttons hit `/download/windows` and
+`/download/linux`, which redirect to the newest release carrying
+`SpaceAdventure-win-Setup.exe` / `SpaceAdventure.AppImage`
+(`server/internal/web/download.go`), so the links never go stale.
+
+```sh
+curl -sI https://game.stevenholder.info/download/windows | grep -i location
+```
+
 ## Roll back
 
 ```sh

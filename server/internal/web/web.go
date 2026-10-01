@@ -62,6 +62,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	site, _ := fs.Sub(siteFS, "site")
 	mux.Handle("/", http.FileServer(http.FS(site)))
 
+	mux.Handle("/download/", newDownloads())
 	mux.HandleFunc("/api/stats", h.stats)
 	mux.HandleFunc("/api/register", h.mutating(h.limited(h.register)))
 	mux.HandleFunc("/api/login", h.mutating(h.limited(h.login)))
