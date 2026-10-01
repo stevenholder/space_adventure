@@ -79,8 +79,9 @@ void fragment() {
         };
 
         /// <summary>
-        /// The same depth squeeze for a real (pbr) material: albedo,
-        /// roughness and metallic copied off the imported material.
+        /// The same depth squeeze for a real (pbr) material: albedo (and its
+        /// texture), normal map, roughness and metallic copied off the
+        /// imported material.
         /// </summary>
         private static readonly Shader FpPbrShader = new Shader
         {
@@ -88,12 +89,17 @@ void fragment() {
 uniform vec4 albedo : source_color = vec4(1.0);
 uniform float roughness = 0.6;
 uniform float metallic = 0.0;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform float normal_scale = 0.0;
 void vertex() {
     POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
     POSITION.z = (1.0 - (1.0 - POSITION.z / POSITION.w) * 0.02) * POSITION.w;
 }
 void fragment() {
-    ALBEDO = albedo.rgb;
+    ALBEDO = albedo.rgb * texture(albedo_tex, UV).rgb;
+    NORMAL_MAP = texture(normal_tex, UV).rgb;
+    NORMAL_MAP_DEPTH = normal_scale;
     ROUGHNESS = roughness;
     METALLIC = metallic;
 }",
@@ -123,6 +129,12 @@ void fragment() {
                             sm.SetShaderParameter("albedo", bm.AlbedoColor);
                             sm.SetShaderParameter("roughness", bm.Roughness);
                             sm.SetShaderParameter("metallic", bm.Metallic);
+                            if (bm.AlbedoTexture != null) sm.SetShaderParameter("albedo_tex", bm.AlbedoTexture);
+                            if (bm.NormalEnabled && bm.NormalTexture != null)
+                            {
+                                sm.SetShaderParameter("normal_tex", bm.NormalTexture);
+                                sm.SetShaderParameter("normal_scale", bm.NormalScale);
+                            }
                             FpCopies[src] = fp = sm;
                         }
                     }

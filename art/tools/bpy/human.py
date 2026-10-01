@@ -38,6 +38,8 @@ from bl_ext.user_default.mpfb.services.humanservice import HumanService
 from bl_ext.user_default.mpfb.services.targetservice import TargetService
 
 ART = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import textures  # noqa: E402 -- generated surface maps
 
 EYE = 1.70          # GDD eye_height; the camera and the server's shot origin
 BODY_TRIS = 5600    # body + arms + head; armor gets the rest of ~15k
@@ -116,7 +118,13 @@ def material(name):
         b.inputs["Roughness"].default_value = rough
         b.inputs["Metallic"].default_value = metal
         m.diffuse_color = (*lin, 1.0)
+        if name in SURFACE:
+            textures.dress(m, SURFACE[name], col)
     return m
+
+
+# Materials that get a generated surface texture (tools/bpy/textures.py).
+SURFACE = {"suit": "suit", "glove": "fabric", "boot": "fabric"}
 
 
 # ---- the human ----------------------------------------------------------------
@@ -808,11 +816,14 @@ def vertex_group_centroid_world(obj, name):
 
 def export(out):
     os.makedirs(os.path.dirname(out), exist_ok=True)
+    for o in bpy.context.scene.objects:
+        if o.type == "MESH":
+            textures.uv_box(o)
     bpy.ops.export_scene.gltf(
         filepath=out, export_format="GLB", export_apply=True, export_yup=True,
         export_animations=True, export_animation_mode="ACTIONS", export_force_sampling=True,
-        export_skins=True, export_def_bones=False, export_texcoords=False,
-        export_normals=True, export_materials="EXPORT", export_image_format="NONE",
+        export_skins=True, export_def_bones=False, export_texcoords=True,
+        export_normals=True, export_materials="EXPORT", export_image_format="AUTO",
     )
 
 

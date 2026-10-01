@@ -24,6 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Box3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { Texture } from "three";
 
 const artDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const manifest = JSON.parse(readFileSync(path.join(artDir, "manifest.json"), "utf8"));
@@ -164,6 +165,9 @@ function rawColorProblems(file) {
 }
 
 const loader = new GLTFLoader();
+// Textures are not checked here, and decoding an image wants a browser
+// (`self`, ImageBitmap): every texture loads as a blank one.
+loader.register(() => ({ name: "stub-textures", loadTexture: () => Promise.resolve(new Texture()) }));
 function loadGlb(file) {
   const buf = readFileSync(path.join(artDir, file));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

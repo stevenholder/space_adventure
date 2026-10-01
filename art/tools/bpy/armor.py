@@ -65,7 +65,14 @@ def material(name):
         b.inputs["Roughness"].default_value = rough
         b.inputs["Metallic"].default_value = metal
         m.diffuse_color = (*lin, 1.0)
+        if name in SURFACE:
+            human.textures.dress(m, SURFACE[name], col)
     return m
+
+
+# Materials that get a generated surface texture (tools/bpy/textures.py).
+SURFACE = {"plate": "plate", "trim": "trim", "metal": "metal", "iron": "iron",
+           "strap": "fabric", "glove": "fabric", "boot": "fabric"}
 
 
 def setup_materials(obj, main, rim):
@@ -581,6 +588,26 @@ def pieces(body):
         block("pack_lid", (0, back_plate_y - 0.10, pz + 0.19), (0.31, 0.14, 0.05), "trim", "spine_03", bevel=0.01),
         block("pack_cell", (0.0, back_plate_y - 0.175, pz - 0.02), (0.16, 0.03, 0.22), "metal", "spine_03", bevel=0.006),
     ]
+    # Decals: stencilled markings painted onto the plates (textures.py atlas).
+    def part(asset, name):
+        return next(p for p in out[asset] if p.name == name)
+
+    def stick(obj, cell, into, size, offset=(0.0, 0.0)):
+        d = human.textures.decal(obj, cell, into, size, offset)
+        rigid(d, obj["bone"])
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        d.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.join()
+
+    stick(part("armor.suit.scout", "chest"), 3, (0, -1, 0), 0.075, (0.075, 0.02))     # insignia, wearer's left
+    stick(part("armor.suit.scout", "back"), 0, (0, 1, 0), 0.11, (0.0, 0.03))          # squad number
+    stick(part("armor.suit.scout", "pauldron_r"), 1, (-1, 0, -0.35), 0.07)             # rank chevrons
+    stick(part("armor.suit.scout", "pauldron_l"), 1, (1, 0, -0.35), 0.07)
+    stick(part("armor.helmet.scout", "helmet"), 0, (-1, 0, 0), 0.06, (0.0, 0.01))      # number on both sides
+    stick(part("armor.helmet.scout", "helmet"), 0, (1, 0, 0), 0.06, (0.0, 0.01))
+    stick(part("armor.plate.iron", "iron_front"), 2, (0, -1, 0), 0.10, (0.0, -0.07))  # hazard band
     return out
 
 
@@ -608,6 +635,8 @@ def main():
         for p in parts:
             p.name = f"{p.get('bone', 'skin')}__{p.name}"
             p.data.name = p.name
+        for p in parts:
+            human.textures.uv_box(p)
         out = os.path.join(ART, "build", asset_id + ".raw.glb")
         bpy.ops.object.select_all(action="DESELECT")
         for p in parts:
@@ -616,8 +645,8 @@ def main():
         bpy.context.view_layer.objects.active = parts[0]
         bpy.ops.export_scene.gltf(
             filepath=out, export_format="GLB", use_selection=True, export_apply=True, export_yup=True,
-            export_animations=False, export_skins=True, export_def_bones=False, export_texcoords=False,
-            export_normals=True, export_materials="EXPORT", export_image_format="NONE",
+            export_animations=False, export_skins=True, export_def_bones=False, export_texcoords=True,
+            export_normals=True, export_materials="EXPORT", export_image_format="AUTO",
         )
         tris = sum(sum(len(f.vertices) - 2 for f in p.data.polygons) for p in parts)
         print(f"wrote {out}: {tris} tris in {len(parts)} parts")

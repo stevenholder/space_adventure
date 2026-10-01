@@ -546,7 +546,7 @@
     {
       "id": "armor.helmet.scout",
       "file": "armor/helmet_scout.glb",
-      "tris": 1112,
+      "tris": 1116,
       "license": "CC0",
       "source": "recipes/armor.helmet.scout.json",
       "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -555,7 +555,8 @@
       "surfaces": {
         "head__helmet": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "head__visor": [
           "armor_visor",
@@ -570,7 +571,7 @@
     {
       "id": "armor.suit.scout",
       "file": "armor/suit_scout.glb",
-      "tris": 2528,
+      "tris": 2536,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -595,19 +596,23 @@
         ],
         "spine_03__back": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "spine_03__chest": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "upperarm_l__pauldron_l": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "upperarm_r__pauldron_r": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ]
       },
       "pbr": true,
@@ -616,7 +621,7 @@
     {
       "id": "armor.plate.iron",
       "file": "armor/plate_iron.glb",
-      "tris": 1128,
+      "tris": 1130,
       "license": "CC0",
       "source": "recipes/armor.plate.iron.json",
       "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -629,7 +634,8 @@
         ],
         "spine_03__iron_front": [
           "armor_iron",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ]
       },
       "pbr": true

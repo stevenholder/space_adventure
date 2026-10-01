@@ -126,6 +126,34 @@ parts; rig, clips, mounts and grips are shared. `blender -b --python
 tools/bpy/human.py -- npc.grunt` rebuilds one. body.py now only builds the
 retired 11-bone skeleton and is kept for its older docs.
 
+## Surface textures and decals (2026-10-01)
+
+`tools/bpy/textures.py` paints every armor and suit material with numpy
+inside Blender. Each material gets a TILING 256 px albedo and a normal map
+built from one height field:
+
+- **plate**: panel lines, rivets and light scratches.
+- **trim**: fine noise.
+- **metal**: brushed.
+- **iron**: brushed, with pits and scratches.
+- **fabric** (straps, gloves, boots): a weave.
+- **suit**: a weave with quilted seams and stitching.
+
+`uv_box` projects UVs in world METRES (one repeat = 0.4 m), so texel size
+matches across parts. Normal strength is set per kind (`STRENGTH`). A
+strong cloth weave read as zebra stripes on the first-person gloves.
+
+Decals come from a 2x2 stencil atlas: the squad number "07", a chevron,
+hazard stripes and an insignia. `decal()` raycasts onto a plate and lays a
+quad 1.5 mm above it. The quad is joined into the part, so it rides the
+same bone. The material is alpha-clipped (glTF `MASK`). Placements are at
+the end of armor.py `pieces()`. Both generators export texcoords and
+embedded PNGs. verify.mjs stubs texture decoding, since three.js wants a
+browser for images. The first-person shader samples the albedo and normal
+maps too.
+
+Self-check: `blender -b --python tools/bpy/textures.py`.
+
 ## Humanoid skeleton (own bodies, from 2026-09-30)
 
 `char.player` is no longer a downloaded pack and no longer a stack of parts:
