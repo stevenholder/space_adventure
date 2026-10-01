@@ -67,6 +67,21 @@ gh release download v2026.09.29-abc1234 -p '*Setup.exe'   # a specific build
 
 Flip `--prerelease` off in the workflow when a build should become "Latest".
 
+The landing page's download buttons hit `/download/windows` and
+`/download/linux`, which redirect to the newest release carrying
+`SpaceAdventure-win-Setup.exe` / `SpaceAdventure.AppImage`
+(`server/internal/web/download.go`). While the repo is private that needs a
+fine-grained token with read-only Contents on this repo, by hand, once:
+
+```sh
+kubectl -n space-adventure create secret generic space-releases-token --from-literal=token=github_pat_...
+kubectl -n space-adventure rollout restart deploy/server
+curl -sI https://game.stevenholder.info/download/windows | grep -i location   # release-assets.githubusercontent.com
+```
+
+Without it the buttons send visitors to GitHub's public links, which 404
+until the repo is public.
+
 ## Roll back
 
 ```sh
