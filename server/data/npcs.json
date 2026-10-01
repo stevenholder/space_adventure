@@ -68,7 +68,7 @@
    "$comment": "Phase 10 mission board. Shop-shaped (no move_speed = non-combat), stands at the relay; mission_list/turnin validate against this archetype.",
    "id": "npc.dispatcher",
    "name": "Dispatcher Oru",
-   "asset": "npc.shopkeeper",
+   "asset": "npc.dispatcher",
    "kind": "shop",
    "verb": "talk"
   },
@@ -129,6 +129,23 @@
    "attack_windup": 0.25,
    "turn_rate": 360.0,
    "loot": "loot.warlord"
+  },
+  {
+   "$comment": "Own-art review stand-in: the player model on a non-combat NPC (shop-shaped like the dispatcher: no move_speed, no health, no stock) so the body can be seen from outside without a second client. Wears the full Scout set (npcs.json `worn`) so the armor can be seen on a body without a second client.",
+   "id": "npc.recruit",
+   "name": "Recruit Tam",
+   "asset": "char.player",
+   "kind": "shop",
+   "verb": "talk",
+   "worn": {
+    "head": "armor.helmet.scout",
+    "chest": "armor.suit.scout",
+    "legs": "armor.legs.scout",
+    "hands": "armor.gloves.scout",
+    "feet": "armor.boots.scout",
+    "back": "pack.scout"
+   },
+   "primary": "weapon.pulse"
   }
  ]
 }
