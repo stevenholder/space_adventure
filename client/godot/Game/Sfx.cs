@@ -3,12 +3,20 @@
 // the world (everyone else's). Shots differ by weapon family, so a DMR crack
 // and an SMG rattle read apart before you see who fired.
 //
-// ponytail: synthesized one-shots, no mixer buses or occlusion. Swap a
-// stream for a recorded .wav under art/ when real sound design arrives.
+// Placed sounds are muffled when something solid stands between them and the
+// ear: a structure or rock (the sim colliders) or the ground itself (a hill,
+// the planet's curve). Distance already dulls them -- AudioStreamPlayer3D's
+// attenuation filter is on by default.
+//
+// ponytail: synthesized one-shots, one straight-line occlusion test, no
+// reverb. Swap a stream for a recorded .wav under art/ when real sound
+// design arrives; add reverb when there are interiors to ring.
 
 using System;
 using System.Collections.Generic;
 using Godot;
+using Collider = SpaceAdventure.Sim.Collider;
+using TerrainField = SpaceAdventure.Sim.TerrainField;
 
 namespace SpaceAdventure.Game
 {
@@ -86,13 +94,52 @@ namespace SpaceAdventure.Game
             p.Play();
         }
 
+        /// <summary>Where the listener is and what the world is made of; null = never muffle.</summary>
+        public Func<Vector3> Ear;
+        public Collider[] Colliders;
+        public TerrainField Terrain;
+
+        /// <summary>How much quieter, and how dull, a sound behind cover is.</summary>
+        internal const float MuffleDb = -9f, MuffleHz = 700f;
+
         private void PlayAt(Vector3 at, AudioStreamWav s, float db, float range)
         {
             var p = new AudioStreamPlayer3D { Stream = s, VolumeDb = db, MaxDistance = range, UnitSize = 4f };
+            if (Ear != null && Occluded(Ear(), at, Colliders, Terrain))
+            {
+                p.VolumeDb += MuffleDb;
+                p.AttenuationFilterCutoffHz = MuffleHz;
+            }
             _root.AddChild(p);
             p.GlobalPosition = at;
             p.Finished += p.QueueFree;
             p.Play();
+        }
+
+        /// <summary>
+        /// Is the straight line from the ear to a sound blocked? Both ends are
+        /// lifted 1 m off the ground (a footstep is AT the ground) and the
+        /// last half metre at each end is ignored, so the body making the
+        /// sound, or the one hearing it, never hides it from itself.
+        /// </summary>
+        public static bool Occluded(Vector3 ear, Vector3 at, Collider[] colliders, TerrainField terrain)
+        {
+            Vector3 from = ear, to = at + at.Normalized();
+            Vector3 d = to - from;
+            float len = d.Length();
+            if (len < 1.5f) return false;
+            Vector3 dir = d / len;
+            if (ViewModel.Blocked(from + dir * 0.5f, dir, len - 1f, colliders, null) < len - 1f) return true;
+            if (terrain == null) return false;
+            // ponytail: a sample every ~2 m catches hills and the horizon; a
+            // ridge thinner than that can leak, which nobody will hear.
+            int n = Math.Max(2, (int)(len / 2f));
+            for (int i = 1; i < n; i++)
+            {
+                Vector3 q = from + d * ((float)i / n);
+                if (terrain.SampleRadius(Frame.ToSim(q.Normalized())) > q.Length()) return true;
+            }
+            return false;
         }
 
         // ---- synthesis ---------------------------------------------------------

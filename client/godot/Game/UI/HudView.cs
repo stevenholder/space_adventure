@@ -20,6 +20,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Panel _compass;
         private const float CompassWidth = 440f;
         private readonly Label _flight;
+        private readonly Label _version;
         private readonly Label _banner;
         private readonly List<Label> _markers = new List<Label>();
         private readonly Label[] _log;
@@ -86,6 +87,12 @@ namespace SpaceAdventure.Game.UI
             root.AddChild(_compass);
 
             // ---- flight readout, under the compass while seated --------------
+            // ---- top-right: which build this is ------------------------------
+            _version = Styles.Display_("", 12, Styles.Dust);
+            Styles.Pin(_version, Control.LayoutPreset.TopRight, 14, 10);
+            _version.HorizontalAlignment = HorizontalAlignment.Right;
+            root.AddChild(_version);
+
             _flight = Styles.Display_("", 14, Styles.Cream);
             Styles.Pin(_flight, Control.LayoutPreset.CenterTop, 0, 52);
             _flight.Visible = false;
@@ -281,6 +288,11 @@ namespace SpaceAdventure.Game.UI
         {
             _flight.Visible = !string.IsNullOrEmpty(line);
             _flight.Text = line ?? "";
+        }
+
+        public void SetVersion(string text)
+        {
+            if (_version.Text != text) _version.Text = text;
         }
 
         public void SetCredits(long credits) =>

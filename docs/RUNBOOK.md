@@ -56,7 +56,11 @@ Installed clients update themselves: at launch `Boot.UpdateThenConnect` asks
 the newest pre-release's feed, downloads the delta, quits, and Velopack swaps
 the files and relaunches. Source runs, godot-cli flows and loose exports
 aren't installed and skip the check. Any failure (GitHub down, rate limit)
-plays the current build. To test an update locally, pack two versions with
+plays the current build. While playing, an installed client re-checks every
+5 minutes (`SA_UPDATE_EVERY` overrides), downloads a newer release in the
+background, shows "UPDATE … READY — restart the game", and applies it when
+the game quits; the build is top-right on the HUD (`v1.0.N · sha7`, `dev`
+from source). To test an update locally, pack two versions with
 `vpk pack` into a directory and launch the older one with
 `SA_UPDATE_SOURCE=<dir>`.
 
