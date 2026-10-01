@@ -32,6 +32,8 @@ namespace SpaceAdventure.Game
         public ushort Health;
         public bool Dead;
         public string EquippedItem = "";
+        /// <summary>Screenshot rig only (-uiDie): play the death without the server's say-so.</summary>
+        public bool RigDead;
 
         /// <summary>Set once the model loads, null for anything without clips.</summary>
         public CharacterAnim Anim;
@@ -167,6 +169,12 @@ namespace SpaceAdventure.Game
         };
 
         public bool TryGet(uint id, out EntityView view) => _views.TryGetValue(id, out view);
+
+        /// <summary>A `hit` event named this body as the victim: flinch.</summary>
+        public void OnHit(uint victim)
+        {
+            if (_views.TryGetValue(victim, out var v)) v.Anim?.Hit(Clock.Now);
+        }
 
         /// <summary>Records what a `spawn` said, for the row that follows it.</summary>
         public void OnSpawn(Spawn spawn)
@@ -437,7 +445,7 @@ namespace SpaceAdventure.Game
                 }
                 view.LastDrawn = drawn;
                 view.HasLastDrawn = true;
-                view.Anim?.Drive(view.Speed, view.Dead);
+                view.Anim?.Drive(view.Speed, view.Dead || view.RigDead);
 
                 // Dying is allowed to take as long as the death clip, and not
                 // one second longer: the server does not despawn a dead NPC

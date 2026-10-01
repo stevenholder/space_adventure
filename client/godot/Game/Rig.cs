@@ -32,6 +32,8 @@
 //   -rigArmed               show the rig without a purchase
 //   -uiAim                  hold aim-down-sights for the shot
 //   -uiWalk                 walk forward through the shot
+//   -uiFlinch <secs>        nearest body flinches; shot that far in
+//   -uiDie <secs>           nearest body plays its death; shot that far in
 //   -uiFaceHeight <m>       with -uiFace: aim that far above the target's feet
 //   -uiReload <secs>        start the reload motion and shoot that far into it
 //   -uiLowered              lower the rifle as if a wall were in the way
@@ -689,6 +691,27 @@ namespace SpaceAdventure.Game
                 }
             }
             _rigShift = Flag("-uiShift");
+            // -uiFlinch <secs> / -uiDie <secs>: the nearest other body plays its hit
+            // flinch or its death, and the shot lands that far into it.
+            foreach (var (flag, act) in new (string, Action<CharacterAnim>)[] { ("-uiFlinch", a => a.Hit(Clock.Now)), ("-uiDie", a => { }) })
+            {
+                string arg = Arg(flag);
+                if (arg == null) continue;
+                EntityView near = null; float nd = float.MaxValue;
+                foreach (EntityView v in _views.All)
+                {
+                    if (v.Root == null || v.Id == _net.EntityId || v.Anim == null) continue;
+                    float d = v.Root.GlobalPosition.DistanceTo(Eye);
+                    if (d < nd) { nd = d; near = v; }
+                }
+                if (near != null)
+                {
+                    act(near.Anim);
+                    if (flag == "-uiDie") near.RigDead = true;
+                    GD.Print($"ui: {flag} on {near.Id} at {nd:F1} m");
+                    await Wait(double.Parse(arg, CultureInfo.InvariantCulture));
+                }
+            }
             // -uiWalk: hold W through the shot (gait / aimed-while-moving checks).
             if (Flag("-uiWalk")) { _rigWalk = true; await Wait(1.0); }
 

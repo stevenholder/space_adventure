@@ -586,13 +586,51 @@ def clips(rig):
     clip(rig, "walk_armed", 0.70, lambda t: gait(rig, t, 26, 40, 0, 3, armed=AIM3P), Q)
     clip(rig, "sprint_armed", 0.50, lambda t: gait(rig, t, 42, 65, 0, 10, armed=AIM3P), Q)
 
+    def ease(a, b, t):
+        x = max(0.0, min(1.0, (t - a) / (b - a)))
+        return x * x * (3 - 2 * x)
+
+    def drop(dz):
+        """Lower the whole body (Root) by dz metres."""
+        p = rig.pose.bones["Root"]
+        update()
+        p.matrix = Matrix.Translation((0, 0, -dz)) @ p.matrix
+        update()
+
+    # Hit: a short flinch -- the chest snaps back and twists, the head
+    # follows late. Unarmed and holding a rifle (arms stay on the gun).
+    def flinch(t, armed):
+        k = math.sin(math.pi * min(1.0, t * 1.4)) * (1.0 - 0.4 * t)
+        if armed:
+            rifle(rig, **AIM3P)
+        else:
+            arms_down(rig)
+        swing(rig, "spine_02", (1, 0, 0), 16 * k)
+        swing(rig, "spine_03", (0, 0, 1), 11 * k)
+        swing(rig, "head", (1, 0, 0), 20 * ease(0.1, 0.5, t) * (1 - ease(0.6, 1.0, t)))
+        swing(rig, "calf_r", (1, 0, 0), -10 * k)
+        swing(rig, "calf_l", (1, 0, 0), -10 * k)
+    clip(rig, "hit", 0.35, lambda t: flinch(t, False), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
+    clip(rig, "hit_armed", 0.35, lambda t: flinch(t, True), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
+
+    # Death: the knees go, the body drops onto them, then topples back and
+    # to one side, arms falling loose -- not a stiff plank pivoting at the feet.
     def die(t):
-        swing(rig, "Root", (1, 0, 0), 88 * min(1.0, t * 1.2) ** 1.5)
-        swing(rig, "head", (1, 0, 0), -15 * t)
+        k1 = ease(0.0, 0.38, t)                 # knees buckle
+        k2 = ease(0.30, 1.0, t)                 # topple
         arms_down(rig)
-        swing(rig, "upperarm_r", (0, 1, 0), 50 * t)
-        swing(rig, "upperarm_l", (0, 1, 0), -50 * t)
-    clip(rig, "die", 0.5, die, (0.0, 0.3, 0.6, 1.0), loop=False)
+        swing(rig, "thigh_r", (1, 0, 0), 55 * k1)
+        swing(rig, "thigh_l", (1, 0, 0), 48 * k1)
+        swing(rig, "calf_r", (1, 0, 0), -95 * k1)
+        swing(rig, "calf_l", (1, 0, 0), -85 * k1)
+        swing(rig, "spine_01", (1, 0, 0), -18 * k1 + 10 * k2)
+        swing(rig, "head", (1, 0, 0), -20 * k1 + 25 * k2)
+        swing(rig, "upperarm_r", (0, 1, 0), 55 * k2)
+        swing(rig, "upperarm_l", (0, 1, 0), -40 * k2)
+        drop(0.42 * k1 * (1.0 - k2))            # down onto the knees, back up as it tips over
+        swing(rig, "Root", (1, 0, 0), 78 * k2)       # positive tips the body backward
+        swing(rig, "Root", (0, 1, 0), 18 * k2)
+    clip(rig, "die", 1.1, die, (0.0, 0.15, 0.3, 0.45, 0.6, 0.8, 1.0), loop=False)
 
     # First person: only the arms are ever seen, but every bone is keyed so a
     # clip fully overrides the one before it.

@@ -906,6 +906,7 @@ namespace SpaceAdventure.Game
                             break;
                         case EventId.Hit:
                             _fx.OnHit(ev, _net.EntityId);
+                            _views.OnHit(ev.EntityId);
                             OnHitFeedback(ev);
                             break;
                         case EventId.MissionProgress:
