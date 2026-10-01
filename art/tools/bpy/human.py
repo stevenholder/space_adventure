@@ -40,7 +40,7 @@ from bl_ext.user_default.mpfb.services.targetservice import TargetService
 ART = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 EYE = 1.70          # GDD eye_height; the camera and the server's shot origin
-BODY_TRIS = 6000    # body + arms + head; armor gets the rest of ~15k
+BODY_TRIS = 5600    # body + arms + head; armor gets the rest of ~15k
 
 # MakeHuman sliders: an adult, fit, slightly tall build.
 MACRO = {

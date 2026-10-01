@@ -244,7 +244,7 @@ def smoothed_body(body):
 
 
 def plate(name, wrap_onto, a, b, ref, theta, t, gap, thickness, bone, mat="plate", rim="trim",
-          cols=11, rows=8, squareness=4.0, bevel=0.003, relax=4, start=None):
+          cols=9, rows=7, squareness=4.0, bevel=0.003, relax=4, start=None):
     """A hard plate: a grid laid on a cylinder around the axis a->b, angles
     `theta` (degrees, 0 = `ref`) by fractions `t` along the axis (may run
     past 0..1), masked to a rounded rectangle (|u|^p + |v|^p <= 1), shrink-
@@ -349,7 +349,7 @@ def boot_foot(name, lo, hi, bone):
     obj.name = name
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=3, use_grid_fill=True)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=2, use_grid_fill=True)
     for v in bm.verts:
         p = Vector((v.co.x * size.x, v.co.y * size.y, v.co.z * size.z)) + centre
         t = (p.y - a.y) / size.y                  # 0 heel .. 1 toe
@@ -362,7 +362,7 @@ def boot_foot(name, lo, hi, bone):
     setup_materials(obj, "boot", "trim")
     bv = obj.modifiers.new("round", "BEVEL")
     bv.width = 0.025
-    bv.segments = 3
+    bv.segments = 2
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_apply(modifier=bv.name)
     sole = block(name + "_sole", (centre.x, centre.y, 0.009), (size.x + 0.008, size.y + 0.012, 0.018), "trim", bone, bevel=0.005)
@@ -381,7 +381,7 @@ def boot_foot(name, lo, hi, bone):
 def boot_shaft(name, base, radius, height, bone):
     """A boot's shaft: a slightly tapered tube round the ankle and lower
     shin, with a rolled cuff in the trim colour."""
-    bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=radius, radius2=radius * 0.93, depth=height,
+    bpy.ops.mesh.primitive_cone_add(vertices=12, radius1=radius, radius2=radius * 0.93, depth=height,
                                     end_fill_type="NOTHING", location=(base.x, base.y, base.z + height / 2))
     obj = bpy.context.object
     obj.name = name
@@ -396,7 +396,7 @@ def boot_shaft(name, base, radius, height, bone):
     finish(obj, 0.008, 0.002)
     rigid(obj, bone)
     cuff = bpy.ops.mesh.primitive_torus_add(major_radius=radius * 0.95, minor_radius=0.010,
-                                            major_segments=16, minor_segments=6,
+                                            major_segments=12, minor_segments=4,
                                             location=(base.x, base.y, base.z + height))
     cuff = bpy.context.object
     cuff.data.transform(cuff.matrix_world)
@@ -436,7 +436,7 @@ def pieces(body):
     hi = Vector((max(p.x for p in head_pts), max(p.y for p in head_pts), max(p.z for p in head_pts)))
     centre = (lo + hi) * 0.5
     radii = (hi - lo) * 0.5 + Vector((0.035, 0.03, 0.03))
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=16, radius=1.0, location=(0, 0, 0))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=12, radius=1.0, location=(0, 0, 0))
     hel = bpy.context.object
     hel.name = "helmet"
     hel.data.transform(Matrix.Translation(centre) @ Matrix.Diagonal((radii.x, radii.y, radii.z, 1.0)))
@@ -455,7 +455,7 @@ def pieces(body):
     # wrapping 120 degrees across the eyes. Built as its own grid so its
     # edges are straight rows and columns, not the sphere's faces.
     shell_r = radii + Vector((0.012, 0.012, 0.012))
-    cols, rows = 20, 3
+    cols, rows = 12, 2
     verts, faces_ = [], []
     for j in range(rows + 1):
         z = EYE - 0.045 + 0.08 * j / rows
@@ -489,36 +489,36 @@ def pieces(body):
     # pauldrons, forearm bracers.
     suit = [
         plate("chest", sb, spine_a, spine_b, (0, 1, 0), (-62, 62), (tz(chest_lo), tz(neck_z - 0.04)), 0.022, 0.012, "spine_03",
-              cols=12, rows=8),
+              cols=10, rows=7),
         plate("back", sb, spine_a, spine_b, (0, -1, 0), (-58, 58), (tz(chest_lo - 0.08), tz(neck_z - 0.05)), 0.020, 0.010, "spine_03",
-              cols=11, rows=8),
+              cols=9, rows=7),
         plate("abs_hi", sb, spine_a, spine_b, (0, 1, 0), (-42, 42), (tz(chest_lo - 0.115), tz(chest_lo - 0.025)), 0.020, 0.009, "spine_02",
-              cols=8, rows=4, squareness=6),
+              cols=7, rows=3, squareness=6),
         plate("abs_lo", sb, spine_a, spine_b, (0, 1, 0), (-38, 38), (tz(chest_lo - 0.215), tz(chest_lo - 0.125)), 0.018, 0.009, "spine_01",
-              cols=8, rows=4, squareness=6),
+              cols=7, rows=3, squareness=6),
     ]
     for side, sign in (("r", 1), ("l", -1)):
         sh, el = body.bone("upperarm_" + side)
         lo_h, lo_t = body.bone("lowerarm_" + side)
         out_dir = (sign, 0.0, 0.35)
         suit.append(plate("pauldron_" + side, sb, sh, el, out_dir, (-105, 105), (-0.22, 0.42), 0.024, 0.011, "upperarm_" + side,
-                          cols=11, rows=6, squareness=3))
+                          cols=9, rows=5, squareness=3))
         suit.append(plate("bracer_" + side, sb, lo_h, lo_t, (sign, 0.0, 0.6), (-110, 110), (0.25, 0.85), 0.014, 0.008, "lowerarm_" + side,
-                          cols=9, rows=5, squareness=5))
+                          cols=8, rows=4, squareness=5))
     out["armor.suit.scout"] = suit
 
     # Iron breastplate: one heavy chest shell front and back.
     out["armor.plate.iron"] = [
         plate("iron_front", sb, spine_a, spine_b, (0, 1, 0), (-75, 75), (tz(chest_lo - 0.13), tz(neck_z - 0.035)), 0.030, 0.016, "spine_03",
-              mat="iron", cols=14, rows=9, squareness=5),
+              mat="iron", cols=12, rows=8, squareness=5),
         plate("iron_back", sb, spine_a, spine_b, (0, -1, 0), (-70, 70), (tz(chest_lo - 0.13), tz(neck_z - 0.045)), 0.028, 0.014, "spine_03",
-              mat="iron", cols=12, rows=9, squareness=5),
+              mat="iron", cols=10, rows=8, squareness=5),
     ]
 
     # Legs: belt with pouches, thigh plates, knee pads, shin guards.
     def belt(c, b):
         return b in ("pelvis", "spine_01") and abs(c.z - (pelvis.z + 0.06)) < 0.035
-    legs = [panel(body, "belt", belt, 0.012, 0.008, mat="strap", rim="metal", bone="pelvis", tris=400, bevel=0.002, smooth=2)]
+    legs = [panel(body, "belt", belt, 0.012, 0.008, mat="strap", rim="metal", bone="pelvis", tris=260, bevel=0.0, smooth=2)]
     front_y = max(body.obj.data.polygons[i].center.y for i in body.faces(lambda c, b: b == "pelvis"))
     for sign in (1, -1):
         legs.append(block("pouch", (0.13 * sign, front_y - 0.01, pelvis.z + 0.04), (0.07, 0.04, 0.08), "strap", "pelvis"))
@@ -527,11 +527,11 @@ def pieces(body):
         th_h, th_t = body.bone("thigh_" + side)
         ca_h, ca_t = body.bone("calf_" + side)
         legs.append(plate("thigh_" + side, sb, th_h, th_t, (0.35 * sign, 1, 0), (-80, 80), (0.18, 0.72), 0.018, 0.009, "thigh_" + side,
-                          cols=9, rows=6, squareness=4))
+                          cols=8, rows=5, squareness=4))
         legs.append(plate("knee_" + side, sb, ca_h, ca_t, (0, 1, 0), (-60, 60), (-0.10, 0.10), 0.028, 0.012, "calf_" + side,
-                          mat="trim", rim="metal", cols=6, rows=4, squareness=2.5))
+                          mat="trim", rim="metal", cols=6, rows=3, squareness=2.5))
         legs.append(plate("shin_" + side, sb, ca_h, ca_t, (0.15 * sign, 1, 0), (-60, 60), (0.18, 0.78), 0.018, 0.009, "calf_" + side,
-                          cols=8, rows=6, squareness=5))
+                          cols=7, rows=5, squareness=5))
     out["armor.legs.scout"] = legs
 
     # Gloves: the hands (skinned, they bend) plus a rigid knuckle plate.
@@ -545,11 +545,11 @@ def pieces(body):
         # a knuckle plate and a wrist cuff, both rigid.
         lo_h, lo_t = body.bone("lowerarm_" + side)
         gloves.append(plate("cuff_" + side, sb, lo_h, lo_t, (1 if side == "r" else -1, 0.0, 0.6), (-178, 178), (0.80, 1.02),
-                            0.010, 0.007, "lowerarm_" + side, mat="trim", rim="metal", cols=16, rows=3, squareness=12))
+                            0.010, 0.007, "lowerarm_" + side, mat="trim", rim="metal", cols=8, rows=3, squareness=12))
         h_h, h_t = body.bone("hand_" + side)
         sign = 1 if side == "r" else -1
         gloves.append(plate("knuckle_" + side, sb, h_h, h_t, (0.0, 0.3, 1.0), (-70, 70), (0.35, 1.0), 0.010, 0.006, "hand_" + side,
-                            mat="trim", rim="metal", cols=6, rows=4, squareness=4))
+                            mat="trim", rim="metal", cols=6, rows=3, squareness=4))
     out["armor.gloves.scout"] = gloves
 
     # Boots: built, not cut from the bare foot (toes showed through, and a

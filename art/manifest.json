@@ -4,7 +4,7 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 6000,
+      "tris": 5600,
       "license": "CC0",
       "source": "recipes/char.player.json",
       "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
@@ -90,7 +90,7 @@
     {
       "id": "npc.shopkeeper",
       "file": "chars/shopkeeper.glb",
-      "tris": 6000,
+      "tris": 5600,
       "license": "CC0",
       "source": "recipes/npc.shopkeeper.json",
       "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
@@ -118,7 +118,7 @@
     {
       "id": "npc.dispatcher",
       "file": "chars/dispatcher.glb",
-      "tris": 6024,
+      "tris": 5624,
       "license": "CC0",
       "source": "recipes/npc.dispatcher.json",
       "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
@@ -351,7 +351,7 @@
     {
       "id": "npc.grunt",
       "file": "chars/grunt.glb",
-      "tris": 6540,
+      "tris": 6140,
       "license": "CC0",
       "source": "recipes/npc.grunt.json",
       "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
@@ -380,7 +380,7 @@
     {
       "id": "npc.gunner",
       "file": "chars/gunner.glb",
-      "tris": 6336,
+      "tris": 5936,
       "license": "CC0",
       "source": "recipes/npc.gunner.json",
       "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
@@ -516,7 +516,7 @@
     {
       "id": "armor.helmet.scout",
       "file": "armor/helmet_scout.glb",
-      "tris": 1716,
+      "tris": 1112,
       "license": "CC0",
       "source": "recipes/armor.helmet.scout.json",
       "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -540,7 +540,7 @@
     {
       "id": "armor.suit.scout",
       "file": "armor/suit_scout.glb",
-      "tris": 3332,
+      "tris": 2528,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -586,7 +586,7 @@
     {
       "id": "armor.plate.iron",
       "file": "armor/plate_iron.glb",
-      "tris": 1432,
+      "tris": 1128,
       "license": "CC0",
       "source": "recipes/armor.plate.iron.json",
       "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -607,7 +607,7 @@
     {
       "id": "armor.legs.scout",
       "file": "armor/legs_scout.glb",
-      "tris": 3312,
+      "tris": 2424,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -660,7 +660,7 @@
     {
       "id": "armor.gloves.scout",
       "file": "armor/gloves_scout.glb",
-      "tris": 1332,
+      "tris": 840,
       "license": "CC0",
       "source": "recipes/armor.gloves.scout.json",
       "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -690,7 +690,7 @@
     {
       "id": "armor.boots.scout",
       "file": "armor/boots_scout.glb",
-      "tris": 2280,
+      "tris": 1392,
       "license": "CC0",
       "source": "recipes/armor.boots.scout.json",
       "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
