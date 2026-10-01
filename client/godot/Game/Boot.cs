@@ -12,6 +12,8 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using Godot;
+using Velopack;
+using Velopack.Sources;
 using SpaceAdventure.Game.UI;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
@@ -44,13 +46,13 @@ namespace SpaceAdventure.Game
         /// compiled in, so -serverUrl or the env var wins over the default.
         /// </summary>
         /// <summary>What the HUD says while there is no world to look at.</summary>
-        private string LinkBanner() => _net == null ? "" : _net.State switch
+        private string LinkBanner() => _updating ?? (_net == null ? "" : _net.State switch
         {
             LinkState.Failed => $"CONNECTION FAILED: {_serverUrl} — {_net.LastError}",
             LinkState.Reconnecting => $"RECONNECTING to {_serverUrl}… ({_net.LastError})",
             LinkState.Joined => "JOINED — loading the world…",
             _ => $"CONNECTING to {_serverUrl}…",
-        };
+        });
 
         private static string ResolveServerUrl()
         {
@@ -245,10 +247,55 @@ namespace SpaceAdventure.Game
         private double _quitAfter = -1;
         private double _elapsed;
 
+        /// <summary>The HUD banner while an update downloads; null otherwise.</summary>
+        private string _updating;
+
+        /// <summary>
+        /// An installed client (Setup.exe / AppImage) updates itself from the
+        /// GitHub releases before it connects; deploy.yml publishes the feed.
+        /// Source runs, godot-cli flows and loose exports are not installed and
+        /// skip straight to Connect. Any failure plays the current build: an
+        /// unreachable GitHub must never keep anyone out of the game.
+        /// </summary>
+        private async System.Threading.Tasks.Task UpdateThenConnect()
+        {
+            try
+            {
+                // SA_UPDATE_SOURCE: a local dir or URL feed, for testing an update end to end.
+                string feed = System.Environment.GetEnvironmentVariable("SA_UPDATE_SOURCE");
+                var mgr = string.IsNullOrEmpty(feed)
+                    ? new UpdateManager(new GithubSource(ReleasesRepo, null, true))
+                    : new UpdateManager(feed);
+                if (mgr.IsInstalled && await mgr.CheckForUpdatesAsync() is { } update)
+                {
+                    GD.Print($"update: {mgr.CurrentVersion} -> {update.TargetFullRelease.Version}");
+                    _updating = $"UPDATING to {update.TargetFullRelease.Version}…";
+                    await mgr.DownloadUpdatesAsync(update, p => _updating = $"UPDATING to {update.TargetFullRelease.Version}… {p}%");
+                    // Not ApplyUpdatesAndRestart: that Environment.Exit()s under a
+                    // running engine. Hand the swap to Velopack and quit cleanly.
+                    mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: true, OS.GetCmdlineArgs());
+                    GetTree().Quit(0);
+                    return;
+                }
+            }
+            catch (Exception e)
+            {
+                GD.Print($"update: skipped ({e.Message})");
+            }
+            _updating = null;
+            _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
+        }
+
+        private const string ReleasesRepo = "https://github.com/stevenholder/space_adventure";
+
         // ---- lifecycle ------------------------------------------------------
 
         public override void _Ready()
         {
+            // Velopack's install/update hooks arrive as process args; Godot
+            // hands them through untouched. A no-op for anything not installed.
+            VelopackApp.Build().SetArgs(OS.GetCmdlineArgs()).Run();
+
             string q = Arg("-quitAfter");
             if (q != null) _quitAfter = double.Parse(q, CultureInfo.InvariantCulture);
 
@@ -383,7 +430,7 @@ namespace SpaceAdventure.Game
 
             _net = new NetClient();
             _serverUrl = ResolveServerUrl();
-            _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
+            _ = UpdateThenConnect();
 
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
 
