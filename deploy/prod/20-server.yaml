@@ -40,15 +40,6 @@ spec:
                 secretKeyRef:
                   name: space-db-app
                   key: uri
-            # /download/{windows,linux} on the landing page. The repo is
-            # private, so the server needs read access to mint signed asset
-            # links (internal/web/download.go). Optional: absent = public links.
-            - name: SA_RELEASES_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: space-releases-token
-                  key: token
-                  optional: true
           ports:
             - name: http
               containerPort: 8080

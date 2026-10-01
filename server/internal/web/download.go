@@ -3,19 +3,12 @@ package web
 // /download/windows and /download/linux: a stable link to the newest
 // release's installer. GitHub's own releases/latest/download/... skips
 // pre-releases, and deploy.yml publishes nothing else, so we look the
-// asset up ourselves and redirect.
-//
-// The repo is private: anonymous asset links 404. With SA_RELEASES_TOKEN
-// (read access to contents) the asset API hands back a short-lived signed
-// URL and the visitor is sent there — the bytes never pass through us.
-// Without a token the public browser_download_url is used, which is right
-// the day the repo goes public.
+// asset up ourselves and redirect to its public download URL.
 
 import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,19 +24,18 @@ var downloadAssets = map[string]string{
 
 type ghAsset struct {
 	Name        string `json:"name"`
-	URL         string `json:"url"`
 	DownloadURL string `json:"browser_download_url"`
 }
 
 type ghRelease struct {
-	Draft  bool      `json:"draft"`
-	Assets []ghAsset `json:"assets"`
+	Draft     bool      `json:"draft"`
+	Published time.Time `json:"published_at"`
+	Assets    []ghAsset `json:"assets"`
 }
 
 type downloads struct {
-	api   string // https://api.github.com, a fake in tests
-	token string
-	http  *http.Client
+	api  string // https://api.github.com, a fake in tests
+	http *http.Client
 
 	mu       sync.Mutex
 	releases []ghRelease
@@ -51,28 +43,7 @@ type downloads struct {
 }
 
 func newDownloads() *downloads {
-	return &downloads{
-		api:   "https://api.github.com",
-		token: os.Getenv("SA_RELEASES_TOKEN"),
-		http: &http.Client{
-			Timeout: 10 * time.Second,
-			// The asset API answers with a redirect to the signed URL; we
-			// want that Location, not the file.
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
-	}
-}
-
-func (d *downloads) get(url, accept string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", accept)
-	if d.token != "" {
-		req.Header.Set("Authorization", "Bearer "+d.token)
-	}
-	return d.http.Do(req)
+	return &downloads{api: "https://api.github.com", http: &http.Client{Timeout: 10 * time.Second}}
 }
 
 // list is the newest releases, cached five minutes: a visitor per click
@@ -83,7 +54,7 @@ func (d *downloads) list() ([]ghRelease, error) {
 	if d.releases != nil && time.Since(d.fetched) < 5*time.Minute {
 		return d.releases, nil
 	}
-	resp, err := d.get(d.api+"/repos/"+releasesRepo+"/releases?per_page=20", "application/vnd.github+json")
+	resp, err := d.http.Get(d.api + "/repos/" + releasesRepo + "/releases?per_page=20")
 	if err != nil {
 		return nil, err
 	}
@@ -105,29 +76,24 @@ func (d *downloads) resolve(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, r := range rs { // GitHub lists newest first
-		if r.Draft {
+	// Not GitHub's list order: it is not by date (same-day tags come back
+	// shuffled), so take the latest published release that has the asset.
+	var url string
+	var newest time.Time
+	for _, r := range rs {
+		if r.Draft || !r.Published.After(newest) {
 			continue
 		}
 		for _, a := range r.Assets {
-			if a.Name != name {
-				continue
+			if a.Name == name {
+				url, newest = a.DownloadURL, r.Published
 			}
-			if d.token == "" {
-				return a.DownloadURL, nil
-			}
-			resp, err := d.get(a.URL, "application/octet-stream")
-			if err != nil {
-				return "", err
-			}
-			resp.Body.Close()
-			if loc := resp.Header.Get("Location"); resp.StatusCode/100 == 3 && loc != "" {
-				return loc, nil
-			}
-			return "", errors.New("github asset: " + resp.Status)
 		}
 	}
-	return "", errors.New("no release carries " + name)
+	if url == "" {
+		return "", errors.New("no release carries " + name)
+	}
+	return url, nil
 }
 
 func (d *downloads) ServeHTTP(w http.ResponseWriter, r *http.Request) {

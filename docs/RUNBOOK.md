@@ -70,17 +70,11 @@ Flip `--prerelease` off in the workflow when a build should become "Latest".
 The landing page's download buttons hit `/download/windows` and
 `/download/linux`, which redirect to the newest release carrying
 `SpaceAdventure-win-Setup.exe` / `SpaceAdventure.AppImage`
-(`server/internal/web/download.go`). While the repo is private that needs a
-fine-grained token with read-only Contents on this repo, by hand, once:
+(`server/internal/web/download.go`), so the links never go stale.
 
 ```sh
-kubectl -n space-adventure create secret generic space-releases-token --from-literal=token=github_pat_...
-kubectl -n space-adventure rollout restart deploy/server
-curl -sI https://game.stevenholder.info/download/windows | grep -i location   # release-assets.githubusercontent.com
+curl -sI https://game.stevenholder.info/download/windows | grep -i location
 ```
-
-Without it the buttons send visitors to GitHub's public links, which 404
-until the repo is public.
 
 ## Roll back
 
