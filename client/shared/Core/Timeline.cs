@@ -133,6 +133,10 @@ namespace SpaceAdventure.Game
                             Facing = Lerp(from.Facing, kv.Value.Facing, k),
                             Health = kv.Value.Health,
                             Dead = kv.Value.Dead,
+                            // Occupancy is discrete: the newer row's. Dropping it
+                            // drew every seated remote standing on its vehicle.
+                            ParentId = kv.Value.ParentId,
+                            Seat = kv.Value.Seat,
                         };
                     }
                     else

@@ -283,13 +283,16 @@ def rover():
         t += box(x, 0.98, z + 0.26, 0.42, 0.42, 0.08, SEAT)          # back
     t += box(0.35, 0.95, -0.45, 0.04, 0.30, 0.04, STEEL_DARK)        # steering column
     t += cyl_x(0.35, 1.08, -0.42, 0.14, 0.03, 8, RUBBER)             # wheel
-    # Roll cage: two hoops and two rails.
-    for z in (-0.25, 0.75):
+    # Roll cage: two hoops and two rails, ABOVE the 1.55 m seat eye -- at
+    # 1.40 the driver's camera sat over the rails, perched on the roof.
+    # The front hoop stands ahead of the driver (eye z -0.10), not beside
+    # the head, so a glance sideways is not a face full of post.
+    for z in (-0.60, 0.75):
         for sx in (-1, 1):
-            t += box(sx * 0.62, 1.05, z, 0.06, 0.70, 0.06, STEEL)
-        t += box(0, 1.40, z, 1.30, 0.06, 0.06, STEEL)
+            t += box(sx * 0.66, 1.25, z, 0.06, 1.10, 0.06, STEEL)
+        t += box(0, 1.80, z, 1.38, 0.06, 0.06, STEEL)
     for sx in (-1, 1):
-        t += box(sx * 0.62, 1.40, 0.25, 0.06, 0.06, 1.06, STEEL)
+        t += box(sx * 0.66, 1.80, 0.075, 0.06, 0.06, 1.41, STEEL)
     t += box(0, 0.75, 0.95, 1.10, 0.20, 0.30, STEEL_DARK)            # cargo rack
     return t
 

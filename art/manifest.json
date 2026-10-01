@@ -73,7 +73,7 @@
       "tris": 504,
       "license": "CC0",
       "source": "tools/gen_props.py",
-      "description": "Phase 4 ground rover, our own (tools/gen_props.py): an open buggy, four wheels, roll cage, two seats. -Z forward, origin at ground level, 1.4 m tall at the cage. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
+      "description": "Phase 4 ground rover, our own (tools/gen_props.py): an open buggy, four wheels, roll cage, two seats. -Z forward, origin at ground level, 1.8 m tall at the cage. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
       "source_url": "tools/gen_props.py",
       "author": "Space Adventure"
     },
