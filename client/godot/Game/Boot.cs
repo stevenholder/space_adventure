@@ -250,6 +250,33 @@ namespace SpaceAdventure.Game
         /// <summary>The HUD banner while an update downloads; null otherwise.</summary>
         private string _updating;
 
+        /// <summary>Set once installed: the feed this session keeps watching.</summary>
+        private UpdateManager _updates;
+        /// <summary>An update downloaded mid-session, applied when the game closes.</summary>
+        private VelopackAsset _updateReady;
+        private double _nextUpdateCheck;
+        private bool _updateChecking;
+
+        /// <summary>
+        /// A deploy publishes its release a few minutes after the server
+        /// restarts; 12 checks an hour sits well under GitHub's 60/h anonymous
+        /// limit. SA_UPDATE_EVERY (seconds) shortens it for a test.
+        /// </summary>
+        private static readonly double UpdateEvery =
+            double.TryParse(System.Environment.GetEnvironmentVariable("SA_UPDATE_EVERY"), NumberStyles.Float, CultureInfo.InvariantCulture, out double e) ? e : 300;
+
+        /// <summary>
+        /// What build this is, top-right on the HUD and in a bug report:
+        /// the release number when installed (`v1.0.57`), `dev` otherwise,
+        /// plus the commit the SDK stamps into the assembly.
+        /// </summary>
+        private string BuildLabel => _updates != null ? $"v{_updates.CurrentVersion}{Sha}" : $"dev{Sha}";
+
+        /// <summary>" · abc1234" from the commit the SDK stamps into the assembly, or "".</summary>
+        private static readonly string Sha = ((System.Reflection.AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(
+            typeof(Boot).Assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute)))?.InformationalVersion is { } info
+            && info.IndexOf('+') is int plus and >= 0 && info.Length >= plus + 8 ? $" · {info.Substring(plus + 1, 7)}" : "";
+
         /// <summary>
         /// An installed client (Setup.exe / AppImage) updates itself from the
         /// GitHub releases before it connects; deploy.yml publishes the feed.
@@ -266,6 +293,11 @@ namespace SpaceAdventure.Game
                 var mgr = string.IsNullOrEmpty(feed)
                     ? new UpdateManager(new GithubSource(ReleasesRepo, null, true))
                     : new UpdateManager(feed);
+                if (mgr.IsInstalled)
+                {
+                    _updates = mgr;
+                    _nextUpdateCheck = Clock.Now + UpdateEvery;
+                }
                 if (mgr.IsInstalled && await mgr.CheckForUpdatesAsync() is { } update)
                 {
                     GD.Print($"update: {mgr.CurrentVersion} -> {update.TargetFullRelease.Version}");
@@ -284,6 +316,31 @@ namespace SpaceAdventure.Game
             }
             _updating = null;
             _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
+        }
+
+        /// <summary>
+        /// Mid-session: a newer release is downloaded in the background and
+        /// the HUD asks for a restart. Nobody is pulled out of a fight -- it
+        /// applies when the game closes (_ExitTree), and a player who
+        /// never closes gets it at the next launch anyway.
+        /// </summary>
+        private async System.Threading.Tasks.Task CheckForUpdateInSession()
+        {
+            _updateChecking = true;
+            try
+            {
+                if (await _updates.CheckForUpdatesAsync() is { } update)
+                {
+                    await _updates.DownloadUpdatesAsync(update);
+                    _updateReady = update.TargetFullRelease;
+                    GD.Print($"update: {_updates.CurrentVersion} -> {_updateReady.Version} ready, applies on exit");
+                }
+            }
+            catch (Exception e)
+            {
+                GD.Print($"update: check failed ({e.Message})");
+            }
+            _updateChecking = false;
         }
 
         private const string ReleasesRepo = "https://github.com/stevenholder/space_adventure";
@@ -373,7 +430,7 @@ namespace SpaceAdventure.Game
             _viewModel = new ViewModel(_camera, _material, VmLayer, this, _assets);
             _viewModel.ArmsVisible = false; // until the world is up
             _fx = new CombatFx(this);
-            _sfx = new Sfx(this);
+            _sfx = new Sfx(this) { Ear = () => _camera.GlobalPosition };
             _views.Sfx = _sfx;
             _hud = new Hud();
             _character = new Character();
@@ -443,6 +500,14 @@ namespace SpaceAdventure.Game
 
         public override void _ExitTree()
         {
+            // Quitting with an update downloaded: hand it to Velopack, which
+            // waits for this process to exit and swaps the files. No restart --
+            // the player chose to quit; the next launch is the new build.
+            if (_updates != null && _updateReady != null)
+            {
+                try { _updates.WaitExitThenApplyUpdates(_updateReady, silent: true, restart: false); }
+                catch (Exception e) { GD.Print($"update: apply on exit failed ({e.Message})"); }
+            }
             _net?.Dispose();
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
         }
@@ -451,6 +516,11 @@ namespace SpaceAdventure.Game
 
         public override void _Process(double delta)
         {
+            if (_updates != null && _updateReady == null && !_updateChecking && Clock.Now > _nextUpdateCheck)
+            {
+                _nextUpdateCheck = Clock.Now + UpdateEvery;
+                _ = CheckForUpdateInSession();
+            }
             // Godot .NET reports an unhandled exception and keeps running, which
             // is the same lie Unity's batchmode told: a headless run would log
             // the error and still exit 0. Under -quitAfter the exit code is the
@@ -865,6 +935,7 @@ namespace SpaceAdventure.Game
                 {
                     TerrainMsg t = Decode.Terrain(frame.Reader);
                     _terrain = TerrainField.FromWire(t.Radii, t.RadiusMin, t.RadiusMax);
+                    _sfx.Terrain = _terrain;
                     BuildWorld();
                     break;
                 }
@@ -886,6 +957,7 @@ namespace SpaceAdventure.Game
                     // Same array to the predictor and to the renderer, so what
                     // you walk into is what you can see.
                     _structures.Build(_colliders);
+                    _sfx.Colliders = _colliders;   // and what you hear through
                     GD.Print($"colliders: {_colliders.Length}");
                     break;
                 }
@@ -1260,8 +1332,11 @@ namespace SpaceAdventure.Game
                 _hudView.SetBanner($"{_partyState.PendingName} invites you to a party — P to answer", false);
             else if (!_worldBuilt || _net.State != LinkState.Joined)
                 _hudView.SetBanner(LinkBanner(), true);
+            else if (_updateReady != null)
+                _hudView.SetBanner($"UPDATE {_updateReady.Version} READY — restart the game to play it", false);
             else
                 _hudView.SetBanner(null, false);
+            _hudView.SetVersion(_updateReady != null ? $"{BuildLabel} → v{_updateReady.Version}" : BuildLabel);
 
             UpdateFlightReadout();
 
@@ -1696,6 +1771,8 @@ namespace SpaceAdventure.Game
             Check("fp lower: a wall 0.8 m ahead is in the way", ViewModel.Blocked(eyeAt, Vector3.Forward, ViewModel.Reach, wall, null) < ViewModel.LowerAt);
             Check("fp lower: the same wall behind is not", float.IsPositiveInfinity(ViewModel.Blocked(eyeAt, Vector3.Back, ViewModel.Reach, wall, null)));
             Check("fp lower: a ball off to the side is not", float.IsPositiveInfinity(ViewModel.Blocked(eyeAt, Vector3.Forward, ViewModel.Reach, ball, null)));
+            Check("sfx: a shot behind the wall is muffled, one beside it is not",
+                Sfx.Occluded(eyeAt, new Vector3(0, 150, -6), wall, null) && !Sfx.Occluded(eyeAt, new Vector3(10, 150, -6), wall, null));
 
             // Winding: a counter-clockwise triangle seen from outside the
             // planet is a front face and must NOT be flipped.
