@@ -107,6 +107,9 @@ const NODE_CONTRACTS = {
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
   "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
   "weapon.pulse": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.smg": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.dmr": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.sidearm": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
   // up with hand.r and the channel effect starts at `muzzle`.
   "tool.drill": { nodes: ["grip", "muzzle"] },

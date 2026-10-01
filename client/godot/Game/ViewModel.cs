@@ -179,6 +179,7 @@ void fragment() {
                 foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(model))
                     g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
                 _fpAnim = FirstPersonAnim.For(model);
+                if (_fpAnim != null) _fpAnim.Class = _cls;
                 DressFp();
                 HoldFp(_heldAsset);
             });
@@ -203,6 +204,7 @@ void fragment() {
                             g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
                 }
                 _bodyAnim = CharacterAnim.For(model);
+                if (_bodyAnim != null) _bodyAnim.Class = _cls;
                 EntityViews.Dress(_assets, a => a, _bodyModel, _worn, _wornDrawn, _wornNodes, local: true);
                 string want = _heldAsset; _heldAsset = "\u0000"; Hold(want);
                 foreach (Node3D n in AssetRegistry.Descendants<Node3D>(_body))
@@ -242,17 +244,21 @@ void fragment() {
 
         /// <summary>Something in hand: the fire gate.</summary>
         public bool Armed => _heldAsset != "" && _heldAsset != "\u0000";
+        private string _cls = "";
 
         /// <summary>
         /// The equipped weapon, by ASSET id ("" for empty hands): in the
         /// first-person hand, drawn, and in the body's hand, shadows-only,
         /// with both instances on their armed clips.
         /// </summary>
-        public void Hold(string asset)
+        public void Hold(string asset, string cls = "")
         {
             asset ??= "";
             if (asset == _heldAsset) return;
             _heldAsset = asset;
+            _cls = cls;
+            if (_bodyAnim != null) _bodyAnim.Class = cls;
+            if (_fpAnim != null) _fpAnim.Class = cls;
             HoldFp(asset);
             if (_bodyModel == null) return;
             if (_held != null) { _held.QueueFree(); _held = null; }
@@ -295,6 +301,7 @@ void fragment() {
                     // Aiming: the barrel down the line of sight, so the front
                     // post sits on the crosshair whatever the arms manage.
                     Ads = () => (_eye.GlobalTransform, _adsW, _kick),
+                    SightDistance = _cls == "_pistol" ? 0.42f : 0.20f,
                 });
                 _fpMuzzle = AssetRegistry.FindNode(weapon, "muzzle");
                 _fpGrip = AssetRegistry.FindNode(weapon, "grip");
@@ -500,6 +507,8 @@ void fragment() {
         private string _current;
         private double _oneShotUntil;
         public bool Armed;
+        /// <summary>Hold family suffix, as CharacterAnim.Class.</summary>
+        public string Class = "";
 
         private FirstPersonAnim(AnimationPlayer player)
         {
@@ -528,7 +537,7 @@ void fragment() {
         public void Drive(float speed, bool aiming, bool lowered, double now)
         {
             if (now < _oneShotUntil) return;
-            string want = Pick(speed, Armed, aiming, lowered);
+            string want = CharacterAnim.Clip(_player, Pick(speed, Armed, aiming, lowered), Class);
             if (want == _current || !_player.HasAnimation(want)) return;
             _player.Play(want, aiming ? 0.10 : 0.15);
             _current = want;
@@ -536,20 +545,22 @@ void fragment() {
 
         public void Fire(double now)
         {
-            if (!Armed || !_player.HasAnimation("fp_fire") || now < _oneShotUntil && _current == "fp_reload") return;
-            _player.Play("fp_fire", 0.02);
+            string clip = CharacterAnim.Clip(_player, "fp_fire", Class);
+            if (!Armed || !_player.HasAnimation(clip) || now < _oneShotUntil && _current.StartsWith("fp_reload")) return;
+            _player.Play(clip, 0.02);
             _player.Seek(0, true);
-            _oneShotUntil = now + _player.GetAnimation("fp_fire").Length;
-            _current = "fp_fire";
+            _oneShotUntil = now + _player.GetAnimation(clip).Length;
+            _current = clip;
         }
 
         public void Reload(double seconds, double now)
         {
-            if (!Armed || !_player.HasAnimation("fp_reload") || seconds <= 0) return;
-            double len = _player.GetAnimation("fp_reload").Length;
-            _player.Play("fp_reload", 0.1, (float)(len / seconds));
+            string clip = CharacterAnim.Clip(_player, "fp_reload", Class);
+            if (!Armed || !_player.HasAnimation(clip) || seconds <= 0) return;
+            double len = _player.GetAnimation(clip).Length;
+            _player.Play(clip, 0.1, (float)(len / seconds));
             _oneShotUntil = now + seconds;
-            _current = "fp_reload";
+            _current = clip;
         }
     }
 }

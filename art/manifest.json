@@ -88,6 +88,36 @@
       "author": "Space Adventure"
     },
     {
+      "id": "weapon.smg",
+      "file": "weapons/smg.glb",
+      "tris": 168,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Scrap SMG (tools/gen_weapon.py): compact, folded wire stock, stick magazine. Rifle contact geometry (grip/fore), so it uses the long-gun holds.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
+      "id": "weapon.dmr",
+      "file": "weapons/dmr.glb",
+      "tris": 348,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Longshot DMR (tools/gen_weapon.py): full stock, scope on a rail, long barrel with a brake. Rifle contact geometry; `sight`/`front` run through the scope.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
+      "id": "weapon.sidearm",
+      "file": "weapons/sidearm.glb",
+      "tris": 120,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Pocket Pulser (tools/gen_weapon.py): blocky pistol; weapon class `pistol` -- `fore` is where the support palm cups the firing fist.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
       "id": "npc.shopkeeper",
       "file": "chars/shopkeeper.glb",
       "tris": 5600,

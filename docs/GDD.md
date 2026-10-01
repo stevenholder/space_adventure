@@ -2048,6 +2048,26 @@ drop. NPC projectiles arrive in Phase 3 and are a separate entity type.
 | `spread_per_shot` | 0.35 | deg | added per shot fired |
 | `spread_decay` | 3.0 | deg/s | recovery toward `spread_base` |
 
+**The armoury (2026-10-01).** Three more guns on the same schema, all
+sold by the quartermaster and all firing `ammo.cell`:
+
+| Param | `weapon.sidearm` | `weapon.smg` | `weapon.dmr` |
+|---|---|---|---|
+| name | Pocket Pulser | Scrap SMG | Longshot DMR |
+| `price` | 120 | 220 | 480 |
+| `damage` | 20 | 14 | 60 |
+| `fire_interval` | 0.22 | 0.075 | 0.45 |
+| `magazine` | 12 | 40 | 10 |
+| `reload_time` | 1.4 | 1.8 | 2.6 |
+| `max_range` | 60 | 70 | 250 |
+| `falloff_start` / `end` / `min` | 20 / 60 / 0.3 | 15 / 60 / 0.3 | 120 / 250 / 0.6 |
+| `spread_base` / `max` / `per_shot` / `decay` | 0.8 / 2.5 / 0.5 / 4 | 1.0 / 3.5 / 0.3 / 4 | 0.15 / 1.2 / 0.8 / 2 |
+| `class` | `pistol` | — | — |
+
+`weapon.class` (optional) is the hold family. It is empty for a long gun and
+`pistol` for the sidearm, and it picks the body's `*_pistol` clips. The
+client paces its own trigger by the held weapon's `fire_interval`.
+
 Damage is `round(damage · falloff)`, with `falloff` linearly interpolated from
 `1.0` at `falloff_start` to `falloff_min` at `falloff_end`, clamped at both ends.
 

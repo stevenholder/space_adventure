@@ -15,6 +15,18 @@
      "price": 250
     },
     {
+     "item": "weapon.sidearm",
+     "price": 120
+    },
+    {
+     "item": "weapon.smg",
+     "price": 220
+    },
+    {
+     "item": "weapon.dmr",
+     "price": 480
+    },
+    {
      "item": "ammo.cell",
      "price": 1
     },

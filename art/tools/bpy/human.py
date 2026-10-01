@@ -521,6 +521,43 @@ FP_ADS = dict(G=(0.03, 0.30, 1.38), forward=(0.0, 1.0, 0.02))       # sights; th
 FP_LOWER = dict(G=(0.12, 0.22, 1.10), forward=(-0.25, 0.60, -0.75))
 
 
+# The pistol: its `fore` (tools/gen_weapon.py) is where the support palm cups
+# the firing fist, just under and in front of the grip.
+PISTOL_FORE = (-0.02, -0.045)          # (along the barrel, up) from grip
+
+
+def pistol(rig, G, forward, pole_r=(0.6, -0.4, -0.7), pole_l=(-0.6, -0.4, -0.7)):
+    """Two hands on a pistol, square stance: the right fist round the grip,
+    the left hand wrapped over the right fingers from below and the left,
+    palm toward the gun, thumbs forward along the frame."""
+    f = Vector(forward).normalized()
+    up = Vector((0, 0, 1))
+    up = (up - f * up.dot(f)).normalized()
+    right = f.cross(up)
+    F = Vector(G) + f * PISTOL_FORE[0] + up * PISTOL_FORE[1]
+    grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
+         fingers=(15, 80, 85, 85), thumb=40)
+    grip(rig, "l", F, (f - up * 0.35 + right * 0.25).normalized(), (right * 0.85 + up * 0.5).normalized(), pole_l,
+         fingers=(70, 75, 75, 75), thumb=25)
+    lay_thumb(rig, "r", (f - right * 0.35).normalized())
+    lay_thumb(rig, "l", (f - right * 0.15 + up * 0.05).normalized())
+
+
+P_AIM3P = dict(G=(0.08, 0.34, 1.20), forward=(-0.10, 1.0, -0.20))   # third person: pistol at the ready
+P_FP_HOLD = dict(G=(0.13, 0.36, 1.30), forward=(-0.02, 1.0, 0.03))   # elbows bent: forearms clear of the lens   # arms near straight: forearms clear of the eye
+P_FP_ADS = dict(G=(0.00, 0.47, 1.55), forward=(0.0, 1.0, 0.02))     # client puts the rear sight 0.42 m out
+P_FP_LOWER = dict(G=(0.08, 0.26, 1.10), forward=(-0.20, 0.60, -0.75))
+
+# Weapon classes: a clip-name suffix, the hold, its targets and where its
+# magazine is (reload). The client picks the suffix from the weapon's def.
+CLASSES = {
+    "": dict(hold=rifle, aim3p=AIM3P, fp=FP_HOLD, ads=FP_ADS, lower=FP_LOWER,
+             fore=(FORE_ALONG, FORE_UP), mag=(0.12, -0.04)),
+    "_pistol": dict(hold=pistol, aim3p=P_AIM3P, fp=P_FP_HOLD, ads=P_FP_ADS, lower=P_FP_LOWER,
+                    fore=PISTOL_FORE, mag=(0.0, -0.09)),
+}
+
+
 def pose_rest(rig):
     for p in rig.pose.bones:
         p.rotation_mode = "QUATERNION"
@@ -565,7 +602,7 @@ def gait(rig, t, leg, knee, arm, lean, armed=None):
     swing(rig, "calf_r", (1, 0, 0), -knee * bend_r)
     swing(rig, "calf_l", (1, 0, 0), -knee * bend_l)
     if armed:
-        rifle(rig, **armed)
+        armed[0](rig, **armed[1])
     else:
         arms_down(rig)
         swing(rig, "upperarm_r", (1, 0, 0), -arm * c)
@@ -582,9 +619,11 @@ def clips(rig):
     clip(rig, "idle", 3.0, lambda t: (arms_down(rig), breathe(t)), Q)
     clip(rig, "walk", 0.70, lambda t: gait(rig, t, 26, 40, 18, 3), Q)
     clip(rig, "sprint", 0.50, lambda t: gait(rig, t, 42, 65, 35, 10), Q)
-    clip(rig, "idle_armed", 3.0, lambda t: (breathe(t), rifle(rig, **AIM3P)), Q)
-    clip(rig, "walk_armed", 0.70, lambda t: gait(rig, t, 26, 40, 0, 3, armed=AIM3P), Q)
-    clip(rig, "sprint_armed", 0.50, lambda t: gait(rig, t, 42, 65, 0, 10, armed=AIM3P), Q)
+    for sfx, C in CLASSES.items():
+        hold3 = (C["hold"], C["aim3p"])
+        clip(rig, "idle_armed" + sfx, 3.0, lambda t, h=hold3: (breathe(t), h[0](rig, **h[1])), Q)
+        clip(rig, "walk_armed" + sfx, 0.70, lambda t, h=hold3: gait(rig, t, 26, 40, 0, 3, armed=h), Q)
+        clip(rig, "sprint_armed" + sfx, 0.50, lambda t, h=hold3: gait(rig, t, 42, 65, 0, 10, armed=h), Q)
 
     def ease(a, b, t):
         x = max(0.0, min(1.0, (t - a) / (b - a)))
@@ -599,10 +638,10 @@ def clips(rig):
 
     # Hit: a short flinch -- the chest snaps back and twists, the head
     # follows late. Unarmed and holding a rifle (arms stay on the gun).
-    def flinch(t, armed):
+    def flinch(t, armed, C=CLASSES[""]):
         k = math.sin(math.pi * min(1.0, t * 1.4)) * (1.0 - 0.4 * t)
         if armed:
-            rifle(rig, **AIM3P)
+            C["hold"](rig, **C["aim3p"])
         else:
             arms_down(rig)
         swing(rig, "spine_02", (1, 0, 0), 16 * k)
@@ -611,7 +650,8 @@ def clips(rig):
         swing(rig, "calf_r", (1, 0, 0), -10 * k)
         swing(rig, "calf_l", (1, 0, 0), -10 * k)
     clip(rig, "hit", 0.35, lambda t: flinch(t, False), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
-    clip(rig, "hit_armed", 0.35, lambda t: flinch(t, True), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
+    for sfx, C in CLASSES.items():
+        clip(rig, "hit_armed" + sfx, 0.35, lambda t, C=C: flinch(t, True, C), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
 
     # Death: the knees go, the body drops onto them, then topples back and
     # to one side, arms falling loose -- not a stiff plank pivoting at the feet.
@@ -633,15 +673,38 @@ def clips(rig):
     clip(rig, "die", 1.1, die, (0.0, 0.15, 0.3, 0.45, 0.6, 0.8, 1.0), loop=False)
 
     # First person: only the arms are ever seen, but every bone is keyed so a
-    # clip fully overrides the one before it.
-    def hold(t, bob=0.0, amp=0.0):
-        G = Vector(FP_HOLD["G"]) + Vector((amp * math.sin(2 * math.pi * t), 0, bob * math.sin(4 * math.pi * t)))
-        rifle(rig, G, FP_HOLD["forward"])
-    clip(rig, "fp_idle", 3.0, lambda t: hold(t, bob=0.004), Q)
-    clip(rig, "fp_walk", 0.70, lambda t: hold(t, bob=0.008, amp=0.010), Q)
-    clip(rig, "fp_sprint", 0.50, lambda t: hold(t, bob=0.014, amp=0.020), Q)
-    clip(rig, "fp_ads", 1.0, lambda t: rifle(rig, **FP_ADS), (0.0,))
-    clip(rig, "fp_lower", 1.0, lambda t: rifle(rig, **FP_LOWER), (0.0,))
+    # clip fully overrides the one before it. One set per weapon class.
+    for sfx, C in CLASSES.items():
+        hold, fp = C["hold"], C["fp"]
+
+        def held(t, bob=0.0, amp=0.0, hold=hold, fp=fp):
+            G = Vector(fp["G"]) + Vector((amp * math.sin(2 * math.pi * t), 0, bob * math.sin(4 * math.pi * t)))
+            hold(rig, G, fp["forward"])
+        clip(rig, "fp_idle" + sfx, 3.0, lambda t, h=held: h(t, bob=0.004), Q)
+        clip(rig, "fp_walk" + sfx, 0.70, lambda t, h=held: h(t, bob=0.008, amp=0.010), Q)
+        clip(rig, "fp_sprint" + sfx, 0.50, lambda t, h=held: h(t, bob=0.014, amp=0.020), Q)
+        clip(rig, "fp_ads" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["ads"]), (0.0,))
+        clip(rig, "fp_lower" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["lower"]), (0.0,))
+
+        def fire(t, hold=hold, fp=fp):
+            k = math.sin(math.pi * min(1.0, t * 1.6))       # back and up, then settle
+            G = Vector(fp["G"]) + Vector((0, -0.03 * k, 0.012 * k))
+            hold(rig, G, Vector(fp["forward"]) + Vector((0, 0, 0.06 * k)))
+        clip(rig, "fp_fire" + sfx, 0.12, fire, (0.0, 0.3, 0.6, 1.0), loop=False)
+
+        def reload(t, C=C):
+            C["hold"](rig, **C["fp"])
+            # The left hand drops to the magazine, works it, and comes back.
+            k = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.8)))
+            if k > 0:
+                f = Vector(C["fp"]["forward"]).normalized()
+                up = (Vector((0, 0, 1)) - f * f.z).normalized()
+                G = Vector(C["fp"]["G"])
+                fore = G + f * C["fore"][0] + up * C["fore"][1]
+                mag = G + f * C["mag"][0] + up * C["mag"][1]
+                grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
+                     (-0.7, 0.2, -0.7), fingers=(45, 50, 50, 50), thumb=30)
+        clip(rig, "fp_reload" + sfx, 2.0, reload, (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), loop=False)
 
     def unarmed(t):
         # Loose fists low in the view, knuckles forward, thumbs up and in.
@@ -651,27 +714,6 @@ def clips(rig):
         curl(rig, "r", CURL * 1.2, thumb=CURL * 0.4)
         curl(rig, "l", CURL * 1.2, thumb=CURL * 0.4)
     clip(rig, "fp_unarmed", 3.0, unarmed, Q)
-
-    def fire(t):
-        k = math.sin(math.pi * min(1.0, t * 1.6))       # back and up, then settle
-        G = Vector(FP_HOLD["G"]) + Vector((0, -0.03 * k, 0.012 * k))
-        rifle(rig, G, Vector(FP_HOLD["forward"]) + Vector((0, 0, 0.06 * k)))
-    clip(rig, "fp_fire", 0.12, fire, (0.0, 0.3, 0.6, 1.0), loop=False)
-
-    def reload(t):
-        rifle(rig, **FP_HOLD)
-        # The left hand drops to the magazine (under the receiver, ~12 cm
-        # ahead of the grip), works it, and comes back to the fore-end.
-        k = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.8)))
-        if k > 0:
-            f = Vector(FP_HOLD["forward"]).normalized()
-            up = (Vector((0, 0, 1)) - f * f.z).normalized()
-            G = Vector(FP_HOLD["G"])
-            fore = G + f * FORE_ALONG + up * FORE_UP
-            mag = G + f * 0.12 - up * 0.04
-            grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
-                 (-0.7, 0.2, -0.7), fingers=(45, 50, 50, 50), thumb=30)
-    clip(rig, "fp_reload", 2.0, reload, (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), loop=False)
     rig.animation_data.action = None
 
 

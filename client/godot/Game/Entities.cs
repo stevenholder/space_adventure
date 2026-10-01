@@ -332,7 +332,7 @@ namespace SpaceAdventure.Game
 
             if (view.Held != null) { view.Held.QueueFree(); view.Held = null; }
             view.HeldItem = view.EquippedItem;
-            if (view.Anim != null) view.Anim.Armed = false;
+            if (view.Anim != null) { view.Anim.Armed = false; view.Anim.Class = Defs.HoldSuffix(view.EquippedItem ?? ""); }
             if (string.IsNullOrEmpty(view.EquippedItem)) return;
 
             string asset = Defs.ItemAsset(view.EquippedItem);
@@ -605,8 +605,8 @@ namespace SpaceAdventure.Game
         /// </summary>
         public Func<(Transform3D eye, float w, float kick)?> Ads;
 
-        /// <summary>Rear sight's distance in front of the eye when aimed.</summary>
-        public const float SightDistance = 0.20f;
+        /// <summary>Eye to rear sight when aimed: a shouldered long gun 0.20 m, a pistol at arm's length.</summary>
+        public float SightDistance = 0.20f;
 
         /// <summary>Hip fire: the bore converges on the crosshair this far out.</summary>
         public const float Converge = 15f;
@@ -683,6 +683,10 @@ namespace SpaceAdventure.Game
             // hand: grip -> fore runs to hand.r -> hand.l, so the rifle sits in
             // BOTH hands, not just pointed between them.
             Node3D fore = _left != null ? AssetRegistry.FindNode(Weapon, "fore") : null;
+            // A pistol's `fore` (the support palm under the fist) is too close
+            // to the grip to steer the barrel: it rides the forearm instead.
+            bool pistol = fore != null && (fore.GlobalPosition - grip.GlobalPosition).Length() < 0.15f;
+            if (pistol) fore = null;
             if (fore != null)
             {
                 Vector3 hands = _left.GlobalPosition - Hand.GlobalPosition;
@@ -705,7 +709,7 @@ namespace SpaceAdventure.Game
                 Aim();
                 return;
             }
-            else if (_left != null)
+            else if (_left != null && !pistol)
                 arm = _left.GlobalPosition - Hand.GlobalPosition;
             else
             {
@@ -728,6 +732,7 @@ namespace SpaceAdventure.Game
             if (want.LengthSquared() > 0.5f && have.LengthSquared() > 0.5f)
                 Weapon.GlobalBasis = new Basis(arm, have.SignedAngleTo(want, arm)) * Weapon.GlobalBasis;
             Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
+            Aim();
             if (_left == null) QueueFree();   // one-handed (old bodies): once is enough
         }
     }

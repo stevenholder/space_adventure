@@ -226,6 +226,15 @@ sight, empty hands by the right hand.
 The pulse rifle is ours (`tools/gen_weapon.py`, pure glb.py boxes, 156 tris):
 −Z forward, `grip` on top of the pistol grip just under the bore, `muzzle` at
 the barrel tip, a notched rear sight so aiming sees through it.
+The same file builds the rest of the armoury: `weapon.smg` (168 tris),
+`weapon.dmr` (348, a HOLLOW scope tube with a reticle so aiming looks
+through it) and `weapon.sidearm` (120). The long guns share the rifle's
+`grip`→`fore` geometry, so one set of hold clips fits all of them. The
+pistol's `fore` is where the support palm cups the fist (under the grip).
+That is too short to steer the barrel, so the client rides the barrel
+along the forearm for it. human.py builds a `*_pistol` copy of every armed
+clip (`CLASSES`), and `weapon.class` picks it. Aimed, a pistol's rear
+sight sits 0.42 m out (arm's length), a long gun's 0.20 m.
 
 ### Holding a weapon
 

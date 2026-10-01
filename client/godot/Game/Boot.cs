@@ -551,7 +551,8 @@ namespace SpaceAdventure.Game
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
             _viewModel.ArmsVisible = _seat == 0;
-            _viewModel.Hold(_seat == 0 && !string.IsNullOrEmpty(_character.Primary) ? _views.Defs.ItemAsset(_character.Primary) : "");
+            bool holding = _seat == 0 && !string.IsNullOrEmpty(_character.Primary);
+            _viewModel.Hold(holding ? _views.Defs.ItemAsset(_character.Primary) : "", holding ? _views.Defs.HoldSuffix(_character.Primary) : "");
             _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
             _viewModel.Place(body.Pos, body.Facing);
@@ -756,7 +757,8 @@ namespace SpaceAdventure.Game
             // made an empty gun look like it was shooting. -1 = not known yet.
             if (li.FirePressed && _viewModel.Armed && _seat == 0 && _character.Magazine != 0 && Clock.Now >= _nextFireAt)
             {
-                _nextFireAt = Clock.Now + FireIntervalSeconds;
+                double fi = _character.Defs.Item(_character.Primary)?.Weapon?.FireInterval ?? 0;
+                _nextFireAt = Clock.Now + (fi > 0 ? fi : FireIntervalSeconds);
                 _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));
                 _fx.OnLocalFire(_viewModel.Muzzle, _viewModel.Layers);
                 _viewModel.Fire(); // the arms kick; the camera never does
