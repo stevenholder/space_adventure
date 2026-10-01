@@ -1,13 +1,11 @@
 {
-  "$comment": "The dispatcher: an android on the shared skeleton (tools/bpy/body.py RACES/VARIANTS): synthetic pale skin, lit cyan eyes, a scalp seam, white suit. Same bones, weights and clips as every humanoid.",
+  "$comment": "npc.dispatcher: a variant of the MakeHuman body (tools/bpy/human.py VARIANTS) on the shared 53-bone rig, its own clips and hand mounts; real materials (pbr).",
   "id": "npc.dispatcher",
   "src": "build/npc.dispatcher.raw.glb",
   "out": "chars/dispatcher.glb",
-  "height": 1.8,
-  "axis": "y",
-  "ground": true,
-  "yaw": 0,
-  "budget": 6000,
+  "fit": false,
+  "budget": 9000,
+  "pbr": true,
   "mounts": {
     "eye": [
       0,
@@ -16,7 +14,7 @@
     ]
   },
   "license": "CC0",
-  "author": "Space Adventure",
-  "source_url": "tools/bpy/body.py",
+  "author": "Space Adventure (MakeHuman base mesh, CC0)",
+  "source_url": "tools/bpy/human.py",
   "rig": "animated"
 }

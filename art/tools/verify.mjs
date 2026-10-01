@@ -50,7 +50,7 @@ const CELL_MARGIN = 0.45;
 
 const BUDGETS = [
   [/^char\./, 9000],
-  [/^npc\./, 6000],
+  [/^npc\./, 9000],
   [/^ship\./, 15000],
   [/^vehicle\./, 15000],
   [/^weapon\./, 3000],
@@ -86,22 +86,22 @@ const NODE_CONTRACTS = {
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "npc.dispatcher": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   // The hostiles carry the same layout on purpose: the client's nametag,
   // health-bar and animation code walks these names and does not care which
   // archetype it is looking at.
   "npc.grunt": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "npc.gunner": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },

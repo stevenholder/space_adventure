@@ -115,8 +115,16 @@ real materials, about 18k triangles dressed.
   (extensions.blender.org). The shipped `.glb` files are committed, so only
   regenerating needs it.
 
-The NPC bodies (shopkeeper, dispatcher, grunt, gunner) are still the older
-generator below, on its 11-bone skeleton.
+Every humanoid now comes from human.py's VARIANTS: the player, the
+quartermaster (older, heavier, khaki), the dispatcher (android: slim, pale
+synthetic skin, no hair, lit eyes, scalp seam), the grunt (orc: bigger and
+heavier, eyes at 1.82, green skin, brow, tusks, ears, topknot) and the
+gunner (robot: the player's build in flat-shaded gunmetal with a visor band
+and antenna, so the Scout/iron armor fits it). A variant sets MakeHuman
+sliders, eye height, colours/metalness, hair, flat shading and rigid head
+parts; rig, clips, mounts and grips are shared. `blender -b --python
+tools/bpy/human.py -- npc.grunt` rebuilds one. body.py now only builds the
+retired 11-bone skeleton and is kept for its older docs.
 
 ## Humanoid skeleton (own bodies, from 2026-09-30)
 

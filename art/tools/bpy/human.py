@@ -57,9 +57,48 @@ MATERIALS = {
     "hair":  ((0.10, 0.07, 0.05), 0.8, 0.0),
     "eye":   ((0.05, 0.05, 0.06), 0.15, 0.0),
     "boot":  ((0.07, 0.07, 0.08), 0.85, 0.0),
+    "ivory": ((0.86, 0.82, 0.70), 0.5, 0.0),    # orc tusks
 }
 
 KEEP_GROUPS = ("body", "helper-l-eye", "helper-r-eye")
+
+# Every humanoid comes from this file. A variant changes the MakeHuman
+# sliders, the eye height (overall size), material colours, whether the head
+# has hair, flat (machine) shading, and adds rigid head parts. Bones, clips,
+# hand mounts and contact-point grips are shared, so every body holds a gun
+# and wears armor the same way. Armor is authored on char.player's build;
+# variants that keep that build (gunner) can wear it, bigger ones (orc) not.
+VARIANTS = {
+    "char.player": {},
+    "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
+        "macro": {"age": 0.75, "weight": 0.72, "muscle": 0.45, "height": 0.45},
+        "materials": {"suit": (0.46, 0.41, 0.30), "hair": (0.55, 0.53, 0.50), "skin": (0.72, 0.55, 0.45)},
+    },
+    "npc.dispatcher": {                        # Dispatcher Oru: an android
+        "macro": {"gender": 0.35, "weight": 0.35, "muscle": 0.45, "proportions": 0.9},
+        "materials": {"skin": (0.86, 0.88, 0.92), "suit": (0.88, 0.89, 0.91), "glove": (0.70, 0.72, 0.76),
+                      "eye": (0.25, 0.90, 1.00), "boot": (0.30, 0.32, 0.36)},
+        "hair": False,
+        "head_parts": "android",
+    },
+    "npc.grunt": {                             # melee raider: an orc, big and heavy
+        "macro": {"muscle": 1.0, "weight": 0.78, "height": 1.0, "proportions": 0.4, "age": 0.4},
+        "eye": 1.82,
+        "materials": {"skin": (0.40, 0.55, 0.32), "suit": (0.45, 0.20, 0.14), "hair": (0.08, 0.07, 0.06),
+                      "eye": (0.70, 0.12, 0.08)},
+        "hair": "topknot",
+        "head_parts": "orc",
+    },
+    "npc.gunner": {                            # ranged raider: a combat robot (player's build, so armor fits)
+        "materials": {"skin": (0.48, 0.50, 0.54), "suit": (0.30, 0.32, 0.35), "glove": (0.40, 0.42, 0.45),
+                      "boot": (0.22, 0.23, 0.25), "eye": (1.00, 0.45, 0.10)},
+        "metallic": {"skin": 0.85, "suit": 0.6, "glove": 0.8},
+        "hair": False,
+        "flat": True,
+        "head_parts": "robot",
+    },
+}
+ACTIVE = {}
 
 
 # ---- materials ----------------------------------------------------------------
@@ -67,6 +106,8 @@ def material(name):
     m = bpy.data.materials.get(name)
     if m is None:
         col, rough, metal = MATERIALS[name]
+        col = ACTIVE.get("materials", {}).get(name, col)
+        metal = ACTIVE.get("metallic", {}).get(name, metal)
         m = bpy.data.materials.new(name)
         m.use_nodes = True
         b = m.node_tree.nodes["Principled BSDF"]
@@ -80,7 +121,9 @@ def material(name):
 
 # ---- the human ----------------------------------------------------------------
 def make_human(decimate=True):
-    h = HumanService.create_human(scale=0.1, macro_detail_dict=MACRO, feet_on_ground=True)
+    macro = dict(MACRO)
+    macro.update(ACTIVE.get("macro", {}))
+    h = HumanService.create_human(scale=0.1, macro_detail_dict=macro, feet_on_ground=True)
     rig = HumanService.add_builtin_rig(h, "game_engine")
     TargetService.bake_targets(h)
 
@@ -103,7 +146,7 @@ def make_human(decimate=True):
 
     # Front -Y -> +Y (a half turn about Z) and eyes to EYE: same matrix on the
     # mesh data and on the armature's bones, so weights stay valid.
-    s = EYE / eye_z
+    s = ACTIVE.get("eye", EYE) / eye_z
     M = Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Rotation(math.pi, 4, "Z")
     h.data.transform(M)
     bpy.context.view_layer.objects.active = rig
@@ -185,7 +228,13 @@ def dress(h, eye_l, eye_r):
             m = "eye"
         elif b == "head":
             # Short hair: the crown, and the back of the skull above the nape.
-            m = "hair" if (r.z > 0.045 and r.y < 0.07) or (r.z > -0.03 and r.y < -0.03) else "skin"
+            hair = ACTIVE.get("hair", True)
+            if hair is True:
+                m = "hair" if (r.z > 0.045 and r.y < 0.07) or (r.z > -0.03 and r.y < -0.03) else "skin"
+            elif hair == "topknot":
+                m = "hair" if (r.z > 0.07 and abs(r.x) < 0.03 and -0.06 < r.y < 0.02) else "skin"
+            else:
+                m = "skin"
         elif b and b.startswith(("hand", "thumb", "index", "middle", "ring", "pinky")):
             m = "glove"
         elif (b and b.startswith(("foot", "ball"))) or c.z < 0.13:
@@ -589,10 +638,78 @@ def clips(rig):
 
 
 # ---- build ------------------------------------------------------------------------
+def head_box(name, center, size, mat, rot=(0.0, 0.0, 0.0), bevel=0.004):
+    """A small rigid part on the head bone (tusk, ear, brow, antenna)."""
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=center, rotation=rot)
+    o = bpy.context.object
+    o.name = name
+    o.scale = Vector(size)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for n in MATERIALS:
+        o.data.materials.append(material(n))
+    for p in o.data.polygons:
+        p.material_index = list(MATERIALS).index(mat)
+    if bevel:
+        bv = o.modifiers.new("bevel", "BEVEL")
+        bv.width = bevel
+        bv.segments = 2
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.modifier_apply(modifier=bv.name)
+    g = o.vertex_groups.new(name="head")
+    g.add([v.index for v in o.data.vertices], 1.0, "REPLACE")
+    return o
+
+
+def head_parts(kind, head, eye_l, eye_r):
+    """Race features, built round the eyes and the skull's measured size."""
+    eye = (eye_l + eye_r) * 0.5
+    pts = [v.co for v in head.data.vertices]
+    # Measured on the skull, not the whole head mesh (it includes the neck).
+    ring = [p for p in pts if abs(p.z - eye.z) < 0.025 and p.y > eye.y - 0.02]   # front half: no ears
+    half = max(abs(p.x - eye.x) for p in ring)
+    front = max(p.y for p in ring if abs(p.x - eye.x) < 0.02)
+    hi = Vector((0.0, 0.0, max(p.z for p in pts)))
+    out = []
+    if kind == "orc":
+        out.append(head_box("brow", (eye.x, eye.y + 0.012, eye.z + 0.028), (0.11, 0.04, 0.025), "skin", rot=(0.25, 0, 0)))
+        for sx in (1, -1):
+            out.append(head_box("tusk", (eye.x + 0.022 * sx, front - 0.012, eye.z - 0.085), (0.012, 0.012, 0.035), "ivory",
+                                rot=(0.35, 0, -0.25 * sx)))
+            out.append(head_box("ear", (half * 0.98 * sx, eye.y - 0.085, eye.z + 0.01), (0.012, 0.035, 0.06), "skin",
+                                rot=(-0.6, 0, 0.5 * sx)))
+    elif kind == "android":
+        out.append(head_box("seam", (0.0, eye.y - 0.06, hi.z - 0.012), (0.006, 0.17, 0.012), "suit", bevel=0.0))
+        out.append(head_box("brow_line", (eye.x, front - 0.004, eye.z + 0.022), (0.075, 0.006, 0.004), "eye", bevel=0.0))
+    elif kind == "robot":
+        out.append(head_box("visor", (eye.x, front - 0.018, eye.z), (half * 1.9, 0.03, 0.028), "eye", bevel=0.003))
+        out.append(head_box("antenna", (half * 0.6, eye.y - 0.07, hi.z + 0.05), (0.01, 0.01, 0.10), "glove", bevel=0.0))
+        out.append(head_box("antenna_tip", (half * 0.6, eye.y - 0.07, hi.z + 0.105), (0.02, 0.02, 0.02), "eye"))
+        out.append(head_box("jaw", (eye.x, front - 0.03, eye.z - 0.075), (half * 1.3, 0.05, 0.035), "suit"))
+    return out
+
+
 def build():
     h, rig, (eye_l, eye_r) = make_human()
     dress(h, eye_l, eye_r)
     parts = split(h)
+    kind = ACTIVE.get("head_parts")
+    if kind:
+        extra = head_parts(kind, parts["head"], eye_l, eye_r)
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in extra:
+            o.select_set(True)
+        parts["head"].select_set(True)
+        bpy.context.view_layer.objects.active = parts["head"]
+        bpy.ops.object.join()
+        parts["head"] = bpy.context.view_layer.objects.active
+        parts["head"].name = parts["head"].data.name = "head"
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+    if ACTIVE.get("flat"):
+        for o in parts.values():
+            bpy.ops.object.select_all(action="DESELECT")
+            o.select_set(True)
+            bpy.context.view_layer.objects.active = o
+            bpy.ops.object.shade_flat()
     for o in parts.values():
         bind(o, rig)
     # Mounts: the right at the centre of a closed fist (a grip sits in the
@@ -620,13 +737,17 @@ def export(out):
 
 
 def main():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    rig, parts = build()
-    tris = {n: sum(len(p.vertices) - 2 for p in o.data.polygons) for n, o in parts.items()}
-    print("parts", tris, "bones", len(rig.data.bones))
-    out = os.path.join(ART, "build", "char.player.raw.glb")
-    export(out)
-    print("wrote", out)
+    # `-- npc.grunt npc.gunner`: build only those; default is every variant.
+    want = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(VARIANTS)
+    for asset_id in want:
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        ACTIVE.clear()
+        ACTIVE.update(VARIANTS[asset_id])
+        rig, parts = build()
+        tris = {n: sum(len(p.vertices) - 2 for p in o.data.polygons) for n, o in parts.items()}
+        out = os.path.join(ART, "build", asset_id + ".raw.glb")
+        export(out)
+        print("wrote", out, tris)
 
 
 if __name__ == "__main__":

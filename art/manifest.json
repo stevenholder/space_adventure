@@ -90,62 +90,57 @@
     {
       "id": "npc.shopkeeper",
       "file": "chars/shopkeeper.glb",
-      "tris": 1452,
+      "tris": 6000,
       "license": "CC0",
       "source": "recipes/npc.shopkeeper.json",
       "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "trouser",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
           "boot"
         ],
         "head": [
+          "suit",
           "skin",
           "hair",
           "eye"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "npc.dispatcher",
       "file": "chars/dispatcher.glb",
-      "tris": 1560,
+      "tris": 6024,
       "license": "CC0",
       "source": "recipes/npc.dispatcher.json",
       "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
           "boot"
         ],
         "head": [
-          "trouser",
-          "accent",
+          "suit",
           "skin",
-          "accent"
+          "eye"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "prop.target",
@@ -356,65 +351,59 @@
     {
       "id": "npc.grunt",
       "file": "chars/grunt.glb",
-      "tris": 1376,
+      "tris": 6540,
       "license": "CC0",
       "source": "recipes/npc.grunt.json",
       "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
-          "skin",
           "boot"
         ],
         "head": [
+          "suit",
           "skin",
           "hair",
           "eye",
-          "bone"
+          "ivory"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "npc.gunner",
       "file": "chars/gunner.glb",
-      "tris": 1568,
+      "tris": 6336,
       "license": "CC0",
       "source": "recipes/npc.gunner.json",
       "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "trouser",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
           "boot"
         ],
         "head": [
           "suit",
-          "trouser",
-          "accent",
           "skin",
+          "glove",
           "eye"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "prop.loot.crate",
