@@ -1654,7 +1654,8 @@ namespace SpaceAdventure.Game
                 UI.Hotbar.SlotFor(Key.Q, true) == 15 && UI.Hotbar.SlotFor(Key.Z, false) == 8 && UI.Hotbar.SlotFor(Key.X, false) == 9
                 && UI.Hotbar.SlotFor(Key.R, false) == -1 && UI.Hotbar.SlotFor(Key.F, false) == -1);
             Check("sfx: weapon families", Sfx.Family("weapon.dmr") == "dmr" && Sfx.Family("weapon.sidearm") == "pistol"
-                && Sfx.Family("weapon.smg") == "smg" && Sfx.Family("weapon.pulse") == "rifle" && Sfx.Family("") == "rifle");
+                && Sfx.Family("weapon.smg") == "smg" && Sfx.Family("weapon.pulse") == "rifle" && Sfx.Family("") == "rifle"
+                && Sfx.Family("weapon.smg.frost") == "smg" && Sfx.Family("weapon.pulse.dune") == "rifle");
             var sfx = new Sfx(null);
             Check("sfx: every sound synthesizes, 16-bit, normalized", Array.TrueForAll(sfx.All(), s =>
             {

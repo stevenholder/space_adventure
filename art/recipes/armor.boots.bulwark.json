@@ -1,0 +1,20 @@
+{
+  "$comment": "Bulwark boots: armored foot shells and tall shafts. Built by tools/bpy/armor.py for every body in BODIES.",
+  "id": "armor.boots.bulwark",
+  "src": "build/armor.boots.bulwark.raw.glb",
+  "out": "armor/boots_bulwark.glb",
+  "fit": false,
+  "budget": 5000,
+  "pbr": true,
+  "covers": [
+    "body/boot"
+  ],
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/armor.py",
+  "bodies": [
+    "npc.grunt",
+    "npc.shopkeeper",
+    "npc.dispatcher"
+  ]
+}

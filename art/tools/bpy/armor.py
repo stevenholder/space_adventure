@@ -49,6 +49,9 @@ MATERIALS = {
     "iron":   ((0.42, 0.43, 0.45), 0.4, 0.9),
     "glove":  ((0.18, 0.18, 0.20), 0.8, 0.0),
     "boot":   ((0.16, 0.15, 0.14), 0.85, 0.0),
+    "heavy":  ((0.30, 0.34, 0.40), 0.40, 0.55),   # Bulwark: blued gunmetal
+    "rust":   ((0.47, 0.25, 0.14), 0.80, 0.45),   # Raider: scavenged, rusting
+    "bone":   ((0.80, 0.75, 0.62), 0.60, 0.0),    # Raider horns and spikes
 }
 ORDER = list(MATERIALS)
 
@@ -72,7 +75,7 @@ def material(name):
 
 # Materials that get a generated surface texture (tools/bpy/textures.py).
 SURFACE = {"plate": "plate", "trim": "trim", "metal": "metal", "iron": "iron",
-           "strap": "fabric", "glove": "fabric", "boot": "fabric"}
+           "strap": "fabric", "glove": "fabric", "boot": "fabric", "heavy": "plate", "rust": "iron"}
 
 
 def setup_materials(obj, main, rim):
@@ -343,7 +346,7 @@ def block(name, center, size, mat, bone, bevel=0.006, rot=(0, 0, 0)):
     return obj
 
 
-def boot_foot(name, lo, hi, bone):
+def boot_foot(name, lo, hi, bone, mat="boot"):
     """A boot's foot: a box over the foot's bounds (+1.5 cm all round),
     rounded hard by a bevel, the toe end pulled down into a toe box, on a
     darker sole slab."""
@@ -366,7 +369,7 @@ def boot_foot(name, lo, hi, bone):
         v.co = p
     bm.to_mesh(obj.data)
     bm.free()
-    setup_materials(obj, "boot", "trim")
+    setup_materials(obj, mat, "trim")
     bv = obj.modifiers.new("round", "BEVEL")
     bv.width = 0.025
     bv.segments = 2
@@ -385,7 +388,7 @@ def boot_foot(name, lo, hi, bone):
     return obj
 
 
-def boot_shaft(name, base, radius, height, bone):
+def boot_shaft(name, base, radius, height, bone, mat="boot"):
     """A boot's shaft: a slightly tapered tube round the ankle and lower
     shin, with a rolled cuff in the trim colour."""
     bpy.ops.mesh.primitive_cone_add(vertices=12, radius1=radius, radius2=radius * 0.93, depth=height,
@@ -394,7 +397,7 @@ def boot_shaft(name, base, radius, height, bone):
     obj.name = name
     obj.data.transform(obj.matrix_world)
     obj.matrix_world = Matrix.Identity(4)
-    setup_materials(obj, "boot", "trim")
+    setup_materials(obj, mat, "trim")
     for p in obj.data.polygons:
         p.material_index = 0
     bpy.ops.object.select_all(action="DESELECT")
@@ -416,6 +419,43 @@ def boot_shaft(name, base, radius, height, bone):
     cuff.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.join()
+    return obj
+
+
+def shell(name, centre, radii, cut_front, cut_back, mat, tris, thickness=0.008):
+    """A helmet shell: an ellipsoid round the skull, everything under the cut
+    removed (cut_front for the face side, cut_back behind), rigid on head."""
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=18, ring_count=12, radius=1.0, location=(0, 0, 0))
+    obj = bpy.context.object
+    obj.name = name
+    obj.data.transform(Matrix.Translation(centre) @ Matrix.Diagonal((radii.x, radii.y, radii.z, 1.0)))
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    doomed = [f for f in bm.faces
+              if f.calc_center_median().z < (cut_front if f.calc_center_median().y > centre.y else cut_back)]
+    bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    bm.to_mesh(obj.data)
+    bm.free()
+    setup_materials(obj, mat, "trim")
+    reduce(obj, tris)
+    finish(obj, thickness, 0.002)
+    rigid(obj, "head")
+    return obj
+
+
+def horn(name, base, direction, length, radius, bone, mat="bone"):
+    """A curved-ish spike: a cone from `base` along `direction`."""
+    d = Vector(direction).normalized()
+    bpy.ops.mesh.primitive_cone_add(vertices=8, radius1=radius, radius2=0.002, depth=length,
+                                    location=Vector(base) + d * (length / 2))
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_mode = "QUATERNION"
+    obj.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(d)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    setup_materials(obj, mat, "trim")
+    bpy.ops.object.shade_flat()
+    rigid(obj, bone)
     return obj
 
 
@@ -588,9 +628,116 @@ def pieces(body):
         block("pack_lid", (0, back_plate_y - 0.10, pz + 0.19), (0.31, 0.14, 0.05), "trim", "spine_03", bevel=0.01),
         block("pack_cell", (0.0, back_plate_y - 0.175, pz - 0.02), (0.16, 0.03, 0.22), "metal", "spine_03", bevel=0.006),
     ]
+    # ---- Bulwark: the heavy set. Bigger, thicker, layered plates in blued
+    # gunmetal; a crested helmet with a slit visor; full-wrap legs.
+    hb = shell("helmet_bulwark", centre + Vector((0, 0, 0.01)), radii + Vector((0.03, 0.03, 0.025)),
+               EYE - 0.15, EYE - 0.17, "heavy", 1000, thickness=0.012)
+    slit = block("slit", (0, centre.y + radii.y + 0.028, EYE + 0.005), (0.15, 0.03, 0.022), "visor", "head", bevel=0.004)
+    crest = block("crest", (0, centre.y + 0.01, centre.z + radii.z + 0.035), (0.03, radii.y * 1.9, 0.045), "trim", "head", bevel=0.008)
+    for side, sign in (("r", 1), ("l", -1)):
+        out.setdefault("_cheeks", []).append(
+            block("cheek_" + side, (sign * (radii.x + 0.02), centre.y + radii.y * 0.45, EYE - 0.09),
+                  (0.03, 0.09, 0.09), "heavy", "head", bevel=0.01))
+    out["armor.helmet.bulwark"] = [hb, slit, crest] + out.pop("_cheeks")
+
+    bul = [
+        plate("chest", sb, spine_a, spine_b, (0, 1, 0), (-80, 80), (tz(chest_lo - 0.02), tz(neck_z - 0.02)), 0.026, 0.018, "spine_03",
+              mat="heavy", cols=10, rows=7, squareness=5),
+        plate("back", sb, spine_a, spine_b, (0, -1, 0), (-75, 75), (tz(chest_lo - 0.10), tz(neck_z - 0.03)), 0.024, 0.016, "spine_03",
+              mat="heavy", cols=9, rows=7, squareness=5),
+        plate("gorget", sb, spine_a, spine_b, (0, 1, 0), (-150, 150), (tz(neck_z - 0.04), tz(neck_z + 0.015)), 0.02, 0.012, "spine_03",
+              mat="trim", rim="metal", cols=14, rows=2, squareness=12),
+        plate("abs", sb, spine_a, spine_b, (0, 1, 0), (-50, 50), (tz(chest_lo - 0.24), tz(chest_lo - 0.03)), 0.022, 0.014, "spine_02",
+              mat="heavy", cols=8, rows=4, squareness=6),
+    ]
+    for side, sign in (("r", 1), ("l", -1)):
+        sh, el = body.bone("upperarm_" + side)
+        lo_h, lo_t = body.bone("lowerarm_" + side)
+        bul.append(plate("pauldron_" + side, sb, sh, el, (sign, 0.0, 0.35), (-120, 120), (-0.26, 0.48), 0.03, 0.015, "upperarm_" + side,
+                         mat="heavy", cols=9, rows=4, squareness=3))
+        bul.append(plate("pauldron_top_" + side, sb, sh, el, (sign, 0.0, 0.8), (-90, 90), (-0.24, 0.10), 0.055, 0.012, "upperarm_" + side,
+                         mat="heavy", rim="metal", cols=7, rows=3, squareness=3))
+        bul.append(plate("vambrace_" + side, sb, lo_h, lo_t, (sign, 0.0, 0.6), (-140, 140), (0.15, 0.9), 0.018, 0.012, "lowerarm_" + side,
+                         mat="heavy", cols=8, rows=4, squareness=6))
+    out["armor.suit.bulwark"] = bul
+
+    bl = [panel(body, "belt", belt, 0.014, 0.01, mat="trim", rim="metal", bone="pelvis", tris=260, bevel=0.0, smooth=2)]
+    for side, sign in (("r", 1), ("l", -1)):
+        th_h, th_t = body.bone("thigh_" + side)
+        ca_h, ca_t = body.bone("calf_" + side)
+        bl.append(plate("tasset_" + side, sb, th_h, th_t, (0.5 * sign, 1, 0), (-60, 60), (-0.05, 0.30), 0.03, 0.012, "thigh_" + side,
+                        mat="heavy", rim="metal", cols=6, rows=3, squareness=4))
+        bl.append(plate("thigh_" + side, sb, th_h, th_t, (0.35 * sign, 1, 0), (-120, 120), (0.25, 0.78), 0.02, 0.012, "thigh_" + side,
+                        mat="heavy", cols=9, rows=4, squareness=5))
+        bl.append(plate("knee_" + side, sb, ca_h, ca_t, (0, 1, 0), (-70, 70), (-0.12, 0.12), 0.034, 0.014, "calf_" + side,
+                        mat="trim", rim="metal", cols=6, rows=3, squareness=2.5))
+        bl.append(plate("greave_" + side, sb, ca_h, ca_t, (0.15 * sign, 1, 0), (-120, 120), (0.15, 0.80), 0.02, 0.012, "calf_" + side,
+                        mat="heavy", cols=8, rows=4, squareness=6))
+    out["armor.legs.bulwark"] = bl
+
+    bg = []
+    for side, sign in (("r", 1), ("l", -1)):
+        lo_h, lo_t = body.bone("lowerarm_" + side)
+        h_h, h_t = body.bone("hand_" + side)
+        bg.append(plate("gauntlet_" + side, sb, lo_h, lo_t, (sign, 0.0, 0.6), (-178, 178), (0.70, 1.04), 0.014, 0.009, "lowerarm_" + side,
+                        mat="heavy", rim="metal", cols=8, rows=3, squareness=12))
+        bg.append(plate("knuckle_" + side, sb, h_h, h_t, (0.0, 0.3, 1.0), (-80, 80), (0.30, 1.0), 0.012, 0.008, "hand_" + side,
+                        mat="heavy", rim="metal", cols=6, rows=3, squareness=4))
+    out["armor.gloves.bulwark"] = bg
+
+    bb = []
+    for side in ("r", "l"):
+        pts = [body.obj.data.vertices[v].co for i in body.faces(lambda c, b, side=side: b in ("foot_" + side, "ball_" + side))
+               for v in body.obj.data.polygons[i].vertices]
+        lo = Vector((min(p.x for p in pts), min(p.y for p in pts), 0.0))
+        hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        bb.append(boot_foot("boot_" + side, lo - Vector((0.005, 0.005, 0)), hi + Vector((0.005, 0.005, 0.01)), "foot_" + side, mat="heavy"))
+        ank = body.bone("foot_" + side)[0]
+        shaft_pts = [body.obj.data.vertices[v].co for i in body.faces(lambda c, b, side=side, z=ank.z: b == "calf_" + side and z < c.z < z + 0.17)
+                     for v in body.obj.data.polygons[i].vertices]
+        cx = sum((p.x for p in shaft_pts)) / len(shaft_pts)
+        cy = sum((p.y for p in shaft_pts)) / len(shaft_pts)
+        r = max(((p.x - cx) ** 2 + (p.y - cy) ** 2) ** 0.5 for p in shaft_pts)
+        bb.append(boot_shaft("shaft_" + side, Vector((cx, cy, ank.z - 0.02)), r + 0.016, 0.25, "calf_" + side, mat="heavy"))
+    out["armor.boots.bulwark"] = bb
+
+    # ---- Raider: scavenged, rusting, lopsided. The orcs wear it.
+    rh = shell("helmet_raider", centre + Vector((0, -0.01, 0.015)), radii + Vector((0.01, 0.0, 0.0)),
+               EYE + 0.035, EYE - 0.06, "rust", 700, thickness=0.009)
+    out["armor.helmet.raider"] = [rh] + [
+        horn("horn_" + side, (sign * radii.x * 0.75, centre.y + 0.02, centre.z + radii.z * 0.55),
+             (sign * 0.8, 0.15, 0.6), 0.16, 0.028, "head")
+        for side, sign in (("r", 1), ("l", -1))]
+
+    sh, el = body.bone("upperarm_l")
+    rs = [
+        plate("chest", sb, spine_a, spine_b, (0.4, 1, 0), (-35, 70), (tz(chest_lo), tz(neck_z - 0.05)), 0.024, 0.014, "spine_03",
+              mat="rust", cols=8, rows=6, squareness=3),
+        plate("pauldron_l", sb, sh, el, (-1, 0.0, 0.4), (-125, 125), (-0.28, 0.50), 0.034, 0.016, "upperarm_l",
+              mat="rust", cols=10, rows=5, squareness=2.5),
+    ]
+    for k, (y, z) in enumerate(((-0.04, 0.02), (0.06, 0.06))):
+        rs.append(horn(f"spike_{k}", (Vector(sh) + Vector((-0.10, y, 0.06 + z))), (-0.5, 0.0, 1.0), 0.09, 0.016, "upperarm_l"))
+    # Crossed straps: two bands round the torso, chest to back.
+    for k, (lo_t, hi_t) in enumerate(((0.55, 0.70), (0.42, 0.55))):
+        rs.append(plate(f"strap_{k}", sb, spine_a, spine_b, (0, 1, 0), (-178, 178), (lo_t, hi_t), 0.01, 0.006, "spine_03" if k == 0 else "spine_02",
+                        mat="strap", rim="strap", cols=16, rows=1, squareness=40))
+    out["armor.suit.raider"] = rs
+
+    rl = [panel(body, "belt", belt, 0.012, 0.008, mat="strap", rim="rust", bone="pelvis", tris=260, bevel=0.0, smooth=2)]
+    th_h, th_t = body.bone("thigh_r")
+    rl.append(plate("thigh_r", sb, th_h, th_t, (0.5, 1, 0), (-70, 90), (0.15, 0.70), 0.02, 0.012, "thigh_r",
+                    mat="rust", cols=8, rows=5, squareness=3))
+    for side, sign in (("r", 1), ("l", -1)):
+        ca_h, ca_t = body.bone("calf_" + side)
+        rl.append(plate("knee_" + side, sb, ca_h, ca_t, (0, 1, 0), (-55, 55), (-0.08, 0.10), 0.03, 0.012, "calf_" + side,
+                        mat="rust", rim="metal", cols=6, rows=3, squareness=2.5))
+    rl.append(block("pouch", (-0.14, front_y - 0.01, pelvis.z + 0.04), (0.08, 0.045, 0.09), "strap", "pelvis"))
+    out["armor.legs.raider"] = rl
+
     # Decals: stencilled markings painted onto the plates (textures.py atlas).
     def part(asset, name):
-        return next(p for p in out[asset] if p.name == name)
+        return next(p for p in out[asset] if p.name.split(".")[0] == name)   # Blender adds .001 to repeats
 
     def stick(obj, cell, into, size, offset=(0.0, 0.0)):
         d = human.textures.decal(obj, cell, into, size, offset)
@@ -608,12 +755,41 @@ def pieces(body):
     stick(part("armor.helmet.scout", "helmet"), 0, (-1, 0, 0), 0.06, (0.0, 0.01))      # number on both sides
     stick(part("armor.helmet.scout", "helmet"), 0, (1, 0, 0), 0.06, (0.0, 0.01))
     stick(part("armor.plate.iron", "iron_front"), 2, (0, -1, 0), 0.10, (0.0, -0.07))  # hazard band
+    stick(part("armor.suit.bulwark", "chest"), 3, (0, -1, 0), 0.09, (0.08, 0.03))      # insignia
+    stick(part("armor.suit.bulwark", "back"), 0, (0, 1, 0), 0.12, (0.0, 0.03))
+    stick(part("armor.suit.bulwark", "pauldron_r"), 1, (-1, 0, -0.35), 0.08)
+    stick(part("armor.suit.bulwark", "pauldron_l"), 1, (1, 0, -0.35), 0.08)
+    stick(part("armor.helmet.bulwark", "helmet_bulwark"), 0, (-1, 0, 0), 0.06, (0.0, 0.02))
+    stick(part("armor.helmet.bulwark", "helmet_bulwark"), 0, (1, 0, 0), 0.06, (0.0, 0.02))
+    stick(part("armor.suit.raider", "pauldron_l"), 2, (1, 0, -0.4), 0.10)              # hazard, painted on
     return out
 
 
 # ---- build -------------------------------------------------------------------------
+# Body shapes armor is fitted to. "" is the player's build (the player and
+# the robot gunner); the rest are races whose MakeHuman macro or eye height
+# differs, and get their own copy of every piece, exported as
+# "<asset>@<body>" -- the client picks it by the wearer's asset id.
+BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher")
+
+
 def main():
+    only = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    for body_id in BODIES:
+        if only and (body_id or "char.player") not in only:
+            continue
+        build_for(body_id)
+
+
+def build_for(body_id):
+    global EYE
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    human.ACTIVE.clear()
+    if body_id:                                   # the shape only, not the colours
+        v = human.VARIANTS[body_id]
+        human.ACTIVE.update({k: v[k] for k in ("macro", "eye") if k in v})
+    EYE = human.ACTIVE.get("eye", human.EYE)
+    suffix = "@" + body_id if body_id else ""
     h, rig, _ = human.make_human(decimate=False)
     h.data.update()
     body = Body(h, rig)
@@ -637,7 +813,7 @@ def main():
             p.data.name = p.name
         for p in parts:
             human.textures.uv_box(p)
-        out = os.path.join(ART, "build", asset_id + ".raw.glb")
+        out = os.path.join(ART, "build", asset_id + suffix + ".raw.glb")
         bpy.ops.object.select_all(action="DESELECT")
         for p in parts:
             p.select_set(True)

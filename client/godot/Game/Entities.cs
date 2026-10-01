@@ -234,6 +234,7 @@ namespace SpaceAdventure.Game
             Skeleton3D skeleton = null;
             foreach (Skeleton3D sk in AssetRegistry.Descendants<Skeleton3D>(model)) { skeleton = sk; break; }
             if (skeleton == null) return;
+            string wearer = model.HasMeta("asset") ? (string)model.GetMeta("asset") : null;
             bool changed = false;
             foreach (var kv in worn)
             {
@@ -245,6 +246,9 @@ namespace SpaceAdventure.Game
                 if (string.IsNullOrEmpty(kv.Value)) continue;
                 string id = asset(kv.Value);
                 if (keep != null && !keep(id)) continue;   // recorded in `drawn`, not hung (first-person arms)
+                // A piece built for this wearer's body ("armor.suit.scout@npc.grunt",
+                // armor.py BODIES) when there is one; the player-build piece otherwise.
+                if (wearer != null && assets.Has(id + "@" + wearer)) id = id + "@" + wearer;
                 Node3D piece = assets.AttachSkinned(id, skeleton);
                 if (piece == null) continue;
                 nodes[kv.Key] = piece;

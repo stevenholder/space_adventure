@@ -1,56 +1,46 @@
 #!/usr/bin/env node
 /**
- * Turn a downloaded CC0 model into an asset this game can actually use.
+ * Finish a model our Blender generators exported (tools/bpy/*.py ->
+ * art/build/*.raw.glb) into the asset the game ships, and record it in
+ * art/manifest.json.
  *
- * Everything in art/ up to now was generated: a Python script stacking
- * axis-aligned boxes, exact by construction, 180 triangles for a rifle. That
- * ceiling is the reason this file exists. Real assets come from CC0 packs
- * (Kenney, Quaternius, Poly Pizza) instead, and a downloaded model never
- * arrives in the shape this project needs — wrong scale, wrong origin, wrong
- * forward axis, textured materials, and node names nobody here mounts things
- * by. This applies the fixups, deterministically, from a recipe.
+ * Every model here is our own now; this used to adapt downloaded CC0 packs
+ * (rescale, re-axis, bake colour to vertices, borrow animation clips), and
+ * all of that went with the last Kenney asset. What is left:
  *
- * THE ONE THAT MATTERS IS `bake`. The client draws every model with ONE
- * material that reads colour out of the vertex stream (Godot:
- * StandardMaterial3D with VertexColorUseAsAlbedo, built in C#, no shader
- * resources in the project). This started as a Unity constraint — Unity
- * stripped every shader nothing referenced, so per-model PBR materials went
- * MAGENTA in packaged builds — and it stays because the Godot client
- * (AssetRegistry) still reads COLOR_0 and nothing else. So the colour is baked
- * down into COLOR_0 here, at import, and the client never needs a second
- * material.
+ *   - dedup and prune, keeping empty mount nodes,
+ *   - record each mesh's surface (material) names, for `covers`,
+ *   - add the recipe's mount empties,
+ *   - simplify to the triangle budget if over it,
+ *   - write the manifest row (tris, surfaces, flags, provenance).
  *
  * Usage:
- *   node tools/import_pack.mjs <recipe.json>       apply one recipe
+ *   node tools/import_pack.mjs <recipe.json>       finish one recipe
  *   node tools/import_pack.mjs --selftest          run the checks below
  *
  * A recipe is JSON:
  *
  *   {
- *     "id":     "npc.grunt",              // art/manifest.json id
- *     "src":    "vendor/quaternius/Grunt.glb",
- *     "out":    "chars/grunt.glb",
- *     "height": 1.8,                      // scale so the model is this tall
- *     "ground": true,                     // put the origin between the feet
- *     "yaw":    180,                      // degrees, to bring forward to -Z
- *     "budget": 6000,                     // max triangles
- *     "rename": { "Hand_R": "hand.r" },   // node contract
- *     "license": "CC0",
- *     "source_url": "https://quaternius.com/...",
- *     "author": "Quaternius"
+ *     "id":     "armor.suit.scout",          // art/manifest.json id
+ *     "src":    "build/armor.suit.scout.raw.glb",
+ *     "out":    "armor/suit_scout.glb",
+ *     "budget": 5000,                        // max triangles
+ *     "pbr":    true,                        // real materials, drawn as authored
+ *     "mounts": { "probe": [0, 1.7, 0] },    // optional empties
+ *     "covers": ["body/suit"],               // optional: surfaces this hides
+ *     "arms":   true,                        // optional: first-person arms wear it
+ *     "rig":    "animated",                  // optional manifest flag
+ *     "bodies": ["npc.grunt"],               // optional: also "<id>@<body>" per wearer build
+ *     "license": "CC0", "author": "Space Adventure", "source_url": "tools/bpy/armor.py"
  *   }
- *
- * Paths in a recipe are relative to art/. `vendor/` is gitignored: the packs
- * are re-downloadable from `source_url` and do not belong in git, but the
- * fixed-up output does — it is what the game ships.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { NodeIO, Document } from "@gltf-transform/core";
+import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { dedup, join, prune, weld, simplify } from "@gltf-transform/functions";
+import { dedup, prune, weld, simplify } from "@gltf-transform/functions";
 import { MeshoptSimplifier } from "meshoptimizer";
 
 const artDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -59,191 +49,6 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 // ---------------------------------------------------------------------------
 // transforms
 // ---------------------------------------------------------------------------
-
-/**
- * Fold every material's base colour into the mesh's COLOR_0 stream, then throw
- * the materials away and leave one untextured opaque material behind.
- *
- * A pack model carries its colour in `baseColorFactor` (flat-shaded packs) or
- * in a texture atlas (most Kenney kits). Only the factor is read here: a
- * texture would need the UV sampled per vertex, and the vertex-colour renderer
- * this feeds has nowhere to put a texture anyway. A model whose colour lives
- * ONLY in an atlas therefore comes out flat grey, which is visible immediately
- * rather than subtly wrong — see `--selftest`.
- *
- * COLOR_0 is multiplied into the base colour by the glTF spec, so an existing
- * vertex colour is preserved and tinted rather than overwritten.
- *
- * `tint` multiplies the whole palette on the way through. Two enemy archetypes
- * cut from the same source model have to be told apart at a glance -- the box
- * models did it by tinting one red and one purple (Models.cs Grunt/Gunner) --
- * and re-tinting is the only recolour available once the colour has been baked
- * into vertices. It scales the source palette rather than replacing it, so the
- * model keeps its internal contrast instead of going flat.
- */
-function bakeVertexColors(doc, tint) {
-  const root = doc.getRoot();
-  const t = tint ?? [1, 1, 1];
-  let baked = 0;
-
-  for (const mesh of root.listMeshes()) {
-    for (const prim of mesh.listPrimitives()) {
-      const material = prim.getMaterial();
-      const factor = material ? material.getBaseColorFactor() : [1, 1, 1, 1];
-
-      const position = prim.getAttribute("POSITION");
-      if (!position) continue;
-      const count = position.getCount();
-
-      const existing = prim.getAttribute("COLOR_0");
-      const out = new Float32Array(count * 4);
-      for (let i = 0; i < count; i++) {
-        let r = factor[0] * t[0], g = factor[1] * t[1], b = factor[2] * t[2], a = factor[3];
-        // COLOR_0 is normalised in glTF: anything outside [0,1] is out of
-        // spec. A tint above 1.0 is the easy way to produce one, and it does
-        // not fail loudly -- it sails through the exporter and only surfaces
-        // downstream, as a renderer throwing on a >255 colour byte or a
-        // clamp appearing somewhere in the engine that nobody chose.
-        const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
-        if (existing) {
-          const e = [0, 0, 0, 1];
-          existing.getElement(i, e);
-          // A 3-component COLOR_0 leaves alpha at the initialised 1.
-          r *= e[0]; g *= e[1]; b *= e[2];
-          if (existing.getElementSize() === 4) a *= e[3];
-        }
-        out.set([clamp01(r), clamp01(g), clamp01(b), clamp01(a)], i * 4);
-      }
-
-      const accessor = doc
-        .createAccessor()
-        .setType("VEC4")
-        .setArray(out)
-        .setBuffer(root.listBuffers()[0]);
-      prim.setAttribute("COLOR_0", accessor);
-      baked++;
-    }
-  }
-
-  // One material for everything, matching the client's single material.
-  const flat = doc.createMaterial("opaque").setDoubleSided(true);
-  for (const mesh of root.listMeshes()) {
-    for (const prim of mesh.listPrimitives()) prim.setMaterial(flat);
-  }
-  for (const m of root.listMaterials()) if (m !== flat) m.dispose();
-  for (const t of root.listTextures()) t.dispose();
-
-  return baked;
-}
-
-/** World-space bounding box over every mesh in the scene, transforms applied. */
-function bounds(doc) {
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-
-  const visit = (node, parent) => {
-    const m = mul(parent, node.getWorldMatrix ? null : null) || null;
-    // gltf-transform exposes a node's own matrix; compose it with the parent's.
-    const local = node.getMatrix();
-    const world = parent ? mul(parent, local) : local;
-
-    const mesh = node.getMesh();
-    if (mesh) {
-      for (const prim of mesh.listPrimitives()) {
-        const pos = prim.getAttribute("POSITION");
-        if (!pos) continue;
-        const v = [0, 0, 0];
-        for (let i = 0; i < pos.getCount(); i++) {
-          pos.getElement(i, v);
-          const p = apply(world, v);
-          for (let k = 0; k < 3; k++) {
-            if (p[k] < min[k]) min[k] = p[k];
-            if (p[k] > max[k]) max[k] = p[k];
-          }
-        }
-      }
-    }
-    for (const child of node.listChildren()) visit(child, world);
-  };
-
-  for (const scene of doc.getRoot().listScenes()) {
-    for (const node of scene.listChildren()) visit(node, null);
-  }
-  return { min, max };
-}
-
-/** Column-major 4x4 multiply, matching glTF's matrix layout. */
-function mul(a, b) {
-  if (!a) return b;
-  if (!b) return a;
-  const out = new Array(16).fill(0);
-  for (let c = 0; c < 4; c++) {
-    for (let r = 0; r < 4; r++) {
-      let s = 0;
-      for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
-      out[c * 4 + r] = s;
-    }
-  }
-  return out;
-}
-
-function apply(m, v) {
-  if (!m) return v.slice();
-  return [
-    m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12],
-    m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13],
-    m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14],
-  ];
-}
-
-/**
- * Scale to a target height, drop the model onto Y=0 and centre it on XZ.
- *
- * Height, not a scale factor, because the number that matters is fixed by the
- * SERVER: items.json gives every humanoid a capsule of radius 0.35 and height
- * 1.8, and that capsule is what shots are resolved against. A model that is
- * not 1.8 m teaches the wrong aim — you learn to shoot at the shape you see
- * while the server tests the capsule. Same reasoning as Models.cs:3-6.
- *
- * Applied by wrapping the scene in one node rather than rewriting vertex data,
- * so an armature and its skinned mesh cannot drift apart.
- */
-function fit(doc, { height, axis = "y", ground = true, yaw = 0 }) {
-  const { min, max } = bounds(doc);
-  if (!isFinite(min[1]) || !isFinite(max[1])) return { scale: 1 };
-
-  // `height` is measured along `axis`, because "how big is it" is a different
-  // question per asset class. A humanoid is sized by how tall it is (the
-  // server's capsule is 1.8 m). A rifle is sized by how LONG it is -- scaling
-  // a gun by its height would size it by its sights.
-  const k = { x: 0, y: 1, z: 2 }[axis];
-  const h = max[k] - min[k];
-  const scale = height && h > 1e-9 ? height / h : 1;
-
-  const cx = ((min[0] + max[0]) / 2) * scale;
-  const cz = ((min[2] + max[2]) / 2) * scale;
-  const dy = ground ? -min[1] * scale : 0;
-
-  const rad = (yaw * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-
-  for (const scene of doc.getRoot().listScenes()) {
-    const wrapper = doc
-      .createNode("fit")
-      .setScale([scale, scale, scale])
-      .setRotation([0, Math.sin(rad / 2), 0, Math.cos(rad / 2)])
-      // Undo the centring in the wrapper's own frame, after rotation.
-      .setTranslation([-(cx * cos + cz * sin), dy, -(-cx * sin + cz * cos)]);
-
-    for (const child of scene.listChildren()) {
-      scene.removeChild(child);
-      wrapper.addChild(child);
-    }
-    scene.addChild(wrapper);
-  }
-  return { scale };
-}
 
 /**
  * Add the empty mount nodes the client mounts things by, at explicit positions
@@ -300,109 +105,6 @@ function addMounts(doc, mounts) {
 }
 
 /**
- * Copy animation clips off a DIFFERENT model and re-point them at this one.
- *
- * The good-looking CC0 characters and the animated CC0 characters are not the
- * same characters. Kenney's Space Kit astronaut is the right look for this
- * game and ships no animation at all; Kenney's Blocky Characters ship 27 clips
- * -- idle, walk, sprint, die, holding-both-shoot -- on six boxes that would be
- * a downgrade to look at. Retargeting takes the clips from one and leaves the
- * geometry of the other.
- *
- * That works here because both packs use the same rig convention, which was
- * checked before relying on it: limb nodes sit AT THE JOINT and their mesh
- * hangs off the node origin (a leg's vertices run from y=-1 to y=0 below its
- * hip node). Rotating such a node swings the limb from the shoulder or the
- * hip. A pack that instead baked limb positions into vertices and left every
- * node at the origin would spin its arms around the character's feet, and no
- * amount of renaming would fix it.
- *
- * ROTATION CHANNELS ONLY, and that is the other thing that makes this safe.
- * The source clips also carry a translation track on `root` -- the vertical
- * bob of a walk -- authored in units where the character is 2.2 tall. This
- * model is 0.79 before it is fitted to 1.8. A translation is in metres and
- * does not scale with the model, so importing that track would bob the
- * astronaut by most of its own height. A rotation is scale-free and means the
- * same thing on any rig, so rotations come across and nothing else does. The
- * cost is a walk with no bob, which is a small loss next to one that pogos.
- */
-async function retargetAnimations(doc, spec) {
-  if (!spec) return { clips: 0, channels: 0, dropped: 0 };
-
-  const src = await io.read(path.resolve(artDir, spec.src));
-  const buffer = doc.getRoot().listBuffers()[0];
-
-  // Destination nodes by name, so a mapped target that does not exist is
-  // caught here rather than becoming a channel that animates nothing.
-  const byName = new Map();
-  for (const node of doc.getRoot().listNodes()) byName.set(node.getName(), node);
-
-  const keep = spec.keep ? new Set(spec.keep) : null;
-  let clips = 0, channels = 0, dropped = 0;
-
-  for (const anim of src.getRoot().listAnimations()) {
-    const name = anim.getName();
-    if (keep && !keep.has(name)) continue;
-
-    const out = doc.createAnimation(name);
-    let kept = 0;
-
-    for (const channel of anim.listChannels()) {
-      if (channel.getTargetPath() !== "rotation") { dropped++; continue; }
-
-      const from = channel.getTargetNode()?.getName();
-      const to = from != null ? spec.map?.[from] : undefined;
-      const node = to != null ? byName.get(to) : undefined;
-      if (!node) { dropped++; continue; }
-
-      const s = channel.getSampler();
-      const input = doc
-        .createAccessor()
-        .setType("SCALAR")
-        .setArray(new Float32Array(s.getInput().getArray()))
-        .setBuffer(buffer);
-      const output = doc
-        .createAccessor()
-        .setType("VEC4")
-        .setArray(new Float32Array(s.getOutput().getArray()))
-        .setBuffer(buffer);
-
-      const sampler = doc
-        .createAnimationSampler()
-        .setInterpolation(s.getInterpolation())
-        .setInput(input)
-        .setOutput(output);
-
-      out.addSampler(sampler);
-      out.addChannel(
-        doc.createAnimationChannel().setTargetNode(node).setTargetPath("rotation").setSampler(sampler),
-      );
-      kept++;
-    }
-
-    if (kept === 0) { out.dispose(); continue; }
-    clips++;
-    channels += kept;
-  }
-
-  return { clips, channels, dropped };
-}
-
-/** Apply the node-name contract: `grip`, `muzzle`, `hand.r`, `seat.pilot`. */
-function renameNodes(doc, map) {
-  if (!map) return 0;
-  let n = 0;
-  for (const node of doc.getRoot().listNodes()) {
-    const to = map[node.getName()];
-    if (to) {
-      node.setName(to);
-      n++;
-    }
-  }
-  return n;
-}
-
-/**
  * Triangles as DRAWN, counted by walking the scene graph — so a mesh two nodes
  * share counts twice, once per instance.
  *
@@ -443,8 +145,8 @@ export async function importPack(recipe) {
 
   const doc = await io.read(src);
 
-  // Housekeeping first: a pack model routinely ships duplicate accessors and
-  // materials.
+  // Housekeeping first: the Blender exporter can write duplicate accessors
+  // and materials.
   //
   // Two tempting cleanups are deliberately NOT here, because both destroy the
   // node-name contract this whole pipeline exists to satisfy:
@@ -460,41 +162,17 @@ export async function importPack(recipe) {
   //              fine and mounts nothing.
   await doc.transform(dedup(), prune({ keepLeaves: true }));
 
-  // Surface names BEFORE the bake collapses every material into one: the
-  // client hides a body's covered surfaces (`covers` on a worn piece) by
-  // index, and this is the only record of which index is which. Godot keeps
-  // a glTF mesh's primitive order as its surface order.
+  // Surface names: the client hides a body's covered surfaces (`covers` on a
+  // worn piece) by index, and this is the record of which index is which.
+  // Godot keeps a glTF mesh's primitive order as its surface order.
   const surfaces = {};
   for (const mesh of doc.getRoot().listMeshes()) {
     const names = mesh.listPrimitives().map((p) => p.getMaterial()?.getName() ?? "");
     if (names.some((n) => n)) surfaces[mesh.getName()] = names;
   }
 
-  // `pbr`: the model carries real materials (roughness, metallic) and the
-  // client draws them as they are -- nothing is baked to vertex colour.
-  const baked = recipe.pbr ? 0 : bakeVertexColors(doc, recipe.tint);
-  // `fit: false`: the model is authored in the wearer's frame (armor over the
-  // humanoid skeleton) and must stay exactly there -- no rescale, no centring.
-  const { scale } = recipe.fit === false ? { scale: 1 } : fit(doc, recipe);
-  const renamed = renameNodes(doc, recipe.rename);
+  if (!recipe.pbr) throw new Error(`${recipe.id}: every model is pbr now (the vertex-colour bake went with the Kenney packs)`);
   const mounted = addMounts(doc, recipe.mounts);
-  // After the renames: the map in a recipe is written in terms of this
-  // project's node names, not the source pack's.
-  const anim = await retargetAnimations(doc, recipe.animations);
-
-  // `merge` collapses the model to ONE mesh, for props the client draws with
-  // Graphics.RenderMeshInstanced.
-  //
-  // That path takes a single Mesh and a list of transforms, so a model split
-  // across several meshes gets only its first one drawn -- four hundred rocks
-  // rendering their first third and nothing saying why. AssetRegistry warns
-  // when it has to pick, and this is what stops it having to: after the bake
-  // every primitive shares one material, so they join cleanly.
-  //
-  // Opt-in, NOT the default: joining a character would weld the limbs into one
-  // mesh and take its animation with them. Only props that are instanced ask
-  // for it.
-  if (recipe.merge) await doc.transform(join({ keepNamed: false }));
 
   // Weld before simplify: meshoptimizer needs shared vertices to collapse
   // edges, and a flat-shaded export has none.
@@ -512,7 +190,7 @@ export async function importPack(recipe) {
   mkdirSync(path.dirname(out), { recursive: true });
   await io.write(out, doc);
 
-  return { id: recipe.id, out: recipe.out, tris, scale, baked, renamed, mounted, anim, surfaces };
+  return { id: recipe.id, out: recipe.out, tris, mounted, surfaces };
 }
 
 /**
@@ -524,7 +202,17 @@ export async function importPack(recipe) {
 export function updateManifest(result, recipe) {
   const file = path.join(artDir, "manifest.json");
   const manifest = JSON.parse(readFileSync(file, "utf8"));
-  const row = manifest.assets.find((a) => a.id === recipe.id);
+  let row = manifest.assets.find((a) => a.id === recipe.id);
+  if (!row && recipe.variant_of) {
+    // A per-body variant ("armor.suit.scout@npc.grunt") is a copy of its
+    // base row, placed right after it.
+    const base = manifest.assets.findIndex((a) => a.id === recipe.variant_of);
+    if (base < 0) throw new Error(`variant ${recipe.id}: no base row ${recipe.variant_of}`);
+    row = { ...manifest.assets[base], id: recipe.id };
+    let at = base + 1;
+    while (at < manifest.assets.length && manifest.assets[at].id.startsWith(recipe.variant_of + "@")) at++;
+    manifest.assets.splice(at, 0, row);
+  }
   if (!row) throw new Error(`manifest has no id ${recipe.id} (adding one is a deliberate change)`);
 
   row.file = recipe.out;
@@ -543,8 +231,7 @@ export function updateManifest(result, recipe) {
   if (recipe.source_url) row.source_url = recipe.source_url;
   if (recipe.author) row.author = recipe.author;
   if (recipe.rig) row.rig = recipe.rig;
-  // `source` used to name the generator script that built the model. An
-  // imported asset has no generator; the recipe is what reproduces it.
+  // The recipe is what reproduces the shipped file from the Blender export.
   row.source = recipe.recipe_path ?? row.source;
 
   writeFileSync(file, JSON.stringify(manifest, null, 2) + "\n");
@@ -555,26 +242,21 @@ export function updateManifest(result, recipe) {
 // ---------------------------------------------------------------------------
 
 /**
- * The check, run against a model already in the tree so it needs no download.
- *
- * It reimports art/chars/player.glb at a deliberately WRONG scale and asserts
- * the pipeline puts it right: one material, no textures, COLOR_0 on every
- * primitive, 1.8 m tall, feet on Y=0, and the renamed node present. If any of
- * those regress, a packaged build renders magenta or the player stands the
- * wrong height against the server's capsule — both are expensive to notice
- * any later than here.
+ * The check, run against a model already in the tree so it needs no Blender:
+ * re-finish art/chars/player.glb with a probe mount and assert the pipeline
+ * keeps what the client depends on -- the real materials and their textures,
+ * the surface names, the empty mount nodes, and every triangle.
  */
 async function selftest() {
   const os = await import("node:os");
   const tmp = path.join(os.tmpdir(), `art-selftest-${process.pid}.glb`);
 
-  // Counted from the source rather than hardcoded. The obvious version of this
-  // check asserted a literal 192, which was the triangle count of the
-  // generated box player -- and then the pipeline replaced that very file with
-  // an imported model and the check failed on its own success. An assertion
-  // about "the input" must be measured from the input.
+  // Counted from the source, not hardcoded: an assertion about the input is
+  // measured from the input.
   const SRC = "chars/player.glb";
-  const before = triangleCount(await io.read(path.resolve(artDir, SRC)));
+  const srcDoc = await io.read(path.resolve(artDir, SRC));
+  const before = triangleCount(srcDoc);
+  const srcMaterials = srcDoc.getRoot().listMaterials().length;
   let failures = 0;
   const check = (name, cond, detail = "") => {
     console.log(`${cond ? "PASS" : "FAIL"} ${name}${detail ? "  " + detail : ""}`);
@@ -582,75 +264,25 @@ async function selftest() {
   };
 
   const result = await importPack({
-    id: "char.player",
-    src: SRC,
-    out: path.relative(artDir, tmp),
-    height: 1.8,
-    ground: true,
-    rename: { spine_03: "chest" },
+    id: "char.player", src: SRC, out: path.relative(artDir, tmp), pbr: true,
     mounts: { probe: [0, 1.7, 0] },
   });
+  const root = (await io.read(tmp)).getRoot();
 
-  const doc = await io.read(tmp);
-  const root = doc.getRoot();
-
-  check("exactly one material", root.listMaterials().length === 1,
-        `got ${root.listMaterials().length}`);
-  check("no textures survive the bake", root.listTextures().length === 0,
-        `got ${root.listTextures().length}`);
-
-  let prims = 0, coloured = 0;
-  for (const mesh of root.listMeshes()) {
-    for (const prim of mesh.listPrimitives()) {
-      prims++;
-      if (prim.getAttribute("COLOR_0")) coloured++;
-    }
-  }
-  check("every primitive carries COLOR_0", prims > 0 && coloured === prims,
-        `${coloured}/${prims}`);
-
-  const { min, max } = bounds(doc);
-  const height = max[1] - min[1];
-  check("scaled to 1.8 m", Math.abs(height - 1.8) < 1e-3, `got ${height.toFixed(4)}`);
-  check("feet sit on Y=0", Math.abs(min[1]) < 1e-3, `got ${min[1].toFixed(4)}`);
-
+  check("materials kept", root.listMaterials().length === srcMaterials,
+        `${root.listMaterials().length} of ${srcMaterials}`);
+  check("textures kept", root.listTextures().length > 0, `got ${root.listTextures().length}`);
+  check("surface names recorded", Object.values(result.surfaces).some((n) => n.includes("suit")),
+        JSON.stringify(result.surfaces));
   const names = root.listNodes().map((n) => n.getName());
-  check("rename applied", names.includes("chest") && !names.includes("spine_03"));
-
-  // The regression this catches: prune's default deletes childless meshless
-  // nodes, and every mount point in this project is one. `eye` going missing
-  // costs the camera its mount and nothing errors.
-  check("the empty mount node survives", names.includes("eye"),
-        `nodes: ${names.join(" ")}`);
-  check("added mount is present", names.includes("probe"));
-
-  // The mount must land where the recipe put it, in FINISHED model units --
-  // that is the whole point of adding it after the scale is applied.
+  // prune's default deletes childless meshless nodes, and every mount point
+  // in this project is one: `eye` going missing costs the camera its mount.
+  check("the empty mount node survives", names.includes("eye"));
   const probe = root.listNodes().find((n) => n.getName() === "probe");
-  check("added mount is at the position asked for",
-        probe && Math.abs(probe.getTranslation()[1] - 1.7) < 1e-4,
-        `y=${probe?.getTranslation()[1]}`);
-  // Counted as drawn, not as stored: dedup() legitimately merges identical
-  // meshes, which drops the MESH count without dropping a single triangle off
-  // the screen. This is the number verify.mjs will independently count.
-  check("no geometry lost", result.tris === before,
-        `${result.tris} tris, source has ${before}`);
-  check("reports a triangle count", result.tris > 0, `got ${result.tris}`);
-
-  // Colour must SURVIVE the bake: a model whose vertices all come out black or
-  // all identical has lost the thing the whole renderer reads.
-  const seen = new Set();
-  for (const mesh of root.listMeshes()) {
-    for (const prim of mesh.listPrimitives()) {
-      const c = prim.getAttribute("COLOR_0");
-      const v = [0, 0, 0, 0];
-      for (let i = 0; i < Math.min(c.getCount(), 500); i++) {
-        c.getElement(i, v);
-        seen.add(v.slice(0, 3).map((x) => x.toFixed(3)).join(","));
-      }
-    }
-  }
-  check("more than one colour survives", seen.size > 1, `${seen.size} distinct`);
+  check("added mount is where the recipe put it",
+        probe && Math.abs(probe.getTranslation()[1] - 1.7) < 1e-4, `y=${probe?.getTranslation()[1]}`);
+  // Counted as drawn: dedup() may merge meshes without dropping a triangle.
+  check("no geometry lost", result.tris === before, `${result.tris} tris, source has ${before}`);
 
   console.log(failures === 0 ? "\nOVERALL: PASS" : `\nOVERALL: FAIL (${failures})`);
   return failures;
@@ -668,12 +300,19 @@ if (arg === "--selftest") {
 }
 
 const recipePath = path.resolve(process.cwd(), arg);
-const recipe = JSON.parse(readFileSync(recipePath, "utf8"));
-recipe.recipe_path = path.relative(artDir, recipePath);
-const result = await importPack(recipe);
-updateManifest(result, recipe);
-console.log(
-  `${result.id}: ${result.out}  ${result.tris} tris  scale x${result.scale.toFixed(3)}` +
-  `  baked ${result.baked} prims  renamed ${result.renamed}  mounts ${result.mounted}` +
-  (result.anim.clips ? `  clips ${result.anim.clips} (${result.anim.channels} tracks)` : ""),
-);
+const base = JSON.parse(readFileSync(recipePath, "utf8"));
+base.recipe_path = path.relative(artDir, recipePath);
+// `bodies`: the piece is also built for these wearers (armor.py BODIES), as
+// "<id>@<body>" from build/<id>@<body>.raw.glb to <out stem>.<body>.glb.
+const variants = [base, ...(base.bodies ?? []).map((b) => ({
+  ...base,
+  id: `${base.id}@${b}`,
+  variant_of: base.id,
+  src: base.src.replace(".raw.glb", `@${b}.raw.glb`),
+  out: base.out.replace(/\.glb$/, `.${b.replace("npc.", "")}.glb`),
+}))];
+for (const recipe of variants) {
+  const result = await importPack(recipe);
+  updateManifest(result, recipe);
+  console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);
+}

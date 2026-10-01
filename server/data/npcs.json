@@ -15,12 +15,20 @@
      "price": 250
     },
     {
+     "item": "weapon.pulse.dune",
+     "price": 520
+    },
+    {
      "item": "weapon.sidearm",
      "price": 120
     },
     {
      "item": "weapon.smg",
      "price": 220
+    },
+    {
+     "item": "weapon.smg.frost",
+     "price": 420
     },
     {
      "item": "weapon.dmr",
@@ -53,6 +61,26 @@
     {
      "item": "armor.boots.scout",
      "price": 35
+    },
+    {
+     "item": "armor.helmet.bulwark",
+     "price": 240
+    },
+    {
+     "item": "armor.suit.bulwark",
+     "price": 640
+    },
+    {
+     "item": "armor.legs.bulwark",
+     "price": 320
+    },
+    {
+     "item": "armor.gloves.bulwark",
+     "price": 160
+    },
+    {
+     "item": "armor.boots.bulwark",
+     "price": 200
     },
     {
      "item": "pack.scout",
@@ -112,7 +140,13 @@
    "attack_interval": 1.2,
    "attack_windup": 0.35,
    "turn_rate": 360.0,
-   "loot": "loot.grunt"
+   "loot": "loot.grunt",
+   "worn": {
+    "head": "armor.helmet.raider",
+    "chest": "armor.suit.raider",
+    "legs": "armor.legs.raider",
+    "feet": "armor.boots.scout"
+   }
   },
   {
    "id": "npc.gunner",
@@ -152,7 +186,13 @@
    "attack_interval": 1.0,
    "attack_windup": 0.25,
    "turn_rate": 360.0,
-   "loot": "loot.warlord"
+   "loot": "loot.warlord",
+   "worn": {
+    "head": "armor.helmet.raider",
+    "chest": "armor.suit.raider",
+    "legs": "armor.legs.raider",
+    "feet": "armor.boots.scout"
+   }
   },
   {
    "$comment": "Own-art review stand-in: the player model on a non-combat NPC (shop-shaped like the dispatcher: no move_speed, no health, no stock) so the body can be seen from outside without a second client. Wears the full Scout set (npcs.json `worn`) so the armor can be seen on a body without a second client.",

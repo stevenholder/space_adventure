@@ -1,0 +1,17 @@
+{
+  "$comment": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Built by tools/bpy/armor.py for every body in BODIES.",
+  "id": "armor.legs.bulwark",
+  "src": "build/armor.legs.bulwark.raw.glb",
+  "out": "armor/legs_bulwark.glb",
+  "fit": false,
+  "budget": 5000,
+  "pbr": true,
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/armor.py",
+  "bodies": [
+    "npc.grunt",
+    "npc.shopkeeper",
+    "npc.dispatcher"
+  ]
+}

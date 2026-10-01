@@ -7,6 +7,21 @@
     "item": "ammo.cell",
     "qty": 15,
     "chance": 1.0
+   },
+   {
+    "item": "armor.helmet.raider",
+    "qty": 1,
+    "chance": 0.06
+   },
+   {
+    "item": "armor.suit.raider",
+    "qty": 1,
+    "chance": 0.06
+   },
+   {
+    "item": "armor.legs.raider",
+    "qty": 1,
+    "chance": 0.06
    }
   ],
   "loot.gunner": [
@@ -16,10 +31,28 @@
     "chance": 1.0
    }
   ],
-  "loot.node.iron": [{"item": "mat.ore.iron", "qty": 2, "chance": 1.0}],
-    "loot.node.copper": [{"item": "mat.ore.copper", "qty": 2, "chance": 1.0}],
-    "loot.node.wreck": [{"item": "mat.scrap", "qty": 3, "chance": 1.0}],
-    "loot.warlord": [
+  "loot.node.iron": [
+   {
+    "item": "mat.ore.iron",
+    "qty": 2,
+    "chance": 1.0
+   }
+  ],
+  "loot.node.copper": [
+   {
+    "item": "mat.ore.copper",
+    "qty": 2,
+    "chance": 1.0
+   }
+  ],
+  "loot.node.wreck": [
+   {
+    "item": "mat.scrap",
+    "qty": 3,
+    "chance": 1.0
+   }
+  ],
+  "loot.warlord": [
    {
     "item": "ammo.cell",
     "qty": 60,
@@ -27,6 +60,11 @@
    },
    {
     "item": "weapon.pulse",
+    "qty": 1,
+    "chance": 1.0
+   },
+   {
+    "item": "armor.suit.raider",
     "qty": 1,
     "chance": 1.0
    }

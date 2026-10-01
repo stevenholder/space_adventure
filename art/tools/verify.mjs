@@ -111,6 +111,8 @@ const NODE_CONTRACTS = {
   "weapon.smg": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   "weapon.dmr": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   "weapon.sidearm": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.pulse.dune": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.smg.frost": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
   // up with hand.r and the channel effect starts at `muzzle`.
   "tool.drill": { nodes: ["grip", "muzzle"] },

@@ -1,0 +1,18 @@
+{
+  "$comment": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Built by tools/bpy/armor.py for every body in BODIES.",
+  "id": "armor.suit.bulwark",
+  "src": "build/armor.suit.bulwark.raw.glb",
+  "out": "armor/suit_bulwark.glb",
+  "fit": false,
+  "budget": 5000,
+  "pbr": true,
+  "arms": true,
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/armor.py",
+  "bodies": [
+    "npc.grunt",
+    "npc.shopkeeper",
+    "npc.dispatcher"
+  ]
+}

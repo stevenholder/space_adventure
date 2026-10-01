@@ -11,7 +11,7 @@
 //   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug first
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
-//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rock|mast
+//   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rover|rock|mast
 //   -uiPitch <deg> [-uiYaw <deg>]  look down/up and turn, from where the rig stands
 //   -uiBuy <item>           E at the faced shopkeeper, buy it, equip it (a REAL weapon)
 //   -uiFireNow <secs>       re-apply -uiPitch/-uiYaw, then hold the trigger that long
@@ -126,6 +126,7 @@ namespace SpaceAdventure.Game
         private static ushort KindOf(string arg) =>
             arg == "npc" || arg == "hostile" ? EntityType.Npc
             : arg == "player" ? EntityType.Player
+            : arg == "rover" ? EntityType.Vehicle
             : EntityType.Target;
 
         /// <summary>
