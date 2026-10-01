@@ -1,14 +1,12 @@
 {
-  "$comment": "Armor: a skinned piece over the shared humanoid skeleton (tools/bpy/body.py ARMOR), no clips of its own -- the client hangs it on the wearer's Skeleton3D. fit:false keeps it in the wearer's frame; only the bake and the count happen here.",
+  "$comment": "Scout set for the MakeHuman body: hard plates wrapped onto a smoothed copy of the body and rigid on one bone, gloves/boots skinned (tools/bpy/armor.py). Real materials (pbr).",
   "id": "armor.legs.scout",
   "src": "build/armor.legs.scout.raw.glb",
   "out": "armor/legs_scout.glb",
   "fit": false,
-  "budget": 1500,
+  "budget": 5000,
+  "pbr": true,
   "license": "CC0",
   "author": "Space Adventure",
-  "source_url": "tools/bpy/body.py",
-  "covers": [
-    "body/trouser"
-  ]
+  "source_url": "tools/bpy/armor.py"
 }

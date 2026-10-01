@@ -171,7 +171,9 @@ RACES = {
 }
 
 VARIANTS = {
-    "char.player": {"race": "human"},
+    # char.player and the Scout armor come from tools/bpy/human.py and
+    # armor.py (MakeHuman body, game-engine rig) since 2026-10-01. This file
+    # still builds the NPC bodies on the old 11-bone skeleton.
     "npc.shopkeeper": {   # the quartermaster: human, khaki, a little stocky
         "race": "human",
         "palette": {"suit": (0.52, 0.46, 0.34), "accent": (0.80, 0.72, 0.55), "hair": (0.62, 0.60, 0.58),
@@ -858,7 +860,7 @@ def main():
         out = os.path.join(art, "build", asset_id + ".raw.glb")
         export(out)
         print("wrote", out)
-    for asset_id, spec in ARMOR.items():
+    for asset_id, spec in ():          # armor moved to tools/bpy/armor.py
         bpy.ops.wm.read_factory_settings(use_empty=True)
         ACTIVE.update(palette=dict(PALETTE), bulk=1.0, shoulders=1.0, race="human")
         build_armor(asset_id, spec)

@@ -5,11 +5,11 @@
   "type": "module",
   "description": "glTF 2.0 binary assets and manifest for Space Adventure; scripts verify them.",
   "scripts": {
-    "gen:bpy": "${BLENDER:-$HOME/opt/blender/4.5.14/blender} -b --python tools/bpy/body.py",
+    "gen:bpy": "B=${BLENDER:-$HOME/opt/blender/4.5.14/blender}; $B -b --python tools/bpy/body.py && $B -b --python tools/bpy/human.py && $B -b --python tools/bpy/armor.py",
     "gen": "python3 tools/gen_ship.py && python3 tools/gen_target.py && python3 tools/gen_struct.py && python3 tools/gen_kit.py && python3 tools/gen_nodes.py && python3 tools/gen_weapon.py && python3 tools/gen_icons.py",
     "verify": "node tools/verify.mjs",
     "render": "python3 tools/render_check.py",
-    "test": "node tools/verify.mjs && node tools/import_pack.mjs --selftest",
+    "test": "python3 tools/glb.py && node tools/verify.mjs && node tools/import_pack.mjs --selftest",
     "import": "for r in recipes/*.json; do node tools/import_pack.mjs \"$r\" || exit 1; done"
   },
   "devDependencies": {

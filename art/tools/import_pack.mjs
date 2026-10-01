@@ -470,7 +470,9 @@ export async function importPack(recipe) {
     if (names.some((n) => n)) surfaces[mesh.getName()] = names;
   }
 
-  const baked = bakeVertexColors(doc, recipe.tint);
+  // `pbr`: the model carries real materials (roughness, metallic) and the
+  // client draws them as they are -- nothing is baked to vertex colour.
+  const baked = recipe.pbr ? 0 : bakeVertexColors(doc, recipe.tint);
   // `fit: false`: the model is authored in the wearer's frame (armor over the
   // humanoid skeleton) and must stay exactly there -- no rescale, no centring.
   const { scale } = recipe.fit === false ? { scale: 1 } : fit(doc, recipe);
@@ -531,6 +533,12 @@ export function updateManifest(result, recipe) {
   else delete row.surfaces;
   if (recipe.covers) row.covers = recipe.covers;
   else delete row.covers;
+  if (recipe.pbr) row.pbr = true;
+  else delete row.pbr;
+  // `arms`: a worn piece with parts on the arms (pauldrons, bracers) that the
+  // first-person arms should wear too, whether or not it hides anything.
+  if (recipe.arms) row.arms = true;
+  else delete row.arms;
   if (recipe.license) row.license = recipe.license;
   if (recipe.source_url) row.source_url = recipe.source_url;
   if (recipe.author) row.author = recipe.author;
@@ -579,7 +587,7 @@ async function selftest() {
     out: path.relative(artDir, tmp),
     height: 1.8,
     ground: true,
-    rename: { torso: "chest" },
+    rename: { spine_03: "chest" },
     mounts: { probe: [0, 1.7, 0] },
   });
 
@@ -607,7 +615,7 @@ async function selftest() {
   check("feet sit on Y=0", Math.abs(min[1]) < 1e-3, `got ${min[1].toFixed(4)}`);
 
   const names = root.listNodes().map((n) => n.getName());
-  check("rename applied", names.includes("chest") && !names.includes("torso"));
+  check("rename applied", names.includes("chest") && !names.includes("spine_03"));
 
   // The regression this catches: prune's default deletes childless meshless
   // nodes, and every mount point in this project is one. `eye` going missing

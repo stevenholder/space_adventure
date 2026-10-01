@@ -22,12 +22,21 @@ from glb import box, out_path, write_glb
 from gen_nodes import MATERIALS, _tool, tilt_x
 
 # Palette: the Scrapyard Comic rifle the box model had (client Models.Rifle).
-BODY = (0.26, 0.28, 0.32)
-METAL = (0.17, 0.18, 0.21)
-ACCENT = (0.32, 0.56, 0.72)
-GRIP_C = (0.14, 0.13, 0.13)
+# Display colours, written straight into COLOR_0 like every glb.py asset
+# (the client reads them that way; converting to linear rendered it black).
+BODY = (0.46, 0.49, 0.53)     # gunmetal receiver and stock
+METAL = (0.30, 0.31, 0.34)    # barrel, sights, magazine
+ACCENT = (0.35, 0.66, 0.85)   # charge rail, front post
+GRIP_C = (0.22, 0.21, 0.21)   # polymer furniture
 
-GRIP = (0.0, 0.12, 0.0)        # top of the pistol grip, 3.5 cm under the bore
+# Contact points. The client puts `grip` in the right fist (hand.r) and
+# `fore` on the left palm (hand.l), so the rifle sits IN both hands; `sight`
+# is the rear notch first person lines up with the eye; `muzzle` is where
+# shots are drawn from. Keep human.py FORE_ALONG/FORE_UP equal to fore - grip.
+GRIP = (0.0, 0.06, 0.005)      # middle of the pistol grip, where a fist closes
+FORE = (0.0, 0.115, -0.29)     # under the fore-end, where a palm supports it
+SIGHT = (0.0, 0.22, -0.02)     # rear sight notch
+FRONT = (0.0, 0.22, -0.37)     # front post tip: SIGHT -> FRONT is the line of sight
 MUZZLE = (0.0, 0.155, -0.425)  # barrel tip
 
 
@@ -51,6 +60,9 @@ def build_rifle():
 
 def main():
     node = _tool("weapon.pulse", build_rifle(), GRIP, MUZZLE)
+    node.child("fore", FORE)
+    node.child("sight", SIGHT)
+    node.child("front", FRONT)
     n = write_glb(out_path("weapons", "pulse.glb"), node, MATERIALS)
     print(f"weapons/pulse.glb: {n} tris (budget 300)")
     if n > 300:

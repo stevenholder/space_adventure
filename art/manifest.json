@@ -1,661 +1,756 @@
 {
- "version": 1,
- "assets": [
-  {
-   "id": "char.player",
-   "file": "chars/player.glb",
-   "tris": 1580,
-   "license": "CC0",
-   "source": "recipes/char.player.json",
-   "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "rig": "animated",
-   "surfaces": {
-    "arms": [
-     "suit",
-     "trouser",
-     "accent",
-     "skin"
-    ],
-    "body": [
-     "suit",
-     "trouser",
-     "accent",
-     "boot"
-    ],
-    "head": [
-     "skin",
-     "hair",
-     "eye"
-    ]
-   }
-  },
-  {
-   "id": "prop.rock.a",
-   "file": "props/rock_a.glb",
-   "tris": 176,
-   "license": "CC0",
-   "source": "recipes/prop.rock.a.json",
-   "description": "Rounded boulder. Kenney rock_largeA, normalised to 1 m tall with the base at origin, up +Y; the client seats it on the surface, orients it radially and scales it 0.3-1.5 m.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.rock.b",
-   "file": "props/rock_b.glb",
-   "tris": 172,
-   "license": "CC0",
-   "source": "recipes/prop.rock.b.json",
-   "description": "Low broad rock. Kenney rock, normalised as rock.a.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.rock.c",
-   "file": "props/rock_c.glb",
-   "tris": 364,
-   "license": "CC0",
-   "source": "recipes/prop.rock.c.json",
-   "description": "Crystal outcrop -- the sharp, angular silhouette in the set. Kenney rock_crystals, normalised as rock.a.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "ship.v1",
-   "file": "ships/v1.glb",
-   "tris": 432,
-   "license": "CC0",
-   "source": "tools/gen_ship.py",
-   "description": "Hero scout ship for M2 (built early so M2 does not wait on art). -Z forward, origin at ground level. Carries the seat contract: seat.pilot plus seat.passenger.0/1 empty nodes at the eye point. Walk-in cockpit with open canopy, glass (alphaMode BLEND), floor, dash, lit console panel and seats; hull is double-sided so the interior renders from the pilot seat."
-  },
-  {
-   "id": "vehicle.rover.v1",
-   "file": "vehicles/rover.v1.glb",
-   "tris": 172,
-   "license": "CC0",
-   "source": "recipes/vehicle.rover.v1.json",
-   "description": "Phase 4 ground rover. -Z forward, origin at ground level, 1.4 m tall. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "weapon.pulse",
-   "file": "weapons/pulse.glb",
-   "tris": 156,
-   "license": "CC0",
-   "source": "tools/gen_weapon.py",
-   "description": "Pulse rifle, our own (tools/gen_weapon.py): ~0.64 m, -Z forward, +Y up, grip at the top of the pistol grip just under the bore, muzzle at the barrel tip. The one model first and third person both hold; the client turns grip->muzzle onto the forearm.",
-   "source_url": "tools/gen_weapon.py",
-   "author": "Space Adventure"
-  },
-  {
-   "id": "npc.shopkeeper",
-   "file": "chars/shopkeeper.glb",
-   "tris": 1452,
-   "license": "CC0",
-   "source": "recipes/npc.shopkeeper.json",
-   "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "rig": "animated",
-   "surfaces": {
-    "arms": [
-     "suit",
-     "trouser",
-     "accent",
-     "skin"
-    ],
-    "body": [
-     "suit",
-     "trouser",
-     "accent",
-     "boot"
-    ],
-    "head": [
-     "skin",
-     "hair",
-     "eye"
-    ]
-   }
-  },
-  {
-   "id": "npc.dispatcher",
-   "file": "chars/dispatcher.glb",
-   "tris": 1560,
-   "license": "CC0",
-   "source": "recipes/npc.dispatcher.json",
-   "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "rig": "animated",
-   "surfaces": {
-    "arms": [
-     "suit",
-     "accent",
-     "skin"
-    ],
-    "body": [
-     "suit",
-     "trouser",
-     "accent",
-     "boot"
-    ],
-    "head": [
-     "trouser",
-     "accent",
-     "skin",
-     "accent"
-    ]
-   }
-  },
-  {
-   "id": "prop.target",
-   "file": "props/target.glb",
-   "tris": 64,
-   "license": "CC0",
-   "source": "tools/gen_target.py",
-   "description": "Phase 2 target dummy. Base at origin, up +Y, faces -Z. Concentric plate on a post, ~1.8 m tall. Node `plate` is coloured by the client to show hit/reset state."
-  },
-  {
-   "id": "struct.wall",
-   "file": "structs/wall.glb",
-   "tris": 72,
-   "license": "CC0",
-   "source": "tools/gen_struct.py",
-   "description": "Wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Banded in Y -- dark plinth, mid shaft, light coping -- because Y is the only axis that survives that scaling: a camp wall is 32 m long and 0.8 m thick, so anything modelled in X or Z is stretched past recognition, while a band in Y stays a band. Visual only; the authoritative shape is the colliders message."
-  },
-  {
-   "id": "struct.post",
-   "file": "structs/post.glb",
-   "tris": 48,
-   "license": "CC0",
-   "source": "tools/gen_struct.py",
-   "description": "Phase 2 cover post. Unit sphere, centre at origin, scaled to the sphere collider's radius. Visual only, as above."
-  },
-  {
-   "id": "struct.wall4.colony",
-   "file": "structs/wall4.colony.glb",
-   "tris": 48,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 3.3,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE \u2014 the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to \u22120.3. Colony skin: one thing is always symmetric."
-  },
-  {
-   "id": "struct.wall4.scrap",
-   "file": "structs/wall4.scrap.glb",
-   "tris": 60,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 3.3,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE \u2014 the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to \u22120.3. Scrapyard skin: one thing is always crooked."
-  },
-  {
-   "id": "struct.corner.colony",
-   "file": "structs/corner.colony.glb",
-   "tris": 36,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 3.8,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit corner post. Corners belong to posts: walls butt into these and never meet each other. Colony skin: one thing is always symmetric."
-  },
-  {
-   "id": "struct.corner.scrap",
-   "file": "structs/corner.scrap.glb",
-   "tris": 36,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 3.8,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit corner post. Corners belong to posts: walls butt into these and never meet each other. Scrapyard skin: one thing is always crooked."
-  },
-  {
-   "id": "struct.gate4.colony",
-   "file": "structs/gate4.colony.glb",
-   "tris": 72,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 3.3,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit gate module: a wall4 footprint with a 2.4 m opening. Colony skin: one thing is always symmetric."
-  },
-  {
-   "id": "struct.gate4.scrap",
-   "file": "structs/gate4.scrap.glb",
-   "tris": 84,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 3.3,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit gate module: a wall4 footprint with a 2.4 m opening. Scrapyard skin: one thing is always crooked."
-  },
-  {
-   "id": "struct.tower.colony",
-   "file": "structs/tower.colony.glb",
-   "tris": 132,
-   "cell": [
-    2,
-    2
-   ],
-   "height": 8.4,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit watchtower, 2\u00d72 cells, 8 m. Colony skin: one thing is always symmetric."
-  },
-  {
-   "id": "struct.tower.scrap",
-   "file": "structs/tower.scrap.glb",
-   "tris": 144,
-   "cell": [
-    2,
-    2
-   ],
-   "height": 8.4,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit watchtower, 2\u00d72 cells, 8 m. Scrapyard skin: one thing is always crooked."
-  },
-  {
-   "id": "struct.mast.colony",
-   "file": "structs/mast.colony.glb",
-   "tris": 72,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 12.6,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI \u2014 the skyline spike discovery runs on. Colony skin: one thing is always symmetric."
-  },
-  {
-   "id": "struct.mast.scrap",
-   "file": "structs/mast.scrap.glb",
-   "tris": 84,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 12.6,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI \u2014 the skyline spike discovery runs on. Scrapyard skin: one thing is always crooked."
-  },
-  {
-   "id": "struct.hab.colony",
-   "file": "structs/hab.colony.glb",
-   "tris": 96,
-   "cell": [
-    2,
-    2
-   ],
-   "height": 5.4,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit habitat, Colony only: 2\u00d72 cells, the closed hut. Colony skin: one thing is always symmetric."
-  },
-  {
-   "id": "struct.shack.scrap",
-   "file": "structs/shack.scrap.glb",
-   "tris": 72,
-   "cell": [
-    2,
-    2
-   ],
-   "height": 4.5,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit shack, Scrapyard only: 2\u00d72 cells, the leaning hut. Scrapyard skin: one thing is always crooked."
-  },
-  {
-   "id": "struct.cover4.scrap",
-   "file": "structs/cover4.scrap.glb",
-   "tris": 48,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 2.5,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit barricade, 1 cell, 2.1 m \u2014 the cover-ring piece and the camp inner block. Scrapyard skin."
-  },
-  {
-   "id": "struct.cover4.colony",
-   "file": "structs/cover4.colony.glb",
-   "tris": 48,
-   "cell": [
-    1,
-    1
-   ],
-   "height": 2.5,
-   "license": "CC0",
-   "source": "tools/gen_kit.py",
-   "description": "Phase 9 kit barricade, 1 cell, 2.1 m \u2014 the cover-ring piece and the camp inner block. Colony skin."
-  },
-  {
-   "id": "npc.grunt",
-   "file": "chars/grunt.glb",
-   "tris": 1376,
-   "license": "CC0",
-   "source": "recipes/npc.grunt.json",
-   "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "rig": "animated",
-   "surfaces": {
-    "arms": [
-     "suit",
-     "accent",
-     "skin"
-    ],
-    "body": [
-     "suit",
-     "trouser",
-     "accent",
-     "skin",
-     "boot"
-    ],
-    "head": [
-     "skin",
-     "hair",
-     "eye",
-     "bone"
-    ]
-   }
-  },
-  {
-   "id": "npc.gunner",
-   "file": "chars/gunner.glb",
-   "tris": 1568,
-   "license": "CC0",
-   "source": "recipes/npc.gunner.json",
-   "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "rig": "animated",
-   "surfaces": {
-    "arms": [
-     "suit",
-     "trouser",
-     "accent",
-     "skin"
-    ],
-    "body": [
-     "suit",
-     "trouser",
-     "accent",
-     "boot"
-    ],
-    "head": [
-     "suit",
-     "trouser",
-     "accent",
-     "skin",
-     "eye"
-    ]
-   }
-  },
-  {
-   "id": "prop.loot.crate",
-   "file": "props/loot_crate.glb",
-   "tris": 56,
-   "license": "CC0",
-   "source": "recipes/prop.loot.crate.json",
-   "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.barrel",
-   "file": "props/barrel.glb",
-   "tris": 56,
-   "license": "CC0",
-   "source": "recipes/prop.barrel.json",
-   "description": "Fuel drum. Camp dressing, placed from zone data.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.barrels",
-   "file": "props/barrels.glb",
-   "tris": 268,
-   "license": "CC0",
-   "source": "recipes/prop.barrels.json",
-   "description": "A stack of three drums, for filling a corner without three placements.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.generator",
-   "file": "props/generator.glb",
-   "tris": 406,
-   "license": "CC0",
-   "source": "recipes/prop.generator.json",
-   "description": "Portable generator. The reason a camp in vacuum has lights.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.dish",
-   "file": "props/dish.glb",
-   "tris": 274,
-   "license": "CC0",
-   "source": "recipes/prop.dish.json",
-   "description": "Comms dish. Reads as a camp that is talking to someone.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.bones",
-   "file": "props/bones.glb",
-   "tris": 168,
-   "license": "CC0",
-   "source": "recipes/prop.bones.json",
-   "description": "Bones. Dressing for a hostile camp -- the cheapest way to say someone lost here.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
-  },
-  {
-   "id": "prop.node.ore.iron",
-   "file": "props/node_ore_iron.glb",
-   "tris": 144,
-   "license": "CC0",
-   "source": "tools/gen_nodes.py",
-   "description": "Phase 12 iron ore node. Base at origin, up +Y, faces -Z (the tallest chunk sits toward -Z). Four angular rock chunks, ~1.45 m wide, 1.0 m tall, dark grey with rust-orange facets for the iron streaks; the client scales it 0.6 and darkens it when depleted."
-  },
-  {
-   "id": "prop.node.ore.copper",
-   "file": "props/node_ore_copper.glb",
-   "tris": 108,
-   "license": "CC0",
-   "source": "tools/gen_nodes.py",
-   "description": "Phase 12 copper ore node. Base at origin, up +Y, faces -Z. Three angular rock chunks in a different arrangement from the iron node, ~1.25 m wide, 0.96 m tall, dark rock with green-teal facets for the copper streaks."
-  },
-  {
-   "id": "prop.wreck",
-   "file": "props/wreck.glb",
-   "tris": 120,
-   "license": "CC0",
-   "source": "tools/gen_nodes.py",
-   "description": "Phase 12 salvage wreck. Base at origin, up +Y, faces -Z: a broken hull panel ~2.4 m long and 0.96 m tall leaning back (+Z) with four ribs and a scorched band on its -Z face, a broken shard at the +X end, a snapped strut at the -X end and a scrap plate on the ground in front."
-  },
-  {
-   "id": "prop.bench",
-   "file": "props/bench.glb",
-   "tris": 132,
-   "license": "CC0",
-   "source": "tools/gen_nodes.py",
-   "description": "Phase 12 workbench (npc.workbench). Base at origin, up +Y, faces -Z: a 1.6 x 0.7 m steel slab at 0.9 m on two dark-blue block legs with a shelf, a vise block at the +X end on the -Z edge, and a tool rack post with a pegged bar at the -X end rising to 1.24 m."
-  },
-  {
-   "id": "tool.drill",
-   "file": "weapons/drill.glb",
-   "tris": 80,
-   "license": "CC0",
-   "source": "tools/gen_nodes.py",
-   "description": "Phase 12 hand drill, the TOOL slot item that opens iron ore nodes. Held like weapon.pulse: -Z forward, pistol grip bottoming out at y=0, 0.49 m long and 0.13 m tall; yellow body, dark grip and motor cap, steel chuck and tapered bit. Mount nodes `grip` (where the right hand holds it) and `muzzle` (the bit tip at the -Z end)."
-  },
-  {
-   "id": "tool.cutter",
-   "file": "weapons/cutter.glb",
-   "tris": 80,
-   "license": "CC0",
-   "source": "tools/gen_nodes.py",
-   "description": "Phase 12 plasma cutter, the TOOL slot item that opens wrecks. Held like weapon.pulse: -Z forward, rear grip bottoming out at y=0, 0.39 m long and 0.16 m tall; orange boxy body, dark side handle and gas cell on top, steel collar and short tapered nozzle. Mount nodes `grip` (where the right hand holds it) and `muzzle` (the nozzle tip at the -Z end)."
-  },
-  {
-   "id": "armor.helmet.scout",
-   "file": "armor/helmet_scout.glb",
-   "tris": 72,
-   "license": "CC0",
-   "source": "recipes/armor.helmet.scout.json",
-   "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "eye",
-     "armor"
-    ]
-   },
-   "covers": [
-    "head/hair"
-   ]
-  },
-  {
-   "id": "armor.suit.scout",
-   "file": "armor/suit_scout.glb",
-   "tris": 664,
-   "license": "CC0",
-   "source": "recipes/armor.suit.scout.json",
-   "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "armor",
-     "strap"
-    ]
-   },
-   "covers": [
-    "body/suit",
-    "body/accent",
-    "arms/suit",
-    "arms/accent"
-   ]
-  },
-  {
-   "id": "armor.plate.iron",
-   "file": "armor/plate_iron.glb",
-   "tris": 292,
-   "license": "CC0",
-   "source": "recipes/armor.plate.iron.json",
-   "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "iron",
-     "strap"
-    ]
-   }
-  },
-  {
-   "id": "armor.legs.scout",
-   "file": "armor/legs_scout.glb",
-   "tris": 436,
-   "license": "CC0",
-   "source": "recipes/armor.legs.scout.json",
-   "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "armor",
-     "strap"
-    ]
-   },
-   "covers": [
-    "body/trouser"
-   ]
-  },
-  {
-   "id": "armor.gloves.scout",
-   "file": "armor/gloves_scout.glb",
-   "tris": 176,
-   "license": "CC0",
-   "source": "recipes/armor.gloves.scout.json",
-   "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "armor",
-     "strap"
-    ]
-   },
-   "covers": [
-    "arms/skin",
-    "arms/accent"
-   ]
-  },
-  {
-   "id": "armor.boots.scout",
-   "file": "armor/boots_scout.glb",
-   "tris": 208,
-   "license": "CC0",
-   "source": "recipes/armor.boots.scout.json",
-   "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "armor",
-     "strap"
-    ]
-   },
-   "covers": [
-    "body/boot"
-   ]
-  },
-  {
-   "id": "pack.scout",
-   "file": "armor/pack_scout.glb",
-   "tris": 132,
-   "license": "CC0",
-   "source": "recipes/pack.scout.json",
-   "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
-   "source_url": "tools/bpy/body.py",
-   "author": "Space Adventure",
-   "surfaces": {
-    "armor": [
-     "armor",
-     "strap"
-    ]
-   }
-  }
- ]
+  "version": 1,
+  "assets": [
+    {
+      "id": "char.player",
+      "file": "chars/player.glb",
+      "tris": 6000,
+      "license": "CC0",
+      "source": "recipes/char.player.json",
+      "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
+      "rig": "animated",
+      "surfaces": {
+        "arms": [
+          "suit",
+          "glove"
+        ],
+        "body": [
+          "suit",
+          "boot"
+        ],
+        "head": [
+          "suit",
+          "skin",
+          "hair",
+          "eye"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "prop.rock.a",
+      "file": "props/rock_a.glb",
+      "tris": 176,
+      "license": "CC0",
+      "source": "recipes/prop.rock.a.json",
+      "description": "Rounded boulder. Kenney rock_largeA, normalised to 1 m tall with the base at origin, up +Y; the client seats it on the surface, orients it radially and scales it 0.3-1.5 m.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.rock.b",
+      "file": "props/rock_b.glb",
+      "tris": 172,
+      "license": "CC0",
+      "source": "recipes/prop.rock.b.json",
+      "description": "Low broad rock. Kenney rock, normalised as rock.a.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.rock.c",
+      "file": "props/rock_c.glb",
+      "tris": 364,
+      "license": "CC0",
+      "source": "recipes/prop.rock.c.json",
+      "description": "Crystal outcrop -- the sharp, angular silhouette in the set. Kenney rock_crystals, normalised as rock.a.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "ship.v1",
+      "file": "ships/v1.glb",
+      "tris": 432,
+      "license": "CC0",
+      "source": "tools/gen_ship.py",
+      "description": "Hero scout ship for M2 (built early so M2 does not wait on art). -Z forward, origin at ground level. Carries the seat contract: seat.pilot plus seat.passenger.0/1 empty nodes at the eye point. Walk-in cockpit with open canopy, glass (alphaMode BLEND), floor, dash, lit console panel and seats; hull is double-sided so the interior renders from the pilot seat."
+    },
+    {
+      "id": "vehicle.rover.v1",
+      "file": "vehicles/rover.v1.glb",
+      "tris": 172,
+      "license": "CC0",
+      "source": "recipes/vehicle.rover.v1.json",
+      "description": "Phase 4 ground rover. -Z forward, origin at ground level, 1.4 m tall. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "weapon.pulse",
+      "file": "weapons/pulse.glb",
+      "tris": 156,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Pulse rifle, our own (tools/gen_weapon.py): ~0.64 m, -Z forward, +Y up, grip at the top of the pistol grip just under the bore, muzzle at the barrel tip. The one model first and third person both hold; the client turns grip->muzzle onto the forearm.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
+      "id": "npc.shopkeeper",
+      "file": "chars/shopkeeper.glb",
+      "tris": 1452,
+      "license": "CC0",
+      "source": "recipes/npc.shopkeeper.json",
+      "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
+      "source_url": "tools/bpy/body.py",
+      "author": "Space Adventure",
+      "rig": "animated",
+      "surfaces": {
+        "arms": [
+          "suit",
+          "trouser",
+          "accent",
+          "skin"
+        ],
+        "body": [
+          "suit",
+          "trouser",
+          "accent",
+          "boot"
+        ],
+        "head": [
+          "skin",
+          "hair",
+          "eye"
+        ]
+      }
+    },
+    {
+      "id": "npc.dispatcher",
+      "file": "chars/dispatcher.glb",
+      "tris": 1560,
+      "license": "CC0",
+      "source": "recipes/npc.dispatcher.json",
+      "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
+      "source_url": "tools/bpy/body.py",
+      "author": "Space Adventure",
+      "rig": "animated",
+      "surfaces": {
+        "arms": [
+          "suit",
+          "accent",
+          "skin"
+        ],
+        "body": [
+          "suit",
+          "trouser",
+          "accent",
+          "boot"
+        ],
+        "head": [
+          "trouser",
+          "accent",
+          "skin",
+          "accent"
+        ]
+      }
+    },
+    {
+      "id": "prop.target",
+      "file": "props/target.glb",
+      "tris": 64,
+      "license": "CC0",
+      "source": "tools/gen_target.py",
+      "description": "Phase 2 target dummy. Base at origin, up +Y, faces -Z. Concentric plate on a post, ~1.8 m tall. Node `plate` is coloured by the client to show hit/reset state."
+    },
+    {
+      "id": "struct.wall",
+      "file": "structs/wall.glb",
+      "tris": 72,
+      "license": "CC0",
+      "source": "tools/gen_struct.py",
+      "description": "Wall segment. Unit box, base at origin, up +Y, scaled by the client to the collider's half-extents. Banded in Y -- dark plinth, mid shaft, light coping -- because Y is the only axis that survives that scaling: a camp wall is 32 m long and 0.8 m thick, so anything modelled in X or Z is stretched past recognition, while a band in Y stays a band. Visual only; the authoritative shape is the colliders message."
+    },
+    {
+      "id": "struct.post",
+      "file": "structs/post.glb",
+      "tris": 48,
+      "license": "CC0",
+      "source": "tools/gen_struct.py",
+      "description": "Phase 2 cover post. Unit sphere, centre at origin, scaled to the sphere collider's radius. Visual only, as above."
+    },
+    {
+      "id": "struct.wall4.colony",
+      "file": "structs/wall4.colony.glb",
+      "tris": 48,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 3.3,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE — the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to −0.3. Colony skin: one thing is always symmetric."
+    },
+    {
+      "id": "struct.wall4.scrap",
+      "file": "structs/wall4.scrap.glb",
+      "tris": 60,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 3.3,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE — the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to −0.3. Scrapyard skin: one thing is always crooked."
+    },
+    {
+      "id": "struct.corner.colony",
+      "file": "structs/corner.colony.glb",
+      "tris": 36,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 3.8,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit corner post. Corners belong to posts: walls butt into these and never meet each other. Colony skin: one thing is always symmetric."
+    },
+    {
+      "id": "struct.corner.scrap",
+      "file": "structs/corner.scrap.glb",
+      "tris": 36,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 3.8,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit corner post. Corners belong to posts: walls butt into these and never meet each other. Scrapyard skin: one thing is always crooked."
+    },
+    {
+      "id": "struct.gate4.colony",
+      "file": "structs/gate4.colony.glb",
+      "tris": 72,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 3.3,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit gate module: a wall4 footprint with a 2.4 m opening. Colony skin: one thing is always symmetric."
+    },
+    {
+      "id": "struct.gate4.scrap",
+      "file": "structs/gate4.scrap.glb",
+      "tris": 84,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 3.3,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit gate module: a wall4 footprint with a 2.4 m opening. Scrapyard skin: one thing is always crooked."
+    },
+    {
+      "id": "struct.tower.colony",
+      "file": "structs/tower.colony.glb",
+      "tris": 132,
+      "cell": [
+        2,
+        2
+      ],
+      "height": 8.4,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit watchtower, 2×2 cells, 8 m. Colony skin: one thing is always symmetric."
+    },
+    {
+      "id": "struct.tower.scrap",
+      "file": "structs/tower.scrap.glb",
+      "tris": 144,
+      "cell": [
+        2,
+        2
+      ],
+      "height": 8.4,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit watchtower, 2×2 cells, 8 m. Scrapyard skin: one thing is always crooked."
+    },
+    {
+      "id": "struct.mast.colony",
+      "file": "structs/mast.colony.glb",
+      "tris": 72,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 12.6,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI — the skyline spike discovery runs on. Colony skin: one thing is always symmetric."
+    },
+    {
+      "id": "struct.mast.scrap",
+      "file": "structs/mast.scrap.glb",
+      "tris": 84,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 12.6,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI — the skyline spike discovery runs on. Scrapyard skin: one thing is always crooked."
+    },
+    {
+      "id": "struct.hab.colony",
+      "file": "structs/hab.colony.glb",
+      "tris": 96,
+      "cell": [
+        2,
+        2
+      ],
+      "height": 5.4,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit habitat, Colony only: 2×2 cells, the closed hut. Colony skin: one thing is always symmetric."
+    },
+    {
+      "id": "struct.shack.scrap",
+      "file": "structs/shack.scrap.glb",
+      "tris": 72,
+      "cell": [
+        2,
+        2
+      ],
+      "height": 4.5,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit shack, Scrapyard only: 2×2 cells, the leaning hut. Scrapyard skin: one thing is always crooked."
+    },
+    {
+      "id": "struct.cover4.scrap",
+      "file": "structs/cover4.scrap.glb",
+      "tris": 48,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 2.5,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit barricade, 1 cell, 2.1 m — the cover-ring piece and the camp inner block. Scrapyard skin."
+    },
+    {
+      "id": "struct.cover4.colony",
+      "file": "structs/cover4.colony.glb",
+      "tris": 48,
+      "cell": [
+        1,
+        1
+      ],
+      "height": 2.5,
+      "license": "CC0",
+      "source": "tools/gen_kit.py",
+      "description": "Phase 9 kit barricade, 1 cell, 2.1 m — the cover-ring piece and the camp inner block. Colony skin."
+    },
+    {
+      "id": "npc.grunt",
+      "file": "chars/grunt.glb",
+      "tris": 1376,
+      "license": "CC0",
+      "source": "recipes/npc.grunt.json",
+      "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
+      "source_url": "tools/bpy/body.py",
+      "author": "Space Adventure",
+      "rig": "animated",
+      "surfaces": {
+        "arms": [
+          "suit",
+          "accent",
+          "skin"
+        ],
+        "body": [
+          "suit",
+          "trouser",
+          "accent",
+          "skin",
+          "boot"
+        ],
+        "head": [
+          "skin",
+          "hair",
+          "eye",
+          "bone"
+        ]
+      }
+    },
+    {
+      "id": "npc.gunner",
+      "file": "chars/gunner.glb",
+      "tris": 1568,
+      "license": "CC0",
+      "source": "recipes/npc.gunner.json",
+      "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
+      "source_url": "tools/bpy/body.py",
+      "author": "Space Adventure",
+      "rig": "animated",
+      "surfaces": {
+        "arms": [
+          "suit",
+          "trouser",
+          "accent",
+          "skin"
+        ],
+        "body": [
+          "suit",
+          "trouser",
+          "accent",
+          "boot"
+        ],
+        "head": [
+          "suit",
+          "trouser",
+          "accent",
+          "skin",
+          "eye"
+        ]
+      }
+    },
+    {
+      "id": "prop.loot.crate",
+      "file": "props/loot_crate.glb",
+      "tris": 56,
+      "license": "CC0",
+      "source": "recipes/prop.loot.crate.json",
+      "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.barrel",
+      "file": "props/barrel.glb",
+      "tris": 56,
+      "license": "CC0",
+      "source": "recipes/prop.barrel.json",
+      "description": "Fuel drum. Camp dressing, placed from zone data.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.barrels",
+      "file": "props/barrels.glb",
+      "tris": 268,
+      "license": "CC0",
+      "source": "recipes/prop.barrels.json",
+      "description": "A stack of three drums, for filling a corner without three placements.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.generator",
+      "file": "props/generator.glb",
+      "tris": 406,
+      "license": "CC0",
+      "source": "recipes/prop.generator.json",
+      "description": "Portable generator. The reason a camp in vacuum has lights.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.dish",
+      "file": "props/dish.glb",
+      "tris": 274,
+      "license": "CC0",
+      "source": "recipes/prop.dish.json",
+      "description": "Comms dish. Reads as a camp that is talking to someone.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.bones",
+      "file": "props/bones.glb",
+      "tris": 168,
+      "license": "CC0",
+      "source": "recipes/prop.bones.json",
+      "description": "Bones. Dressing for a hostile camp -- the cheapest way to say someone lost here.",
+      "source_url": "https://kenney.nl/assets/space-kit",
+      "author": "Kenney"
+    },
+    {
+      "id": "prop.node.ore.iron",
+      "file": "props/node_ore_iron.glb",
+      "tris": 144,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 12 iron ore node. Base at origin, up +Y, faces -Z (the tallest chunk sits toward -Z). Four angular rock chunks, ~1.45 m wide, 1.0 m tall, dark grey with rust-orange facets for the iron streaks; the client scales it 0.6 and darkens it when depleted."
+    },
+    {
+      "id": "prop.node.ore.copper",
+      "file": "props/node_ore_copper.glb",
+      "tris": 108,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 12 copper ore node. Base at origin, up +Y, faces -Z. Three angular rock chunks in a different arrangement from the iron node, ~1.25 m wide, 0.96 m tall, dark rock with green-teal facets for the copper streaks."
+    },
+    {
+      "id": "prop.wreck",
+      "file": "props/wreck.glb",
+      "tris": 120,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 12 salvage wreck. Base at origin, up +Y, faces -Z: a broken hull panel ~2.4 m long and 0.96 m tall leaning back (+Z) with four ribs and a scorched band on its -Z face, a broken shard at the +X end, a snapped strut at the -X end and a scrap plate on the ground in front."
+    },
+    {
+      "id": "prop.bench",
+      "file": "props/bench.glb",
+      "tris": 132,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 12 workbench (npc.workbench). Base at origin, up +Y, faces -Z: a 1.6 x 0.7 m steel slab at 0.9 m on two dark-blue block legs with a shelf, a vise block at the +X end on the -Z edge, and a tool rack post with a pegged bar at the -X end rising to 1.24 m."
+    },
+    {
+      "id": "tool.drill",
+      "file": "weapons/drill.glb",
+      "tris": 80,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 12 hand drill, the TOOL slot item that opens iron ore nodes. Held like weapon.pulse: -Z forward, pistol grip bottoming out at y=0, 0.49 m long and 0.13 m tall; yellow body, dark grip and motor cap, steel chuck and tapered bit. Mount nodes `grip` (where the right hand holds it) and `muzzle` (the bit tip at the -Z end)."
+    },
+    {
+      "id": "tool.cutter",
+      "file": "weapons/cutter.glb",
+      "tris": 80,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 12 plasma cutter, the TOOL slot item that opens wrecks. Held like weapon.pulse: -Z forward, rear grip bottoming out at y=0, 0.39 m long and 0.16 m tall; orange boxy body, dark side handle and gas cell on top, steel collar and short tapered nozzle. Mount nodes `grip` (where the right hand holds it) and `muzzle` (the nozzle tip at the -Z end)."
+    },
+    {
+      "id": "armor.helmet.scout",
+      "file": "armor/helmet_scout.glb",
+      "tris": 1716,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.scout.json",
+      "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "head__visor": [
+          "armor_visor",
+          "armor_metal"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.suit.scout",
+      "file": "armor/suit_scout.glb",
+      "tris": 3332,
+      "license": "CC0",
+      "source": "recipes/armor.suit.scout.json",
+      "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__bracer_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "lowerarm_r__bracer_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_01__abs_lo": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_02__abs_hi": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_03__back": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_03__chest": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "upperarm_l__pauldron_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "upperarm_r__pauldron_r": [
+          "armor_plate",
+          "armor_trim"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.plate.iron",
+      "file": "armor/plate_iron.glb",
+      "tris": 1432,
+      "license": "CC0",
+      "source": "recipes/armor.plate.iron.json",
+      "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__iron_back": [
+          "armor_iron",
+          "armor_trim"
+        ],
+        "spine_03__iron_front": [
+          "armor_iron",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.scout",
+      "file": "armor/legs_scout.glb",
+      "tris": 3312,
+      "license": "CC0",
+      "source": "recipes/armor.legs.scout.json",
+      "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_l__shin_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "calf_r__knee_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__shin_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "pelvis__belt": [
+          "armor_strap",
+          "armor_metal"
+        ],
+        "pelvis__pouch": [
+          "armor_strap"
+        ],
+        "pelvis__pouch.001": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side.001": [
+          "armor_strap"
+        ],
+        "thigh_l__thigh_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "thigh_r__thigh_r": [
+          "armor_plate",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.gloves.scout",
+      "file": "armor/gloves_scout.glb",
+      "tris": 1332,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.scout.json",
+      "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_l__cuff_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_r__cuff_r": [
+          "armor_trim",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.boots.scout",
+      "file": "armor/boots_scout.glb",
+      "tris": 2280,
+      "license": "CC0",
+      "source": "recipes/armor.boots.scout.json",
+      "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_l__boot_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_r__boot_r": [
+          "armor_boot",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "pack.scout",
+      "file": "armor/pack_scout.glb",
+      "tris": 324,
+      "license": "CC0",
+      "source": "recipes/pack.scout.json",
+      "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__pack": [
+          "armor_plate"
+        ],
+        "spine_03__pack_cell": [
+          "armor_metal"
+        ],
+        "spine_03__pack_lid": [
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    }
+  ]
 }

@@ -1,13 +1,11 @@
 {
-  "$comment": "Our own body, built headless by tools/bpy/body.py at final scale: one skinned mesh on an armature whose bones carry the contract names (art/README.md 'Humanoid skeleton'), its own idle/walk/sprint/die clips, and hand.r already riding the forearm bone. The recipe only adds eye: at 1.7 m because GDD eye_height is 1.7 and the server fires ranged shots from that height (server/internal/server/cmd.go).",
+  "$comment": "The player: a MakeHuman body built by tools/bpy/human.py (MPFB2, CC0 output) on the 53-bone game-engine rig, already at final scale with eyes at 1.70 m, its own clips and both hand mounts. Real materials (pbr). The recipe only adds eye.",
   "id": "char.player",
   "src": "build/char.player.raw.glb",
   "out": "chars/player.glb",
-  "height": 1.8,
-  "axis": "y",
-  "ground": true,
-  "yaw": 0,
-  "budget": 6000,
+  "fit": false,
+  "budget": 9000,
+  "pbr": true,
   "mounts": {
     "eye": [
       0,
@@ -16,7 +14,7 @@
     ]
   },
   "license": "CC0",
-  "author": "Space Adventure",
-  "source_url": "tools/bpy/body.py",
+  "author": "Space Adventure (MakeHuman base mesh, CC0)",
+  "source_url": "tools/bpy/human.py",
   "rig": "animated"
 }

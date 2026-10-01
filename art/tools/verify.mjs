@@ -49,7 +49,7 @@ const CELL = 4.0;
 const CELL_MARGIN = 0.45;
 
 const BUDGETS = [
-  [/^char\./, 6000],
+  [/^char\./, 9000],
   [/^npc\./, 6000],
   [/^ship\./, 15000],
   [/^vehicle\./, 15000],
@@ -57,7 +57,7 @@ const BUDGETS = [
   [/^tool\./, 1000],
   [/^struct\./, 1500],
   [/^prop\./, 1000],
-  [/^armor\./, 1500],
+  [/^armor\./, 5000],
   [/^pack\./, 800],
 ];
 
@@ -79,8 +79,10 @@ const CLIP_CONTRACTS = {
 };
 
 const NODE_CONTRACTS = {
+  // The MakeHuman body (tools/bpy/human.py): game-engine bone names, both
+  // hand mounts (grip in the right, barrel toward the left).
   "char.player": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
@@ -104,7 +106,7 @@ const NODE_CONTRACTS = {
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
   "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
-  "weapon.pulse": { nodes: ["grip", "muzzle"] },
+  "weapon.pulse": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
   // up with hand.r and the channel effect starts at `muzzle`.
   "tool.drill": { nodes: ["grip", "muzzle"] },

@@ -43,14 +43,14 @@ clips any more; the row below stays until the pack is deleted from vendor/.
 
 | asset id | model | author | licence | source |
 |---|---|---|---|---|
-| `char.player` | own, `tools/bpy/body.py`, mesh AND clips | Space Adventure | CC0 | this repo (replaced the Space Kit astronaut + Blocky clips) |
+| `char.player` | own, `tools/bpy/human.py`, MakeHuman base mesh via MPFB2 | Space Adventure; MakeHuman (CC0) | CC0 | makehumancommunity.org, extensions.blender.org/add-ons/mpfb |
 | `prop.rock.a` | `rock_largeA` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.rock.b` | `rock` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.rock.c` | `rock_crystals` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `weapon.pulse` | own, `tools/gen_weapon.py` | Space Adventure | CC0 | this repo (replaced the Space Kit `weapon_rifle`) |
 | `npc.shopkeeper` | own, `tools/bpy/body.py` VARIANTS, mesh AND clips | Space Adventure | CC0 | this repo (replaced Space Kit astronautB) |
 | `npc.dispatcher` | own, `tools/bpy/body.py` VARIANTS (android), mesh AND clips | Space Adventure | CC0 | this repo (new; the dispatcher used to share astronautB) |
-| `armor.*`, `pack.scout` | own, `tools/bpy/body.py` ARMOR | Space Adventure | CC0 | this repo (new, 2026-09-30) |
+| `armor.*`, `pack.scout` | own, `tools/bpy/armor.py` | Space Adventure | CC0 | this repo |
 | `npc.grunt` | own, `tools/bpy/body.py` VARIANTS, mesh AND clips | Space Adventure | CC0 | this repo (replaced Space Kit alien) |
 | `npc.gunner` | own, `tools/bpy/body.py` VARIANTS, mesh AND clips | Space Adventure | CC0 | this repo (replaced Space Kit alien) |
 | `prop.loot.crate` | `barrel` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |

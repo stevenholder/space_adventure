@@ -68,6 +68,56 @@ Node-name contract:
 - Placeholder fallback: when the `.glb` or the node is missing, `frontend`
   mounts the camera at the GDD `eye_height` above the entity origin.
 
+## The player body and its armor (MakeHuman, from 2026-10-01)
+
+`char.player` and the Scout set target a Star Citizen read at modest cost:
+real anatomy, hard-surface plates over a fitted undersuit, smooth shading,
+real materials, about 18k triangles dressed.
+
+- **Body** (`tools/bpy/human.py`): a MakeHuman human from MPFB2's sliders
+  (`MACRO`), MPFB's 53-bone `game_engine` rig with its weights, turned to +Y
+  front and scaled so the eyes are at 1.70 m, helpers removed, decimated to
+  6k triangles, split into `body`/`arms`/`head`. Undersuit, gloves and boots
+  are materials on the body. Clips are posed by world-space swings and an
+  analytic two-bone IK toward WRIST targets (shoulders at ±0.20, 0.02, 1.45;
+  wrist reach 0.54 m), and both hands carry mounts (`hand.r`, `hand.l`): the
+  client runs a two-handed weapon's barrel from the right hand toward the
+  left, every frame.
+- **Armor** (`tools/bpy/armor.py`): hard plates are clean grids laid on a
+  cylinder around their bone, masked to a rounded rectangle, projected
+  inward along their normals onto a SMOOTHED copy of the body with a gap,
+  given thickness with a darker rim and bevelled, rigid on one bone. Gloves,
+  boots and the belt are cut from the body and keep its weights. The helmet
+  is a smooth shell with a separate visor strip. Things that did not work,
+  so they are not retried: cutting plates straight out of the body (they
+  carried its anatomy, and un-subdividing an irregular region tore it),
+  nearest-point shrinkwrap (dragged the chest plate onto the neck),
+  decimating after Solidify and Solidify's even offset (both made spikes).
+- **Holding a weapon**: the rifle has contact points, `grip` (mid pistol
+  grip), `fore` (under the fore-end), `sight`/`front` (line of sight) and
+  `muzzle`. human.py's `grip()` puts each hand MOUNT on its contact point by
+  iterating the arm IK and orienting the hand (palm/knuckle frame from the
+  hand bone; palm normal is the bone's −Z), right fist round the grip with the
+  trigger finger straighter, left palm up under the fore-end. A bladed stance
+  (chest turned 25°, head turned back) lets the left arm reach. The client
+  places the gun grip→hand.r and fore→hand.l every frame; while aiming it
+  aligns sight→front with the view instead (grip→muzzle climbs ~12° against
+  the sights).
+- **Boots** are built (rounded foot shell with a lowered toe box, sole, ankle
+  shaft with a cuff), not cut from the bare foot.
+- **Materials** (`pbr` in the recipe): the import keeps the glTF materials
+  (base colour, roughness, metallic) and the client draws them as they are;
+  first person gets a depth-squeezed copy of each. Palettes are written as
+  display colours and converted to linear on the way out.
+- **MPFB2** is a build tool (GPL, not shipped); the MakeHuman mesh and
+  targets it uses are CC0. Install once into the local Blender:
+  `blender --command extension install-file -r user_default -e add-on-mpfb-v2.0.17.zip`
+  (extensions.blender.org). The shipped `.glb` files are committed, so only
+  regenerating needs it.
+
+The NPC bodies (shopkeeper, dispatcher, grunt, gunner) are still the older
+generator below, on its 11-bone skeleton.
+
 ## Humanoid skeleton (own bodies, from 2026-09-30)
 
 `char.player` is no longer a downloaded pack and no longer a stack of parts:
