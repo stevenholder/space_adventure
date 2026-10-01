@@ -36,18 +36,23 @@ clips on six boxes that would be a downgrade to look at. So the characters
 below are Space Kit geometry carrying Blocky Characters **clips**, retargeted
 by `tools/import_pack.mjs` — which is possible only because both packs put limb
 nodes at the joint with the mesh hanging off the node origin. Any asset whose
-manifest row says `rig: "animated"` has clips from `kenney-blocky-characters`.
+manifest row says `rig: "animated"` has clips from `kenney-blocky-characters`,
+except the humanoids (`char.player`, `npc.shopkeeper`, `npc.grunt`, `npc.gunner`),
+whose clips are authored in `tools/bpy/body.py`. No shipped asset carries Blocky
+clips any more; the row below stays until the pack is deleted from vendor/.
 
 | asset id | model | author | licence | source |
 |---|---|---|---|---|
-| `char.player` | `astronautA` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `char.player` | own, `tools/bpy/body.py`, mesh AND clips | Space Adventure | CC0 | this repo (replaced the Space Kit astronaut + Blocky clips) |
 | `prop.rock.a` | `rock_largeA` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.rock.b` | `rock` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.rock.c` | `rock_crystals` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
-| `weapon.pulse` | `weapon_rifle` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
-| `npc.shopkeeper` | `astronautB` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
-| `npc.grunt` | `alien` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
-| `npc.gunner` | `alien` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
+| `weapon.pulse` | own, `tools/gen_weapon.py` | Space Adventure | CC0 | this repo (replaced the Space Kit `weapon_rifle`) |
+| `npc.shopkeeper` | own, `tools/bpy/body.py` VARIANTS, mesh AND clips | Space Adventure | CC0 | this repo (replaced Space Kit astronautB) |
+| `npc.dispatcher` | own, `tools/bpy/body.py` VARIANTS (android), mesh AND clips | Space Adventure | CC0 | this repo (new; the dispatcher used to share astronautB) |
+| `armor.*`, `pack.scout` | own, `tools/bpy/body.py` ARMOR | Space Adventure | CC0 | this repo (new, 2026-09-30) |
+| `npc.grunt` | own, `tools/bpy/body.py` VARIANTS, mesh AND clips | Space Adventure | CC0 | this repo (replaced Space Kit alien) |
+| `npc.gunner` | own, `tools/bpy/body.py` VARIANTS, mesh AND clips | Space Adventure | CC0 | this repo (replaced Space Kit alien) |
 | `prop.loot.crate` | `barrel` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.barrel` | `barrel` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |
 | `prop.barrels` | `barrels` | Kenney | CC0 | [Space Kit](https://kenney.nl/assets/space-kit) |

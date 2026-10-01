@@ -1,0 +1,15 @@
+{
+  "$comment": "Armor: a skinned piece over the shared humanoid skeleton (tools/bpy/body.py ARMOR), no clips of its own -- the client hangs it on the wearer's Skeleton3D. fit:false keeps it in the wearer's frame; only the bake and the count happen here.",
+  "id": "armor.gloves.scout",
+  "src": "build/armor.gloves.scout.raw.glb",
+  "out": "armor/gloves_scout.glb",
+  "fit": false,
+  "budget": 1500,
+  "covers": [
+    "arms/skin",
+    "arms/accent"
+  ],
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/body.py"
+}

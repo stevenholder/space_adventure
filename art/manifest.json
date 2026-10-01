@@ -4,13 +4,32 @@
   {
    "id": "char.player",
    "file": "chars/player.glb",
-   "tris": 296,
+   "tris": 1580,
    "license": "CC0",
    "source": "recipes/char.player.json",
-   "description": "Player character. Kenney astronautA, rescaled to 1.8 m and renamed to the node contract (eye/head/torso/arm.l/arm.r/leg.l/leg.r). Segmented, unrigged -- the client rotates the limbs. Faces -Z (the backpack sits further +Z than the head). eye is at 1.7 m because GDD eye_height is 1.7, not because of where this head sits. NOTE: 1.10 m across with the arms out, against a server capsule 0.70 m wide -- the height matches the capsule, the arm span does not.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney",
-   "rig": "animated"
+   "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "rig": "animated",
+   "surfaces": {
+    "arms": [
+     "suit",
+     "trouser",
+     "accent",
+     "skin"
+    ],
+    "body": [
+     "suit",
+     "trouser",
+     "accent",
+     "boot"
+    ],
+    "head": [
+     "skin",
+     "hair",
+     "eye"
+    ]
+   }
   },
   {
    "id": "prop.rock.a",
@@ -63,23 +82,72 @@
   {
    "id": "weapon.pulse",
    "file": "weapons/pulse.glb",
-   "tris": 106,
+   "tris": 156,
    "license": "CC0",
-   "source": "recipes/weapon.pulse.json",
-   "description": "Pulse rifle. Kenney weapon_rifle, 0.9 m long, yawed 180 so it points -Z (the source points +Z: its +Z half has the smaller cross-section, i.e. the barrel). Mount nodes `grip` (where the right hand holds it) and `muzzle` (barrel tip at the -Z end, where flash and tracer start).",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney"
+   "source": "tools/gen_weapon.py",
+   "description": "Pulse rifle, our own (tools/gen_weapon.py): ~0.64 m, -Z forward, +Y up, grip at the top of the pistol grip just under the bore, muzzle at the barrel tip. The one model first and third person both hold; the client turns grip->muzzle onto the forearm.",
+   "source_url": "tools/gen_weapon.py",
+   "author": "Space Adventure"
   },
   {
    "id": "npc.shopkeeper",
    "file": "chars/shopkeeper.glb",
-   "tris": 314,
+   "tris": 1452,
    "license": "CC0",
    "source": "recipes/npc.shopkeeper.json",
-   "description": "Quartermaster NPC. Kenney astronautB, so it does not read as another player. Same node contract as char.player, so nametag and animation code work unchanged.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney",
-   "rig": "animated"
+   "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "rig": "animated",
+   "surfaces": {
+    "arms": [
+     "suit",
+     "trouser",
+     "accent",
+     "skin"
+    ],
+    "body": [
+     "suit",
+     "trouser",
+     "accent",
+     "boot"
+    ],
+    "head": [
+     "skin",
+     "hair",
+     "eye"
+    ]
+   }
+  },
+  {
+   "id": "npc.dispatcher",
+   "file": "chars/dispatcher.glb",
+   "tris": 1560,
+   "license": "CC0",
+   "source": "recipes/npc.dispatcher.json",
+   "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "rig": "animated",
+   "surfaces": {
+    "arms": [
+     "suit",
+     "accent",
+     "skin"
+    ],
+    "body": [
+     "suit",
+     "trouser",
+     "accent",
+     "boot"
+    ],
+    "head": [
+     "trouser",
+     "accent",
+     "skin",
+     "accent"
+    ]
+   }
   },
   {
    "id": "prop.target",
@@ -290,24 +358,65 @@
   {
    "id": "npc.grunt",
    "file": "chars/grunt.glb",
-   "tris": 292,
+   "tris": 1376,
    "license": "CC0",
    "source": "recipes/npc.grunt.json",
-   "description": "Phase 3 camp grunt (melee). server/data/npcs.json has referenced this asset id since Phase 3 with nothing behind it -- the client fell back to a red-tinted box stack. Same node contract as char.player so nametags and animation code work unchanged; tinted red to read as hostile at a distance.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney",
-   "rig": "animated"
+   "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "rig": "animated",
+   "surfaces": {
+    "arms": [
+     "suit",
+     "accent",
+     "skin"
+    ],
+    "body": [
+     "suit",
+     "trouser",
+     "accent",
+     "skin",
+     "boot"
+    ],
+    "head": [
+     "skin",
+     "hair",
+     "eye",
+     "bone"
+    ]
+   }
   },
   {
    "id": "npc.gunner",
    "file": "chars/gunner.glb",
-   "tris": 292,
+   "tris": 1568,
    "license": "CC0",
    "source": "recipes/npc.gunner.json",
-   "description": "Phase 3 camp gunner (ranged). As npc.grunt, tinted purple so the two archetypes are told apart at a glance -- which matters, because they behave differently: the gunner shoots from 26 m and the grunt closes to 2 m.",
-   "source_url": "https://kenney.nl/assets/space-kit",
-   "author": "Kenney",
-   "rig": "animated"
+   "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "rig": "animated",
+   "surfaces": {
+    "arms": [
+     "suit",
+     "trouser",
+     "accent",
+     "skin"
+    ],
+    "body": [
+     "suit",
+     "trouser",
+     "accent",
+     "boot"
+    ],
+    "head": [
+     "suit",
+     "trouser",
+     "accent",
+     "skin",
+     "eye"
+    ]
+   }
   },
   {
    "id": "prop.loot.crate",
@@ -416,6 +525,137 @@
    "license": "CC0",
    "source": "tools/gen_nodes.py",
    "description": "Phase 12 plasma cutter, the TOOL slot item that opens wrecks. Held like weapon.pulse: -Z forward, rear grip bottoming out at y=0, 0.39 m long and 0.16 m tall; orange boxy body, dark side handle and gas cell on top, steel collar and short tapered nozzle. Mount nodes `grip` (where the right hand holds it) and `muzzle` (the nozzle tip at the -Z end)."
+  },
+  {
+   "id": "armor.helmet.scout",
+   "file": "armor/helmet_scout.glb",
+   "tris": 72,
+   "license": "CC0",
+   "source": "recipes/armor.helmet.scout.json",
+   "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "eye",
+     "armor"
+    ]
+   },
+   "covers": [
+    "head/hair"
+   ]
+  },
+  {
+   "id": "armor.suit.scout",
+   "file": "armor/suit_scout.glb",
+   "tris": 664,
+   "license": "CC0",
+   "source": "recipes/armor.suit.scout.json",
+   "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "armor",
+     "strap"
+    ]
+   },
+   "covers": [
+    "body/suit",
+    "body/accent",
+    "arms/suit",
+    "arms/accent"
+   ]
+  },
+  {
+   "id": "armor.plate.iron",
+   "file": "armor/plate_iron.glb",
+   "tris": 292,
+   "license": "CC0",
+   "source": "recipes/armor.plate.iron.json",
+   "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "iron",
+     "strap"
+    ]
+   }
+  },
+  {
+   "id": "armor.legs.scout",
+   "file": "armor/legs_scout.glb",
+   "tris": 436,
+   "license": "CC0",
+   "source": "recipes/armor.legs.scout.json",
+   "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "armor",
+     "strap"
+    ]
+   },
+   "covers": [
+    "body/trouser"
+   ]
+  },
+  {
+   "id": "armor.gloves.scout",
+   "file": "armor/gloves_scout.glb",
+   "tris": 176,
+   "license": "CC0",
+   "source": "recipes/armor.gloves.scout.json",
+   "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "armor",
+     "strap"
+    ]
+   },
+   "covers": [
+    "arms/skin",
+    "arms/accent"
+   ]
+  },
+  {
+   "id": "armor.boots.scout",
+   "file": "armor/boots_scout.glb",
+   "tris": 208,
+   "license": "CC0",
+   "source": "recipes/armor.boots.scout.json",
+   "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "armor",
+     "strap"
+    ]
+   },
+   "covers": [
+    "body/boot"
+   ]
+  },
+  {
+   "id": "pack.scout",
+   "file": "armor/pack_scout.glb",
+   "tris": 132,
+   "license": "CC0",
+   "source": "recipes/pack.scout.json",
+   "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+   "source_url": "tools/bpy/body.py",
+   "author": "Space Adventure",
+   "surfaces": {
+    "armor": [
+     "armor",
+     "strap"
+    ]
+   }
   }
  ]
 }

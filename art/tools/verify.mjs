@@ -57,6 +57,8 @@ const BUDGETS = [
   [/^tool\./, 1000],
   [/^struct\./, 1500],
   [/^prop\./, 1000],
+  [/^armor\./, 1500],
+  [/^pack\./, 800],
 ];
 
 // Node-name contracts: the client mounts things by these names, so a rename
@@ -69,27 +71,35 @@ const BUDGETS = [
 // clips that animate nothing, and a body that slides instead of walking looks
 // exactly like a body that was never animated.
 const CLIP_CONTRACTS = {
-  animated: ["idle", "walk", "sprint", "die"],
+  // Gaits for every body, armed gaits, death, and the first-person set the
+  // client plays on a second instance under the camera (ViewModel).
+  animated: ["idle", "walk", "sprint", "die",
+    "idle_armed", "walk_armed", "sprint_armed",
+    "fp_idle", "fp_walk", "fp_sprint", "fp_ads", "fp_lower", "fp_unarmed", "fp_fire", "fp_reload"],
 };
 
 const NODE_CONTRACTS = {
   "char.player": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    eyeHeadSiblings: true,
+  },
+  "npc.dispatcher": {
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   // The hostiles carry the same layout on purpose: the client's nametag,
   // health-bar and animation code walks these names and does not care which
   // archetype it is looking at.
   "npc.grunt": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "npc.gunner": {
-    nodes: ["eye", "head", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
