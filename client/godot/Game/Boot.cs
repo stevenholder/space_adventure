@@ -117,6 +117,9 @@ namespace SpaceAdventure.Game
 
         private ViewModel _viewModel;
         private CombatFx _fx;
+        private Sfx _sfx;
+        private float _stepDist;
+        private int _stepN;
 
         /// <summary>
         /// weapon.pulse fire_interval, from the GDD weapon table. The server
@@ -323,6 +326,8 @@ namespace SpaceAdventure.Game
             _viewModel = new ViewModel(_camera, _material, VmLayer, this, _assets);
             _viewModel.ArmsVisible = false; // until the world is up
             _fx = new CombatFx(this);
+            _sfx = new Sfx(this);
+            _views.Sfx = _sfx;
             _hud = new Hud();
             _character = new Character();
             _interact = new Interaction(_views, _character);
@@ -359,6 +364,15 @@ namespace SpaceAdventure.Game
 
             // -dumpNodes <asset id>: print the imported node tree and clips,
             // then quit. Pins the node-name and animation import rules.
+            // -dumpSfx <dir>: write every synthesized sound as a .wav, then quit.
+            string sfxDir = Arg("-dumpSfx");
+            if (sfxDir != null)
+            {
+                foreach (var (name, wav) in new Sfx(this).All()) wav.SaveToWav($"{sfxDir}/{name}.wav");
+                GD.Print($"sfx: wrote {new Sfx(this).All().Length} sounds to {sfxDir}");
+                GetTree().Quit(0);
+                return;
+            }
             string dump = Arg("-dumpNodes");
             if (dump != null)
             {
@@ -455,6 +469,7 @@ namespace SpaceAdventure.Game
                 // themselves to the weapon's reload_time.
                 double rt = _character.Defs.Item(_character.Primary).Weapon.ReloadTime;
                 _viewModel.Reload(rt > 0 ? rt : 2.0);
+                _sfx.Reload(rt > 0 ? rt : 2.0);
             }
             // Phase 13: 1–5 Q E T Z X fire the hotbar; Shift picks the second
             // row (Shift is also sprint — a hotkey while sprinting fires the
@@ -563,6 +578,12 @@ namespace SpaceAdventure.Game
                 : _seat == 0 ? ViewModel.Blocked(_camera.GlobalPosition, -_camera.GlobalBasis.Z, ViewModel.Reach, _colliders, _terrain)
                 : float.PositiveInfinity;
             _viewModel.Tick(_fps.LookDelta, (float)body.Vel.Length, (float)delta, aiming, clear);
+            // Footsteps: one per stride while on foot and on the ground.
+            if (_seat == 0 && body.Grounded && body.Vel.Length > 0.5)
+            {
+                _stepDist += (float)(body.Vel.Length * delta);
+                if (_stepDist > (body.Vel.Length > CharacterAnim.SprintAt ? 1.0f : 0.75f)) { _stepDist = 0; _sfx.OwnStep(_stepN++); }
+            }
             _fx.Tick();
 
             UpdateHudView();
@@ -762,6 +783,12 @@ namespace SpaceAdventure.Game
                 _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));
                 _fx.OnLocalFire(_viewModel.Muzzle, _viewModel.Layers);
                 _viewModel.Fire(); // the arms kick; the camera never does
+                _sfx.OwnShot(_character.Primary);
+            }
+            else if (li.FirePressed && _viewModel.Armed && _seat == 0 && _character.Magazine == 0 && Clock.Now >= _nextFireAt)
+            {
+                _nextFireAt = Clock.Now + 0.3;   // an empty gun clicks, it does not rattle
+                _sfx.DryFire();
             }
         }
 
@@ -905,9 +932,21 @@ namespace SpaceAdventure.Game
                             // Our own shots are drawn from the barrel; everyone
                             // else's from the origin the server reported.
                             _fx.OnShotFired(ev, ev.EntityId == _net.EntityId ? _viewModel.MuzzlePosition : (Vector3?)null);
+                            if (ev.EntityId != _net.EntityId && ev.Data.Length >= 12)
+                            {
+                                var sr = new WireReader(ev.Data);
+                                Vector3 from = Frame.ToGodot(new Vec3(sr.ReadF32(), sr.ReadF32(), sr.ReadF32()));
+                                _sfx.ShotAt(from, _views.TryGet(ev.EntityId, out var shooter) ? shooter.EquippedItem : "");
+                            }
                             break;
                         case EventId.Hit:
                             _fx.OnHit(ev, _net.EntityId);
+                            if (ev.Data.Length >= 16)
+                            {
+                                var hr = new WireReader(ev.Data);
+                                hr.ReadU32();
+                                _sfx.ImpactAt(Frame.ToGodot(new Vec3(hr.ReadF32(), hr.ReadF32(), hr.ReadF32())));
+                            }
                             _views.OnHit(ev.EntityId);
                             OnHitFeedback(ev);
                             break;
@@ -1338,7 +1377,7 @@ namespace SpaceAdventure.Game
         /// </summary>
         /// <summary>Escape's first job: every panel, the map and the shop.</summary>
         /// <summary>The rig or a self-test owns the window; a player's settings do not apply.</summary>
-        private bool Rigged => Arg("-uiShot") != null || Arg("-quitAfter") != null || Flag("-selftest") || Flag("-dumpNodes");
+        private bool Rigged => Arg("-uiShot") != null || Arg("-quitAfter") != null || Flag("-selftest") || Flag("-dumpNodes") || Arg("-dumpSfx") != null;
 
         /// <summary>Window mode, canvas scale and look speed from the settings.</summary>
         private void ApplySettings()
@@ -1614,6 +1653,16 @@ namespace SpaceAdventure.Game
             Check("hotbar: keys are 1–5 Q E T Z X; Shift+Q is slot 16; R and F are not on the bar",
                 UI.Hotbar.SlotFor(Key.Q, true) == 15 && UI.Hotbar.SlotFor(Key.Z, false) == 8 && UI.Hotbar.SlotFor(Key.X, false) == 9
                 && UI.Hotbar.SlotFor(Key.R, false) == -1 && UI.Hotbar.SlotFor(Key.F, false) == -1);
+            Check("sfx: weapon families", Sfx.Family("weapon.dmr") == "dmr" && Sfx.Family("weapon.sidearm") == "pistol"
+                && Sfx.Family("weapon.smg") == "smg" && Sfx.Family("weapon.pulse") == "rifle" && Sfx.Family("") == "rifle");
+            var sfx = new Sfx(null);
+            Check("sfx: every sound synthesizes, 16-bit, normalized", Array.TrueForAll(sfx.All(), s =>
+            {
+                byte[] d = s.wav.Data;
+                int peak = 0;
+                for (int i = 0; i + 1 < d.Length; i += 2) peak = Math.Max(peak, Math.Abs((int)(short)(d[i] | d[i + 1] << 8)));
+                return d.Length > 400 && peak > 25000 && peak < 32000;
+            }));
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));
             Check("the same triangle reversed is inward", TerrainMesh.FacesInward(verts, new[] { 0, 2, 1 }));
 

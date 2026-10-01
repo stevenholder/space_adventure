@@ -67,6 +67,8 @@ namespace SpaceAdventure.Game
         /// </summary>
         public Vector3 LastDrawn;
         public bool HasLastDrawn;
+        /// <summary>Metres walked since the last footstep sound.</summary>
+        public float StepDist;
         public float Speed;
 
         /// <summary>
@@ -167,6 +169,9 @@ namespace SpaceAdventure.Game
             EntityType.Node => v.Label.Contains("copper") ? "Copper" : "",
             _ => "",
         };
+
+        /// <summary>Footsteps for every walking body (set by Boot).</summary>
+        public Sfx Sfx;
 
         public bool TryGet(uint id, out EntityView view) => _views.TryGetValue(id, out view);
 
@@ -446,6 +451,15 @@ namespace SpaceAdventure.Game
                 view.LastDrawn = drawn;
                 view.HasLastDrawn = true;
                 view.Anim?.Drive(view.Speed, view.Dead || view.RigDead);
+                if (view.Anim != null && !view.Dead && view.Speed > 0.5f && Sfx != null)
+                {
+                    view.StepDist += view.Speed * dt;
+                    if (view.StepDist > (view.Speed > CharacterAnim.SprintAt ? 1.0f : 0.75f))
+                    {
+                        view.StepDist = 0;
+                        Sfx.StepAt(drawn, (int)(view.Id + (uint)(drawn.X * 10)));
+                    }
+                }
 
                 // Dying is allowed to take as long as the death clip, and not
                 // one second longer: the server does not despawn a dead NPC
