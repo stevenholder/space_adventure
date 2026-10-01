@@ -32,32 +32,32 @@
     {
       "id": "prop.rock.a",
       "file": "props/rock_a.glb",
-      "tris": 176,
+      "tris": 80,
       "license": "CC0",
-      "source": "recipes/prop.rock.a.json",
-      "description": "Rounded boulder. Kenney rock_largeA, normalised to 1 m tall with the base at origin, up +Y; the client seats it on the surface, orients it radially and scales it 0.3-1.5 m.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source": "tools/gen_props.py",
+      "description": "Rounded boulder: a jittered icosphere with a flat base. Exactly 1 m tall, base at origin, up +Y; the client seats it on the surface, orients it radially and scales it 0.3-1.5 m.",
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.rock.b",
       "file": "props/rock_b.glb",
-      "tris": 172,
+      "tris": 126,
       "license": "CC0",
-      "source": "recipes/prop.rock.b.json",
-      "description": "Low broad rock. Kenney rock, normalised as rock.a.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source": "tools/gen_props.py",
+      "description": "Broken slab cluster: three angular chunks. Exactly 1 m tall, base at origin, up +Y; scaled by the client like prop.rock.a.",
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.rock.c",
       "file": "props/rock_c.glb",
-      "tris": 364,
+      "tris": 152,
       "license": "CC0",
-      "source": "recipes/prop.rock.c.json",
-      "description": "Crystal outcrop -- the sharp, angular silhouette in the set. Kenney rock_crystals, normalised as rock.a.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source": "tools/gen_props.py",
+      "description": "Boulder with four teal crystals growing out of it. Exactly 1 m tall to the tallest crystal, base at origin, up +Y; scaled by the client like prop.rock.a.",
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "ship.v1",
@@ -70,12 +70,12 @@
     {
       "id": "vehicle.rover.v1",
       "file": "vehicles/rover.v1.glb",
-      "tris": 172,
+      "tris": 504,
       "license": "CC0",
-      "source": "recipes/vehicle.rover.v1.json",
-      "description": "Phase 4 ground rover. -Z forward, origin at ground level, 1.4 m tall. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source": "tools/gen_props.py",
+      "description": "Phase 4 ground rover, our own (tools/gen_props.py): an open buggy, four wheels, roll cage, two seats. -Z forward, origin at ground level, 1.4 m tall at the cage. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "weapon.pulse",
@@ -438,62 +438,62 @@
     {
       "id": "prop.loot.crate",
       "file": "props/loot_crate.glb",
-      "tris": 56,
+      "tris": 120,
       "license": "CC0",
-      "source": "recipes/prop.loot.crate.json",
+      "source": "tools/gen_props.py",
       "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.barrel",
       "file": "props/barrel.glb",
-      "tris": 56,
+      "tris": 216,
       "license": "CC0",
-      "source": "recipes/prop.barrel.json",
+      "source": "tools/gen_props.py",
       "description": "Fuel drum. Camp dressing, placed from zone data.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.barrels",
       "file": "props/barrels.glb",
-      "tris": 268,
+      "tris": 648,
       "license": "CC0",
-      "source": "recipes/prop.barrels.json",
+      "source": "tools/gen_props.py",
       "description": "A stack of three drums, for filling a corner without three placements.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.generator",
       "file": "props/generator.glb",
-      "tris": 406,
+      "tris": 260,
       "license": "CC0",
-      "source": "recipes/prop.generator.json",
+      "source": "tools/gen_props.py",
       "description": "Portable generator. The reason a camp in vacuum has lights.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.dish",
       "file": "props/dish.glb",
-      "tris": 274,
+      "tris": 272,
       "license": "CC0",
-      "source": "recipes/prop.dish.json",
+      "source": "tools/gen_props.py",
       "description": "Comms dish. Reads as a camp that is talking to someone.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.bones",
       "file": "props/bones.glb",
-      "tris": 168,
+      "tris": 308,
       "license": "CC0",
-      "source": "recipes/prop.bones.json",
+      "source": "tools/gen_props.py",
       "description": "Bones. Dressing for a hostile camp -- the cheapest way to say someone lost here.",
-      "source_url": "https://kenney.nl/assets/space-kit",
-      "author": "Kenney"
+      "source_url": "tools/gen_props.py",
+      "author": "Space Adventure"
     },
     {
       "id": "prop.node.ore.iron",
