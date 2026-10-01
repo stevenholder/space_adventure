@@ -43,16 +43,26 @@ gatekeeper.go before changing the edge.
 ## Releases
 
 Every successful deploy publishes a GitHub pre-release for the commit it
-rolled out: tag `vYYYY.MM.DD-<sha7>`, the Linux (`.tar.gz`) and Windows
-(`.zip`) client exports from the CI run that was deployed, and notes made of
+rolled out: tag `vYYYY.MM.DD-<sha7>`, the client exports from the CI run
+that was deployed packed by Velopack as version `1.0.<deploy run number>`
+(`SpaceAdventure.AppImage`, `SpaceAdventure-win-Setup.exe`, full + delta
+nupkgs, and the `releases.{linux,win}.json` feeds), and notes made of
 a fixed header (what is live, how to run the downloads) plus GitHub's
 generated list of merged PRs since the previous `v*` tag. It is the
 `release` job at the end of `.github/workflows/deploy.yml`; a failed rollout
 means no release, so a release is always a build that was live.
 
+Installed clients update themselves: at launch `Boot.UpdateThenConnect` asks
+the newest pre-release's feed, downloads the delta, quits, and Velopack swaps
+the files and relaunches. Source runs, godot-cli flows and loose exports
+aren't installed and skip the check. Any failure (GitHub down, rate limit)
+plays the current build. To test an update locally, pack two versions with
+`vpk pack` into a directory and launch the older one with
+`SA_UPDATE_SOURCE=<dir>`.
+
 ```sh
 gh release list --limit 5
-gh release download v2026.09.29-abc1234 -p '*windows*'   # a specific build
+gh release download v2026.09.29-abc1234 -p '*Setup.exe'   # a specific build
 ```
 
 Flip `--prerelease` off in the workflow when a build should become "Latest".

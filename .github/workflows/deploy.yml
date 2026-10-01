@@ -15,7 +15,9 @@
 #
 # Once the rollout is live, `release` publishes a GitHub pre-release for
 # the same commit: tag vYYYY.MM.DD-<sha7>, the Linux and Windows client
-# exports from the CI run that triggered this deploy, and notes = a fixed
+# exports from the CI run that triggered this deploy packed by Velopack
+# (AppImage, Setup.exe, and the feed + delta packages installed clients
+# update themselves from -- Boot.UpdateThenConnect), and notes = a fixed
 # header (what is live, how to run the downloads) + GitHub's generated list
 # of merged PRs since the previous release. A failed rollout means no
 # release, so every release is a build that was live.
@@ -134,13 +136,29 @@ jobs:
           gh run download '${{ github.event.workflow_run.id }}' -n client-linux -D client-linux
           gh run download '${{ github.event.workflow_run.id }}' -n client-windows -D client-windows
 
-      - name: Package (restore the exec bit in case the artifact round-trip dropped it)
+      - name: Pack with Velopack (full + delta against the previous release)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          TAG='${{ steps.meta.outputs.tag }}'
+          # Velopack wants a SemVer2 that only grows; the date-sha tag is not
+          # one. The deploy run number is, and the tag stays as it was.
+          V='1.0.${{ github.run_number }}'
+          REPO='${{ github.server_url }}/${{ github.repository }}'
           chmod +x client-linux/SpaceAdventure.x86_64
-          tar -C client-linux -czf "SpaceAdventure-$TAG-linux-x86_64.tar.gz" .
-          (cd client-windows && zip -qr "../SpaceAdventure-$TAG-windows-x86_64.zip" .)
-          ls -la SpaceAdventure-*
+          dotnet tool install -g vpk
+          # The previous full package lets pack emit a delta. None yet (the
+          # first Velopack release) is fine: that release is full-only.
+          vpk download github --repoUrl "$REPO" --pre --token "$GH_TOKEN" -o Releases --channel linux || true
+          vpk download github --repoUrl "$REPO" --pre --token "$GH_TOKEN" -o Releases --channel win || true
+          vpk pack --packId SpaceAdventure --packVersion "$V" --packTitle "Space Adventure" \
+            --packDir client-linux --mainExe SpaceAdventure.x86_64 -o Releases
+          vpk '[win]' pack --packId SpaceAdventure --packVersion "$V" --packTitle "Space Adventure" \
+            --packDir client-windows --mainExe SpaceAdventure.exe --noPortable -o Releases
+          # Only this version's files go up; older nupkgs were inputs only.
+          mkdir publish
+          cp Releases/*"-$V-"*.nupkg Releases/SpaceAdventure.AppImage Releases/SpaceAdventure-win-Setup.exe \
+             Releases/RELEASES* Releases/releases.*.json Releases/assets.*.json publish/
+          ls -la publish
 
       - name: Publish
         env:
@@ -163,14 +181,16 @@ jobs:
           cat > notes.md <<EOF
           Live now at **wss://game.stevenholder.info/ws** — server build \`$BUILD\`, commit \`${SHA:0:7}\`.
 
-          ### Downloads
-          - **Windows** — \`SpaceAdventure-$TAG-windows-x86_64.zip\`: unzip, run \`SpaceAdventure.exe\`. It connects to the live server by itself. The build is not code-signed yet, so SmartScreen shows "Windows protected your PC" the first time: click **More info → Run anyway**, or right-click the zip → Properties → **Unblock** before unzipping.
-          - **Linux** — \`SpaceAdventure-$TAG-linux-x86_64.tar.gz\`: extract, run \`./SpaceAdventure.x86_64\`.
+          ### Install once, then it updates itself
+          - **Windows**: run \`SpaceAdventure-win-Setup.exe\`. It installs and starts the game, and later launches update it automatically before connecting. The build is not code-signed yet, so SmartScreen shows "Windows protected your PC" the first time: click **More info → Run anyway**.
+          - **Linux**: download \`SpaceAdventure.AppImage\`, then run \`chmod +x SpaceAdventure.AppImage && ./SpaceAdventure.AppImage\`. It updates itself in place.
 
-          Keep the \`art/\` folder beside the executable (it is inside the archive). Another server: \`SpaceAdventure.exe -- -serverUrl ws://host:port/ws\`. Move with WASD, look with the mouse, E interacts, K skills, M map, J journal, Esc frees the cursor.
+          Coming from a zip release? Those builds can't update themselves, so install once from above. The game connects to the live server by itself.
+
+          Another server: \`SpaceAdventure.exe -- -serverUrl ws://host:port/ws\`. Move with WASD, look with the mouse, E interacts, K skills, M map, J journal, Esc frees the cursor.
 
           EOF
           cat changes.md >> notes.md
           gh release create "$TAG" --target "$SHA" --prerelease \
             --title "Space Adventure $TAG" --notes-file notes.md \
-            SpaceAdventure-*.tar.gz SpaceAdventure-*.zip
+            publish/*
