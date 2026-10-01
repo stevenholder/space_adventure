@@ -1,0 +1,18 @@
+{
+  "$comment": "Bulwark gauntlets: long cuffs and broad knuckle plates. Built by tools/bpy/armor.py for every body in BODIES.",
+  "id": "armor.gloves.bulwark",
+  "src": "build/armor.gloves.bulwark.raw.glb",
+  "out": "armor/gloves_bulwark.glb",
+  "fit": false,
+  "budget": 5000,
+  "pbr": true,
+  "arms": true,
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/armor.py",
+  "bodies": [
+    "npc.grunt",
+    "npc.shopkeeper",
+    "npc.dispatcher"
+  ]
+}

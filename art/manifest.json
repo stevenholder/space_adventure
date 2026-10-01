@@ -88,6 +88,16 @@
       "author": "Space Adventure"
     },
     {
+      "id": "weapon.pulse.dune",
+      "file": "weapons/pulse_dune.glb",
+      "tris": 156,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Dune skin of the pulse rifle: sand body, brown furniture, epic (purple) accents. Same model and contact points (tools/gen_weapon.py).",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
       "id": "weapon.smg",
       "file": "weapons/smg.glb",
       "tris": 168,
@@ -98,9 +108,19 @@
       "author": "Space Adventure"
     },
     {
+      "id": "weapon.smg.frost",
+      "file": "weapons/smg_frost.glb",
+      "tris": 168,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Frost skin of the Scrap SMG: white body, steel furniture, rare (blue) accents. Same model and contact points (tools/gen_weapon.py).",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
       "id": "weapon.dmr",
       "file": "weapons/dmr.glb",
-      "tris": 348,
+      "tris": 360,
       "license": "CC0",
       "source": "tools/gen_weapon.py",
       "description": "Longshot DMR (tools/gen_weapon.py): full stock, scope on a rail, long barrel with a brake. Rifle contact geometry; `sight`/`front` run through the scope.",
@@ -1362,7 +1382,7 @@
     {
       "id": "armor.boots.scout@npc.dispatcher",
       "file": "armor/boots_scout.dispatcher.glb",
-      "tris": 1416,
+      "tris": 1392,
       "license": "CC0",
       "source": "recipes/armor.boots.scout.json",
       "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1474,6 +1494,1190 @@
           "armor_metal"
         ],
         "spine_03__pack_lid": [
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.bulwark",
+      "file": "armor/helmet_bulwark.glb",
+      "tris": 1260,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.bulwark.json",
+      "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__cheek_l": [
+          "armor_heavy"
+        ],
+        "head__cheek_r": [
+          "armor_heavy"
+        ],
+        "head__crest": [
+          "armor_trim"
+        ],
+        "head__helmet_bulwark": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__slit": [
+          "armor_visor"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.bulwark@npc.grunt",
+      "file": "armor/helmet_bulwark.grunt.glb",
+      "tris": 1260,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.bulwark.json",
+      "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__cheek_l": [
+          "armor_heavy"
+        ],
+        "head__cheek_r": [
+          "armor_heavy"
+        ],
+        "head__crest": [
+          "armor_trim"
+        ],
+        "head__helmet_bulwark": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__slit": [
+          "armor_visor"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.bulwark@npc.shopkeeper",
+      "file": "armor/helmet_bulwark.shopkeeper.glb",
+      "tris": 1260,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.bulwark.json",
+      "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__cheek_l": [
+          "armor_heavy"
+        ],
+        "head__cheek_r": [
+          "armor_heavy"
+        ],
+        "head__crest": [
+          "armor_trim"
+        ],
+        "head__helmet_bulwark": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__slit": [
+          "armor_visor"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.bulwark@npc.dispatcher",
+      "file": "armor/helmet_bulwark.dispatcher.glb",
+      "tris": 1260,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.bulwark.json",
+      "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__cheek_l": [
+          "armor_heavy"
+        ],
+        "head__cheek_r": [
+          "armor_heavy"
+        ],
+        "head__crest": [
+          "armor_trim"
+        ],
+        "head__helmet_bulwark": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__slit": [
+          "armor_visor"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.suit.bulwark",
+      "file": "armor/suit_bulwark.glb",
+      "tris": 3008,
+      "license": "CC0",
+      "source": "recipes/armor.suit.bulwark.json",
+      "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__vambrace_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "lowerarm_r__vambrace_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_02__abs": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_03__back.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__gorget": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "upperarm_l__pauldron_l.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_top_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "upperarm_r__pauldron_r.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_top_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.suit.bulwark@npc.grunt",
+      "file": "armor/suit_bulwark.grunt.glb",
+      "tris": 3028,
+      "license": "CC0",
+      "source": "recipes/armor.suit.bulwark.json",
+      "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__vambrace_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "lowerarm_r__vambrace_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_02__abs": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_03__back.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__gorget": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "upperarm_l__pauldron_l.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_top_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "upperarm_r__pauldron_r.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_top_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.suit.bulwark@npc.shopkeeper",
+      "file": "armor/suit_bulwark.shopkeeper.glb",
+      "tris": 3016,
+      "license": "CC0",
+      "source": "recipes/armor.suit.bulwark.json",
+      "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__vambrace_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "lowerarm_r__vambrace_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_02__abs": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_03__back.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__gorget": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "upperarm_l__pauldron_l.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_top_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "upperarm_r__pauldron_r.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_top_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.suit.bulwark@npc.dispatcher",
+      "file": "armor/suit_bulwark.dispatcher.glb",
+      "tris": 3008,
+      "license": "CC0",
+      "source": "recipes/armor.suit.bulwark.json",
+      "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__vambrace_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "lowerarm_r__vambrace_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_02__abs": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_03__back.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__gorget": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "upperarm_l__pauldron_l.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_top_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "upperarm_r__pauldron_r.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_top_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.legs.bulwark",
+      "file": "armor/legs_bulwark.glb",
+      "tris": 2336,
+      "license": "CC0",
+      "source": "recipes/armor.legs.bulwark.json",
+      "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__greave_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_l__knee_l.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__greave_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__knee_r.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "pelvis__belt.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "thigh_l__tasset_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_l__thigh_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "thigh_r__tasset_r": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_r__thigh_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.bulwark@npc.grunt",
+      "file": "armor/legs_bulwark.grunt.glb",
+      "tris": 2348,
+      "license": "CC0",
+      "source": "recipes/armor.legs.bulwark.json",
+      "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__greave_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_l__knee_l.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__greave_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__knee_r.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "pelvis__belt.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "thigh_l__tasset_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_l__thigh_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "thigh_r__tasset_r": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_r__thigh_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.bulwark@npc.shopkeeper",
+      "file": "armor/legs_bulwark.shopkeeper.glb",
+      "tris": 2300,
+      "license": "CC0",
+      "source": "recipes/armor.legs.bulwark.json",
+      "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__greave_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_l__knee_l.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__greave_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__knee_r.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "pelvis__belt.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "thigh_l__tasset_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_l__thigh_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "thigh_r__tasset_r": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_r__thigh_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.bulwark@npc.dispatcher",
+      "file": "armor/legs_bulwark.dispatcher.glb",
+      "tris": 2340,
+      "license": "CC0",
+      "source": "recipes/armor.legs.bulwark.json",
+      "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__greave_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_l__knee_l.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__greave_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__knee_r.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "pelvis__belt.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "thigh_l__tasset_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_l__thigh_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "thigh_r__tasset_r": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_r__thigh_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.gloves.bulwark",
+      "file": "armor/gloves_bulwark.glb",
+      "tris": 880,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.bulwark.json",
+      "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_l__gauntlet_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_r__gauntlet_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.gloves.bulwark@npc.grunt",
+      "file": "armor/gloves_bulwark.grunt.glb",
+      "tris": 856,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.bulwark.json",
+      "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_l__gauntlet_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_r__gauntlet_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.gloves.bulwark@npc.shopkeeper",
+      "file": "armor/gloves_bulwark.shopkeeper.glb",
+      "tris": 856,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.bulwark.json",
+      "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_l__gauntlet_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_r__gauntlet_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.gloves.bulwark@npc.dispatcher",
+      "file": "armor/gloves_bulwark.dispatcher.glb",
+      "tris": 864,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.bulwark.json",
+      "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_l__gauntlet_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_r__gauntlet_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.boots.bulwark",
+      "file": "armor/boots_bulwark.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.bulwark.json",
+      "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_l__boot_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_r__boot_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.bulwark@npc.grunt",
+      "file": "armor/boots_bulwark.grunt.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.bulwark.json",
+      "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_l__boot_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_r__boot_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.bulwark@npc.shopkeeper",
+      "file": "armor/boots_bulwark.shopkeeper.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.bulwark.json",
+      "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_l__boot_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_r__boot_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.bulwark@npc.dispatcher",
+      "file": "armor/boots_bulwark.dispatcher.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.bulwark.json",
+      "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_l__boot_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_r__boot_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.raider",
+      "file": "armor/helmet_raider.glb",
+      "tris": 648,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.raider.json",
+      "description": "Raider skull cap: open-faced, rusting, with two bone horns. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet_raider": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "head__horn_l": [
+          "armor_bone"
+        ],
+        "head__horn_r": [
+          "armor_bone"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.raider@npc.grunt",
+      "file": "armor/helmet_raider.grunt.glb",
+      "tris": 648,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.raider.json",
+      "description": "Raider skull cap: open-faced, rusting, with two bone horns. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet_raider": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "head__horn_l": [
+          "armor_bone"
+        ],
+        "head__horn_r": [
+          "armor_bone"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.raider@npc.shopkeeper",
+      "file": "armor/helmet_raider.shopkeeper.glb",
+      "tris": 648,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.raider.json",
+      "description": "Raider skull cap: open-faced, rusting, with two bone horns. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet_raider": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "head__horn_l": [
+          "armor_bone"
+        ],
+        "head__horn_r": [
+          "armor_bone"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.raider@npc.dispatcher",
+      "file": "armor/helmet_raider.dispatcher.glb",
+      "tris": 648,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.raider.json",
+      "description": "Raider skull cap: open-faced, rusting, with two bone horns. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet_raider": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "head__horn_l": [
+          "armor_bone"
+        ],
+        "head__horn_r": [
+          "armor_bone"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.suit.raider",
+      "file": "armor/suit_raider.glb",
+      "tris": 1334,
+      "license": "CC0",
+      "source": "recipes/armor.suit.raider.json",
+      "description": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_02__strap_1": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "spine_03__chest.002": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "spine_03__strap_0": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "upperarm_l__pauldron_l.002": [
+          "armor_rust",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__spike_0": [
+          "armor_bone"
+        ],
+        "upperarm_l__spike_1": [
+          "armor_bone"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.suit.raider@npc.grunt",
+      "file": "armor/suit_raider.grunt.glb",
+      "tris": 1334,
+      "license": "CC0",
+      "source": "recipes/armor.suit.raider.json",
+      "description": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_02__strap_1": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "spine_03__chest.002": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "spine_03__strap_0": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "upperarm_l__pauldron_l.002": [
+          "armor_rust",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__spike_0": [
+          "armor_bone"
+        ],
+        "upperarm_l__spike_1": [
+          "armor_bone"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.suit.raider@npc.shopkeeper",
+      "file": "armor/suit_raider.shopkeeper.glb",
+      "tris": 1338,
+      "license": "CC0",
+      "source": "recipes/armor.suit.raider.json",
+      "description": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_02__strap_1": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "spine_03__chest.002": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "spine_03__strap_0": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "upperarm_l__pauldron_l.002": [
+          "armor_rust",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__spike_0": [
+          "armor_bone"
+        ],
+        "upperarm_l__spike_1": [
+          "armor_bone"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.suit.raider@npc.dispatcher",
+      "file": "armor/suit_raider.dispatcher.glb",
+      "tris": 1334,
+      "license": "CC0",
+      "source": "recipes/armor.suit.raider.json",
+      "description": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_02__strap_1": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "spine_03__chest.002": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "spine_03__strap_0": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "upperarm_l__pauldron_l.002": [
+          "armor_rust",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__spike_0": [
+          "armor_bone"
+        ],
+        "upperarm_l__spike_1": [
+          "armor_bone"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.raider",
+      "file": "armor/legs_raider.glb",
+      "tris": 1188,
+      "license": "CC0",
+      "source": "recipes/armor.legs.raider.json",
+      "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "calf_r__knee_r.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "pelvis__belt.002": [
+          "armor_strap",
+          "armor_rust"
+        ],
+        "pelvis__pouch.002": [
+          "armor_strap"
+        ],
+        "thigh_r__thigh_r.002": [
+          "armor_rust",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.raider@npc.grunt",
+      "file": "armor/legs_raider.grunt.glb",
+      "tris": 1204,
+      "license": "CC0",
+      "source": "recipes/armor.legs.raider.json",
+      "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "calf_r__knee_r.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "pelvis__belt.002": [
+          "armor_strap",
+          "armor_rust"
+        ],
+        "pelvis__pouch.002": [
+          "armor_strap"
+        ],
+        "thigh_r__thigh_r.002": [
+          "armor_rust",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.raider@npc.shopkeeper",
+      "file": "armor/legs_raider.shopkeeper.glb",
+      "tris": 1208,
+      "license": "CC0",
+      "source": "recipes/armor.legs.raider.json",
+      "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "calf_r__knee_r.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "pelvis__belt.002": [
+          "armor_strap",
+          "armor_rust"
+        ],
+        "pelvis__pouch.002": [
+          "armor_strap"
+        ],
+        "thigh_r__thigh_r.002": [
+          "armor_rust",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.raider@npc.dispatcher",
+      "file": "armor/legs_raider.dispatcher.glb",
+      "tris": 1204,
+      "license": "CC0",
+      "source": "recipes/armor.legs.raider.json",
+      "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "calf_r__knee_r.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "pelvis__belt.002": [
+          "armor_strap",
+          "armor_rust"
+        ],
+        "pelvis__pouch.002": [
+          "armor_strap"
+        ],
+        "thigh_r__thigh_r.002": [
+          "armor_rust",
           "armor_trim"
         ]
       },

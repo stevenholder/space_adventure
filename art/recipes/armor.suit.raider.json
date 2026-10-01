@@ -1,0 +1,17 @@
+{
+  "$comment": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Built by tools/bpy/armor.py for every body in BODIES.",
+  "id": "armor.suit.raider",
+  "src": "build/armor.suit.raider.raw.glb",
+  "out": "armor/suit_raider.glb",
+  "fit": false,
+  "budget": 5000,
+  "pbr": true,
+  "license": "CC0",
+  "author": "Space Adventure",
+  "source_url": "tools/bpy/armor.py",
+  "bodies": [
+    "npc.grunt",
+    "npc.shopkeeper",
+    "npc.dispatcher"
+  ]
+}

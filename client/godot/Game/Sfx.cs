@@ -50,7 +50,9 @@ namespace SpaceAdventure.Game
 
         /// <summary>The family a weapon item sounds like.</summary>
         public static string Family(string item) =>
-            item == "weapon.smg" ? "smg" : item == "weapon.dmr" ? "dmr" : item == "weapon.sidearm" ? "pistol" : "rifle";
+            // Skins ("weapon.smg.frost") sound like the gun they reskin.
+            item.StartsWith("weapon.smg") ? "smg" : item.StartsWith("weapon.dmr") ? "dmr"
+            : item.StartsWith("weapon.sidearm") ? "pistol" : "rifle";
 
         public void OwnShot(string item) => Play2D(_shot[Family(item)], -4f);
         public void ShotAt(Vector3 at, string item) => PlayAt(at, _shot[Family(item)], 2f, 120f);

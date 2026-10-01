@@ -37,6 +37,32 @@
       "value": 80
     },
     {
+      "id": "weapon.pulse.dune",
+      "name": "Pulse Rifle (Dune)",
+      "kind": "weapon",
+      "rarity": "epic",
+      "slot": "primary",
+      "asset": "weapon.pulse.dune",
+      "stack_max": 1,
+      "weapon": {
+        "damage": 25,
+        "fire_interval": 0.15,
+        "magazine": 30,
+        "reload_time": 2.0,
+        "ammo_item": "ammo.cell",
+        "max_range": 120.0,
+        "falloff_start": 40.0,
+        "falloff_end": 120.0,
+        "falloff_min": 0.35,
+        "spread_base": 0.6,
+        "spread_max": 2.5,
+        "spread_per_shot": 0.35,
+        "spread_decay": 3.0
+      },
+      "desc": "The same rifle, dressed for the dust. Someone polished it.",
+      "value": 140
+    },
+    {
       "id": "weapon.smg",
       "name": "Scrap SMG",
       "kind": "weapon",
@@ -61,6 +87,32 @@
       },
       "desc": "Welded from three broken guns. Sprays cells fast; useless past 60 m.",
       "value": 60
+    },
+    {
+      "id": "weapon.smg.frost",
+      "name": "Scrap SMG (Frost)",
+      "kind": "weapon",
+      "rarity": "rare",
+      "slot": "primary",
+      "asset": "weapon.smg.frost",
+      "stack_max": 1,
+      "weapon": {
+        "damage": 14,
+        "fire_interval": 0.075,
+        "magazine": 40,
+        "reload_time": 1.8,
+        "ammo_item": "ammo.cell",
+        "max_range": 70.0,
+        "falloff_start": 15.0,
+        "falloff_end": 60.0,
+        "falloff_min": 0.3,
+        "spread_base": 1.0,
+        "spread_max": 3.5,
+        "spread_per_shot": 0.3,
+        "spread_decay": 4.0
+      },
+      "desc": "Repainted white. Still welded from three broken guns.",
+      "value": 110
     },
     {
       "id": "weapon.dmr",
@@ -306,6 +358,118 @@
       },
       "desc": "Bench-made. Heavier than the suit and it shows.",
       "asset": "armor.plate.iron"
+    },
+    {
+      "id": "armor.helmet.bulwark",
+      "name": "Bulwark Helm",
+      "kind": "armor",
+      "rarity": "rare",
+      "slot": "head",
+      "stack_max": 1,
+      "armor": {
+        "value": 6
+      },
+      "desc": "A slit to see through and a crest to be seen by.",
+      "value": 60,
+      "asset": "armor.helmet.bulwark"
+    },
+    {
+      "id": "armor.suit.bulwark",
+      "name": "Bulwark Plate",
+      "kind": "armor",
+      "rarity": "epic",
+      "slot": "chest",
+      "stack_max": 1,
+      "armor": {
+        "value": 18
+      },
+      "desc": "Layered plate for people who intend to stand still under fire.",
+      "value": 160,
+      "asset": "armor.suit.bulwark"
+    },
+    {
+      "id": "armor.legs.bulwark",
+      "name": "Bulwark Greaves",
+      "kind": "armor",
+      "rarity": "rare",
+      "slot": "legs",
+      "stack_max": 1,
+      "armor": {
+        "value": 10
+      },
+      "desc": "Full-wrap thigh plates. Kneeling takes planning.",
+      "value": 80,
+      "asset": "armor.legs.bulwark"
+    },
+    {
+      "id": "armor.gloves.bulwark",
+      "name": "Bulwark Gauntlets",
+      "kind": "armor",
+      "rarity": "rare",
+      "slot": "hands",
+      "stack_max": 1,
+      "armor": {
+        "value": 4
+      },
+      "desc": "Long cuffs, broad knuckles. Reloading is louder.",
+      "value": 40,
+      "asset": "armor.gloves.bulwark"
+    },
+    {
+      "id": "armor.boots.bulwark",
+      "name": "Bulwark Sabatons",
+      "kind": "armor",
+      "rarity": "rare",
+      "slot": "feet",
+      "stack_max": 1,
+      "armor": {
+        "value": 6
+      },
+      "desc": "Armored to the shin. You will not sneak in these.",
+      "value": 50,
+      "asset": "armor.boots.bulwark"
+    },
+    {
+      "id": "armor.helmet.raider",
+      "name": "Raider Skullcap",
+      "kind": "armor",
+      "rarity": "uncommon",
+      "slot": "head",
+      "stack_max": 1,
+      "armor": {
+        "value": 4
+      },
+      "desc": "Rust, two horns and a dent with a story.",
+      "value": 18,
+      "asset": "armor.helmet.raider"
+    },
+    {
+      "id": "armor.suit.raider",
+      "name": "Raider Harness",
+      "kind": "armor",
+      "rarity": "uncommon",
+      "slot": "chest",
+      "stack_max": 1,
+      "armor": {
+        "value": 9
+      },
+      "desc": "One good pauldron and a lot of strapping.",
+      "value": 45,
+      "asset": "armor.suit.raider"
+    },
+    {
+      "id": "armor.legs.raider",
+      "name": "Raider Legguards",
+      "kind": "armor",
+      "rarity": "uncommon",
+      "slot": "legs",
+      "stack_max": 1,
+      "armor": {
+        "value": 6
+      },
+      "desc": "One thigh plate. They ran out.",
+      "value": 24,
+      "asset": "armor.legs.raider"
     },
     {
       "$comment": "Phase 13 consumable (GDD 'use'): one unit leaves the bag, +50 health capped, 8 s cooldown. Bench-made and stocked by the quartermaster.",

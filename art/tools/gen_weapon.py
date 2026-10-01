@@ -121,6 +121,7 @@ def build_dmr():
     t += box(0.0, 0.205, -0.03, 0.02, 0.04, 0.02, METAL)       # scope mount rear
     t += box(0.0, 0.205, -0.15, 0.02, 0.04, 0.02, METAL)       # scope mount front
     t += box(0.0, 0.10, -0.36, 0.03, 0.02, 0.12, METAL)        # folded bipod
+    t += box(0.031, 0.15, -0.06, 0.004, 0.02, 0.20, ACCENT)    # charge strip (rarity colour)
     return t
 
 
@@ -144,19 +145,52 @@ def build_pistol():
     return t
 
 
+# ---- rarity accents and skins -------------------------------------------------
+# The glowing accent parts take the item's rarity colour (the UI's ramp,
+# client Styles.Rarity), so a gun's tier reads in the world as well as in
+# the bags. A skin is a recolour of the same model: a dict of palette
+# colour -> new colour applied after the build.
+def _hex(h):
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+
+
+RARITY = {"common": _hex("#B8B8A8"), "uncommon": _hex("#4FD15C"), "rare": _hex("#3FA9FF"),
+          "epic": _hex("#B45CFF"), "legendary": _hex("#FF9B1A")}
+ACCENTS = (ACCENT, SMG_ACCENT, DMR_GLASS)
+
+
+def recolour(tris, remap):
+    return [(a, b, c, remap.get(col, col)) for (a, b, c, col) in tris]
+
+
+def styled(build, rarity, skin=None):
+    remap = {acc: RARITY[rarity] for acc in ACCENTS}
+    remap.update(skin or {})
+    return lambda: recolour(build(), remap)
+
+
+DUNE = {BODY: (0.72, 0.62, 0.45), GRIP_C: (0.36, 0.27, 0.18), METAL: (0.42, 0.36, 0.28)}
+FROST = {SMG_BODY: (0.86, 0.89, 0.92), GRIP_C: (0.30, 0.34, 0.40), METAL: (0.48, 0.53, 0.58)}
+
 # (asset id, file, builder, contact points)
 WEAPONS = [
-    ("weapon.pulse", "pulse.glb", build_rifle,
+    ("weapon.pulse", "pulse.glb", styled(build_rifle, "rare"),
      dict(grip=GRIP, muzzle=MUZZLE, fore=FORE, sight=SIGHT, front=FRONT)),
-    ("weapon.smg", "smg.glb", build_smg,
+    ("weapon.smg", "smg.glb", styled(build_smg, "uncommon"),
      dict(grip=GRIP, muzzle=(0.0, 0.155, -0.40), fore=FORE, sight=(0.0, 0.212, -0.04), front=(0.0, 0.212, -0.33))),
-    ("weapon.dmr", "dmr.glb", build_dmr,
+    ("weapon.dmr", "dmr.glb", styled(build_dmr, "epic"),
      dict(grip=GRIP, muzzle=(0.0, 0.155, -0.79), fore=FORE, sight=(0.0, 0.245, 0.05), front=(0.0, 0.245, -0.21))),
     # Pistol: `fore` is where the support palm cups the firing fist -- just
     # under and in front of the grip. human.py PISTOL_FORE matches it.
-    ("weapon.sidearm", "sidearm.glb", build_pistol,
+    ("weapon.sidearm", "sidearm.glb", styled(build_pistol, "common"),
      dict(grip=(0.0, 0.03, 0.0), muzzle=(0.0, 0.105, -0.18), fore=(0.0, -0.015, -0.02),
           sight=(0.0, 0.137, -0.005), front=(0.0, 0.137, -0.16))),
+]
+# Skins: the base model and contact points, recoloured.
+_BY_ID = {w[0]: w for w in WEAPONS}
+WEAPONS += [
+    ("weapon.pulse.dune", "pulse_dune.glb", styled(build_rifle, "epic", DUNE), _BY_ID["weapon.pulse"][3]),
+    ("weapon.smg.frost", "smg_frost.glb", styled(build_smg, "rare", FROST), _BY_ID["weapon.smg"][3]),
 ]
 
 
