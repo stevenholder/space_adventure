@@ -525,6 +525,7 @@ void fragment() {
         private FirstPersonAnim(AnimationPlayer player)
         {
             _player = player;
+            _player.Deterministic = true;   // untracked bones to rest; see CharacterAnim
             foreach (string name in _player.GetAnimationList())
                 _player.GetAnimation(name).LoopMode =
                     CharacterAnim.OneShot(name) ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;

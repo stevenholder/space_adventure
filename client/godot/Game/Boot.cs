@@ -591,12 +591,13 @@ namespace SpaceAdventure.Game
                 _interact._selfId = _net.EntityId;
                 _interact.Update(eye, Frame.ToGodot(li.Look));
             }
-            if (_seat != 0) _interact.Notice = SeatKind == EntityType.Ship ? "F  ·  exit ship" : "F  ·  exit rover";
             // An NPC's panel closes when you walk away from the NPC (GDD
             // `ui_close_dist`): the shop and the bench are somebody's counter.
             if (_interact.ShopOpen && OutOfCounterRange(_interact.ShopNpc)) { _interact.CloseShop(); _shopView.Show(false); }
             if (_benchView.Open && _benchView.Bench != 0 && OutOfCounterRange(_benchView.Bench)) _benchView.Show(false);
             else if (Clock.Now > _noticeUntil) _interact.Notice = "";
+            // After the clear above, or the hint is wiped the frame it is set.
+            if (_seat != 0 && Clock.Now > _noticeUntil) _interact.Notice = SeatKind == EntityType.Ship ? "F  ·  exit ship" : "F  ·  exit rover";
             if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open)) OnInteract();
 
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
@@ -1207,7 +1208,7 @@ namespace SpaceAdventure.Game
             var markers = new List<(string, double)>();
             foreach (var v in _views.All)
             {
-                if (v.Root == null || !v.Root.Visible) continue;
+                if (v.Root == null || !v.Root.Visible || (_seat != 0 && v.Id == _seatVehicle)) continue;
                 string name = v.Type switch
                 {
                     EntityType.Npc when v.Label == "npc.quartermaster" => "SHOP",
@@ -1293,9 +1294,16 @@ namespace SpaceAdventure.Game
             _map.Draw(_terrain, Frame.ToGodot(me.Pos), Frame.ToGodot(me.Facing), MapMarkers());
         }
 
-        /// <summary>The flight readout: speed, altitude above the terrain under the ship, regime, role.</summary>
+        /// <summary>The seat readout: rover speed and role, or the ship's speed, altitude, regime, role.</summary>
         private void UpdateFlightReadout()
         {
+            if (SeatKind == EntityType.Vehicle)
+            {
+                // The rover's line: speed from the predicted rover we steer.
+                bool driver = _seat == 1 && _rover.Ready;
+                _hudView.SetFlight(driver ? $"{_rover.State.Vel.Length * 3.6,5:F0} km/h   DRIVER" : "PASSENGER");
+                return;
+            }
             if (SeatKind != EntityType.Ship) { _hudView.SetFlight(null); return; }
             bool pilot = Piloting;
             Vec3 p;

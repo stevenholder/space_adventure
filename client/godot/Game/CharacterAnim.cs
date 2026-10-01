@@ -72,6 +72,12 @@ namespace SpaceAdventure.Game
         private CharacterAnim(AnimationPlayer player)
         {
             _player = player;
+            // Godot's glTF import drops constant tracks, so idle carries no
+            // Root track and a non-deterministic mixer leaves any bone the new
+            // clip doesn't key wherever the last clip put it: a body revived
+            // from `die` played idle lying flat on its back (playtest
+            // 2026-10-01). Deterministic blends every untracked bone to rest.
+            _player.Deterministic = true;
             // Everything loops except dying, which holds its last frame -- a
             // body that loops its own death animation is a bug you cannot unsee.
             foreach (string name in _player.GetAnimationList())

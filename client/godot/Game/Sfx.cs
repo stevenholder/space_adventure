@@ -57,8 +57,11 @@ namespace SpaceAdventure.Game
         public void OwnShot(string item) => Play2D(_shot[Family(item)], -4f);
         public void ShotAt(Vector3 at, string item) => PlayAt(at, _shot[Family(item)], 2f, 120f);
         public void ImpactAt(Vector3 at) => PlayAt(at, _impact, -2f, 40f);
-        public void StepAt(Vector3 at, int n) => PlayAt(at, _steps[n & 3], -10f, 18f);
-        public void OwnStep(int n) => Play2D(_steps[n & 3], -18f);
+        // Steps are background: -18/-10 dB was the loudest thing in the
+        // 2026-10-01 playtest. Others' carry 12 m, not 18, so a camp of
+        // patrolling NPCs is not a drum line.
+        public void StepAt(Vector3 at, int n) => PlayAt(at, _steps[n & 3], -24f, 12f);
+        public void OwnStep(int n) => Play2D(_steps[n & 3], -30f);
         public void DryFire() => Play2D(_dry, -8f);
 
         /// <summary>Mag out, mag in, rack -- timed to the reload.</summary>

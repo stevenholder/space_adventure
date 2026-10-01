@@ -428,6 +428,18 @@ internal static class Program
         Check("an entity that appeared mid-bracket takes the newer pose",
             Math.Abs(TimelineX(tl.Interpolate(0.125f), 2) - 5.0) < 1e-6);
 
+        // Occupancy rides through interpolation: a seated remote is hidden
+        // (Entities.Render), and a dropped ParentId drew it standing on the hull.
+        var seated = new SnapshotTimeline { OneWaySeconds = 0 };
+        foreach (uint t in new uint[] { 10, 11, 12 })
+        {
+            var snap = TimelineSnap(t, (1u, t));
+            snap.Entities[0].ParentId = 7; snap.Entities[0].Seat = 1;
+            seated.Add(snap, (t - 10) * 0.05f);
+        }
+        foreach (var kv in seated.Interpolate(0.125f))
+            Check("an interpolated seated pose keeps its parent and seat", kv.Value.ParentId == 7 && kv.Value.Seat == 1);
+
         // The one-way trip pushes the estimated server clock forward: at the
         // same wall instant, a 100 ms one-way (200 ms RTT) puts the render
         // point ON the newest snapshot, and anything worse clamps there

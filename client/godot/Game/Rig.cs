@@ -29,6 +29,7 @@
 //   -uiFire <secs>          reload and hold the trigger on it
 //   -uiQuest                accept the starter mission at the board, wait for a party invite
 //   -uiLamp                 swing the sun onto whatever the camera ends up looking at
+//   -uiBoard                walk to the nearest rover and take the driver's seat
 //   -rigArmed               show the rig without a purchase
 //   -uiAim                  hold aim-down-sights for the shot
 //   -uiWalk                 walk forward through the shot
@@ -255,6 +256,30 @@ namespace SpaceAdventure.Game
                 _combatFeed.Damage(g1.Root.GlobalPosition + up1 * 1.55f, 20, false);
                 _combatFeed.HitMarker(false);
                 await Wait(0.12);
+            }
+
+            // -uiBoard: walk to the nearest rover and take the driver's seat,
+            // for a shot of the seated camera and HUD.
+            if (Flag("-uiBoard"))
+            {
+                EntityView rover = null; float roverD = float.MaxValue;
+                foreach (EntityView v in _views.All)
+                {
+                    if (v.Root == null || v.Type != EntityType.Vehicle) continue;
+                    float d = (v.Root.GlobalPosition - Eye).LengthSquared();
+                    if (d < roverD) { roverD = d; rover = v; }
+                }
+                if (rover != null)
+                {
+                    await ApproachTo(rover.Root.GlobalPosition, 3f);
+                    _net.Send(Encode.Board(rover.Id, 1));
+                    for (double sw = 0; _seat == 0 && sw < 5; sw += 0.1) await Wait(0.1);
+                    GD.Print(_seat != 0 ? $"ui: seated in rover {rover.Id} seat {_seat}" : "ui: board refused");
+                    // Look out over the bonnet (art -Z is the rover's front).
+                    _fps.FaceToward(Eye, rover.Root.GlobalTransform * new Vector3(0, 1.2f, -8f));
+                    await Wait(1.0);
+                }
+                else GD.Print("ui: no rover to board");
             }
 
             // -uiFace target|npc|hostile|player|wounded: aim the camera at
