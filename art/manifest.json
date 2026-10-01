@@ -569,9 +569,234 @@
       "pbr": true
     },
     {
+      "id": "armor.helmet.scout@npc.grunt",
+      "file": "armor/helmet_scout.grunt.glb",
+      "tris": 1116,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.scout.json",
+      "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__visor": [
+          "armor_visor",
+          "armor_metal"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.scout@npc.shopkeeper",
+      "file": "armor/helmet_scout.shopkeeper.glb",
+      "tris": 1116,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.scout.json",
+      "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__visor": [
+          "armor_visor",
+          "armor_metal"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.scout@npc.dispatcher",
+      "file": "armor/helmet_scout.dispatcher.glb",
+      "tris": 1116,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.scout.json",
+      "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__visor": [
+          "armor_visor",
+          "armor_metal"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
       "id": "armor.suit.scout",
       "file": "armor/suit_scout.glb",
       "tris": 2536,
+      "license": "CC0",
+      "source": "recipes/armor.suit.scout.json",
+      "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__bracer_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "lowerarm_r__bracer_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_01__abs_lo": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_02__abs_hi": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_03__back": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_l": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_r": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.suit.scout@npc.grunt",
+      "file": "armor/suit_scout.grunt.glb",
+      "tris": 2536,
+      "license": "CC0",
+      "source": "recipes/armor.suit.scout.json",
+      "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__bracer_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "lowerarm_r__bracer_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_01__abs_lo": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_02__abs_hi": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_03__back": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_l": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_r": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.suit.scout@npc.shopkeeper",
+      "file": "armor/suit_scout.shopkeeper.glb",
+      "tris": 2536,
+      "license": "CC0",
+      "source": "recipes/armor.suit.scout.json",
+      "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__bracer_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "lowerarm_r__bracer_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_01__abs_lo": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_02__abs_hi": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_03__back": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_l": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_r": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.suit.scout@npc.dispatcher",
+      "file": "armor/suit_scout.dispatcher.glb",
+      "tris": 2520,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -641,9 +866,234 @@
       "pbr": true
     },
     {
+      "id": "armor.plate.iron@npc.grunt",
+      "file": "armor/plate_iron.grunt.glb",
+      "tris": 1130,
+      "license": "CC0",
+      "source": "recipes/armor.plate.iron.json",
+      "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__iron_back": [
+          "armor_iron",
+          "armor_trim"
+        ],
+        "spine_03__iron_front": [
+          "armor_iron",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.plate.iron@npc.shopkeeper",
+      "file": "armor/plate_iron.shopkeeper.glb",
+      "tris": 1130,
+      "license": "CC0",
+      "source": "recipes/armor.plate.iron.json",
+      "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__iron_back": [
+          "armor_iron",
+          "armor_trim"
+        ],
+        "spine_03__iron_front": [
+          "armor_iron",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.plate.iron@npc.dispatcher",
+      "file": "armor/plate_iron.dispatcher.glb",
+      "tris": 1130,
+      "license": "CC0",
+      "source": "recipes/armor.plate.iron.json",
+      "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__iron_back": [
+          "armor_iron",
+          "armor_trim"
+        ],
+        "spine_03__iron_front": [
+          "armor_iron",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true
+    },
+    {
       "id": "armor.legs.scout",
       "file": "armor/legs_scout.glb",
       "tris": 2424,
+      "license": "CC0",
+      "source": "recipes/armor.legs.scout.json",
+      "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_l__shin_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "calf_r__knee_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__shin_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "pelvis__belt": [
+          "armor_strap",
+          "armor_metal"
+        ],
+        "pelvis__pouch": [
+          "armor_strap"
+        ],
+        "pelvis__pouch.001": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side.001": [
+          "armor_strap"
+        ],
+        "thigh_l__thigh_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "thigh_r__thigh_r": [
+          "armor_plate",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.scout@npc.grunt",
+      "file": "armor/legs_scout.grunt.glb",
+      "tris": 2452,
+      "license": "CC0",
+      "source": "recipes/armor.legs.scout.json",
+      "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_l__shin_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "calf_r__knee_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__shin_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "pelvis__belt": [
+          "armor_strap",
+          "armor_metal"
+        ],
+        "pelvis__pouch": [
+          "armor_strap"
+        ],
+        "pelvis__pouch.001": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side.001": [
+          "armor_strap"
+        ],
+        "thigh_l__thigh_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "thigh_r__thigh_r": [
+          "armor_plate",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.scout@npc.shopkeeper",
+      "file": "armor/legs_scout.shopkeeper.glb",
+      "tris": 2428,
+      "license": "CC0",
+      "source": "recipes/armor.legs.scout.json",
+      "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_l__shin_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "calf_r__knee_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__shin_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "pelvis__belt": [
+          "armor_strap",
+          "armor_metal"
+        ],
+        "pelvis__pouch": [
+          "armor_strap"
+        ],
+        "pelvis__pouch.001": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side.001": [
+          "armor_strap"
+        ],
+        "thigh_l__thigh_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "thigh_r__thigh_r": [
+          "armor_plate",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.scout@npc.dispatcher",
+      "file": "armor/legs_scout.dispatcher.glb",
+      "tris": 2436,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -724,6 +1174,96 @@
       "arms": true
     },
     {
+      "id": "armor.gloves.scout@npc.grunt",
+      "file": "armor/gloves_scout.grunt.glb",
+      "tris": 832,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.scout.json",
+      "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_l__cuff_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_r__cuff_r": [
+          "armor_trim",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.gloves.scout@npc.shopkeeper",
+      "file": "armor/gloves_scout.shopkeeper.glb",
+      "tris": 840,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.scout.json",
+      "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_l__cuff_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_r__cuff_r": [
+          "armor_trim",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.gloves.scout@npc.dispatcher",
+      "file": "armor/gloves_scout.dispatcher.glb",
+      "tris": 840,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.scout.json",
+      "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_l__cuff_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_r__cuff_r": [
+          "armor_trim",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
       "id": "armor.boots.scout",
       "file": "armor/boots_scout.glb",
       "tris": 1392,
@@ -756,8 +1296,170 @@
       "pbr": true
     },
     {
+      "id": "armor.boots.scout@npc.grunt",
+      "file": "armor/boots_scout.grunt.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.scout.json",
+      "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_l__boot_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_r__boot_r": [
+          "armor_boot",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.scout@npc.shopkeeper",
+      "file": "armor/boots_scout.shopkeeper.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.scout.json",
+      "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_l__boot_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_r__boot_r": [
+          "armor_boot",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.scout@npc.dispatcher",
+      "file": "armor/boots_scout.dispatcher.glb",
+      "tris": 1416,
+      "license": "CC0",
+      "source": "recipes/armor.boots.scout.json",
+      "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_l__boot_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_r__boot_r": [
+          "armor_boot",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
       "id": "pack.scout",
       "file": "armor/pack_scout.glb",
+      "tris": 324,
+      "license": "CC0",
+      "source": "recipes/pack.scout.json",
+      "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__pack": [
+          "armor_plate"
+        ],
+        "spine_03__pack_cell": [
+          "armor_metal"
+        ],
+        "spine_03__pack_lid": [
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "pack.scout@npc.grunt",
+      "file": "armor/pack_scout.grunt.glb",
+      "tris": 324,
+      "license": "CC0",
+      "source": "recipes/pack.scout.json",
+      "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__pack": [
+          "armor_plate"
+        ],
+        "spine_03__pack_cell": [
+          "armor_metal"
+        ],
+        "spine_03__pack_lid": [
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "pack.scout@npc.shopkeeper",
+      "file": "armor/pack_scout.shopkeeper.glb",
+      "tris": 324,
+      "license": "CC0",
+      "source": "recipes/pack.scout.json",
+      "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__pack": [
+          "armor_plate"
+        ],
+        "spine_03__pack_cell": [
+          "armor_metal"
+        ],
+        "spine_03__pack_lid": [
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "pack.scout@npc.dispatcher",
+      "file": "armor/pack_scout.dispatcher.glb",
       "tris": 324,
       "license": "CC0",
       "source": "recipes/pack.scout.json",

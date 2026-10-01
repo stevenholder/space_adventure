@@ -11,5 +11,10 @@
   ],
   "license": "CC0",
   "author": "Space Adventure",
-  "source_url": "tools/bpy/armor.py"
+  "source_url": "tools/bpy/armor.py",
+  "bodies": [
+    "npc.grunt",
+    "npc.shopkeeper",
+    "npc.dispatcher"
+  ]
 }

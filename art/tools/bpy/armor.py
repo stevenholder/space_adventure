@@ -612,8 +612,30 @@ def pieces(body):
 
 
 # ---- build -------------------------------------------------------------------------
+# Body shapes armor is fitted to. "" is the player's build (the player and
+# the robot gunner); the rest are races whose MakeHuman macro or eye height
+# differs, and get their own copy of every piece, exported as
+# "<asset>@<body>" -- the client picks it by the wearer's asset id.
+BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher")
+
+
 def main():
+    only = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    for body_id in BODIES:
+        if only and (body_id or "char.player") not in only:
+            continue
+        build_for(body_id)
+
+
+def build_for(body_id):
+    global EYE
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    human.ACTIVE.clear()
+    if body_id:                                   # the shape only, not the colours
+        v = human.VARIANTS[body_id]
+        human.ACTIVE.update({k: v[k] for k in ("macro", "eye") if k in v})
+    EYE = human.ACTIVE.get("eye", human.EYE)
+    suffix = "@" + body_id if body_id else ""
     h, rig, _ = human.make_human(decimate=False)
     h.data.update()
     body = Body(h, rig)
@@ -637,7 +659,7 @@ def main():
             p.data.name = p.name
         for p in parts:
             human.textures.uv_box(p)
-        out = os.path.join(ART, "build", asset_id + ".raw.glb")
+        out = os.path.join(ART, "build", asset_id + suffix + ".raw.glb")
         bpy.ops.object.select_all(action="DESELECT")
         for p in parts:
             p.select_set(True)

@@ -30,6 +30,7 @@
  *     "covers": ["body/suit"],               // optional: surfaces this hides
  *     "arms":   true,                        // optional: first-person arms wear it
  *     "rig":    "animated",                  // optional manifest flag
+ *     "bodies": ["npc.grunt"],               // optional: also "<id>@<body>" per wearer build
  *     "license": "CC0", "author": "Space Adventure", "source_url": "tools/bpy/armor.py"
  *   }
  */
@@ -201,7 +202,17 @@ export async function importPack(recipe) {
 export function updateManifest(result, recipe) {
   const file = path.join(artDir, "manifest.json");
   const manifest = JSON.parse(readFileSync(file, "utf8"));
-  const row = manifest.assets.find((a) => a.id === recipe.id);
+  let row = manifest.assets.find((a) => a.id === recipe.id);
+  if (!row && recipe.variant_of) {
+    // A per-body variant ("armor.suit.scout@npc.grunt") is a copy of its
+    // base row, placed right after it.
+    const base = manifest.assets.findIndex((a) => a.id === recipe.variant_of);
+    if (base < 0) throw new Error(`variant ${recipe.id}: no base row ${recipe.variant_of}`);
+    row = { ...manifest.assets[base], id: recipe.id };
+    let at = base + 1;
+    while (at < manifest.assets.length && manifest.assets[at].id.startsWith(recipe.variant_of + "@")) at++;
+    manifest.assets.splice(at, 0, row);
+  }
   if (!row) throw new Error(`manifest has no id ${recipe.id} (adding one is a deliberate change)`);
 
   row.file = recipe.out;
@@ -289,8 +300,19 @@ if (arg === "--selftest") {
 }
 
 const recipePath = path.resolve(process.cwd(), arg);
-const recipe = JSON.parse(readFileSync(recipePath, "utf8"));
-recipe.recipe_path = path.relative(artDir, recipePath);
-const result = await importPack(recipe);
-updateManifest(result, recipe);
-console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);
+const base = JSON.parse(readFileSync(recipePath, "utf8"));
+base.recipe_path = path.relative(artDir, recipePath);
+// `bodies`: the piece is also built for these wearers (armor.py BODIES), as
+// "<id>@<body>" from build/<id>@<body>.raw.glb to <out stem>.<body>.glb.
+const variants = [base, ...(base.bodies ?? []).map((b) => ({
+  ...base,
+  id: `${base.id}@${b}`,
+  variant_of: base.id,
+  src: base.src.replace(".raw.glb", `@${b}.raw.glb`),
+  out: base.out.replace(/\.glb$/, `.${b.replace("npc.", "")}.glb`),
+}))];
+for (const recipe of variants) {
+  const result = await importPack(recipe);
+  updateManifest(result, recipe);
+  console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);
+}
