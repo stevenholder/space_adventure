@@ -5,9 +5,12 @@
 # and templates; it gets its own job at the cutover.
 name: ci
 
+# Push runs main only (deploy.yml waits on that run). A feature branch is
+# checked by its pull request; pushing `feat/**` too ran every job twice
+# on the same commit.
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main]
   pull_request:
 
 jobs:
