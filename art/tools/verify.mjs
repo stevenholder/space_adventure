@@ -24,6 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Box3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { Texture } from "three";
 
 const artDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const manifest = JSON.parse(readFileSync(path.join(artDir, "manifest.json"), "utf8"));
@@ -50,7 +51,7 @@ const CELL_MARGIN = 0.45;
 
 const BUDGETS = [
   [/^char\./, 9000],
-  [/^npc\./, 6000],
+  [/^npc\./, 9000],
   [/^ship\./, 15000],
   [/^vehicle\./, 15000],
   [/^weapon\./, 3000],
@@ -86,27 +87,30 @@ const NODE_CONTRACTS = {
     eyeHeadSiblings: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "npc.dispatcher": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   // The hostiles carry the same layout on purpose: the client's nametag,
   // health-bar and animation code walks these names and does not care which
   // archetype it is looking at.
   "npc.grunt": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "npc.gunner": {
-    nodes: ["eye", "head", "arms", "torso", "arm.l", "arm.r", "leg.l", "leg.r", "hand.r"],
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
   "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
   "weapon.pulse": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.smg": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.dmr": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
+  "weapon.sidearm": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
   // up with hand.r and the channel effect starts at `muzzle`.
   "tool.drill": { nodes: ["grip", "muzzle"] },
@@ -161,6 +165,9 @@ function rawColorProblems(file) {
 }
 
 const loader = new GLTFLoader();
+// Textures are not checked here, and decoding an image wants a browser
+// (`self`, ImageBitmap): every texture loads as a blank one.
+loader.register(() => ({ name: "stub-textures", loadTexture: () => Promise.resolve(new Texture()) }));
 function loadGlb(file) {
   const buf = readFileSync(path.join(artDir, file));
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

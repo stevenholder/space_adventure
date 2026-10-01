@@ -15,6 +15,18 @@
      "price": 250
     },
     {
+     "item": "weapon.sidearm",
+     "price": 120
+    },
+    {
+     "item": "weapon.smg",
+     "price": 220
+    },
+    {
+     "item": "weapon.dmr",
+     "price": 480
+    },
+    {
      "item": "ammo.cell",
      "price": 1
     },
@@ -62,7 +74,10 @@
      "item": "consumable.medkit",
      "price": 30
     }
-   ]
+   ],
+   "worn": {
+    "feet": "armor.boots.scout"
+   }
   },
   {
    "$comment": "Phase 10 mission board. Shop-shaped (no move_speed = non-combat), stands at the relay; mission_list/turnin validate against this archetype.",
@@ -70,7 +85,10 @@
    "name": "Dispatcher Oru",
    "asset": "npc.dispatcher",
    "kind": "shop",
-   "verb": "talk"
+   "verb": "talk",
+   "worn": {
+    "feet": "armor.boots.scout"
+   }
   },
   {
    "$comment": "Phase 12 workbench. Shop-shaped like the dispatcher (no move_speed, no health, no stock): findNPC/inRange resolve it, `craft` validates against kind 'bench'. Stands at the relay beside the dispatcher.",
@@ -111,7 +129,13 @@
    "attack_windup": 0.25,
    "projectile_speed": 45.0,
    "turn_rate": 270.0,
-   "loot": "loot.gunner"
+   "loot": "loot.gunner",
+   "primary": "weapon.pulse",
+   "worn": {
+    "chest": "armor.plate.iron",
+    "legs": "armor.legs.scout",
+    "feet": "armor.boots.scout"
+   }
   },
   {
    "$comment": "Phase 10 bounty target. Spawned by the bounty scheduler at a solver-eligible POI, never by a zone. Tough enough to want a party, generous enough to be worth one.",

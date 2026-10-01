@@ -1,13 +1,11 @@
 {
-  "$comment": "Melee raider: the shared skeleton, broad and heavy, rust jacket. Closes to 2 m. Built by tools/bpy/body.py (VARIANTS) with the player's bones, weights and clips; only palette and bulk differ, so one armor piece fits all of them.",
+  "$comment": "npc.grunt: a variant of the MakeHuman body (tools/bpy/human.py VARIANTS) on the shared 53-bone rig, its own clips and hand mounts; real materials (pbr).",
   "id": "npc.grunt",
   "src": "build/npc.grunt.raw.glb",
   "out": "chars/grunt.glb",
-  "height": 1.8,
-  "axis": "y",
-  "ground": true,
-  "yaw": 0,
-  "budget": 6000,
+  "fit": false,
+  "budget": 9000,
+  "pbr": true,
   "mounts": {
     "eye": [
       0,
@@ -16,7 +14,7 @@
     ]
   },
   "license": "CC0",
-  "author": "Space Adventure",
-  "source_url": "tools/bpy/body.py",
+  "author": "Space Adventure (MakeHuman base mesh, CC0)",
+  "source_url": "tools/bpy/human.py",
   "rig": "animated"
 }

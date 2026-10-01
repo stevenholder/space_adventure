@@ -115,8 +115,44 @@ real materials, about 18k triangles dressed.
   (extensions.blender.org). The shipped `.glb` files are committed, so only
   regenerating needs it.
 
-The NPC bodies (shopkeeper, dispatcher, grunt, gunner) are still the older
-generator below, on its 11-bone skeleton.
+Every humanoid now comes from human.py's VARIANTS: the player, the
+quartermaster (older, heavier, khaki), the dispatcher (android: slim, pale
+synthetic skin, no hair, lit eyes, scalp seam), the grunt (orc: bigger and
+heavier, eyes at 1.82, green skin, brow, tusks, ears, topknot) and the
+gunner (robot: the player's build in flat-shaded gunmetal with a visor band
+and antenna, so the Scout/iron armor fits it). A variant sets MakeHuman
+sliders, eye height, colours/metalness, hair, flat shading and rigid head
+parts; rig, clips, mounts and grips are shared. `blender -b --python
+tools/bpy/human.py -- npc.grunt` rebuilds one. body.py now only builds the
+retired 11-bone skeleton and is kept for its older docs.
+
+## Surface textures and decals (2026-10-01)
+
+`tools/bpy/textures.py` paints every armor and suit material with numpy
+inside Blender. Each material gets a TILING 256 px albedo and a normal map
+built from one height field:
+
+- **plate**: panel lines, rivets and light scratches.
+- **trim**: fine noise.
+- **metal**: brushed.
+- **iron**: brushed, with pits and scratches.
+- **fabric** (straps, gloves, boots): a weave.
+- **suit**: a weave with quilted seams and stitching.
+
+`uv_box` projects UVs in world METRES (one repeat = 0.4 m), so texel size
+matches across parts. Normal strength is set per kind (`STRENGTH`). A
+strong cloth weave read as zebra stripes on the first-person gloves.
+
+Decals come from a 2x2 stencil atlas: the squad number "07", a chevron,
+hazard stripes and an insignia. `decal()` raycasts onto a plate and lays a
+quad 1.5 mm above it. The quad is joined into the part, so it rides the
+same bone. The material is alpha-clipped (glTF `MASK`). Placements are at
+the end of armor.py `pieces()`. Both generators export texcoords and
+embedded PNGs. verify.mjs stubs texture decoding, since three.js wants a
+browser for images. The first-person shader samples the albedo and normal
+maps too.
+
+Self-check: `blender -b --python tools/bpy/textures.py`.
 
 ## Humanoid skeleton (own bodies, from 2026-09-30)
 
@@ -218,6 +254,15 @@ sight, empty hands by the right hand.
 The pulse rifle is ours (`tools/gen_weapon.py`, pure glb.py boxes, 156 tris):
 −Z forward, `grip` on top of the pistol grip just under the bore, `muzzle` at
 the barrel tip, a notched rear sight so aiming sees through it.
+The same file builds the rest of the armoury: `weapon.smg` (168 tris),
+`weapon.dmr` (348, a HOLLOW scope tube with a reticle so aiming looks
+through it) and `weapon.sidearm` (120). The long guns share the rifle's
+`grip`→`fore` geometry, so one set of hold clips fits all of them. The
+pistol's `fore` is where the support palm cups the fist (under the grip).
+That is too short to steer the barrel, so the client rides the barrel
+along the forearm for it. human.py builds a `*_pistol` copy of every armed
+clip (`CLASSES`), and `weapon.class` picks it. Aimed, a pistol's rear
+sight sits 0.42 m out (arm's length), a long gun's 0.20 m.
 
 ### Holding a weapon
 

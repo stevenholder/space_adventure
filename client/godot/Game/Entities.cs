@@ -32,6 +32,8 @@ namespace SpaceAdventure.Game
         public ushort Health;
         public bool Dead;
         public string EquippedItem = "";
+        /// <summary>Screenshot rig only (-uiDie): play the death without the server's say-so.</summary>
+        public bool RigDead;
 
         /// <summary>Set once the model loads, null for anything without clips.</summary>
         public CharacterAnim Anim;
@@ -65,6 +67,8 @@ namespace SpaceAdventure.Game
         /// </summary>
         public Vector3 LastDrawn;
         public bool HasLastDrawn;
+        /// <summary>Metres walked since the last footstep sound.</summary>
+        public float StepDist;
         public float Speed;
 
         /// <summary>
@@ -166,7 +170,16 @@ namespace SpaceAdventure.Game
             _ => "",
         };
 
+        /// <summary>Footsteps for every walking body (set by Boot).</summary>
+        public Sfx Sfx;
+
         public bool TryGet(uint id, out EntityView view) => _views.TryGetValue(id, out view);
+
+        /// <summary>A `hit` event named this body as the victim: flinch.</summary>
+        public void OnHit(uint victim)
+        {
+            if (_views.TryGetValue(victim, out var v)) v.Anim?.Hit(Clock.Now);
+        }
 
         /// <summary>Records what a `spawn` said, for the row that follows it.</summary>
         public void OnSpawn(Spawn spawn)
@@ -324,7 +337,7 @@ namespace SpaceAdventure.Game
 
             if (view.Held != null) { view.Held.QueueFree(); view.Held = null; }
             view.HeldItem = view.EquippedItem;
-            if (view.Anim != null) view.Anim.Armed = false;
+            if (view.Anim != null) { view.Anim.Armed = false; view.Anim.Class = Defs.HoldSuffix(view.EquippedItem ?? ""); }
             if (string.IsNullOrEmpty(view.EquippedItem)) return;
 
             string asset = Defs.ItemAsset(view.EquippedItem);
@@ -437,7 +450,16 @@ namespace SpaceAdventure.Game
                 }
                 view.LastDrawn = drawn;
                 view.HasLastDrawn = true;
-                view.Anim?.Drive(view.Speed, view.Dead);
+                view.Anim?.Drive(view.Speed, view.Dead || view.RigDead);
+                if (view.Anim != null && !view.Dead && view.Speed > 0.5f && Sfx != null)
+                {
+                    view.StepDist += view.Speed * dt;
+                    if (view.StepDist > (view.Speed > CharacterAnim.SprintAt ? 1.0f : 0.75f))
+                    {
+                        view.StepDist = 0;
+                        Sfx.StepAt(drawn, (int)(view.Id + (uint)(drawn.X * 10)));
+                    }
+                }
 
                 // Dying is allowed to take as long as the death clip, and not
                 // one second longer: the server does not despawn a dead NPC
@@ -597,8 +619,8 @@ namespace SpaceAdventure.Game
         /// </summary>
         public Func<(Transform3D eye, float w, float kick)?> Ads;
 
-        /// <summary>Rear sight's distance in front of the eye when aimed.</summary>
-        public const float SightDistance = 0.20f;
+        /// <summary>Eye to rear sight when aimed: a shouldered long gun 0.20 m, a pistol at arm's length.</summary>
+        public float SightDistance = 0.20f;
 
         /// <summary>Hip fire: the bore converges on the crosshair this far out.</summary>
         public const float Converge = 15f;
@@ -675,6 +697,10 @@ namespace SpaceAdventure.Game
             // hand: grip -> fore runs to hand.r -> hand.l, so the rifle sits in
             // BOTH hands, not just pointed between them.
             Node3D fore = _left != null ? AssetRegistry.FindNode(Weapon, "fore") : null;
+            // A pistol's `fore` (the support palm under the fist) is too close
+            // to the grip to steer the barrel: it rides the forearm instead.
+            bool pistol = fore != null && (fore.GlobalPosition - grip.GlobalPosition).Length() < 0.15f;
+            if (pistol) fore = null;
             if (fore != null)
             {
                 Vector3 hands = _left.GlobalPosition - Hand.GlobalPosition;
@@ -697,7 +723,7 @@ namespace SpaceAdventure.Game
                 Aim();
                 return;
             }
-            else if (_left != null)
+            else if (_left != null && !pistol)
                 arm = _left.GlobalPosition - Hand.GlobalPosition;
             else
             {
@@ -720,6 +746,7 @@ namespace SpaceAdventure.Game
             if (want.LengthSquared() > 0.5f && have.LengthSquared() > 0.5f)
                 Weapon.GlobalBasis = new Basis(arm, have.SignedAngleTo(want, arm)) * Weapon.GlobalBasis;
             Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
+            Aim();
             if (_left == null) QueueFree();   // one-handed (old bodies): once is enough
         }
     }

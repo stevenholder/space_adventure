@@ -38,9 +38,11 @@ from bl_ext.user_default.mpfb.services.humanservice import HumanService
 from bl_ext.user_default.mpfb.services.targetservice import TargetService
 
 ART = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import textures  # noqa: E402 -- generated surface maps
 
 EYE = 1.70          # GDD eye_height; the camera and the server's shot origin
-BODY_TRIS = 6000    # body + arms + head; armor gets the rest of ~15k
+BODY_TRIS = 5600    # body + arms + head; armor gets the rest of ~15k
 
 # MakeHuman sliders: an adult, fit, slightly tall build.
 MACRO = {
@@ -57,9 +59,48 @@ MATERIALS = {
     "hair":  ((0.10, 0.07, 0.05), 0.8, 0.0),
     "eye":   ((0.05, 0.05, 0.06), 0.15, 0.0),
     "boot":  ((0.07, 0.07, 0.08), 0.85, 0.0),
+    "ivory": ((0.86, 0.82, 0.70), 0.5, 0.0),    # orc tusks
 }
 
 KEEP_GROUPS = ("body", "helper-l-eye", "helper-r-eye")
+
+# Every humanoid comes from this file. A variant changes the MakeHuman
+# sliders, the eye height (overall size), material colours, whether the head
+# has hair, flat (machine) shading, and adds rigid head parts. Bones, clips,
+# hand mounts and contact-point grips are shared, so every body holds a gun
+# and wears armor the same way. Armor is authored on char.player's build;
+# variants that keep that build (gunner) can wear it, bigger ones (orc) not.
+VARIANTS = {
+    "char.player": {},
+    "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
+        "macro": {"age": 0.75, "weight": 0.72, "muscle": 0.45, "height": 0.45},
+        "materials": {"suit": (0.46, 0.41, 0.30), "hair": (0.55, 0.53, 0.50), "skin": (0.72, 0.55, 0.45)},
+    },
+    "npc.dispatcher": {                        # Dispatcher Oru: an android
+        "macro": {"gender": 0.35, "weight": 0.35, "muscle": 0.45, "proportions": 0.9},
+        "materials": {"skin": (0.86, 0.88, 0.92), "suit": (0.88, 0.89, 0.91), "glove": (0.70, 0.72, 0.76),
+                      "eye": (0.25, 0.90, 1.00), "boot": (0.30, 0.32, 0.36)},
+        "hair": False,
+        "head_parts": "android",
+    },
+    "npc.grunt": {                             # melee raider: an orc, big and heavy
+        "macro": {"muscle": 1.0, "weight": 0.78, "height": 1.0, "proportions": 0.4, "age": 0.4},
+        "eye": 1.82,
+        "materials": {"skin": (0.40, 0.55, 0.32), "suit": (0.45, 0.20, 0.14), "hair": (0.08, 0.07, 0.06),
+                      "eye": (0.70, 0.12, 0.08)},
+        "hair": "topknot",
+        "head_parts": "orc",
+    },
+    "npc.gunner": {                            # ranged raider: a combat robot (player's build, so armor fits)
+        "materials": {"skin": (0.48, 0.50, 0.54), "suit": (0.30, 0.32, 0.35), "glove": (0.40, 0.42, 0.45),
+                      "boot": (0.22, 0.23, 0.25), "eye": (1.00, 0.45, 0.10)},
+        "metallic": {"skin": 0.85, "suit": 0.6, "glove": 0.8},
+        "hair": False,
+        "flat": True,
+        "head_parts": "robot",
+    },
+}
+ACTIVE = {}
 
 
 # ---- materials ----------------------------------------------------------------
@@ -67,6 +108,8 @@ def material(name):
     m = bpy.data.materials.get(name)
     if m is None:
         col, rough, metal = MATERIALS[name]
+        col = ACTIVE.get("materials", {}).get(name, col)
+        metal = ACTIVE.get("metallic", {}).get(name, metal)
         m = bpy.data.materials.new(name)
         m.use_nodes = True
         b = m.node_tree.nodes["Principled BSDF"]
@@ -75,12 +118,20 @@ def material(name):
         b.inputs["Roughness"].default_value = rough
         b.inputs["Metallic"].default_value = metal
         m.diffuse_color = (*lin, 1.0)
+        if name in SURFACE:
+            textures.dress(m, SURFACE[name], col)
     return m
+
+
+# Materials that get a generated surface texture (tools/bpy/textures.py).
+SURFACE = {"suit": "suit", "glove": "fabric", "boot": "fabric"}
 
 
 # ---- the human ----------------------------------------------------------------
 def make_human(decimate=True):
-    h = HumanService.create_human(scale=0.1, macro_detail_dict=MACRO, feet_on_ground=True)
+    macro = dict(MACRO)
+    macro.update(ACTIVE.get("macro", {}))
+    h = HumanService.create_human(scale=0.1, macro_detail_dict=macro, feet_on_ground=True)
     rig = HumanService.add_builtin_rig(h, "game_engine")
     TargetService.bake_targets(h)
 
@@ -103,7 +154,7 @@ def make_human(decimate=True):
 
     # Front -Y -> +Y (a half turn about Z) and eyes to EYE: same matrix on the
     # mesh data and on the armature's bones, so weights stay valid.
-    s = EYE / eye_z
+    s = ACTIVE.get("eye", EYE) / eye_z
     M = Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Rotation(math.pi, 4, "Z")
     h.data.transform(M)
     bpy.context.view_layer.objects.active = rig
@@ -185,7 +236,13 @@ def dress(h, eye_l, eye_r):
             m = "eye"
         elif b == "head":
             # Short hair: the crown, and the back of the skull above the nape.
-            m = "hair" if (r.z > 0.045 and r.y < 0.07) or (r.z > -0.03 and r.y < -0.03) else "skin"
+            hair = ACTIVE.get("hair", True)
+            if hair is True:
+                m = "hair" if (r.z > 0.045 and r.y < 0.07) or (r.z > -0.03 and r.y < -0.03) else "skin"
+            elif hair == "topknot":
+                m = "hair" if (r.z > 0.07 and abs(r.x) < 0.03 and -0.06 < r.y < 0.02) else "skin"
+            else:
+                m = "skin"
         elif b and b.startswith(("hand", "thumb", "index", "middle", "ring", "pinky")):
             m = "glove"
         elif (b and b.startswith(("foot", "ball"))) or c.z < 0.13:
@@ -472,6 +529,43 @@ FP_ADS = dict(G=(0.03, 0.30, 1.38), forward=(0.0, 1.0, 0.02))       # sights; th
 FP_LOWER = dict(G=(0.12, 0.22, 1.10), forward=(-0.25, 0.60, -0.75))
 
 
+# The pistol: its `fore` (tools/gen_weapon.py) is where the support palm cups
+# the firing fist, just under and in front of the grip.
+PISTOL_FORE = (-0.02, -0.045)          # (along the barrel, up) from grip
+
+
+def pistol(rig, G, forward, pole_r=(0.6, -0.4, -0.7), pole_l=(-0.6, -0.4, -0.7)):
+    """Two hands on a pistol, square stance: the right fist round the grip,
+    the left hand wrapped over the right fingers from below and the left,
+    palm toward the gun, thumbs forward along the frame."""
+    f = Vector(forward).normalized()
+    up = Vector((0, 0, 1))
+    up = (up - f * up.dot(f)).normalized()
+    right = f.cross(up)
+    F = Vector(G) + f * PISTOL_FORE[0] + up * PISTOL_FORE[1]
+    grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
+         fingers=(15, 80, 85, 85), thumb=40)
+    grip(rig, "l", F, (f - up * 0.35 + right * 0.25).normalized(), (right * 0.85 + up * 0.5).normalized(), pole_l,
+         fingers=(70, 75, 75, 75), thumb=25)
+    lay_thumb(rig, "r", (f - right * 0.35).normalized())
+    lay_thumb(rig, "l", (f - right * 0.15 + up * 0.05).normalized())
+
+
+P_AIM3P = dict(G=(0.08, 0.34, 1.20), forward=(-0.10, 1.0, -0.20))   # third person: pistol at the ready
+P_FP_HOLD = dict(G=(0.13, 0.36, 1.30), forward=(-0.02, 1.0, 0.03))   # elbows bent: forearms clear of the lens   # arms near straight: forearms clear of the eye
+P_FP_ADS = dict(G=(0.00, 0.47, 1.55), forward=(0.0, 1.0, 0.02))     # client puts the rear sight 0.42 m out
+P_FP_LOWER = dict(G=(0.08, 0.26, 1.10), forward=(-0.20, 0.60, -0.75))
+
+# Weapon classes: a clip-name suffix, the hold, its targets and where its
+# magazine is (reload). The client picks the suffix from the weapon's def.
+CLASSES = {
+    "": dict(hold=rifle, aim3p=AIM3P, fp=FP_HOLD, ads=FP_ADS, lower=FP_LOWER,
+             fore=(FORE_ALONG, FORE_UP), mag=(0.12, -0.04)),
+    "_pistol": dict(hold=pistol, aim3p=P_AIM3P, fp=P_FP_HOLD, ads=P_FP_ADS, lower=P_FP_LOWER,
+                    fore=PISTOL_FORE, mag=(0.0, -0.09)),
+}
+
+
 def pose_rest(rig):
     for p in rig.pose.bones:
         p.rotation_mode = "QUATERNION"
@@ -516,7 +610,7 @@ def gait(rig, t, leg, knee, arm, lean, armed=None):
     swing(rig, "calf_r", (1, 0, 0), -knee * bend_r)
     swing(rig, "calf_l", (1, 0, 0), -knee * bend_l)
     if armed:
-        rifle(rig, **armed)
+        armed[0](rig, **armed[1])
     else:
         arms_down(rig)
         swing(rig, "upperarm_r", (1, 0, 0), -arm * c)
@@ -533,28 +627,92 @@ def clips(rig):
     clip(rig, "idle", 3.0, lambda t: (arms_down(rig), breathe(t)), Q)
     clip(rig, "walk", 0.70, lambda t: gait(rig, t, 26, 40, 18, 3), Q)
     clip(rig, "sprint", 0.50, lambda t: gait(rig, t, 42, 65, 35, 10), Q)
-    clip(rig, "idle_armed", 3.0, lambda t: (breathe(t), rifle(rig, **AIM3P)), Q)
-    clip(rig, "walk_armed", 0.70, lambda t: gait(rig, t, 26, 40, 0, 3, armed=AIM3P), Q)
-    clip(rig, "sprint_armed", 0.50, lambda t: gait(rig, t, 42, 65, 0, 10, armed=AIM3P), Q)
+    for sfx, C in CLASSES.items():
+        hold3 = (C["hold"], C["aim3p"])
+        clip(rig, "idle_armed" + sfx, 3.0, lambda t, h=hold3: (breathe(t), h[0](rig, **h[1])), Q)
+        clip(rig, "walk_armed" + sfx, 0.70, lambda t, h=hold3: gait(rig, t, 26, 40, 0, 3, armed=h), Q)
+        clip(rig, "sprint_armed" + sfx, 0.50, lambda t, h=hold3: gait(rig, t, 42, 65, 0, 10, armed=h), Q)
 
+    def ease(a, b, t):
+        x = max(0.0, min(1.0, (t - a) / (b - a)))
+        return x * x * (3 - 2 * x)
+
+    def drop(dz):
+        """Lower the whole body (Root) by dz metres."""
+        p = rig.pose.bones["Root"]
+        update()
+        p.matrix = Matrix.Translation((0, 0, -dz)) @ p.matrix
+        update()
+
+    # Hit: a short flinch -- the chest snaps back and twists, the head
+    # follows late. Unarmed and holding a rifle (arms stay on the gun).
+    def flinch(t, armed, C=CLASSES[""]):
+        k = math.sin(math.pi * min(1.0, t * 1.4)) * (1.0 - 0.4 * t)
+        if armed:
+            C["hold"](rig, **C["aim3p"])
+        else:
+            arms_down(rig)
+        swing(rig, "spine_02", (1, 0, 0), 16 * k)
+        swing(rig, "spine_03", (0, 0, 1), 11 * k)
+        swing(rig, "head", (1, 0, 0), 20 * ease(0.1, 0.5, t) * (1 - ease(0.6, 1.0, t)))
+        swing(rig, "calf_r", (1, 0, 0), -10 * k)
+        swing(rig, "calf_l", (1, 0, 0), -10 * k)
+    clip(rig, "hit", 0.35, lambda t: flinch(t, False), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
+    for sfx, C in CLASSES.items():
+        clip(rig, "hit_armed" + sfx, 0.35, lambda t, C=C: flinch(t, True, C), (0.0, 0.25, 0.5, 0.75, 1.0), loop=False)
+
+    # Death: the knees go, the body drops onto them, then topples back and
+    # to one side, arms falling loose -- not a stiff plank pivoting at the feet.
     def die(t):
-        swing(rig, "Root", (1, 0, 0), 88 * min(1.0, t * 1.2) ** 1.5)
-        swing(rig, "head", (1, 0, 0), -15 * t)
+        k1 = ease(0.0, 0.38, t)                 # knees buckle
+        k2 = ease(0.30, 1.0, t)                 # topple
         arms_down(rig)
-        swing(rig, "upperarm_r", (0, 1, 0), 50 * t)
-        swing(rig, "upperarm_l", (0, 1, 0), -50 * t)
-    clip(rig, "die", 0.5, die, (0.0, 0.3, 0.6, 1.0), loop=False)
+        swing(rig, "thigh_r", (1, 0, 0), 55 * k1)
+        swing(rig, "thigh_l", (1, 0, 0), 48 * k1)
+        swing(rig, "calf_r", (1, 0, 0), -95 * k1)
+        swing(rig, "calf_l", (1, 0, 0), -85 * k1)
+        swing(rig, "spine_01", (1, 0, 0), -18 * k1 + 10 * k2)
+        swing(rig, "head", (1, 0, 0), -20 * k1 + 25 * k2)
+        swing(rig, "upperarm_r", (0, 1, 0), 55 * k2)
+        swing(rig, "upperarm_l", (0, 1, 0), -40 * k2)
+        drop(0.42 * k1 * (1.0 - k2))            # down onto the knees, back up as it tips over
+        swing(rig, "Root", (1, 0, 0), 78 * k2)       # positive tips the body backward
+        swing(rig, "Root", (0, 1, 0), 18 * k2)
+    clip(rig, "die", 1.1, die, (0.0, 0.15, 0.3, 0.45, 0.6, 0.8, 1.0), loop=False)
 
     # First person: only the arms are ever seen, but every bone is keyed so a
-    # clip fully overrides the one before it.
-    def hold(t, bob=0.0, amp=0.0):
-        G = Vector(FP_HOLD["G"]) + Vector((amp * math.sin(2 * math.pi * t), 0, bob * math.sin(4 * math.pi * t)))
-        rifle(rig, G, FP_HOLD["forward"])
-    clip(rig, "fp_idle", 3.0, lambda t: hold(t, bob=0.004), Q)
-    clip(rig, "fp_walk", 0.70, lambda t: hold(t, bob=0.008, amp=0.010), Q)
-    clip(rig, "fp_sprint", 0.50, lambda t: hold(t, bob=0.014, amp=0.020), Q)
-    clip(rig, "fp_ads", 1.0, lambda t: rifle(rig, **FP_ADS), (0.0,))
-    clip(rig, "fp_lower", 1.0, lambda t: rifle(rig, **FP_LOWER), (0.0,))
+    # clip fully overrides the one before it. One set per weapon class.
+    for sfx, C in CLASSES.items():
+        hold, fp = C["hold"], C["fp"]
+
+        def held(t, bob=0.0, amp=0.0, hold=hold, fp=fp):
+            G = Vector(fp["G"]) + Vector((amp * math.sin(2 * math.pi * t), 0, bob * math.sin(4 * math.pi * t)))
+            hold(rig, G, fp["forward"])
+        clip(rig, "fp_idle" + sfx, 3.0, lambda t, h=held: h(t, bob=0.004), Q)
+        clip(rig, "fp_walk" + sfx, 0.70, lambda t, h=held: h(t, bob=0.008, amp=0.010), Q)
+        clip(rig, "fp_sprint" + sfx, 0.50, lambda t, h=held: h(t, bob=0.014, amp=0.020), Q)
+        clip(rig, "fp_ads" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["ads"]), (0.0,))
+        clip(rig, "fp_lower" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["lower"]), (0.0,))
+
+        def fire(t, hold=hold, fp=fp):
+            k = math.sin(math.pi * min(1.0, t * 1.6))       # back and up, then settle
+            G = Vector(fp["G"]) + Vector((0, -0.03 * k, 0.012 * k))
+            hold(rig, G, Vector(fp["forward"]) + Vector((0, 0, 0.06 * k)))
+        clip(rig, "fp_fire" + sfx, 0.12, fire, (0.0, 0.3, 0.6, 1.0), loop=False)
+
+        def reload(t, C=C):
+            C["hold"](rig, **C["fp"])
+            # The left hand drops to the magazine, works it, and comes back.
+            k = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.8)))
+            if k > 0:
+                f = Vector(C["fp"]["forward"]).normalized()
+                up = (Vector((0, 0, 1)) - f * f.z).normalized()
+                G = Vector(C["fp"]["G"])
+                fore = G + f * C["fore"][0] + up * C["fore"][1]
+                mag = G + f * C["mag"][0] + up * C["mag"][1]
+                grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
+                     (-0.7, 0.2, -0.7), fingers=(45, 50, 50, 50), thumb=30)
+        clip(rig, "fp_reload" + sfx, 2.0, reload, (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), loop=False)
 
     def unarmed(t):
         # Loose fists low in the view, knuckles forward, thumbs up and in.
@@ -564,35 +722,82 @@ def clips(rig):
         curl(rig, "r", CURL * 1.2, thumb=CURL * 0.4)
         curl(rig, "l", CURL * 1.2, thumb=CURL * 0.4)
     clip(rig, "fp_unarmed", 3.0, unarmed, Q)
-
-    def fire(t):
-        k = math.sin(math.pi * min(1.0, t * 1.6))       # back and up, then settle
-        G = Vector(FP_HOLD["G"]) + Vector((0, -0.03 * k, 0.012 * k))
-        rifle(rig, G, Vector(FP_HOLD["forward"]) + Vector((0, 0, 0.06 * k)))
-    clip(rig, "fp_fire", 0.12, fire, (0.0, 0.3, 0.6, 1.0), loop=False)
-
-    def reload(t):
-        rifle(rig, **FP_HOLD)
-        # The left hand drops to the magazine (under the receiver, ~12 cm
-        # ahead of the grip), works it, and comes back to the fore-end.
-        k = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.8)))
-        if k > 0:
-            f = Vector(FP_HOLD["forward"]).normalized()
-            up = (Vector((0, 0, 1)) - f * f.z).normalized()
-            G = Vector(FP_HOLD["G"])
-            fore = G + f * FORE_ALONG + up * FORE_UP
-            mag = G + f * 0.12 - up * 0.04
-            grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
-                 (-0.7, 0.2, -0.7), fingers=(45, 50, 50, 50), thumb=30)
-    clip(rig, "fp_reload", 2.0, reload, (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), loop=False)
     rig.animation_data.action = None
 
 
 # ---- build ------------------------------------------------------------------------
+def head_box(name, center, size, mat, rot=(0.0, 0.0, 0.0), bevel=0.004):
+    """A small rigid part on the head bone (tusk, ear, brow, antenna)."""
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=center, rotation=rot)
+    o = bpy.context.object
+    o.name = name
+    o.scale = Vector(size)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for n in MATERIALS:
+        o.data.materials.append(material(n))
+    for p in o.data.polygons:
+        p.material_index = list(MATERIALS).index(mat)
+    if bevel:
+        bv = o.modifiers.new("bevel", "BEVEL")
+        bv.width = bevel
+        bv.segments = 2
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.modifier_apply(modifier=bv.name)
+    g = o.vertex_groups.new(name="head")
+    g.add([v.index for v in o.data.vertices], 1.0, "REPLACE")
+    return o
+
+
+def head_parts(kind, head, eye_l, eye_r):
+    """Race features, built round the eyes and the skull's measured size."""
+    eye = (eye_l + eye_r) * 0.5
+    pts = [v.co for v in head.data.vertices]
+    # Measured on the skull, not the whole head mesh (it includes the neck).
+    ring = [p for p in pts if abs(p.z - eye.z) < 0.025 and p.y > eye.y - 0.02]   # front half: no ears
+    half = max(abs(p.x - eye.x) for p in ring)
+    front = max(p.y for p in ring if abs(p.x - eye.x) < 0.02)
+    hi = Vector((0.0, 0.0, max(p.z for p in pts)))
+    out = []
+    if kind == "orc":
+        out.append(head_box("brow", (eye.x, eye.y + 0.012, eye.z + 0.028), (0.11, 0.04, 0.025), "skin", rot=(0.25, 0, 0)))
+        for sx in (1, -1):
+            out.append(head_box("tusk", (eye.x + 0.022 * sx, front - 0.012, eye.z - 0.085), (0.012, 0.012, 0.035), "ivory",
+                                rot=(0.35, 0, -0.25 * sx)))
+            out.append(head_box("ear", (half * 0.98 * sx, eye.y - 0.085, eye.z + 0.01), (0.012, 0.035, 0.06), "skin",
+                                rot=(-0.6, 0, 0.5 * sx)))
+    elif kind == "android":
+        out.append(head_box("seam", (0.0, eye.y - 0.06, hi.z - 0.012), (0.006, 0.17, 0.012), "suit", bevel=0.0))
+        out.append(head_box("brow_line", (eye.x, front - 0.004, eye.z + 0.022), (0.075, 0.006, 0.004), "eye", bevel=0.0))
+    elif kind == "robot":
+        out.append(head_box("visor", (eye.x, front - 0.018, eye.z), (half * 1.9, 0.03, 0.028), "eye", bevel=0.003))
+        out.append(head_box("antenna", (half * 0.6, eye.y - 0.07, hi.z + 0.05), (0.01, 0.01, 0.10), "glove", bevel=0.0))
+        out.append(head_box("antenna_tip", (half * 0.6, eye.y - 0.07, hi.z + 0.105), (0.02, 0.02, 0.02), "eye"))
+        out.append(head_box("jaw", (eye.x, front - 0.03, eye.z - 0.075), (half * 1.3, 0.05, 0.035), "suit"))
+    return out
+
+
 def build():
     h, rig, (eye_l, eye_r) = make_human()
     dress(h, eye_l, eye_r)
     parts = split(h)
+    kind = ACTIVE.get("head_parts")
+    if kind:
+        extra = head_parts(kind, parts["head"], eye_l, eye_r)
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in extra:
+            o.select_set(True)
+        parts["head"].select_set(True)
+        bpy.context.view_layer.objects.active = parts["head"]
+        bpy.ops.object.join()
+        parts["head"] = bpy.context.view_layer.objects.active
+        parts["head"].name = parts["head"].data.name = "head"
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+    if ACTIVE.get("flat"):
+        for o in parts.values():
+            bpy.ops.object.select_all(action="DESELECT")
+            o.select_set(True)
+            bpy.context.view_layer.objects.active = o
+            bpy.ops.object.shade_flat()
     for o in parts.values():
         bind(o, rig)
     # Mounts: the right at the centre of a closed fist (a grip sits in the
@@ -611,22 +816,29 @@ def vertex_group_centroid_world(obj, name):
 
 def export(out):
     os.makedirs(os.path.dirname(out), exist_ok=True)
+    for o in bpy.context.scene.objects:
+        if o.type == "MESH":
+            textures.uv_box(o)
     bpy.ops.export_scene.gltf(
         filepath=out, export_format="GLB", export_apply=True, export_yup=True,
         export_animations=True, export_animation_mode="ACTIONS", export_force_sampling=True,
-        export_skins=True, export_def_bones=False, export_texcoords=False,
-        export_normals=True, export_materials="EXPORT", export_image_format="NONE",
+        export_skins=True, export_def_bones=False, export_texcoords=True,
+        export_normals=True, export_materials="EXPORT", export_image_format="AUTO",
     )
 
 
 def main():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    rig, parts = build()
-    tris = {n: sum(len(p.vertices) - 2 for p in o.data.polygons) for n, o in parts.items()}
-    print("parts", tris, "bones", len(rig.data.bones))
-    out = os.path.join(ART, "build", "char.player.raw.glb")
-    export(out)
-    print("wrote", out)
+    # `-- npc.grunt npc.gunner`: build only those; default is every variant.
+    want = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(VARIANTS)
+    for asset_id in want:
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        ACTIVE.clear()
+        ACTIVE.update(VARIANTS[asset_id])
+        rig, parts = build()
+        tris = {n: sum(len(p.vertices) - 2 for p in o.data.polygons) for n, o in parts.items()}
+        out = os.path.join(ART, "build", asset_id + ".raw.glb")
+        export(out)
+        print("wrote", out, tris)
 
 
 if __name__ == "__main__":

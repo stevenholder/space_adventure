@@ -33,7 +33,35 @@ namespace SpaceAdventure.Game
         internal const float SprintAt = 6.0f;
 
         /// <summary>Clips that play once and hold: dying, and the first-person fire and reload.</summary>
-        internal static bool OneShot(string name) => name == "die" || name == "fp_fire" || name == "fp_reload";
+        internal static bool OneShot(string name) =>
+            name == "die" || name.StartsWith("fp_fire") || name.StartsWith("fp_reload") || name.StartsWith("hit");
+
+        /// <summary>
+        /// Hold family suffix ("" or "_pistol"): `name + Class` when the body
+        /// has it, else the plain clip.
+        /// </summary>
+        public string Class = "";
+
+        internal static string Clip(AnimationPlayer p, string name, string cls) =>
+            cls != "" && p.HasAnimation(name + cls) ? name + cls : name;
+
+        private double _flinchUntil;
+
+        /// <summary>
+        /// The body was hit: a short flinch (`hit`, or `hit_armed` with the
+        /// arms kept on the gun), then Drive takes over again. Never during
+        /// death, and a burst re-starts it rather than stacking.
+        /// </summary>
+        public void Hit(double now)
+        {
+            if (_current == "die") return;
+            string clip = Armed && _player.HasAnimation("hit_armed") ? Clip(_player, "hit_armed", Class) : "hit";
+            if (!_player.HasAnimation(clip)) return;
+            _player.Play(clip, 0.04);
+            _player.Seek(0, true);
+            _current = clip;
+            _flinchUntil = now + _player.GetAnimation(clip).Length;
+        }
 
         /// <summary>Long enough not to snap, short enough not to moonwalk.</summary>
         private const double Fade = 0.15;
@@ -82,7 +110,8 @@ namespace SpaceAdventure.Game
                         : speed > SprintAt ? "sprint"
                         : speed > WalkAt ? "walk"
                         : "idle";
-            if (Armed && !dead && _player.HasAnimation(want + "_armed")) want += "_armed";
+            if (Armed && !dead && _player.HasAnimation(want + "_armed")) want = Clip(_player, want + "_armed", Class);
+            if (!dead && Clock.Now < _flinchUntil) return;   // let the flinch finish
             if (want == _current) return;
             if (!_player.HasAnimation(want)) return;
             _player.Play(want, Fade);

@@ -30,6 +30,9 @@ type Weapon struct {
 	SpreadMax     float64 `json:"spread_max"`
 	SpreadPerShot float64 `json:"spread_per_shot"`
 	SpreadDecay   float64 `json:"spread_decay"`
+	// Class picks the client's hold clips ("" long gun, "pistol"); the
+	// server only carries it to the client in defs.
+	Class string `json:"class,omitempty"`
 }
 
 // Item is one row of the item table (server/data/items.json).

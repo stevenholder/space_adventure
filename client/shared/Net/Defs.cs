@@ -139,6 +139,8 @@ namespace SpaceAdventure.Net
         [JsonProperty("ammo_item")] public string AmmoItem { get; set; } = "";
         /// <summary>Seconds a reload takes (server-authoritative; the client only times the arms to it).</summary>
         [JsonProperty("reload_time")] public double ReloadTime { get; set; }
+        /// <summary>Hold family: "" long gun, "pistol". Picks the body's clip set.</summary>
+        [JsonProperty("class")] public string Class { get; set; } = "";
     }
 
     /// <summary>One entity type's render and hitbox def.</summary>
@@ -306,6 +308,10 @@ namespace SpaceAdventure.Net
 
         /// <summary>The art/manifest.json model id for an item, or "".</summary>
         public string ItemAsset(string id) => TryItem(id, out ItemDef it) ? it.Asset ?? "" : "";
+
+        /// <summary>Clip-name suffix for the item's hold family: "" or "_pistol".</summary>
+        public string HoldSuffix(string id) =>
+            TryItem(id, out ItemDef it) && !string.IsNullOrEmpty(it.Weapon?.Class) ? "_" + it.Weapon.Class : "";
 
         /// <summary>
         /// The model id for an entity type name ("player", "npc", "target").

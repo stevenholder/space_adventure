@@ -4,7 +4,7 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 6000,
+      "tris": 5600,
       "license": "CC0",
       "source": "recipes/char.player.json",
       "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
@@ -88,64 +88,89 @@
       "author": "Space Adventure"
     },
     {
+      "id": "weapon.smg",
+      "file": "weapons/smg.glb",
+      "tris": 168,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Scrap SMG (tools/gen_weapon.py): compact, folded wire stock, stick magazine. Rifle contact geometry (grip/fore), so it uses the long-gun holds.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
+      "id": "weapon.dmr",
+      "file": "weapons/dmr.glb",
+      "tris": 348,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Longshot DMR (tools/gen_weapon.py): full stock, scope on a rail, long barrel with a brake. Rifle contact geometry; `sight`/`front` run through the scope.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
+      "id": "weapon.sidearm",
+      "file": "weapons/sidearm.glb",
+      "tris": 120,
+      "license": "CC0",
+      "source": "tools/gen_weapon.py",
+      "description": "Pocket Pulser (tools/gen_weapon.py): blocky pistol; weapon class `pistol` -- `fore` is where the support palm cups the firing fist.",
+      "source_url": "tools/gen_weapon.py",
+      "author": "Space Adventure"
+    },
+    {
       "id": "npc.shopkeeper",
       "file": "chars/shopkeeper.glb",
-      "tris": 1452,
+      "tris": 5600,
       "license": "CC0",
       "source": "recipes/npc.shopkeeper.json",
       "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "trouser",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
           "boot"
         ],
         "head": [
+          "suit",
           "skin",
           "hair",
           "eye"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "npc.dispatcher",
       "file": "chars/dispatcher.glb",
-      "tris": 1560,
+      "tris": 5624,
       "license": "CC0",
       "source": "recipes/npc.dispatcher.json",
       "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
           "boot"
         ],
         "head": [
-          "trouser",
-          "accent",
+          "suit",
           "skin",
-          "accent"
+          "eye"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "prop.target",
@@ -356,65 +381,59 @@
     {
       "id": "npc.grunt",
       "file": "chars/grunt.glb",
-      "tris": 1376,
+      "tris": 6140,
       "license": "CC0",
       "source": "recipes/npc.grunt.json",
       "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
-          "skin",
           "boot"
         ],
         "head": [
+          "suit",
           "skin",
           "hair",
           "eye",
-          "bone"
+          "ivory"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "npc.gunner",
       "file": "chars/gunner.glb",
-      "tris": 1568,
+      "tris": 5936,
       "license": "CC0",
       "source": "recipes/npc.gunner.json",
       "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
-      "source_url": "tools/bpy/body.py",
-      "author": "Space Adventure",
+      "source_url": "tools/bpy/human.py",
+      "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
       "surfaces": {
         "arms": [
           "suit",
-          "trouser",
-          "accent",
-          "skin"
+          "glove"
         ],
         "body": [
           "suit",
-          "trouser",
-          "accent",
           "boot"
         ],
         "head": [
           "suit",
-          "trouser",
-          "accent",
           "skin",
+          "glove",
           "eye"
         ]
-      }
+      },
+      "pbr": true
     },
     {
       "id": "prop.loot.crate",
@@ -527,7 +546,7 @@
     {
       "id": "armor.helmet.scout",
       "file": "armor/helmet_scout.glb",
-      "tris": 1716,
+      "tris": 1116,
       "license": "CC0",
       "source": "recipes/armor.helmet.scout.json",
       "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -536,7 +555,8 @@
       "surfaces": {
         "head__helmet": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "head__visor": [
           "armor_visor",
@@ -551,7 +571,7 @@
     {
       "id": "armor.suit.scout",
       "file": "armor/suit_scout.glb",
-      "tris": 3332,
+      "tris": 2536,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -576,19 +596,23 @@
         ],
         "spine_03__back": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "spine_03__chest": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "upperarm_l__pauldron_l": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ],
         "upperarm_r__pauldron_r": [
           "armor_plate",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ]
       },
       "pbr": true,
@@ -597,7 +621,7 @@
     {
       "id": "armor.plate.iron",
       "file": "armor/plate_iron.glb",
-      "tris": 1432,
+      "tris": 1130,
       "license": "CC0",
       "source": "recipes/armor.plate.iron.json",
       "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -610,7 +634,8 @@
         ],
         "spine_03__iron_front": [
           "armor_iron",
-          "armor_trim"
+          "armor_trim",
+          "armor_decal"
         ]
       },
       "pbr": true
@@ -618,7 +643,7 @@
     {
       "id": "armor.legs.scout",
       "file": "armor/legs_scout.glb",
-      "tris": 3312,
+      "tris": 2424,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -671,7 +696,7 @@
     {
       "id": "armor.gloves.scout",
       "file": "armor/gloves_scout.glb",
-      "tris": 1332,
+      "tris": 840,
       "license": "CC0",
       "source": "recipes/armor.gloves.scout.json",
       "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -701,7 +726,7 @@
     {
       "id": "armor.boots.scout",
       "file": "armor/boots_scout.glb",
-      "tris": 2280,
+      "tris": 1392,
       "license": "CC0",
       "source": "recipes/armor.boots.scout.json",
       "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
