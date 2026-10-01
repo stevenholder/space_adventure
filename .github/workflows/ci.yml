@@ -68,6 +68,9 @@ jobs:
       - uses: actions/setup-go@v5  # go-winres stamps VERSIONINFO onto the Windows exe (godot-cli build)
         with:
           go-version-file: server/go.mod
+      # PRs export too (the check that it still builds) but upload nothing:
+      # only deploy.yml reads these, from the main push run, within minutes,
+      # and the release keeps the lasting copy. 3 days covers a deploy re-run.
       - run: ./client/godot-cli build Linux
         env:
           GODOT: ${{ env.GODOT4 }}
@@ -75,10 +78,14 @@ jobs:
         env:
           GODOT: ${{ env.GODOT4 }}
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
         with:
           name: client-linux
           path: client/build/linux
+          retention-days: 3
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
         with:
           name: client-windows
           path: client/build/windows
+          retention-days: 3
