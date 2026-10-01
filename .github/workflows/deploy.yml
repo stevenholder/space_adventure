@@ -97,8 +97,12 @@ jobs:
           TAG='${{ steps.build.outputs.id }}'
           # --quiet, or kubectl's own "pod deleted" chatter lands in $got and
           # a correct deploy fails its own smoke (it did — versions matched).
+          # -w '\n': /version has no trailing newline. When the runner may not
+          # attach to the pod, kubectl falls back to streaming its logs and the
+          # output can arrive twice -- "6ef836b6ef836b" failed a correct deploy
+          # and rolled it back (2026-10-01). One line per copy; keep the first.
           got=$(kubectl -n space-adventure run smoke-$RANDOM --rm -i --quiet --restart=Never \
-            --image=curlimages/curl:8.10.1 -- -sf http://server:8080/version | head -1 || true)
+            --image=curlimages/curl:8.10.1 -- -sf -w '\n' http://server:8080/version | head -1 || true)
           echo "cluster serves: $got, pushed: $TAG"
           if [ "$got" != "$TAG" ]; then
             echo "::error::smoke failed — rolling back"
