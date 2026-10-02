@@ -33,6 +33,9 @@ namespace SpaceAdventure.Game
 
         public RoverState State => _state;
 
+        /// <summary>The drawn pose (Smoothing.cs).</summary>
+        public readonly RenderSmoother Smooth = new RenderSmoother();
+
         /// <summary>True once terrain is set and one snapshot reconciled.</summary>
         public bool Ready => _terrain != null && _seeded;
 
@@ -51,6 +54,7 @@ namespace SpaceAdventure.Game
             Drive.Apply(ref _state, throttle, steer, _terrain, Rules.DT, 0, Colliders);
             _pending.Add(new Pending(seq, throttle, steer));
             if (_pending.Count > MaxPending) _pending.RemoveAt(0);
+            Smooth.Stepped(_state.Pos, _state.Quat);
         }
 
         /// <summary>
@@ -73,6 +77,7 @@ namespace SpaceAdventure.Game
             foreach (var p in _pending)
                 Drive.Apply(ref s, p.Throttle, p.Steer, _terrain, Rules.DT, 0, Colliders);
             _state = s;
+            Smooth.Corrected(_state.Pos, _state.Quat);
             return true;
         }
 
@@ -82,6 +87,7 @@ namespace SpaceAdventure.Game
             _pending.Clear();
             _lastAck = -1;
             _seeded = false;
+            Smooth.Reset();
         }
     }
 }

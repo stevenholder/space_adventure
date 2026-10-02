@@ -411,7 +411,7 @@ namespace SpaceAdventure.Game
             _seated.Clear();
             double now = Clock.Now;
             float dt = (float)Clock.Dt;
-            foreach (var kv in timeline.Interpolate((float)now))
+            foreach (var kv in timeline.Interpolate(now))
             {
                 uint id = kv.Key;
                 // Our own body is predicted, never drawn from snapshots --

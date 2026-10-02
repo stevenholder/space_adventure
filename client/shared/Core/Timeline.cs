@@ -27,6 +27,7 @@ namespace SpaceAdventure.Game
     {
         public Vec3 Pos;
         public Vec3 Facing;
+        public Vec3 Vel; // the newest row's; extrapolation only
         public ushort Health;
         public bool Dead;
 
@@ -42,8 +43,10 @@ namespace SpaceAdventure.Game
     ///
     /// The clock is estimated, not measured: a snapshot for tick T that
     /// arrives now means the server was at T one one-way trip ago, so it is at
-    /// about T + oneWay now. Adding the elapsed time since arrival keeps the
-    /// estimate moving between snapshots instead of stepping at 20 Hz.
+    /// about T + oneWay now. Each arrival is one noisy sample of the offset
+    /// between our clock and the server's; the render clock follows their
+    /// running average, so arrival jitter no longer jerks remotes back and
+    /// forth (it used to re-anchor on every packet).
     /// </summary>
     public sealed class SnapshotTimeline
     {
@@ -56,15 +59,33 @@ namespace SpaceAdventure.Game
 
         private const int MaxBuffered = 32;
 
-        private readonly List<(uint Tick, float At, Dictionary<uint, Pose> Poses)> _buf =
-            new List<(uint, float, Dictionary<uint, Pose>)>();
+        /// <summary>Per-snapshot weight of a new clock sample: ~1 s to settle at 20 Hz.</summary>
+        private const double OffsetGain = 0.05;
+
+        /// <summary>A sample this far off the average is a real clock change (stall, rejoin): adopt it.</summary>
+        private const double OffsetResync = 0.25;
+
+        /// <summary>
+        /// How far past the newest snapshot a remote may be carried along its
+        /// last velocity before it holds. Covers a late packet or a one-way
+        /// trip up to interp_delay + this; beyond, remotes hold (the old rule
+        /// for every connection over 200 ms RTT).
+        /// </summary>
+        public const double MaxExtrapolateSeconds = 0.1;
+
+        private readonly List<(uint Tick, double At, Dictionary<uint, Pose> Poses)> _buf =
+            new List<(uint, double, Dictionary<uint, Pose>)>();
+
+        // Server seconds (tick / TickHz) minus local seconds, averaged.
+        private double _offset;
+        private bool _haveOffset;
 
         private readonly Dictionary<uint, Pose> _out = new Dictionary<uint, Pose>();
 
         /// <summary>One-way trip in seconds, from the transport's RTT.</summary>
         public double OneWaySeconds { get; set; }
 
-        public void Add(Snapshot snap, float atTime)
+        public void Add(Snapshot snap, double atTime)
         {
             var poses = new Dictionary<uint, Pose>(snap.Entities.Length);
             foreach (var e in snap.Entities)
@@ -73,6 +94,7 @@ namespace SpaceAdventure.Game
                 {
                     Pos = new Vec3(e.PosX, e.PosY, e.PosZ),
                     Facing = FacingOf(e),
+                    Vel = new Vec3(e.VelX, e.VelY, e.VelZ),
                     Health = e.Health,
                     Dead = e.Dead,
                     ParentId = e.ParentId,
@@ -81,37 +103,49 @@ namespace SpaceAdventure.Game
             }
             _buf.Add((snap.Tick, atTime, poses));
             if (_buf.Count > MaxBuffered) _buf.RemoveAt(0);
+
+            double sample = snap.Tick / (double)Rules.TickHz - atTime;
+            if (!_haveOffset || System.Math.Abs(sample - _offset) > OffsetResync) _offset = sample;
+            else _offset += (sample - _offset) * OffsetGain;
+            _haveOffset = true;
         }
 
-        public void Clear() => _buf.Clear();
+        public void Clear() { _buf.Clear(); _haveOffset = false; }
 
         /// <summary>
         /// The world at `serverClock - interp_delay`, interpolated between the
         /// two snapshots that bracket it, on the caller's clock (`now`, the
-        /// same timebase the `atTime` values passed to Add came from). Clamps
-        /// to the newest snapshot when the render point is past it, which
+        /// same timebase the `atTime` values passed to Add came from). Runs
+        /// past the newest snapshot when the render point is past it, which
         /// happens whenever the one-way trip exceeds interp_delay — i.e. on
-        /// any connection worse than 200 ms round trip. (Clamping, not
-        /// extrapolating: on such a connection remotes run one snapshot
-        /// staler than the server's rewind point.)
+        /// any connection worse than 200 ms round trip — or a packet is late.
+        /// Past the newest snapshot it carries each entity along its wire
+        /// velocity, for at most MaxExtrapolateSeconds, then holds.
         /// </summary>
-        public IEnumerable<KeyValuePair<uint, Pose>> Interpolate(float now)
+        public IEnumerable<KeyValuePair<uint, Pose>> Interpolate(double now)
         {
             _out.Clear();
             if (_buf.Count == 0) return _out;
 
             var newest = _buf[_buf.Count - 1];
             double tickSeconds = 1.0 / Rules.TickHz;
-            double elapsed = now - newest.At;
 
             // Server tick now, then the render point interp_delay behind it,
             // expressed on the same tick timeline the snapshots carry.
-            double serverNow = newest.Tick + (elapsed + OneWaySeconds) / tickSeconds;
+            double serverNow = (now + _offset + OneWaySeconds) / tickSeconds;
             double renderTick = serverNow - InterpDelaySeconds / tickSeconds;
 
-            if (_buf.Count == 1 || renderTick >= newest.Tick)
+            if (renderTick >= newest.Tick)
             {
-                foreach (var kv in newest.Poses) _out[kv.Key] = kv.Value;
+                // Along the wire velocity, not the last two positions: a
+                // respawn is a jump with zero velocity, and must not overshoot.
+                double ahead = System.Math.Min((renderTick - newest.Tick) * tickSeconds, MaxExtrapolateSeconds);
+                foreach (var kv in newest.Poses)
+                {
+                    Pose p = kv.Value;
+                    if (p.ParentId == 0 && !p.Dead) p.Pos += p.Vel * ahead;
+                    _out[kv.Key] = p;
+                }
                 return _out;
             }
 
@@ -123,31 +157,31 @@ namespace SpaceAdventure.Game
 
                 double span = b.Tick - a.Tick;
                 float k = span > 0 ? (float)((renderTick - a.Tick) / span) : 1f;
-                foreach (var kv in b.Poses)
-                {
-                    if (a.Poses.TryGetValue(kv.Key, out var from))
-                    {
-                        _out[kv.Key] = new Pose
-                        {
-                            Pos = Lerp(from.Pos, kv.Value.Pos, k),
-                            Facing = Lerp(from.Facing, kv.Value.Facing, k),
-                            Health = kv.Value.Health,
-                            Dead = kv.Value.Dead,
-                            // Occupancy is discrete: the newer row's. Dropping it
-                            // drew every seated remote standing on its vehicle.
-                            ParentId = kv.Value.ParentId,
-                            Seat = kv.Value.Seat,
-                        };
-                    }
-                    else
-                    {
-                        _out[kv.Key] = kv.Value; // appeared this tick
-                    }
-                }
-                return _out;
+                return Blend(a.Poses, b.Poses, k);
             }
 
             foreach (var kv in _buf[0].Poses) _out[kv.Key] = kv.Value;
+            return _out;
+        }
+
+        /// <summary>
+        /// Every entity in <paramref name="to"/> at k along from→to.
+        /// Discrete fields are the newer row's.
+        /// </summary>
+        private Dictionary<uint, Pose> Blend(Dictionary<uint, Pose> fromPoses, Dictionary<uint, Pose> to, float k)
+        {
+            foreach (var kv in to)
+            {
+                Pose p = kv.Value; // appeared this tick: the newer pose
+                if (fromPoses.TryGetValue(kv.Key, out var from))
+                {
+                    // Occupancy is discrete: the newer row's. Dropping it
+                    // drew every seated remote standing on its vehicle.
+                    p.Pos = Lerp(from.Pos, p.Pos, k);
+                    p.Facing = Lerp(from.Facing, p.Facing, k);
+                }
+                _out[kv.Key] = p;
+            }
             return _out;
         }
 

@@ -658,6 +658,11 @@ namespace SpaceAdventure.Game
                 _tickAccumulator -= Rules.DT;
                 SendTick(li);
             }
+            // Draw poses between the last two predicted ticks (Smoothing.cs).
+            double alpha = _tickAccumulator / Rules.DT;
+            _predictor.Smooth.Advance(alpha, delta);
+            _rover.Smooth.Advance(alpha, delta);
+            _ship.Smooth.Advance(alpha, delta);
 
             // Look-at targeting, then E. The shop swallows E so closing it
             // does not immediately reopen it on the same key press.
@@ -680,7 +685,7 @@ namespace SpaceAdventure.Game
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
             if (_seat != 0) PlaceSeatCamera();
-            else _fps.PlaceCamera(_predictor.State.Pos);
+            else _fps.PlaceCamera(_predictor.Smooth.Pos);
             _views.PlaceSeated();   // after the vehicle you drive has moved
             _rigLight.GlobalPosition = _camera.GlobalTransform * new Vector3(0.35f, 0.25f, 0.1f); // above and right of the eye: lights the top and rear of the rifle
 
@@ -696,7 +701,7 @@ namespace SpaceAdventure.Game
             _viewModel.Hold(holding ? _views.Defs.ItemAsset(_character.Primary) : "", holding ? _views.Defs.HoldSuffix(_character.Primary) : "");
             _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
-            _viewModel.Place(body.Pos, body.Facing);
+            _viewModel.Place(_predictor.Smooth.Pos, body.Facing);
             // Right mouse aims, only while the world has the pointer (a free
             // cursor's right-click belongs to the bags and the hotbar).
             bool aiming = _rigAim || (CanShoot && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
@@ -804,8 +809,9 @@ namespace SpaceAdventure.Game
             bool haveView = _views.TryGet(_seatVehicle, out var vv) && vv.Root != null;
             if (_seat == 1 && (ship ? _ship.Ready : _rover.Ready))
             {
-                Vec3 p = ship ? _ship.State.Pos : _rover.State.Pos;
-                Quat q = ship ? _ship.State.Quat : _rover.State.Quat;
+                RenderSmoother sm = ship ? _ship.Smooth : _rover.Smooth;
+                Vec3 p = sm.Pos;
+                Quat q = sm.Rot;
                 hull = new Transform3D(Frame.BasisOf(q), Frame.ToGodot(p));
                 if (haveView) vv.Root.GlobalTransform = hull;
             }
@@ -1011,7 +1017,7 @@ namespace SpaceAdventure.Game
                 case Msg.Snapshot:
                 {
                     Snapshot snap = Decode.Snapshot(frame.Reader);
-                    _timeline.Add(snap, (float)Clock.Now);
+                    _timeline.Add(snap, Clock.Now);
                     foreach (var row in snap.Entities)
                     {
                         if (row.Id == _net.EntityId)
