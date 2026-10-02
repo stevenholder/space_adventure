@@ -181,6 +181,15 @@ def ubc_human():
     h = next(o for o in meshes if o.name.startswith("SuperHero") or len(o.data.vertices) > 5000)
     bpy.context.view_layer.objects.active = h
     bpy.ops.object.join()
+    # The pack's all-white vertex colours make Godot set "vertex colour as
+    # albedo", and ViewModel.FpOverride then draws the first-person arms flat white.
+    while h.data.color_attributes:                       # removing one renames/invalidates the rest
+        h.data.color_attributes.remove(h.data.color_attributes[0])
+    # Four UV sets ship; the textures read the render one, uv_box writes the active one.
+    keep = next(u.name for u in h.data.uv_layers if u.active_render)
+    for name in [u.name for u in h.data.uv_layers if u.name != keep]:
+        h.data.uv_layers.remove(h.data.uv_layers[name])
+    h.data.uv_layers.active = h.data.uv_layers[keep]
 
     # Leaf bones carry finger-tip weights: fold them into the parent, then drop them.
     parents = {b.name: b.parent.name for b in rig.data.bones if "leaf" in b.name}
