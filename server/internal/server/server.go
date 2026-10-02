@@ -73,6 +73,9 @@ type Server struct {
 	colliders      []protocol.Collider
 	// Per-tick moving obstacles (tick) and the scratch list a body steps
 	// against (collidersFor); owned by the tick, under s.mu.
+	// solid is everything static a body or vehicle can hit: the shipped
+	// colliders plus rocks and props, which clients rebuild themselves.
+	solid        []protocol.Collider
 	dynColliders []protocol.Collider
 	dynOwners    []uint32
 	collScratch  []protocol.Collider
@@ -275,6 +278,22 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 	s.terrainF = frame(protocol.MsgTerrain, t.Encode())
 	s.defsF = protocol.EncodeDefs(protocol.Defs{Data: reg.Payload})
 	s.collidersF = protocol.EncodeColliders(protocol.Colliders{List: allColliders})
+	// Rocks are solid: the same scatter the client draws (sim/rocks.go),
+	// on the same wire-quantized field it receives, as spheres.
+	s.solid = append([]protocol.Collider(nil), s.colliders...)
+	if q, err := terrain.Decode(t.Encode()); err == nil {
+		for _, r := range sim.RockScatter(q, uint32(s.seed)) {
+			s.solid = append(s.solid, sim.RockCollider(r))
+		}
+	} else {
+		return nil, fmt.Errorf("re-decoding terrain for rocks: %w", err)
+	}
+	// So are the solid dressing props (sim/props.go).
+	for _, p := range allProps {
+		if c, ok := sim.PropCollider(p); ok {
+			s.solid = append(s.solid, c)
+		}
+	}
 	// Zone dressing. Visual only and pre-encoded once, exactly like the
 	// colliders it sits among -- a client that never decodes this still agrees
 	// with the server about everything that can be walked into or shot.
@@ -444,6 +463,9 @@ func (s *Server) tick() {
 		case e.Kind == sim.EntityKind(protocol.EntityTypeVehicle):
 			s.dynColliders = append(s.dynColliders, sim.RoverCollider(sim.Vec(e.Pos), sim.Quat(e.Quat)))
 			s.dynOwners = append(s.dynOwners, e.ID)
+		case e.Kind == sim.EntityKind(protocol.EntityTypeShip):
+			s.dynColliders = append(s.dynColliders, sim.ShipCollider(sim.Vec(e.Pos), sim.Quat(e.Quat)))
+			s.dynOwners = append(s.dynOwners, e.ID)
 		case e.Kind == sim.EntityKind(protocol.EntityTypeNPC) && e.Health > 0:
 			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(e.Pos)))
 			s.dynOwners = append(s.dynOwners, e.ID)
@@ -491,11 +513,12 @@ func (s *Server) tick() {
 	events := s.pendingEvents
 	s.pendingEvents = nil
 	s.world.Step(sim.DT, sim.StepCtx{
-		Events:    &events,
-		World:     s.world,
-		Terrain:   s.terrain,
-		Colliders: s.colliders,
-		DefOf:     s.entityDef,
+		Events:       &events,
+		World:        s.world,
+		Terrain:      s.terrain,
+		Colliders:    s.colliders,
+		DefOf:        s.entityDef,
+		CollidersFor: s.collidersFor,
 	})
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
@@ -643,7 +666,7 @@ func (s *Server) encodeSnapshot(tick uint32) []byte {
 // collidersFor is the static colliders plus every moving body but id's own,
 // in a scratch slice reused tick to tick (valid until the next call).
 func (s *Server) collidersFor(id uint32) []protocol.Collider {
-	s.collScratch = append(s.collScratch[:0], s.colliders...)
+	s.collScratch = append(s.collScratch[:0], s.solid...)
 	for i, owner := range s.dynOwners {
 		if owner != id {
 			s.collScratch = append(s.collScratch, s.dynColliders[i])

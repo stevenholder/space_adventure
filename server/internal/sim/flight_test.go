@@ -181,3 +181,37 @@ func TestShipTolerantStep(t *testing.T) {
 		t.Fatal("ship moved with no terrain in ctx")
 	}
 }
+
+// Full collision: a ship flying at 20 m/s toward a wall 10 m ahead stops
+// with its hull at the wall's face instead of flying through it.
+func TestShipStopsAtWall(t *testing.T) {
+	f := flatField(150)
+	e := newShip(f)
+	up := terrain.Normalize(Vec(e.Pos))
+	fwd := Rotate(Quat(e.Quat), Vec{0, 0, 1})
+	fwd = terrain.Normalize(fwd.Sub(up.Scale(fwd.Dot(up))))
+	// Airborne, 3 m up: a grounded ship's landing grip would stop it short.
+	e.Pos = [3]float64(Vec(e.Pos).Add(up.Scale(3)))
+	e.Data.(*ShipState).Grounded = false
+	start := Vec(e.Pos)
+	e.Vel = [3]float64(fwd.Scale(20))
+	wallC := start.Add(fwd.Scale(10))
+	q := quatFromBasis(terrain.Normalize(terrain.Cross(up, fwd)), up, fwd)
+	wall := protocol.Collider{
+		Kind:   protocol.ColliderBox,
+		Center: [3]float32{float32(wallC[0]), float32(wallC[1]), float32(wallC[2])},
+		Half:   [3]float32{6, 6, 0.2},
+		Quat:   [4]float32{float32(q[0]), float32(q[1]), float32(q[2]), float32(q[3])},
+	}
+	ctx := StepCtx{Terrain: f, CollidersFor: func(uint32) []protocol.Collider { return []protocol.Collider{wall} }}
+	for i := 0; i < 60; i++ {
+		StepShip(e, DT, ctx)
+	}
+	along := Vec(e.Pos).Sub(start).Dot(fwd)
+	if limit := 10 - 0.2 - (2.40 + 1.40) + 0.01; along > limit {
+		t.Fatalf("ship reached %.2f m along its path, want ≤ %.2f (stopped at the wall)", along, limit)
+	}
+	if along < 4 {
+		t.Fatalf("ship only moved %.2f m, want it to fly up to the wall", along)
+	}
+}

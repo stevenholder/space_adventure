@@ -41,6 +41,69 @@ const (
 	RoverBoxH  = 0.75
 )
 
+// Ship hull box for bodies and rovers (gen_ship.py: fuselage ±3.55 m long,
+// ~1.4 m half-width, cockpit to ~2.5 m), centre ShipBoxH over the origin.
+// The wings are left out: a body ducks under them.
+const (
+	ShipHalfX = 1.40
+	ShipHalfY = 1.30
+	ShipHalfZ = 3.60
+	ShipBoxH  = 1.30
+)
+
+// HullSphere is one sphere of a vehicle's collision hull: Off in the
+// vehicle's local frame (+Y up, +Z its heading), radius R.
+type HullSphere struct {
+	Off Vec
+	R   float64
+}
+
+// RoverHull and ShipHull are the vehicles' own collision shapes -- a few
+// spheres strung along each, because a sphere is what nearest() resolves.
+// The rover's two cover its 1.7 x 2.2 m tub; the ship's three its fuselage.
+var (
+	RoverHull = []HullSphere{{Vec{0, 0.75, 0.55}, 0.80}, {Vec{0, 0.75, -0.55}, 0.80}}
+	ShipHull  = []HullSphere{{Vec{0, 1.30, 2.40}, 1.40}, {Vec{0, 1.30, 0}, 1.40}, {Vec{0, 1.30, -2.40}, 1.40}}
+)
+
+// ResolveHull pushes a vehicle out of colliders: each hull sphere, in order,
+// against each collider, in order -- the body rule (step 8) with the
+// sphere's centre carried by the vehicle's pose. Inbound velocity along the
+// push is removed, so a rover slides along a wall instead of sticking.
+// Orientation is not touched; the caller's own terrain step re-seats.
+func ResolveHull(pos, vel [3]float64, q Quat, hull []HullSphere, cs []protocol.Collider) (outPos, outVel [3]float64) {
+	if len(cs) == 0 {
+		return pos, vel
+	}
+	p, v := Vec(pos), Vec(vel)
+	up := terrain.Normalize(p)
+	for _, h := range hull {
+		off := Rotate(q, h.Off)
+		for i := range cs {
+			hit, n, depth := nearest(p.Add(off), h.R, cs[i], up)
+			if !hit {
+				continue
+			}
+			p = p.Add(n.Scale(depth))
+			if d := v.Dot(n); d < 0 {
+				v = v.Sub(n.Scale(d))
+			}
+		}
+	}
+	return [3]float64(p), [3]float64(v)
+}
+
+// ShipCollider is a ship's hull box at pos, oriented by q.
+func ShipCollider(pos Vec, q Quat) protocol.Collider {
+	c := pos.Add(Rotate(q, Vec{0, ShipBoxH, 0}))
+	return protocol.Collider{
+		Kind:   protocol.ColliderBox,
+		Center: [3]float32{float32(c[0]), float32(c[1]), float32(c[2])},
+		Half:   [3]float32{ShipHalfX, ShipHalfY, ShipHalfZ},
+		Quat:   [4]float32{float32(q[0]), float32(q[1]), float32(q[2]), float32(q[3])},
+	}
+}
+
 // BodyCollider is a standing body's collision sphere as a collider: the
 // same sphere ResolveColliders gives the stepping body, so two bodies rest
 // 2·BodyRadius apart.

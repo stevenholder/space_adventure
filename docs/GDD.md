@@ -98,7 +98,7 @@ control back to.
 - Vehicles of every kind: ships, rovers, boarding, seats, passengers,
   piloting, control handoff (M2).
 - Space, flight, orbit, landing and takeoff transitions (M3).
-- Player-vs-player collision — in M1 players pass through each other.
+- Player-vs-player collision — in M1 players pass through each other. (Done 2026-10-02: "Full collision" under "Static colliders".)
 - Combat, weapons, damage, health.
 - Inventory, gathering, quests, NPCs.
 - Economy, accounts, persistence, chat.
@@ -224,7 +224,8 @@ input, and body facing is initialized from it as in step 2 (then carried
 as state). Deterministic: two servers with the same seed and input stream
 spawn identically. All players spawn at the same point; bodies pass through
 each other (no player-vs-player collision in M1), so overlap is acceptable
-and there is no spawn spread in M1.
+and there is no spawn spread in M1. Since full collision (2026-10-02) two
+bodies on one spot push apart on the next tick, which is the spawn spread.
 
 ### First-person body
 
@@ -797,6 +798,7 @@ scatters them identically. They cost the server nothing and the wire nothing.
 - Props have **no collision in M1**, so nothing may be big enough that walking
   through it is jarring — hence the 1.5 m cap. Boulders you can climb on need
   prop collision, and that means the server owns their placement instead.
+  (Superseded 2026-10-02: rocks and solid props collide -- "Full collision".)
   A later milestone, not a tuning value.
 - Denser scatter inside crater floors and along ridgelines reads as debris
   and gives the eye something to judge distance by on a world whose horizon is
@@ -952,7 +954,8 @@ The seat table is in the ship's local frame. Both ends use these numbers
   by a disconnect.
 - **No body-vs-ship collision in M2** (M1 has no body-vs-body collision): a
   player walking around the parked ship can visually clip the hull until
-  they board. Accepted for M2; a post-M2 candidate.
+  they board. Accepted for M2; a post-M2 candidate. (Done 2026-10-02: "Full
+  collision".)
 
 ### The flight model — M2 context
 
@@ -1238,7 +1241,9 @@ Steps 3, 4 and 6 are grounded-only: airborne, the rover is a ballistic
 brick — no steering, no throttle, no grip, which is what makes crests feel
 like crests. The one collision the rover has is step 9's origin point,
 exactly like a body's foot point ("Vehicles and crew": hull volume is
-visual-only, and there is no body-vs-vehicle collision).
+visual-only, and there is no body-vs-vehicle collision). Superseded
+2026-10-02: step 8b pushes the hull out of everything solid ("Full
+collision").
 
 ### Rover seats
 
@@ -2180,7 +2185,33 @@ Phase 4/5.
 
 Rocks stay client-scattered and non-collidable. **Anything the player must not
 walk through is authored into a zone file** and shipped in the `colliders`
-message (`docs/PROTOCOL.md`).
+message (`docs/PROTOCOL.md`). (Rocks: superseded below.)
+
+#### Full collision (2026-10-02)
+
+Playtest: "the game should have full collision". Everything solid, on both
+sides, through the existing sphere-vs-collider rule (`ResolveColliders` /
+`nearest`) -- no new solver:
+
+| Mover | Shape | Pushed out of |
+|---|---|---|
+| body (player, NPC) | its chest sphere (`body_radius`, `body_sphere_h`) | everything below |
+| rover | 2 hull spheres r 0.80 at (0, 0.75, ±0.55) local, step 8b | everything below |
+| ship | 3 hull spheres r 1.40 at (0, 1.30, 0/±2.40) local, step 4a | everything below |
+
+Solid: the shipped colliders; **rocks** (each a sphere: centre 0.4 of its
+height up, radius 0.45 of its narrower footprint) from the same seeded
+scatter the client draws, run server-side on the wire-quantized field
+(`sim/rocks.go`, held to the client's by `t38-rock-parity`); **solid props**
+(barrel, barrels, generator, dish, loot crate -- model bounds as a box;
+bones walk-through); and every **moving thing but yourself** at its
+start-of-tick pose: on-foot players and live NPCs as body spheres, rovers
+(half 0.85 × 0.55 × 1.12, centre 0.75 up) and ships (half 1.40 × 1.30 ×
+3.60, centre 1.30 up) as boxes. Seated bodies are not obstacles. Order:
+static, rocks, props, then moving bodies. The client predicts against the
+same list built from what it draws. One-sided: nothing transfers momentum,
+so a rover stops against a player rather than shoving them, and the player
+is pushed out of the rover's box on their own step.
 
 **Authoring frame.** Authoring boxes in world space on a sphere is not humanly
 possible, so a zone file is written in a **local tangent frame** at the zone's

@@ -51,7 +51,7 @@ namespace SpaceAdventure.Sim
     public static class Flight
     {
         /// <summary>One fixed-dt ship tick — the exact step order of flight.go.</summary>
-        public static void Apply(ref ShipSimState s, FlightInput inp, TerrainField t, double dt)
+        public static void Apply(ref ShipSimState s, FlightInput inp, TerrainField t, double dt, Collider[] colliders = null)
         {
             double thrust = SanitiseAxis(inp.Thrust);
             double roll = SanitiseAxis(inp.Roll);
@@ -99,6 +99,8 @@ namespace SpaceAdventure.Sim
 
             // 4. Integrate + origin-point contact with the landing rules.
             pos += vel * dt;
+            // 4a: the hull out of anything solid (flight.go 4a).
+            if (colliders != null) Collide.ResolveHull(ref pos, ref vel, q, Collide.ShipHull, colliders);
             Vec3 dir = pos.Normalized();
             double r = t.SampleRadius(dir);
             if (pos.Length < r)

@@ -103,6 +103,14 @@ func StepRover(e *Ent, dt float64, ctx StepCtx) {
 	// 8: integrate.
 	pos = pos.Add(vel.Scale(dt))
 
+	// 8b: the hull out of anything solid (structures, rocks, props, bodies,
+	// other vehicles), by the pose it started the tick with. Before step 9,
+	// so the terrain follow re-seats whatever the push did to the height.
+	if ctx.CollidersFor != nil {
+		p2, v2 := ResolveHull([3]float64(pos), [3]float64(vel), Quat(e.Quat), RoverHull, ctx.CollidersFor(e.ID))
+		pos, vel = Vec(p2), Vec(v2)
+	}
+
 	// 9: terrain following — the origin point, like a body's foot.
 	u := terrain.Normalize(pos)
 	r := ctx.Terrain.SampleRadius(u)

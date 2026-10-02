@@ -75,6 +75,7 @@ func run(args []string) error {
 			"codec":   runCodec,
 			"poi":     runPOI,
 			"collide": runCollide,
+			"rocks":   runRocks,
 		}
 		if run, ok := sub[args[0]]; ok {
 			return run(args[1:])

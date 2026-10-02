@@ -46,10 +46,13 @@ namespace SpaceAdventure.Game
 
         public void Seed(TerrainField terrain) => _terrain = terrain;
 
+        /// <summary>Everything solid but this ship, set before each Apply (RoverPredictor.Colliders).</summary>
+        public Collider[] Colliders;
+
         public void Apply(ushort seq, FlightInput input)
         {
             if (!Ready) return;
-            Flight.Apply(ref _state, input, _terrain, Rules.DT);
+            Flight.Apply(ref _state, input, _terrain, Rules.DT, Colliders);
             _pending.Add(new Pending(seq, input, _state.Omega));
             if (_pending.Count > MaxPending) _pending.RemoveAt(0);
         }
@@ -78,7 +81,7 @@ namespace SpaceAdventure.Game
 
             var s = _state;
             foreach (var p in _pending)
-                Flight.Apply(ref s, p.Input, _terrain, Rules.DT);
+                Flight.Apply(ref s, p.Input, _terrain, Rules.DT, Colliders);
             _state = s;
             return true;
         }

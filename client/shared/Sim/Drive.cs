@@ -38,7 +38,7 @@ namespace SpaceAdventure.Sim
         public static double EffMult(double m) => m <= 0 ? 1 : m;
 
         public static void Apply(ref RoverState s, double throttle, double steer,
-                                 TerrainField t, double dt, double effMult = 0)
+                                 TerrainField t, double dt, double effMult = 0, Collider[] colliders = null)
         {
             throttle = Sanitise(throttle);
             steer = Sanitise(steer);
@@ -99,6 +99,10 @@ namespace SpaceAdventure.Sim
 
             // 8: integrate.
             pos += vel * dt;
+
+            // 8b: the hull out of anything solid, by the tick's starting pose
+            // (drive.go 8b).
+            if (colliders != null) Collide.ResolveHull(ref pos, ref vel, s.Quat, Collide.RoverHull, colliders);
 
             // 9: terrain following — the origin point, like a body's foot.
             Vec3 u = pos.Normalized();

@@ -52,6 +52,9 @@ internal static class Program
                                ? Arg(args, "--server-origin") : null);
         if (Array.IndexOf(args, "--authority") >= 0)
             return Authority(Arg(args, "--authority"), Arg(args, "--evidence"));
+        int rockAt = Array.IndexOf(args, "--rocks");
+        if (rockAt >= 0 && rockAt + 3 < args.Length) return Rocks(args[rockAt + 1], uint.Parse(args[rockAt + 2]), args[rockAt + 3]);
+
         int colAt = Array.IndexOf(args, "--collide");
         if (colAt >= 0 && colAt + 2 < args.Length) return Collide(args[colAt + 1], args[colAt + 2]);
 
@@ -221,6 +224,7 @@ internal static class Program
         PredictionChecks();
         RockScatterChecks();
         TimelineChecks();
+        PropChecks();
         RoverPredictionChecks();
         BearingChecks();
 
@@ -412,6 +416,21 @@ internal static class Program
         Check("rover predictor moved at all", (continuous.Pos - start.Pos).Length > 0.1);
         Check("a stale ack is ignored",
             !b.Reconcile(start.Pos, start.Vel, start.Quat, true, 2));
+    }
+
+    // sim/props_test.go TestPropCollider, same prop and numbers: the two
+    // PropCollider ports agree on a turned, scaled barrel stack.
+    private static void PropChecks()
+    {
+        double h = Math.Sqrt(0.5);
+        bool ok = SpaceAdventure.Sim.Collide.PropCollider("prop.barrels", new Vec3(0, 150, 0),
+            new Quat((float)0, (float)h, (float)0, (float)h), 2, out var c);
+        Check("prop collider: barrels are solid", ok);
+        Check("prop collider: box centred over the turned base, as Go has it",
+            Math.Abs(c.Center.X - (-0.37)) < 1e-5 && Math.Abs(c.Center.Y - 150.95) < 1e-5 && Math.Abs(c.Center.Z) < 1e-5,
+            $"{c.Center.X} {c.Center.Y} {c.Center.Z}");
+        Check("prop collider: half extents scaled", (float)c.Half.X == 1.3f && (float)c.Half.Y == 0.95f && (float)c.Half.Z == 1.35f);
+        Check("prop collider: bones are walk-through", !SpaceAdventure.Sim.Collide.PropCollider("prop.bones", Vec3.Zero, new Quat(0, 0, 0, 1), 1, out _));
     }
 
     private static void TimelineChecks()
@@ -1264,6 +1283,20 @@ internal static class Program
         public bool grounded { get; set; }
         public double radius { get; set; }
         public CollideJson[] colliders { get; set; }
+        /// <summary>Optional: run ResolveHull (a vehicle) instead of the body rule.</summary>
+        public HullJson hull { get; set; }
+    }
+
+    private sealed class HullJson
+    {
+        public double[] quat { get; set; }
+        public HullSphereJson[] spheres { get; set; }
+    }
+
+    private sealed class HullSphereJson
+    {
+        public double[] off { get; set; }
+        public double r { get; set; }
     }
 
     private sealed class CollideJson
@@ -1280,6 +1313,32 @@ internal static class Program
         public double[] Pos { get; set; }
         public double[] Vel { get; set; }
         public bool Grounded { get; set; }
+    }
+
+    /// <summary>
+    /// The C# half of test/t38-rock-parity.mjs: RockScatter on the captured
+    /// wire field, one row per rock, for the Go port to be diffed against.
+    /// </summary>
+    private static int Rocks(string worldPath, uint seed, string outPath)
+    {
+        using var wdoc = JsonDocument.Parse(File.ReadAllBytes(worldPath));
+        var w = wdoc.RootElement;
+        var codesEl = w.GetProperty("radii");
+        var codes = new ushort[codesEl.GetArrayLength()];
+        for (int i = 0; i < codes.Length; i++) codes[i] = (ushort)codesEl[i].GetUInt32();
+        var field = TerrainField.FromWire(codes, w.GetProperty("radius_min").GetDouble(), w.GetProperty("radius_max").GetDouble());
+        var rows = new System.Collections.Generic.List<object>();
+        foreach (var r in SpaceAdventure.Game.RockScatter.Scatter(field, seed))
+            rows.Add(new
+            {
+                Pos = new[] { r.Pos.X, r.Pos.Y, r.Pos.Z },
+                Dir = new[] { r.Dir.X, r.Dir.Y, r.Dir.Z },
+                Scale = new[] { r.Scale.X, r.Scale.Y, r.Scale.Z },
+                r.Spin,
+                r.Variant,
+            });
+        File.WriteAllText(outPath, Newtonsoft.Json.JsonConvert.SerializeObject(rows));
+        return 0;
     }
 
     private static int Collide(string inPath, string outPath)
@@ -1313,8 +1372,18 @@ internal static class Program
             bool grounded = s.grounded;
             double radius = s.radius;
 
-            SpaceAdventure.Sim.Collide.ResolveColliders(
-                ref pos, ref vel, up, ref grounded, cs, _ => radius);
+            if (s.hull != null)
+            {
+                var hull = new SpaceAdventure.Sim.Collide.HullSphere[s.hull.spheres.Length];
+                for (int i = 0; i < hull.Length; i++)
+                    hull[i] = new SpaceAdventure.Sim.Collide.HullSphere(
+                        new Vec3(s.hull.spheres[i].off[0], s.hull.spheres[i].off[1], s.hull.spheres[i].off[2]), s.hull.spheres[i].r);
+                var q = new Quat(s.hull.quat[0], s.hull.quat[1], s.hull.quat[2], s.hull.quat[3]);
+                SpaceAdventure.Sim.Collide.ResolveHull(ref pos, ref vel, q, hull, cs);
+            }
+            else
+                SpaceAdventure.Sim.Collide.ResolveColliders(
+                    ref pos, ref vel, up, ref grounded, cs, _ => radius);
 
             results.Add(new CollideResult
             {

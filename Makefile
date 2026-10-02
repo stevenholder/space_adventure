@@ -207,12 +207,15 @@ godot-test:
 	dotnet build $(CLIENT_SLN) -v q --nologo
 	dotnet run --project client/simdump --nologo -- --selftest
 
-# C40: the C# sim must match the Go sim on the C5 route within 1e-10 m.
+# C40: the C# sim must match the Go sim on the C5 route within 1e-10 m, and
+# agree on colliders (t13: bodies and vehicle hulls) and rocks (t38).
 .PHONY: godot-conformance
 godot-conformance:
 	node test/t20-csharp-conformance.mjs
 	node test/t23-drive-conformance.mjs
 	node test/t25-flight-conformance.mjs
+	node test/t13-collide-parity.mjs
+	node test/t38-rock-parity.mjs
 
 # C41: the C# codec must agree with the Go one BYTE FOR BYTE, both
 # directions. A codec's own round-trip test agrees with its own bug, so this

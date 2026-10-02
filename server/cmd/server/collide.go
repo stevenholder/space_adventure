@@ -31,6 +31,15 @@ type collideScenario struct {
 	Grounded  bool         `json:"grounded"`
 	Radius    float64      `json:"radius"`
 	Colliders []jsonCollid `json:"colliders"`
+	// Hull, when present, runs sim.ResolveHull (a vehicle) instead of the
+	// body rule.
+	Hull *struct {
+		Quat    [4]float64 `json:"quat"`
+		Spheres []struct {
+			Off [3]float64 `json:"off"`
+			R   float64    `json:"r"`
+		} `json:"spheres"`
+	} `json:"hull"`
 }
 
 type jsonCollid struct {
@@ -74,8 +83,18 @@ func runCollide(args []string) error {
 			}
 		}
 		r := s.Radius
-		pos, vel, grounded := sim.ResolveColliders(s.Pos, s.Vel, s.Up, s.Grounded, cs,
-			func([3]float64) float64 { return r })
+		var pos, vel [3]float64
+		grounded := s.Grounded
+		if s.Hull != nil {
+			hull := make([]sim.HullSphere, len(s.Hull.Spheres))
+			for i, h := range s.Hull.Spheres {
+				hull[i] = sim.HullSphere{Off: sim.Vec(h.Off), R: h.R}
+			}
+			pos, vel = sim.ResolveHull(s.Pos, s.Vel, sim.Quat(s.Hull.Quat), hull, cs)
+		} else {
+			pos, vel, grounded = sim.ResolveColliders(s.Pos, s.Vel, s.Up, s.Grounded, cs,
+				func([3]float64) float64 { return r })
+		}
 		out = append(out, collideResult{Name: s.Name, Pos: pos, Vel: vel, Grounded: grounded})
 	}
 
