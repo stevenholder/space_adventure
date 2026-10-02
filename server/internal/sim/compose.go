@@ -24,6 +24,11 @@ var RoverSeatPos = [MaxCrew + 1]Vec{
 	2: {+0.35, 0.95, -0.40}, // passenger
 }
 
+// SeatEyeAbove is the rover's seat_eye − seat_pos (GDD "Rover seats"): a
+// seated passenger's shot starts this far over the seat. Along the planet's
+// up, not the rover's -- ponytail: off by 0.6·sin(tilt) on a slope, a few cm.
+const SeatEyeAbove = 0.60
+
 // ShipSeatPos is the ship seat table's seat_pos column (GDD "Seats and
 // occupancy"), ship local frame.
 var ShipSeatPos = [MaxCrew + 1]Vec{

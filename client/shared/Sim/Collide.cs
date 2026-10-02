@@ -23,6 +23,103 @@ namespace SpaceAdventure.Sim
     {
         public const double BodyRadius = 0.35;
         public const double BodySphereH = 0.9;
+
+        // Moving bodies as colliders -- collide.go "Moving bodies as
+        // colliders", same constants. The client predicts its body against
+        // the static colliders plus these, built from the bodies it draws.
+        public const double RoverHalfX = 0.85, RoverHalfY = 0.55, RoverHalfZ = 1.12, RoverBoxH = 0.75;
+
+        public const double ShipHalfX = 1.40, ShipHalfY = 1.30, ShipHalfZ = 3.60, ShipBoxH = 1.30;
+
+        /// <summary>One sphere of a vehicle hull: offset in the vehicle frame (+Y up, +Z heading), radius.</summary>
+        public readonly struct HullSphere
+        {
+            public readonly Vec3 Off;
+            public readonly double R;
+            public HullSphere(Vec3 off, double r) { Off = off; R = r; }
+        }
+
+        /// <summary>collide.go RoverHull / ShipHull, same numbers.</summary>
+        public static readonly HullSphere[] RoverHull = { new HullSphere(new Vec3(0, 0.75, 0.55), 0.80), new HullSphere(new Vec3(0, 0.75, -0.55), 0.80) };
+        public static readonly HullSphere[] ShipHull = { new HullSphere(new Vec3(0, 1.30, 2.40), 1.40), new HullSphere(new Vec3(0, 1.30, 0), 1.40), new HullSphere(new Vec3(0, 1.30, -2.40), 1.40) };
+
+        /// <summary>
+        /// collide.go ResolveHull, line for line: each hull sphere against each
+        /// collider, in order; push out, drop inbound velocity.
+        /// </summary>
+        public static void ResolveHull(ref Vec3 pos, ref Vec3 vel, Quat q, HullSphere[] hull, Collider[] cs)
+        {
+            if (cs == null || cs.Length == 0) return;
+            Vec3 up = pos.Normalized();
+            foreach (HullSphere h in hull)
+            {
+                Vec3 off = Quat.Rotate(q, h.Off);
+                for (int i = 0; i < cs.Length; i++)
+                {
+                    if (!Nearest(pos + off, h.R, cs[i], up, out Vec3 n, out double depth)) continue;
+                    pos = pos + n * depth;
+                    double d = Vec3.Dot(vel, n);
+                    if (d < 0) vel = vel - n * d;
+                }
+            }
+        }
+
+        /// <summary>sim/props.go PropBoxes: solid props' model-space (min, max), same numbers.</summary>
+        public static readonly System.Collections.Generic.Dictionary<string, (Vec3 Min, Vec3 Max)> PropBoxes =
+            new System.Collections.Generic.Dictionary<string, (Vec3, Vec3)>
+            {
+                ["prop.barrel"] = (new Vec3(-0.32, 0, -0.32), new Vec3(0.32, 0.95, 0.32)),
+                ["prop.barrels"] = (new Vec3(-0.65, 0, -0.86), new Vec3(0.65, 0.95, 0.49)),
+                ["prop.generator"] = (new Vec3(-1.00, 0, -0.45), new Vec3(1.12, 1.34, 0.43)),
+                ["prop.dish"] = (new Vec3(-0.95, 0, -0.93), new Vec3(0.95, 2.09, 0.66)),
+                ["prop.loot.crate"] = (new Vec3(-0.22, 0, -0.17), new Vec3(0.22, 0.50, 0.17)),
+            };
+
+        /// <summary>A solid prop as a box (props.go PropCollider); false for walk-through dressing.</summary>
+        public static bool PropCollider(string asset, Vec3 pos, Quat q, double scale, out Collider c)
+        {
+            c = default;
+            if (!PropBoxes.TryGetValue(asset, out var b)) return false;
+            double s = scale <= 0 ? 1 : scale;
+            Vec3 mid = (b.Min + b.Max) * (0.5 * s);
+            Vec3 half = (b.Max - b.Min) * (0.5 * s);
+            Vec3 ctr = pos + Quat.Rotate(q, mid);
+            c = new Collider
+            {
+                Kind = ColliderKind.Box,
+                Center = new Vec3((float)ctr.X, (float)ctr.Y, (float)ctr.Z),
+                Half = new Vec3((float)half.X, (float)half.Y, (float)half.Z),
+                Rot = q,
+            };
+            return true;
+        }
+
+        /// <summary>A ship's hull box at pos, oriented by q (collide.go ShipCollider).</summary>
+        public static Collider ShipCollider(Vec3 pos, Quat q) => new Collider
+        {
+            Kind = ColliderKind.Box,
+            Center = pos + Quat.Rotate(q, new Vec3(0, ShipBoxH, 0)),
+            Half = new Vec3(ShipHalfX, ShipHalfY, ShipHalfZ),
+            Rot = q,
+        };
+
+        /// <summary>A standing body's collision sphere as a collider (collide.go BodyCollider).</summary>
+        public static Collider BodyCollider(Vec3 pos) => new Collider
+        {
+            Kind = ColliderKind.Sphere,
+            Center = pos + pos.Normalized() * BodySphereH,
+            Half = new Vec3(BodyRadius, 0, 0),
+            Rot = new Quat(0, 0, 0, 1),
+        };
+
+        /// <summary>A rover's hull box at pos, oriented by q (collide.go RoverCollider).</summary>
+        public static Collider RoverCollider(Vec3 pos, Quat q) => new Collider
+        {
+            Kind = ColliderKind.Box,
+            Center = pos + Quat.Rotate(q, new Vec3(0, RoverBoxH, 0)),
+            Half = new Vec3(RoverHalfX, RoverHalfY, RoverHalfZ),
+            Rot = q,
+        };
         private const double DegenEps = 1e-9;
 
         /// <summary>

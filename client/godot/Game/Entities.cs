@@ -55,6 +55,10 @@ namespace SpaceAdventure.Game
 
         /// <summary>Occupancy from the snapshot; nonzero = seated, not drawn.</summary>
         public uint ParentId;
+        public ushort Seat;
+        /// <summary>The local player's own view: only ever drawn seated, headless.</summary>
+        public bool IsSelf;
+        public bool HeadHidden;
 
         /// <summary>Phase 12: the tint last applied, so it is set once per change.</summary>
         public bool DepletedDrawn;
@@ -71,6 +75,10 @@ namespace SpaceAdventure.Game
         public float StepDist;
         public float Speed;
 
+        /// <summary>A rover's dash speed bar, grown from the model's `dash.speed` mount; null until found.</summary>
+        public Node3D DashBar;
+        public bool DashLooked;
+
         /// <summary>
         /// The most health this entity has ever been seen with. Entities spawn
         /// and respawn at full, so the high-water mark IS the maximum.
@@ -80,7 +88,7 @@ namespace SpaceAdventure.Game
         public float HealthFraction => MaxHealth == 0 ? 1f : Mathf.Clamp((float)Health / MaxHealth, 0f, 1f);
 
         /// <summary>Health bars are for the wounded; a full bar is noise. A node's health is yields, not wounds.</summary>
-        public bool ShowHealthBar => Type != EntityType.Node && !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
+        public bool ShowHealthBar => !IsSelf && Type != EntityType.Node && !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
 
         /// <summary>Phase 12: a node with no yields left (snapshot health 0).</summary>
         public bool Depleted => Type == EntityType.Node && Health == 0;
@@ -133,7 +141,7 @@ namespace SpaceAdventure.Game
         {
             foreach (EntityView v in _views.Values)
             {
-                if (v.Root == null || !v.Root.Visible) continue;
+                if (v.Root == null || !v.Root.Visible || v.IsSelf) continue;
                 yield return new MapMarker(v.Root.GlobalPosition, v.Type, MapLabel(v), MapIcon(v), v.Depleted || v.Dead);
             }
         }
@@ -400,12 +408,20 @@ namespace SpaceAdventure.Game
         /// </summary>
         public void Render(SnapshotTimeline timeline, uint selfId)
         {
+            _seated.Clear();
             double now = Clock.Now;
             float dt = (float)Clock.Dt;
             foreach (var kv in timeline.Interpolate((float)now))
             {
                 uint id = kv.Key;
-                if (id == selfId) continue;
+                // Our own body is predicted, never drawn from snapshots --
+                // except seated, where it sits in the seat like anyone else's
+                // (headless, under our camera: PlaceSeated).
+                if (id == selfId && kv.Value.ParentId == 0)
+                {
+                    if (_views.TryGetValue(id, out var me) && me.Root != null) me.Root.Visible = false;
+                    continue;
+                }
 
                 if (!_views.TryGetValue(id, out var view))
                 {
@@ -413,13 +429,18 @@ namespace SpaceAdventure.Game
                     _views[id] = view;
                 }
 
-                // GDD "Seats and occupancy", binding client rule: a seated
-                // body is not rendered — a standing character at a seat clips
-                // the hull, and a seated pose is post-M2 art.
+                // Seated bodies are posed in their seat by PlaceSeated, once
+                // the vehicles have moved this frame (playtest 2026-10-02: the
+                // old rule drew no seated body at all, after one that drew it
+                // standing on the roof).
                 view.ParentId = kv.Value.ParentId;
+                view.Seat = kv.Value.Seat;
+                view.IsSelf = id == selfId;
                 if (kv.Value.ParentId != 0)
                 {
-                    view.Root.Visible = false;
+                    view.Health = kv.Value.Health;
+                    view.Dead = kv.Value.Dead;
+                    _seated.Add(view);
                     continue;
                 }
 
@@ -455,6 +476,7 @@ namespace SpaceAdventure.Game
                 view.LastDrawn = drawn;
                 view.HasLastDrawn = true;
                 view.Anim?.Drive(view.Speed, view.Dead || view.RigDead);
+                if (view.Type == EntityType.Vehicle) UpdateDash(view);
                 if (view.Anim != null && !view.Dead && view.Speed > 0.5f && Sfx != null)
                 {
                     view.StepDist += view.Speed * dt;
@@ -476,6 +498,81 @@ namespace SpaceAdventure.Game
                 bool stillDying = view.DiedAt >= 0 && now - view.DiedAt < linger;
                 view.Root.Visible = !kv.Value.Dead || stillDying;
             }
+        }
+
+        private readonly List<EntityView> _seated = new List<EntityView>();
+
+        /// <summary>
+        /// How far a seated body's eye sits under a standing one (art
+        /// tools/bpy/human.py SIT_DROP): the sit clips drop the whole body
+        /// this much, and the seat's eye mount is where the seated eye goes.
+        /// </summary>
+        internal const float SitDrop = 0.45f;
+
+        /// <summary>
+        /// Puts every seated body (Render's list) in its seat: its eye on the
+        /// seat's eye mount, facing the vehicle's way, playing `sit_drive`
+        /// at a rover's wheel, `sit_armed` with a gun in hand, `sit` else.
+        /// Call after the vehicles are placed for the frame -- Boot moves the
+        /// one you drive itself -- or a seated body trails its seat by a
+        /// frame at speed. Your own seated body drops its head (the camera
+        /// is in it) and gives way to the first-person arms when armed.
+        /// </summary>
+        public void PlaceSeated()
+        {
+            foreach (EntityView view in _seated)
+            {
+                if (view.Root == null) continue;
+                if (!_views.TryGetValue(view.ParentId, out var veh) || veh.Model == null) { view.Root.Visible = false; continue; }
+                bool rover = veh.Type == EntityType.Vehicle;
+                string mountName = rover ? (view.Seat == 1 ? "seat.driver" : "seat.passenger.0")
+                                         : (view.Seat == 1 ? "seat.pilot" : view.Seat == 2 ? "seat.passenger.0" : "seat.passenger.1");
+                Node3D mount = AssetRegistry.FindNode(veh.Model, mountName);
+                if (mount == null) { view.Root.Visible = false; continue; }
+
+                string clip = rover && view.Seat == 1 ? "sit_drive" : view.Held != null && rover ? "sit_armed" : "sit";
+                // Our own gunner sees the first-person arms instead.
+                bool show = !(view.IsSelf && clip == "sit_armed");
+                view.Root.Visible = show && !view.Dead;
+                if (!view.Root.Visible) continue;
+
+                Basis b = veh.Root.GlobalBasis.Orthonormalized();
+                view.Root.GlobalTransform = new Transform3D(b,
+                    mount.GlobalPosition - b.Y * (FpsController.EyeHeight - SitDrop));
+                view.Anim?.Sit(clip);
+                if (view.Held != null) view.Held.Visible = clip == "sit_armed";
+                if (view.IsSelf && !view.HeadHidden && view.Model != null)
+                {
+                    view.HeadHidden = true;
+                    if (AssetRegistry.FindNode(view.Model, "head") is GeometryInstance3D head) head.Visible = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The rover's dash speed bar: amber, growing from the mount's left
+        /// end over a dark track as the drawn speed climbs to vmax_drive.
+        /// Everyone sees it, so a passenger reads the same dash as the driver.
+        /// </summary>
+        private void UpdateDash(EntityView view)
+        {
+            if (!view.DashLooked && view.Model != null)
+            {
+                view.DashLooked = true;
+                Node3D mount = AssetRegistry.FindNode(view.Model, "dash.speed");
+                if (mount != null)
+                {
+                    const float len = 0.46f;
+                    BoxMesh.Attach(mount, "speedtrack", BoxMesh.Build(new[]
+                        { new Box(new Vector3(len / 2, 0, 0.004f), new Vector3(len + 0.02f, 0.07f, 0.01f), new Color(0.08f, 0.08f, 0.09f)) }, "speedtrack"), _material, 0);
+                    view.DashBar = new Node3D { Name = "speedbar" };
+                    mount.AddChild(view.DashBar);
+                    BoxMesh.Attach(view.DashBar, "bar", BoxMesh.Build(new[]
+                        { new Box(new Vector3(len / 2, 0, 0.012f), new Vector3(len, 0.045f, 0.01f), new Color(1.0f, 0.62f, 0.12f)) }, "speedbar"), _material, 0);
+                }
+            }
+            if (view.DashBar != null)
+                view.DashBar.Scale = new Vector3(Mathf.Clamp(view.Speed / (float)DriveRules.VmaxDrive, 0.02f, 1f), 1, 1);
         }
 
         /// <summary>

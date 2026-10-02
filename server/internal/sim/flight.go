@@ -109,6 +109,12 @@ func StepShip(e *Ent, dt float64, ctx StepCtx) {
 
 	// 4. Integrate, then origin-point contact with the landing rules.
 	pos = pos.Add(vel.Scale(dt))
+	// 4a: the hull out of anything solid, by this tick's attitude (the
+	// rover's step 8b, three spheres for the fuselage).
+	if ctx.CollidersFor != nil {
+		p2, v2 := ResolveHull([3]float64(pos), [3]float64(vel), q, ShipHull, ctx.CollidersFor(e.ID))
+		pos, vel = Vec(p2), Vec(v2)
+	}
 	dir := terrain.Normalize(pos)
 	r := ctx.Terrain.SampleRadius(dir)
 	if pos.Len() < r {

@@ -9,14 +9,16 @@
 // the only kind of check this repo counts (CONVENTIONS.md rule 5). Rocks.cs
 // turns what comes out of here into transforms and draws it.
 //
-// The scatter is client-side decoration and the server never mentions it: it
-// sends `world_seed`, and every client runs this on it. That is the whole
+// The scatter is client-side decoration that the server ALSO runs (for
+// collision), never sends: it sends `world_seed`, and every client runs this
+// on it. That is the whole
 // agreement mechanism -- no traffic, no authority, just the same function of
 // the same two inputs. Which makes the ORDER the random numbers are drawn in
 // the actual contract here, not the shape of the loop: one extra rng() call,
 // or two drawn in the other order, and this client's rocks are somewhere else
-// than every other client's. M1 rocks have no collision, so nothing would
-// complain.
+// than every other client's -- and, since rocks became solid (2026-10-02),
+// somewhere else than the server's Go port (sim/rocks.go) bumps you into:
+// test/t38-rock-parity.mjs diffs the two.
 //
 // Ported from the retired TypeScript client's scene/rocks.ts step for step
 // for that reason (git history; ROADMAP U18). That
@@ -54,8 +56,8 @@ namespace SpaceAdventure.Game
         /// <summary>GDD: rocks skip slopes above 35 degrees.</summary>
         public const double SlopeMax = 35.0 * Math.PI / 180.0;
         public const int TargetCount = 400;
-        // The 1.5 m cap is the GDD's walk-through constraint (no prop collision
-        // in M1). The floor rose from 0.3 (feedback 2026-09-29: the small end
+        // The 1.5 m cap was the GDD's walk-through constraint (no prop collision
+        // in M1; rocks are solid since 2026-10-02). The floor rose from 0.3 (feedback 2026-09-29: the small end
         // read as pebbles next to a 35 m flattened plateau); the pebbles proper
         // are Rocks.cs's cluster pass. Only the mapping of the draw changed.
         private const double MinSize = 0.6;
@@ -109,6 +111,22 @@ namespace SpaceAdventure.Game
                 });
             }
             return placements;
+        }
+
+        /// <summary>
+        /// A rock as a sphere -- sim/rocks.go RockCollider, same numbers: the
+        /// server and the client both make rocks solid this way.
+        /// </summary>
+        public static Collider ColliderOf(RockPlacement r)
+        {
+            Vec3 c = r.Pos + r.Dir * (r.Scale.Y * 0.4);
+            return new Collider
+            {
+                Kind = ColliderKind.Sphere,
+                Center = new Vec3((float)c.X, (float)c.Y, (float)c.Z),
+                Half = new Vec3((float)(0.45 * Math.Min(r.Scale.X, r.Scale.Z)), 0, 0),
+                Rot = new Quat(0, 0, 0, 1),
+            };
         }
     }
 }

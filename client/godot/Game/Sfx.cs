@@ -66,10 +66,10 @@ namespace SpaceAdventure.Game
         public void ShotAt(Vector3 at, string item) => PlayAt(at, _shot[Family(item)], 2f, 120f);
         public void ImpactAt(Vector3 at) => PlayAt(at, _impact, -2f, 40f);
         // Steps are background: -18/-10 dB was the loudest thing in the
-        // 2026-10-01 playtest. Others' carry 12 m, not 18, so a camp of
+        // 2026-10-01 playtest, -30/-24 still "a little loud" on 10-02. Others' carry 12 m, not 18, so a camp of
         // patrolling NPCs is not a drum line.
-        public void StepAt(Vector3 at, int n) => PlayAt(at, _steps[n & 3], -24f, 12f);
-        public void OwnStep(int n) => Play2D(_steps[n & 3], -30f);
+        public void StepAt(Vector3 at, int n) => PlayAt(at, _steps[n & 3], -27f, 12f);
+        public void OwnStep(int n) => Play2D(_steps[n & 3], -33f);
         public void DryFire() => Play2D(_dry, -8f);
 
         /// <summary>Mag out, mag in, rack -- timed to the reload.</summary>
@@ -161,17 +161,27 @@ namespace SpaceAdventure.Game
             return Wav(x);
         }
 
-        /// <summary>A soft boot on ground: low noise, fast decay.</summary>
+        /// <summary>
+        /// A boot on dust: mostly a low, soft thump (a falling sine around
+        /// 80 Hz) with a little dull grit on top. The first step sound was
+        /// pure low-passed noise at 500 Hz -- a hiss, and the playtest's
+        /// most-hated sound twice over.
+        /// </summary>
         private static AudioStreamWav Step(Random rng, double pitch)
         {
-            int n = (int)(Rate * 0.12);
+            int n = (int)(Rate * 0.14);
             var x = new float[n];
-            double lp = 0, a = Math.Exp(-2 * Math.PI * 500 * pitch / Rate);
+            double lp = 0, lp2 = 0, a = Math.Exp(-2 * Math.PI * 700 * pitch / Rate), ph = 0;
             for (int i = 0; i < n; i++)
             {
                 double t = (double)i / Rate;
                 lp = a * lp + (1 - a) * (rng.NextDouble() * 2 - 1);
-                x[i] = (float)(lp * 4.0 * Math.Exp(-t / 0.025) * Math.Min(1.0, t / 0.004));
+                lp2 = a * lp2 + (1 - a) * lp;                              // two poles: grit, not hiss
+                ph += 2 * Math.PI * 80 * pitch * (1.0 + 0.6 * Math.Exp(-t * 60)) / Rate;
+                double attack = Math.Min(1.0, t / 0.006);
+                double thump = Math.Sin(ph) * Math.Exp(-t / 0.035);
+                double grit = lp2 * 6.0 * Math.Exp(-t / 0.018);
+                x[i] = (float)(attack * (0.8 * thump + 0.35 * grit));
             }
             return Wav(x);
         }

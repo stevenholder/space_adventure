@@ -105,10 +105,12 @@ func (s *Server) stepNPCs(tick uint32) {
 		// Move: toward the target while chasing, back to the post while
 		// leashing, still otherwise.
 		switch {
+		// Against everything solid -- structures, rocks, props, players,
+		// rovers, ships, other NPCs -- not just the shipped walls.
 		case (state == ai.StateAggro || state == ai.StateAttack) && haveTarget:
-			n.stepSteer(target, s.terrain, s.colliders)
+			n.stepSteer(target, s.terrain, s.collidersFor(n.ent.ID))
 		case state == ai.StateLeash:
-			n.stepSteer(n.brain.Post, s.terrain, s.colliders)
+			n.stepSteer(n.brain.Post, s.terrain, s.collidersFor(n.ent.ID))
 		}
 
 		if !haveTarget {

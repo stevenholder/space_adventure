@@ -174,3 +174,39 @@ func TestVehicleSeatOf(t *testing.T) {
 		t.Fatal("SeatOf lookup wrong")
 	}
 }
+
+// Full collision (playtest 2026-10-02): a rover driven flat out at a wall
+// 6 m ahead stops at it -- its hull never reaches past the wall's face --
+// instead of driving through as it did when only the terrain stopped it.
+func TestRoverStopsAtWall(t *testing.T) {
+	f := flatField(150)
+	e := newRover(f)
+	fwd := Rotate(Quat(e.Quat), Vec{0, 0, 1})
+	up := terrain.Normalize(Vec(e.Pos))
+	fwd = terrain.Normalize(fwd.Sub(up.Scale(fwd.Dot(up))))
+	start := Vec(e.Pos)
+	wallC := start.Add(fwd.Scale(6)).Add(up.Scale(1))
+	// A thin box across the path, faced along fwd: half 0.2 m along fwd.
+	right := terrain.Normalize(terrain.Cross(up, fwd))
+	q := quatFromBasis(right, up, fwd)
+	wall := protocol.Collider{
+		Kind:   protocol.ColliderBox,
+		Center: [3]float32{float32(wallC[0]), float32(wallC[1]), float32(wallC[2])},
+		Half:   [3]float32{5, 2, 0.2},
+		Quat:   [4]float32{float32(q[0]), float32(q[1]), float32(q[2]), float32(q[3])},
+	}
+	v := e.Data.(*VehicleState)
+	ctx := StepCtx{Terrain: f, CollidersFor: func(uint32) []protocol.Collider { return []protocol.Collider{wall} }}
+	for i := 0; i < 120; i++ {
+		v.Throttle, v.Steer = 1, 0
+		StepRover(e, DT, ctx)
+	}
+	along := Vec(e.Pos).Sub(start).Dot(fwd)
+	// Wall face at 6 - 0.2; the hull's front sphere reaches 0.55 + 0.80 ahead.
+	if limit := 6 - 0.2 - (0.55 + 0.80) + 0.01; along > limit {
+		t.Fatalf("rover reached %.2f m along its path, want ≤ %.2f (stopped at the wall)", along, limit)
+	}
+	if along < 3 {
+		t.Fatalf("rover only moved %.2f m, want it to drive up to the wall", along)
+	}
+}

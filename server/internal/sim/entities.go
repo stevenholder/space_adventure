@@ -60,6 +60,10 @@ type StepCtx struct {
 	Terrain   *terrain.Field
 	Colliders []protocol.Collider
 	DefOf     func(*Ent) defs.EntityDef
+	// CollidersFor, when set, is everything solid an entity can hit -- the
+	// static colliders plus the moving bodies and vehicles other than id
+	// itself. Vehicles push their hulls out of it (ResolveHull). Nil: none.
+	CollidersFor func(id uint32) []protocol.Collider
 }
 
 // StepFunc steps a single entity forward by dt.

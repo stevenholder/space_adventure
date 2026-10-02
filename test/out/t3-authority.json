@@ -1,16 +1,16 @@
 {
   "harness": "SimDump --authority (C# Predictor, Game/Core/Prediction.cs)",
   "url": "ws://127.0.0.1:18080/ws",
-  "server_build": "dev",
+  "server_build": "b828a2d-dirty",
   "corrupt_dist_m": 4.0,
-  "pre_dist_m": 3.9999999999999996,
+  "pre_dist_m": 4.0,
   "snap_dist_m": 0.0,
-  "correction_ms": 50.14630000000011,
-  "forced_tick": 133,
-  "corrected_tick": 134,
+  "correction_ms": 50.465999999999894,
+  "forced_tick": 190,
+  "corrected_tick": 191,
   "forced_dir": [
-    0.9990827966904935,
-    -0.04282015129704548,
+    0.9990174425068367,
+    -0.04431872704737018,
     0.0
   ],
   "pass": true

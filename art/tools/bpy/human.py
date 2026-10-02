@@ -523,6 +523,11 @@ def rifle(rig, G, forward, pole_r=(0.6, -0.3, -0.8), pole_l=(-0.7, 0.2, -0.7)):
 # eye at 1.70). Shoulders sit at (+-0.20, 0.02, 1.45) and the wrist reaches
 # 0.54 m; the fore-end lands 0.30 m down the barrel, so the left hand has to
 # be able to get there or the IK clamps it short.
+# Seated: the body drops this far (the client's Entities.SitDrop), and the
+# rover's wheel rim relative to the seated eye (gen_props.py rover()).
+SIT_DROP = 0.45
+WHEEL_R, WHEEL_AHEAD, WHEEL_BELOW = 0.17, 0.30, 0.40
+
 AIM3P = dict(G=(0.17, 0.24, 1.12), forward=(-0.35, 0.92, 0.18))    # third person, low ready
 FP_HOLD = dict(G=(0.14, 0.30, 1.26), forward=(-0.03, 1.0, 0.03))    # first person hold: straight down the view (the client converges it on the crosshair)
 FP_ADS = dict(G=(0.03, 0.30, 1.38), forward=(0.0, 1.0, 0.02))       # sights; the client lifts it to the eye
@@ -679,6 +684,41 @@ def clips(rig):
         swing(rig, "Root", (1, 0, 0), 78 * k2)       # positive tips the body backward
         swing(rig, "Root", (0, 1, 0), 18 * k2)
     clip(rig, "die", 1.1, die, (0.0, 0.15, 0.3, 0.45, 0.6, 0.8, 1.0), loop=False)
+
+    # Seated (playtest 2026-10-02: drivers stood on the roof, then vanished).
+    # Thighs level, shins down, the whole body dropped SIT_DROP so the eye
+    # sits SIT_DROP under EYE -- the client lines that eye up on the seat's
+    # eye mount. `sit_drive` puts both fists on the rover's rim (the wheel
+    # sits 0.30 ahead of and 0.40 under the driver's eye, rim radius 0.17:
+    # tools/gen_props.py rover()); `sit_armed` is a passenger at the low
+    # ready; `sit` rests the forearms on the thighs.
+    def seat_legs():
+        for side in ("r", "l"):
+            swing(rig, "thigh_" + side, (1, 0, 0), 88)
+            swing(rig, "calf_" + side, (1, 0, 0), -84)
+        drop(SIT_DROP)
+
+    def rest_hands():
+        arms_down(rig)
+        for side, sx in (("r", 1), ("l", -1)):
+            aim(rig, "lowerarm_" + side, (0.10 * sx, 0.90, -0.40))
+            aim(rig, "hand_" + side, (0.05 * sx, 0.95, -0.30))
+
+    eye_seated = EYE - SIT_DROP
+    clip(rig, "sit", 2.0, lambda t: (seat_legs(), rest_hands(), breathe(t)), Q)
+
+    def on_wheel(t):
+        seat_legs()
+        breathe(t)
+        for side, sx in (("r", 1), ("l", -1)):
+            rim = (sx * WHEEL_R, WHEEL_AHEAD, eye_seated - WHEEL_BELOW)
+            grip(rig, side, rim, (0.0, 0.35, 0.94), (-sx, 0.0, 0.0), (sx * 0.7, -0.1, -0.7),
+                 fingers=(70, 75, 75, 75), thumb=30)
+    clip(rig, "sit_drive", 2.0, on_wheel, Q)
+    for sfx, C in CLASSES.items():
+        a3 = C["aim3p"]
+        held = dict(G=(a3["G"][0], a3["G"][1], a3["G"][2] - SIT_DROP), forward=a3["forward"])
+        clip(rig, "sit_armed" + sfx, 2.0, lambda t, C=C, h=held: (seat_legs(), breathe(t), C["hold"](rig, **h)), Q)
 
     # First person: only the arms are ever seen, but every bone is keyed so a
     # clip fully overrides the one before it. One set per weapon class.

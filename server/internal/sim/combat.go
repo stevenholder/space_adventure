@@ -26,6 +26,11 @@ type Shot struct {
 	// DamageMult scales the weapon's damage before rounding (Phase 11
 	// Marksmanship efficacy). 0 means 1: a fresh player is bit-identical.
 	DamageMult float64
+	// EyeHeight is how far above the shooter's recorded position the shot
+	// starts, along its rewound up. 0 means eyeHeightMeters (a standing
+	// body); a seated shooter's recorded position is the seat, whose eye is
+	// SeatEyeAbove over it (GDD "Rover seats": seat_eye − seat_pos).
+	EyeHeight float64
 	// Shooter is the firing entity's id. Only ever used to look up the
 	// shooter's OWN rewound history — never trusted as a position.
 	Shooter uint32
@@ -105,7 +110,11 @@ func ResolveShot(w *World, h *History, s Shot, wp defs.Weapon,
 	if !ok {
 		return Ray{}, Hit{}, false
 	}
-	origin := Vec(eyePos).Add(Vec(eyeUp).Scale(eyeHeightMeters))
+	eh := eyeHeightMeters
+	if s.EyeHeight > 0 {
+		eh = s.EyeHeight
+	}
+	origin := Vec(eyePos).Add(Vec(eyeUp).Scale(eh))
 
 	dir := terrain.Normalize(s.Dir)
 	if s.ConeHalfAngle > 0 {

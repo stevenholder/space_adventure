@@ -76,6 +76,7 @@ const CLIP_CONTRACTS = {
   // client plays on a second instance under the camera (ViewModel).
   animated: ["idle", "walk", "sprint", "die",
     "idle_armed", "walk_armed", "sprint_armed",
+    "sit", "sit_drive", "sit_armed",
     "fp_idle", "fp_walk", "fp_sprint", "fp_ads", "fp_lower", "fp_unarmed", "fp_fire", "fp_reload"],
 };
 

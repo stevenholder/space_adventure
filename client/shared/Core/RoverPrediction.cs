@@ -38,11 +38,17 @@ namespace SpaceAdventure.Game
 
         public void Seed(TerrainField terrain) => _terrain = terrain;
 
+        /// <summary>
+        /// Everything solid but this rover (Boot: static + moving bodies),
+        /// set before each Apply so prediction hits what the server's hits.
+        /// </summary>
+        public Collider[] Colliders;
+
         /// <summary>One driven tick, with the seq that goes on the wire.</summary>
         public void Apply(ushort seq, double throttle, double steer)
         {
             if (!Ready) return;
-            Drive.Apply(ref _state, throttle, steer, _terrain, Rules.DT);
+            Drive.Apply(ref _state, throttle, steer, _terrain, Rules.DT, 0, Colliders);
             _pending.Add(new Pending(seq, throttle, steer));
             if (_pending.Count > MaxPending) _pending.RemoveAt(0);
         }
@@ -65,7 +71,7 @@ namespace SpaceAdventure.Game
 
             var s = _state;
             foreach (var p in _pending)
-                Drive.Apply(ref s, p.Throttle, p.Steer, _terrain, Rules.DT);
+                Drive.Apply(ref s, p.Throttle, p.Steer, _terrain, Rules.DT, 0, Colliders);
             _state = s;
             return true;
         }

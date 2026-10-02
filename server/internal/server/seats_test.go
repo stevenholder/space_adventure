@@ -6,6 +6,7 @@ import (
 
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
+	"space-adventure/server/internal/store"
 )
 
 // joinSeat runs the hello handshake and returns the client's entity id,
@@ -214,6 +215,35 @@ func TestSeatRaceRefusalsPassenger(t *testing.T) {
 	bRow := rowOf(t, b, bID)
 	if bRow.ParentID != rover.ID || bRow.Seat != 2 {
 		t.Fatalf("passenger row not composed: %+v", bRow)
+	}
+
+	// Playtest 2: the passenger shoots, the driver does not. FiringTick is
+	// set only by an accepted shot.
+	arm := func(id uint32) *client {
+		s.mu.Lock()
+		c := s.clients[id]
+		s.mu.Unlock()
+		c.ident.Mutate(func(p *store.Player) {
+			if err := sim.AddItem(p, "weapon.pulse", 1, s.reg); err != nil {
+				t.Fatalf("AddItem: %v", err)
+			}
+			p.Equipped[slotPrimary] = "weapon.pulse"
+		})
+		return c
+	}
+	ca, cb := arm(aID), arm(bID)
+	fired := func(c *client) bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return c.entity.FiringTick != 0
+	}
+	s.fireLocked(ca, protocol.Fire{Seq: 1, Dir: [3]float32{0, 0, 1}})
+	s.fireLocked(cb, protocol.Fire{Seq: 1, Dir: [3]float32{0, 0, 1}})
+	if fired(ca) {
+		t.Error("the driver's shot was accepted, want dropped")
+	}
+	if !fired(cb) {
+		t.Error("the passenger's shot was dropped, want accepted")
 	}
 }
 

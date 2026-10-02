@@ -222,6 +222,20 @@ func TestResolveShotReturnsDeviatedRay(t *testing.T) {
 	}
 }
 
+// A seated passenger's shot starts at the seat eye (EyeHeight), not a
+// standing eye over the seat -- that put rover shots 1.1 m too high.
+func TestResolveShotSeatedEye(t *testing.T) {
+	w := NewWorld()
+	h := NewHistory(0)
+	newShooter(w, h, 1, 100)
+	ray, _, _ := ResolveShot(w, h,
+		Shot{Shooter: 1, Dir: [3]float64{0, 0, 1}, Tick: 100, EyeHeight: SeatEyeAbove},
+		testWeapon(), defOf(map[string]defs.EntityDef{"player": targetDef()}), rand.New(rand.NewSource(1)))
+	if math.Abs(ray.Origin[1]-SeatEyeAbove) > 1e-9 {
+		t.Errorf("seated ray origin y = %g, want the seat eye %g", ray.Origin[1], SeatEyeAbove)
+	}
+}
+
 func vecDist(a, b [3]float64) float64 {
 	dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)

@@ -184,10 +184,12 @@ func (c *client) step(t *terrain.Field, colliders []protocol.Collider) {
 			MoveY:      float64(w.MoveY),
 			Look:       sim.Vec{float64(w.LookDir[0]), float64(w.LookDir[1]), float64(w.LookDir[2])},
 			ActionMask: w.ActionMask,
-			Colliders:  colliders,
 			SprintMult: c.sprintMult,
 		}
 	}
+	// Colliders whether or not input has arrived: a body that has not sent
+	// an input yet still gets shoved out of a rover parked on it.
+	in.Colliders = colliders
 	c.entity.PrevLook = sim.Step(&c.entity.State, in, c.entity.PrevLook, t, sim.DT)
 }
 

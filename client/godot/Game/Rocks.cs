@@ -38,6 +38,9 @@ namespace SpaceAdventure.Game
             _assets = assets;
         }
 
+        /// <summary>Every rock as a collider (RockScatter.ColliderOf); empty before Build.</summary>
+        public Collider[] Colliders = System.Array.Empty<Collider>();
+
         /// <summary>The rock nearest `from`, or null before Build: `-uiFace rock`.</summary>
         public Vector3? Nearest(Vector3 from)
         {
@@ -68,6 +71,9 @@ namespace SpaceAdventure.Game
             var batches = new List<Transform3D>[] { new List<Transform3D>(), new List<Transform3D>(), new List<Transform3D>() };
             var tints = new List<Color>[] { new List<Color>(), new List<Color>(), new List<Color>() };
             List<RockPlacement> scatter = RockScatter.Scatter(terrain, worldSeed);
+            // Solid: the same spheres the server pushes bodies and vehicles
+            // out of (sim/rocks.go), for prediction to agree with it.
+            Colliders = scatter.ConvertAll(RockScatter.ColliderOf).ToArray();
 
             // The scatter's rng draw order is a contract (RockScatter.cs), so
             // the variety is layered ON it from a second stream: a tint per

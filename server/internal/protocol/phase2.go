@@ -68,9 +68,9 @@ type Prop struct {
 
 // Props is the S→C zone dressing: u16 count | prop × count.
 //
-// Purely visual. Props carry no collider and the sim never sees them -- a
-// client that ignored this message entirely would still agree with the server
-// about everything that can be walked into or shot.
+// Visual, plus collision since 2026-10-02: the solid ones (sim/props.go
+// PropBoxes) are boxes both sides derive from this list, never shipped as
+// colliders. Nothing that can be shot depends on it.
 type Props struct {
 	List []Prop
 }

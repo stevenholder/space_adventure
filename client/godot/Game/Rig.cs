@@ -29,7 +29,7 @@
 //   -uiFire <secs>          reload and hold the trigger on it
 //   -uiQuest                accept the starter mission at the board, wait for a party invite
 //   -uiLamp                 swing the sun onto whatever the camera ends up looking at
-//   -uiBoard                walk to the nearest rover and take the driver's seat
+//   -uiBoard [-uiSeat n]    walk to the nearest rover and take seat n (default 1, the driver's)
 //   -rigArmed               show the rig without a purchase
 //   -uiAim                  hold aim-down-sights for the shot
 //   -uiWalk                 walk forward through the shot
@@ -272,11 +272,13 @@ namespace SpaceAdventure.Game
                 if (rover != null)
                 {
                     await ApproachTo(rover.Root.GlobalPosition, 3f);
-                    _net.Send(Encode.Board(rover.Id, 1));
+                    ushort seat = ushort.TryParse(Arg("-uiSeat"), out ushort sn) ? sn : (ushort)1;
+                    _net.Send(Encode.Board(rover.Id, seat));
                     for (double sw = 0; _seat == 0 && sw < 5; sw += 0.1) await Wait(0.1);
                     GD.Print(_seat != 0 ? $"ui: seated in rover {rover.Id} seat {_seat}" : "ui: board refused");
-                    // Look out over the bonnet (art -Z is the rover's front).
-                    _fps.FaceToward(Eye, rover.Root.GlobalTransform * new Vector3(0, 1.2f, -8f));
+                    // Look out over the bonnet: the view root's +Z is the
+                    // facing (Entities.Place); the model inside it is flipped.
+                    _fps.FaceToward(Eye, rover.Root.GlobalTransform * new Vector3(0, 1.2f, 8f));
                     await Wait(1.0);
                 }
                 else GD.Print("ui: no rover to board");

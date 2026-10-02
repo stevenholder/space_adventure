@@ -173,6 +173,13 @@ namespace SpaceAdventure.Game
             _seat != 0 && _views.TryGet(_seatVehicle, out var v) ? v.Type : (ushort)0;
 
         private bool Piloting => _seat == 1 && SeatKind == EntityType.Ship;
+
+        /// <summary>
+        /// On foot, or riding a rover's passenger seat: the open buggy has a
+        /// gunner, the driver's hands are on the wheel, a ship's crew is
+        /// inside a hull. Mirrors server.go fireLocked, which drops the rest.
+        /// </summary>
+        private bool CanShoot => _seat == 0 || (_seat >= 2 && SeatKind == EntityType.Vehicle);
         private Hud _hud;
         private Character _character;
         private Interaction _interact;
@@ -674,6 +681,7 @@ namespace SpaceAdventure.Game
             _views.Render(_timeline, _net.EntityId);
             if (_seat != 0) PlaceSeatCamera();
             else _fps.PlaceCamera(_predictor.State.Pos);
+            _views.PlaceSeated();   // after the vehicle you drive has moved
             _rigLight.GlobalPosition = _camera.GlobalTransform * new Vector3(0.35f, 0.25f, 0.1f); // above and right of the eye: lights the top and rear of the rifle
 
             // The rig follows the character sheet, which is the one place
@@ -683,15 +691,15 @@ namespace SpaceAdventure.Game
             // -rigArmed: show the rig without a purchase (screenshot rig).
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
-            _viewModel.ArmsVisible = _seat == 0;
-            bool holding = _seat == 0 && !string.IsNullOrEmpty(_character.Primary);
+            _viewModel.ArmsVisible = CanShoot;
+            bool holding = CanShoot && !string.IsNullOrEmpty(_character.Primary);
             _viewModel.Hold(holding ? _views.Defs.ItemAsset(_character.Primary) : "", holding ? _views.Defs.HoldSuffix(_character.Primary) : "");
             _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
             _viewModel.Place(body.Pos, body.Facing);
             // Right mouse aims, only while the world has the pointer (a free
             // cursor's right-click belongs to the bags and the hotbar).
-            bool aiming = _rigAim || (_seat == 0 && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
+            bool aiming = _rigAim || (CanShoot && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
             float clear = _rigLowered ? 0f
                 : _seat == 0 ? ViewModel.Blocked(_camera.GlobalPosition, -_camera.GlobalBasis.Z, ViewModel.Reach, _colliders, _terrain)
                 : float.PositiveInfinity;
@@ -840,6 +848,7 @@ namespace SpaceAdventure.Game
                     PitchRate = pitch,
                     Boost = (li.ActionMask & Net.Action.Sprint) != 0,
                 };
+                _ship.Colliders = WithMovingBodies(_seatVehicle);
                 _ship.Apply(_seq, finp);
                 _net.Send(Encode.Input(
                     (float)finp.Thrust, (float)finp.Roll,
@@ -852,6 +861,7 @@ namespace SpaceAdventure.Game
                 // Driving: mode 2, v = [throttle, steer, 0, 0, 0]. Forward
                 // key is throttle, strafe keys steer (PROTOCOL "input").
                 double throttle = li.MoveY, steer = li.MoveX;
+                _rover.Colliders = WithMovingBodies(_seatVehicle);
                 _rover.Apply(_seq, throttle, steer);
                 _net.Send(Encode.Input((float)throttle, (float)steer, 0, 0, 0, 0, _seq, 2));
                 return;
@@ -879,6 +889,7 @@ namespace SpaceAdventure.Game
                 LookDir = li.Look,
                 ActionMask = li.ActionMask,
             };
+            _predictor.SetColliders(WithMovingBodies(0));
             _predictor.Apply(_seq, input);
             _net.Send(Encode.Input(
                 (float)li.MoveX, (float)li.MoveY,
@@ -894,7 +905,7 @@ namespace SpaceAdventure.Game
             // An empty magazine does not fire: the server drops the shot anyway
             // (server.go fireLocked), and drawing a flash and recoil for it
             // made an empty gun look like it was shooting. -1 = not known yet.
-            if (li.FirePressed && _viewModel.Armed && _seat == 0 && _character.Magazine != 0 && Clock.Now >= _nextFireAt)
+            if (li.FirePressed && _viewModel.Armed && CanShoot && _character.Magazine != 0 && Clock.Now >= _nextFireAt)
             {
                 double fi = _character.Defs.Item(_character.Primary)?.Weapon?.FireInterval ?? 0;
                 _nextFireAt = Clock.Now + (fi > 0 ? fi : FireIntervalSeconds);
@@ -903,7 +914,7 @@ namespace SpaceAdventure.Game
                 _viewModel.Fire(); // the arms kick; the camera never does
                 _sfx.OwnShot(_character.Primary);
             }
-            else if (li.FirePressed && _viewModel.Armed && _seat == 0 && _character.Magazine == 0 && Clock.Now >= _nextFireAt)
+            else if (li.FirePressed && _viewModel.Armed && CanShoot && _character.Magazine == 0 && Clock.Now >= _nextFireAt)
             {
                 _nextFireAt = Clock.Now + 0.3;   // an empty gun clicks, it does not rattle
                 _sfx.DryFire();
@@ -962,9 +973,20 @@ namespace SpaceAdventure.Game
                     break;
                 }
                 case Msg.Props:
-                    // Visual only, and deliberately not routed anywhere near
-                    // the predictor: props have no collision.
-                    _structures.BuildProps(Decode.Props(frame.Reader));
+                    // Drawn by Structures; the solid ones collide.
+                {
+                    var props = Decode.Props(frame.Reader);
+                    _structures.BuildProps(props);
+                    // ...and, since full collision, the solid ones are walls
+                    // (sim/props.go): prediction pushes out of them as the
+                    // server does.
+                    var solid = new List<Sim.Collider>();
+                    foreach (var p in props)
+                        if (Sim.Collide.PropCollider(p.Asset, new Vec3(p.PosX, p.PosY, p.PosZ),
+                                new Quat(p.QuatX, p.QuatY, p.QuatZ, p.QuatW), p.Scale, out Sim.Collider c))
+                            solid.Add(c);
+                    _propColliders = solid.ToArray();
+                }
                     break;
                 case Msg.Defs:
                 {
@@ -1276,7 +1298,7 @@ namespace SpaceAdventure.Game
             }
             else _hudView.SetChannel(-1f, "");
 
-            var me = _predictor.State;
+            var me = Viewer;
             var markers = new List<(string, double)>();
             foreach (var v in _views.All)
             {
@@ -1369,6 +1391,49 @@ namespace SpaceAdventure.Game
             _map.Draw(_terrain, Frame.ToGodot(me.Pos), Frame.ToGodot(me.Facing), MapMarkers());
         }
 
+        private readonly List<Sim.Collider> _moving = new List<Sim.Collider>();
+        private Sim.Collider[] _propColliders = Array.Empty<Sim.Collider>();
+
+        /// <summary>
+        /// The static colliders plus everyone else as the server sees them
+        /// (server.go tick, "moving obstacles"): on-foot players and live
+        /// NPCs as body spheres, rovers and ships as hull boxes -- from the
+        /// poses we draw, so contact predicts instead of snapping back.
+        /// `except` leaves out the vehicle we drive (it is not its own wall).
+        /// ponytail: remotes are drawn ~100 ms behind the server, so a body
+        /// you walk into is where it was; the reconcile absorbs the gap.
+        /// </summary>
+        private Sim.Collider[] WithMovingBodies(uint except)
+        {
+            _moving.Clear();
+            _moving.AddRange(_colliders);
+            if (_rocks != null) _moving.AddRange(_rocks.Colliders);
+            _moving.AddRange(_propColliders);
+            foreach (EntityView v in _views.All)
+            {
+                if (v.Root == null || !v.Root.Visible || v.Id == _net.EntityId || v.Id == except) continue;
+                Vec3 pos = Frame.ToSim(v.Root.GlobalPosition);
+                if (v.Type == EntityType.Vehicle || v.Type == EntityType.Ship)
+                {
+                    Quaternion q = v.Root.GlobalBasis.GetRotationQuaternion();
+                    var quat = new Quat(q.X, q.Y, q.Z, q.W);
+                    _moving.Add(v.Type == EntityType.Vehicle ? Sim.Collide.RoverCollider(pos, quat) : Sim.Collide.ShipCollider(pos, quat));
+                }
+                else if ((v.Type == EntityType.Player || v.Type == EntityType.Npc) && !v.Dead && v.ParentId == 0)
+                    _moving.Add(Sim.Collide.BodyCollider(pos));
+            }
+            return _moving.ToArray();
+        }
+
+        /// <summary>
+        /// Where you are and where you face, for the compass and hit
+        /// bearings: the CAMERA, not the on-foot predictor -- seated, the
+        /// predictor is frozen at the boarding point and the compass froze
+        /// with it (playtest 2026-10-02).
+        /// </summary>
+        private (Vec3 Pos, Vec3 Facing) Viewer =>
+            (Frame.ToSim(_camera.GlobalPosition), Frame.ToSim(-_camera.GlobalBasis.Z));
+
         /// <summary>The seat readout: rover speed and role, or the ship's speed, altitude, regime, role.</summary>
         private void UpdateFlightReadout()
         {
@@ -1455,7 +1520,7 @@ namespace SpaceAdventure.Game
             if (shooter == _net.EntityId) _combatFeed.HitMarker(healthAfter == 0);
             if (ev.EntityId == _net.EntityId && _views.TryGet(shooter, out var sv) && sv.Root != null)
             {
-                var me = _predictor.State;
+                var me = Viewer;
                 _combatFeed.Incoming(Bearing.To(me.Pos, me.Facing, Frame.ToSim(sv.Root.GlobalPosition)));
             }
         }
