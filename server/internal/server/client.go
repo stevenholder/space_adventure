@@ -65,8 +65,15 @@ type client struct {
 	ident  *identity // nil until hello succeeds
 	rate   *cmdRate  // nil until hello succeeds
 
-	input  atomic.Pointer[protocol.Input] // latest command state (latest wins)
+	input  atomic.Pointer[protocol.Input] // the input this tick applies (popInput)
 	ackSeq atomic.Uint32                  // seq of the input last applied
+
+	// inQ holds inputs received but not yet applied, oldest first. One is
+	// applied per tick, so two arriving inside one tick (network jitter)
+	// both run instead of the earlier one vanishing -- which the client had
+	// predicted, and then had to be corrected for.
+	inMu sync.Mutex
+	inQ  []protocol.Input
 
 	// seatVehicle/seat are this body's occupancy (0 = on foot). Guarded by
 	// srv.mu: written by board/disembark/freeSeat, read by the tick loop
@@ -141,6 +148,44 @@ type client struct {
 type cmdTick struct {
 	tick uint32
 	seq  uint16
+}
+
+const (
+	// inputBacklog is the most inputs left waiting after a tick's pop. Each
+	// one waiting is a tick (50 ms) of added input latency; past this the
+	// oldest are dropped. Two absorbs ordinary jitter; a stall's burst is
+	// shed instead of being played back late.
+	inputBacklog = 2
+	// inputQueueMax bounds the queue between ticks against a client that
+	// floods inputs.
+	inputQueueMax = 8
+)
+
+// pushInput queues one received input (reader goroutine).
+func (c *client) pushInput(in protocol.Input) {
+	c.inMu.Lock()
+	c.inQ = append(c.inQ, in)
+	if n := len(c.inQ); n > inputQueueMax {
+		c.inQ = append(c.inQ[:0], c.inQ[n-inputQueueMax:]...)
+	}
+	c.inMu.Unlock()
+}
+
+// popInput makes the oldest queued input the one this tick applies. With
+// nothing queued the previous input holds, as before.
+func (c *client) popInput() {
+	c.inMu.Lock()
+	defer c.inMu.Unlock()
+	if len(c.inQ) == 0 {
+		return
+	}
+	in := c.inQ[0]
+	c.inQ = append(c.inQ[:0], c.inQ[1:]...)
+	if n := len(c.inQ); n > inputBacklog {
+		c.inQ = append(c.inQ[:0], c.inQ[n-inputBacklog:]...)
+	}
+	c.input.Store(&in)
+	c.ackSeq.Store(uint32(in.Seq))
 }
 
 // recordCmdTick notes that this tick executed the currently-held input.
@@ -368,8 +413,7 @@ func (c *client) reader() {
 				c.closeCode(websocket.CloseProtocolError)
 				return
 			}
-			c.input.Store(&in)
-			c.ackSeq.Store(uint32(in.Seq))
+			c.pushInput(in)
 		case protocol.MsgFire:
 			if c.entity == nil {
 				c.closeCode(websocket.CloseProtocolError) // fire before hello

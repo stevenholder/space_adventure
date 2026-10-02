@@ -277,14 +277,16 @@ Constants:
   in `pitch_q` instead, applied to the head and the held weapon only.
 - Positions are world-space Cartesian with the planet centre at the origin.
   There is no world boundary.
-- `input` is **current command state**, not an event stream: the server
-  applies the latest received input every tick (constant between inputs).
+- `input` is **current command state**, applied one per tick in arrival
+  order: the server queues what it receives and each tick applies the oldest
+  queued input, holding the last one when none is queued. At most 2 stay
+  queued after a tick (older ones are dropped), so jitter is absorbed without
+  a stall's burst adding latency. A client sends one `input` per tick.
 - `seq` is a per-connection counter the client increments on every `input`
   it sends. The server stores the `seq` of the input it last applied and
   echoes it as `ack_seq` in that client's next `snapshot`. It orders nothing
-  and drops nothing — an input whose `seq` is older than the stored one is
-  still applied (latest arrival wins); `seq` exists only so the client can
-  replay. Comparisons must be wraparound-safe (`int16(a - b) > 0`), since
+  — inputs apply in arrival order whatever their `seq`; `seq` exists only so
+  the client can replay. Comparisons must be wraparound-safe (`int16(a - b) > 0`), since
   `seq` wraps every ~18 min at 60 Hz.
 - `ack_seq` is the only per-client field in `snapshot`. The server encodes the
   snapshot body once per tick and patches those 2 bytes (offset 4) per

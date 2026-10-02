@@ -182,7 +182,7 @@ type HelloAck struct {
 	EntityID  uint32
 }
 
-// Input is the C→S command state (latest wins):
+// Input is the C→S command state (queued, one applied per tick):
 // f32 v[5] | u16 action_mask | u16 seq | u8 mode.
 //
 // The five floats are one vector whose meaning Mode selects, so the message

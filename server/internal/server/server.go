@@ -472,6 +472,7 @@ func (s *Server) tick() {
 		}
 	}
 	for _, c := range s.clients {
+		c.popInput()
 		switch {
 		case c.seat == 0:
 			c.step(s.terrain, s.collidersFor(c.entity.ID))
