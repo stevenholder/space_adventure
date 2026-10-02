@@ -23,6 +23,29 @@ namespace SpaceAdventure.Sim
     {
         public const double BodyRadius = 0.35;
         public const double BodySphereH = 0.9;
+
+        // Moving bodies as colliders -- collide.go "Moving bodies as
+        // colliders", same constants. The client predicts its body against
+        // the static colliders plus these, built from the bodies it draws.
+        public const double RoverHalfX = 0.85, RoverHalfY = 0.55, RoverHalfZ = 1.12, RoverBoxH = 0.75;
+
+        /// <summary>A standing body's collision sphere as a collider (collide.go BodyCollider).</summary>
+        public static Collider BodyCollider(Vec3 pos) => new Collider
+        {
+            Kind = ColliderKind.Sphere,
+            Center = pos + pos.Normalized() * BodySphereH,
+            Half = new Vec3(BodyRadius, 0, 0),
+            Rot = new Quat(0, 0, 0, 1),
+        };
+
+        /// <summary>A rover's hull box at pos, oriented by q (collide.go RoverCollider).</summary>
+        public static Collider RoverCollider(Vec3 pos, Quat q) => new Collider
+        {
+            Kind = ColliderKind.Box,
+            Center = pos + Quat.Rotate(q, new Vec3(0, RoverBoxH, 0)),
+            Half = new Vec3(RoverHalfX, RoverHalfY, RoverHalfZ),
+            Rot = q,
+        };
         private const double DegenEps = 1e-9;
 
         /// <summary>

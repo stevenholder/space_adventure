@@ -70,7 +70,7 @@
     {
       "id": "vehicle.rover.v1",
       "file": "vehicles/rover.v1.glb",
-      "tris": 504,
+      "tris": 652,
       "license": "CC0",
       "source": "tools/gen_props.py",
       "description": "Phase 4 ground rover, our own (tools/gen_props.py): an open buggy, four wheels, roll cage, two seats. -Z forward, origin at ground level, 1.8 m tall at the cage. Carries the seat contract: seat.driver plus seat.passenger.0 empty nodes at the eye points (GDD 'Rover seats', art frame = 180-degree-Y flip of the table).",

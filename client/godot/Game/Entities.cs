@@ -71,6 +71,10 @@ namespace SpaceAdventure.Game
         public float StepDist;
         public float Speed;
 
+        /// <summary>A rover's dash speed bar, grown from the model's `dash.speed` mount; null until found.</summary>
+        public Node3D DashBar;
+        public bool DashLooked;
+
         /// <summary>
         /// The most health this entity has ever been seen with. Entities spawn
         /// and respawn at full, so the high-water mark IS the maximum.
@@ -455,6 +459,7 @@ namespace SpaceAdventure.Game
                 view.LastDrawn = drawn;
                 view.HasLastDrawn = true;
                 view.Anim?.Drive(view.Speed, view.Dead || view.RigDead);
+                if (view.Type == EntityType.Vehicle) UpdateDash(view);
                 if (view.Anim != null && !view.Dead && view.Speed > 0.5f && Sfx != null)
                 {
                     view.StepDist += view.Speed * dt;
@@ -476,6 +481,32 @@ namespace SpaceAdventure.Game
                 bool stillDying = view.DiedAt >= 0 && now - view.DiedAt < linger;
                 view.Root.Visible = !kv.Value.Dead || stillDying;
             }
+        }
+
+        /// <summary>
+        /// The rover's dash speed bar: amber, growing from the mount's left
+        /// end over a dark track as the drawn speed climbs to vmax_drive.
+        /// Everyone sees it, so a passenger reads the same dash as the driver.
+        /// </summary>
+        private void UpdateDash(EntityView view)
+        {
+            if (!view.DashLooked && view.Model != null)
+            {
+                view.DashLooked = true;
+                Node3D mount = AssetRegistry.FindNode(view.Model, "dash.speed");
+                if (mount != null)
+                {
+                    const float len = 0.46f;
+                    BoxMesh.Attach(mount, "speedtrack", BoxMesh.Build(new[]
+                        { new Box(new Vector3(len / 2, 0, 0.004f), new Vector3(len + 0.02f, 0.07f, 0.01f), new Color(0.08f, 0.08f, 0.09f)) }, "speedtrack"), _material, 0);
+                    view.DashBar = new Node3D { Name = "speedbar" };
+                    mount.AddChild(view.DashBar);
+                    BoxMesh.Attach(view.DashBar, "bar", BoxMesh.Build(new[]
+                        { new Box(new Vector3(len / 2, 0, 0.012f), new Vector3(len, 0.045f, 0.01f), new Color(1.0f, 0.62f, 0.12f)) }, "speedbar"), _material, 0);
+                }
+            }
+            if (view.DashBar != null)
+                view.DashBar.Scale = new Vector3(Mathf.Clamp(view.Speed / (float)DriveRules.VmaxDrive, 0.02f, 1f), 1, 1);
         }
 
         /// <summary>

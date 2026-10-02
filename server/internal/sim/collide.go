@@ -19,6 +19,52 @@ const (
 	BodySphereH = 0.9  // body_sphere_h: chest height above the feet, m
 )
 
+// Moving bodies as colliders (playtest 2026-10-02: "the car and players
+// don't have collision"). Nothing new is solved: each tick a player is
+// stepped against the static colliders PLUS these shapes for everyone else,
+// so ResolveColliders pushes bodies out of each other and out of the rover
+// exactly as it does out of a wall. The client predicts with the same
+// shapes built from what it draws (Collide.cs).
+//
+// ponytail: one-sided and one tick stale -- a body is pushed by the others'
+// positions at the start of the tick, and nothing pushes the rover or an
+// NPC back. Good enough to stop walking through things; a mass-and-impulse
+// solver is the upgrade if anyone ever needs to shove a rover.
+const (
+	// RoverHalfX/Y/Z: the rover's hull as one box (rover.v1: tub, fenders
+	// and wheels ±0.91 m wide, bumper to cargo rack ±1.1 m long), its centre
+	// RoverBoxH over the rover origin along the rover's up. The top sits at
+	// the tub rim, so a body can stand on the rover but not in the cage.
+	RoverHalfX = 0.85
+	RoverHalfY = 0.55
+	RoverHalfZ = 1.12
+	RoverBoxH  = 0.75
+)
+
+// BodyCollider is a standing body's collision sphere as a collider: the
+// same sphere ResolveColliders gives the stepping body, so two bodies rest
+// 2·BodyRadius apart.
+func BodyCollider(pos Vec) protocol.Collider {
+	c := pos.Add(terrain.Normalize(pos).Scale(BodySphereH))
+	return protocol.Collider{
+		Kind:   protocol.ColliderSphere,
+		Center: [3]float32{float32(c[0]), float32(c[1]), float32(c[2])},
+		Half:   [3]float32{BodyRadius, 0, 0},
+		Quat:   [4]float32{0, 0, 0, 1},
+	}
+}
+
+// RoverCollider is a rover's hull box at pos, oriented by q.
+func RoverCollider(pos Vec, q Quat) protocol.Collider {
+	c := pos.Add(Rotate(q, Vec{0, RoverBoxH, 0}))
+	return protocol.Collider{
+		Kind:   protocol.ColliderBox,
+		Center: [3]float32{float32(c[0]), float32(c[1]), float32(c[2])},
+		Half:   [3]float32{RoverHalfX, RoverHalfY, RoverHalfZ},
+		Quat:   [4]float32{float32(q[0]), float32(q[1]), float32(q[2]), float32(q[3])},
+	}
+}
+
 // degenEps is the distance below which a sphere-vs-collider closest point is
 // treated as coincident with the sphere centre — the exit normal is then
 // undefined by construction, not just numerically noisy.

@@ -71,6 +71,11 @@ type Server struct {
 	bountyRotation int
 	propsF         []byte // pre-encoded props frame, built once at startup
 	colliders      []protocol.Collider
+	// Per-tick moving obstacles (tick) and the scratch list a body steps
+	// against (collidersFor); owned by the tick, under s.mu.
+	dynColliders []protocol.Collider
+	dynOwners    []uint32
+	collScratch  []protocol.Collider
 
 	reg   *defs.Registry
 	world *sim.World // static NPC/target entities, composed from zones
@@ -423,10 +428,31 @@ func (s *Server) tick() {
 			v.Thrust, v.Roll, v.YawRate, v.PitchRate, v.Boost = 0, 0, 0, 0, false
 		}
 	}
+	// Everyone else is an obstacle too: on-foot players and live NPCs as
+	// body spheres, rovers as hull boxes, at their start-of-tick positions
+	// (sim/collide.go "Moving bodies as colliders").
+	s.dynColliders = s.dynColliders[:0]
+	s.dynOwners = s.dynOwners[:0]
+	for _, c := range s.clients {
+		if c.seat == 0 && c.entity.Health > 0 {
+			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(c.entity.State.Pos)))
+			s.dynOwners = append(s.dynOwners, c.entity.ID)
+		}
+	}
+	for _, e := range s.worldEnts {
+		switch {
+		case e.Kind == sim.EntityKind(protocol.EntityTypeVehicle):
+			s.dynColliders = append(s.dynColliders, sim.RoverCollider(sim.Vec(e.Pos), sim.Quat(e.Quat)))
+			s.dynOwners = append(s.dynOwners, e.ID)
+		case e.Kind == sim.EntityKind(protocol.EntityTypeNPC) && e.Health > 0:
+			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(e.Pos)))
+			s.dynOwners = append(s.dynOwners, e.ID)
+		}
+	}
 	for _, c := range s.clients {
 		switch {
 		case c.seat == 0:
-			c.step(s.terrain, s.colliders)
+			c.step(s.terrain, s.collidersFor(c.entity.ID))
 			s.history.Record(tick, c.entity.ID, [3]float64(c.entity.State.Pos), [3]float64(terrain.Normalize(c.entity.State.Pos)))
 		case c.seat == 1:
 			// The control seat's input drives the vehicle; the body itself
@@ -612,6 +638,18 @@ func (s *Server) encodeSnapshot(tick uint32) []byte {
 		})
 	}
 	return b
+}
+
+// collidersFor is the static colliders plus every moving body but id's own,
+// in a scratch slice reused tick to tick (valid until the next call).
+func (s *Server) collidersFor(id uint32) []protocol.Collider {
+	s.collScratch = append(s.collScratch[:0], s.colliders...)
+	for i, owner := range s.dynOwners {
+		if owner != id {
+			s.collScratch = append(s.collScratch, s.dynColliders[i])
+		}
+	}
+	return s.collScratch
 }
 
 func healthU16(h int) uint16 {
@@ -1150,6 +1188,17 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Seated, only a rover passenger fires: the driver's hands are on the
+	// wheel, and a ship's crew is inside a hull.
+	eyeHeight := 0.0
+	if c.seat != 0 {
+		ent, _ := s.vehicleByID(c.seatVehicle)
+		if c.seat == 1 || ent == nil || ent.Kind != sim.EntityKind(protocol.EntityTypeVehicle) {
+			return
+		}
+		eyeHeight = sim.SeatEyeAbove
+	}
+
 	tick := s.tickNo
 	intervalTicks := uint32(math.Round(wp.FireInterval * sim.TickHz))
 	tolerance := uint32(1)
@@ -1195,6 +1244,7 @@ func (s *Server) fireLocked(c *client, f protocol.Fire) (members []*client, vict
 		RewindTicks:   rewindTicks,
 		ConeHalfAngle: wp.SpreadBase * math.Pi / 180,
 		DamageMult:    c.damageMult,
+		EyeHeight:     eyeHeight,
 	}
 	ray, hit, found := sim.ResolveShot(s.world, s.history, shot, wp, s.entityDef, s.rng)
 

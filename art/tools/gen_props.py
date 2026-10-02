@@ -263,7 +263,12 @@ def bones():
 
 
 # ---- rover -----------------------------------------------------------------
-ROVER_SEATS = {"seat.driver": (0.35, 1.55, -0.1), "seat.passenger.0": (-0.35, 1.55, 0.4)}
+ROVER_SEATS = {"seat.driver": (0.35, 1.55, -0.1), "seat.passenger.0": (-0.35, 1.55, 0.4),
+               # The client grows a speed bar from here along +X, on the gauge
+               # panel's driver-facing side (its face is z -0.585).
+               "dash.speed": (0.12, 1.29, -0.585),
+               # Where the driver's hands go: either side of the rim.
+               "wheel.l": (0.18, 1.15, -0.40), "wheel.r": (0.52, 1.15, -0.40)}
 
 
 def rover():
@@ -281,8 +286,25 @@ def rover():
     for (x, z) in ((0.35, -0.1), (-0.35, 0.4)):                     # under the seat mounts
         t += box(x, 0.74, z + 0.05, 0.42, 0.10, 0.42, SEAT)          # seat pan
         t += box(x, 0.98, z + 0.26, 0.42, 0.42, 0.08, SEAT)          # back
-    t += box(0.35, 0.95, -0.45, 0.04, 0.30, 0.04, STEEL_DARK)        # steering column
-    t += cyl_x(0.35, 1.08, -0.42, 0.14, 0.03, 8, RUBBER)             # wheel
+    t += box(0, 0.93, -0.66, 1.18, 0.30, 0.08, OLIVE_DARK)           # dash
+    # Gauge panel on a stalk over the dash, ~25 degrees under the driver's
+    # eye: the speed bar has to clear the HUD's hotbar at a level look.
+    t += box(0.35, 1.29, -0.61, 0.54, 0.12, 0.05, STEEL_DARK)          # gauge panel
+    t += box(0.35, 1.14, -0.63, 0.05, 0.20, 0.04, STEEL_DARK)          # its stalk
+    # Steering wheel: a rim of struts and two spokes, its face tipped 60
+    # degrees back toward the driver (the first one was a disc on X --
+    # edge-on to the driver, like a fifth road wheel).
+    hub = (0.35, 1.15, -0.40)
+    tilt = lambda p: _rot_x(p, math.radians(60))
+    rim = [(0.17 * math.cos(2 * math.pi * k / 10), 0.0, 0.17 * math.sin(2 * math.pi * k / 10)) for k in range(10)]
+    for k in range(10):
+        a, b = tilt(rim[k]), tilt(rim[(k + 1) % 10])
+        t += beam(tuple(hub[i] + a[i] for i in range(3)), tuple(hub[i] + b[i] for i in range(3)), 0.03, RUBBER)
+    for k in (0, 5):
+        a = tilt(rim[k])
+        t += beam(hub, tuple(hub[i] + a[i] for i in range(3)), 0.02, STEEL)
+    col = tilt((0.0, -0.32, 0.0))
+    t += beam(tuple(hub[i] + col[i] for i in range(3)), hub, 0.04, STEEL_DARK)  # steering column
     # Roll cage: two hoops and two rails, ABOVE the 1.55 m seat eye -- at
     # 1.40 the driver's camera sat over the rails, perched on the roof.
     # The front hoop stands ahead of the driver (eye z -0.10), not beside
