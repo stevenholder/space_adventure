@@ -202,7 +202,6 @@
    "kind": "shop",
    "verb": "talk",
    "worn": {
-    "head": "armor.helmet.scout",
     "chest": "armor.suit.scout",
     "legs": "armor.legs.scout",
     "hands": "armor.gloves.scout",
@@ -219,7 +218,6 @@
    "kind": "shop",
    "verb": "talk",
    "worn": {
-    "head": "armor.helmet.bulwark",
     "chest": "armor.suit.bulwark",
     "legs": "armor.legs.bulwark",
     "hands": "armor.gloves.bulwark",
