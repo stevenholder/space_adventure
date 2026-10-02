@@ -316,6 +316,24 @@ def plate(name, wrap_onto, a, b, ref, theta, t, gap, thickness, bone, mat="plate
     sw.wrap_mode = "OUTSIDE_SURFACE"
     sw.offset = gap
     bpy.ops.object.modifier_apply(modifier=sw.name)
+    # A ray that misses (past the wrist, off the knee's side) leaves its vertex
+    # at r0: a flat flange sticking out of the plate's edge. Each one keeps
+    # its own angle and height and takes the radius of the nearest vertex that
+    # hit (nearest on the starting cylinder). Snapping to the nearest surface
+    # point instead bridged knee pads across to the other leg.
+    def cyl(co):
+        axial = d * (co - a).dot(d)
+        radial = co - a - axial
+        return axial, radial
+    hit, missed = [], []
+    for v in me.vertices:
+        axial, radial = cyl(v.co)
+        (missed if radial.length > r0 * 0.9 else hit).append((v, axial, radial))
+    if missed and hit:
+        start = [(a + ax + rd.normalized() * r0, rd.length) for _, ax, rd in hit]
+        for v, ax, rd in missed:
+            r = min(start, key=lambda s: (s[0] - v.co).length)[1]
+            v.co = a + ax + rd.normalized() * r
     relax_outline(obj, relax)
     sm = obj.modifiers.new("sm", "SMOOTH")
     sm.factor = 0.5

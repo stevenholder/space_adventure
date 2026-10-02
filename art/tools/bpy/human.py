@@ -161,6 +161,8 @@ def ubc_human():
         if img.filepath and not os.path.exists(bpy.path.abspath(img.filepath)):
             img.filepath = img.filepath.replace("_png.png", ".png")
             img.reload()
+        if img.size[0] > 1024:                           # 2-4K maps: 16 MB glb; 1K is plenty at game scale
+            img.scale(1024, 1024 * img.size[1] // img.size[0])
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
     for m in bpy.data.materials:
         m["keep_uv"] = True                              # textures.uv_box leaves these faces' UVs alone

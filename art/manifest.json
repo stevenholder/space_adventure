@@ -30,6 +30,35 @@
       "pbr": true
     },
     {
+      "id": "char.ubc",
+      "file": "chars/ubc.glb",
+      "tris": 8992,
+      "license": "CC0",
+      "source": "recipes/char.ubc.json",
+      "description": "Spike body: Quaternius Universal Base Characters Superhero male (CC0), imported and dressed by tools/bpy/human.py variant char.ubc on the same game-engine bone names, clips and hand mounts as char.player. Worn by npc.veteran at spawn for review. Faces -Z, eye at 1.7 m.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters), dressed by Space Adventure",
+      "rig": "animated",
+      "pbr": true,
+      "surfaces": {
+        "arms": [
+          "suit",
+          "glove"
+        ],
+        "body": [
+          "suit",
+          "boot"
+        ],
+        "head": [
+          "MI_Superhero_Male",
+          "MI_Hair_1",
+          "MI_Eyes",
+          "MI_Hair_1.001",
+          "suit"
+        ]
+      }
+    },
+    {
       "id": "prop.rock.a",
       "file": "props/rock_a.glb",
       "tris": 80,
@@ -666,7 +695,7 @@
     {
       "id": "armor.suit.scout",
       "file": "armor/suit_scout.glb",
-      "tris": 2536,
+      "tris": 2520,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -716,7 +745,7 @@
     {
       "id": "armor.suit.scout@npc.grunt",
       "file": "armor/suit_scout.grunt.glb",
-      "tris": 2536,
+      "tris": 2520,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -766,7 +795,7 @@
     {
       "id": "armor.suit.scout@npc.shopkeeper",
       "file": "armor/suit_scout.shopkeeper.glb",
-      "tris": 2536,
+      "tris": 2520,
       "license": "CC0",
       "source": "recipes/armor.suit.scout.json",
       "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -954,7 +983,7 @@
     {
       "id": "armor.legs.scout",
       "file": "armor/legs_scout.glb",
-      "tris": 2424,
+      "tris": 2416,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1007,7 +1036,7 @@
     {
       "id": "armor.legs.scout@npc.grunt",
       "file": "armor/legs_scout.grunt.glb",
-      "tris": 2452,
+      "tris": 2428,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1060,7 +1089,7 @@
     {
       "id": "armor.legs.scout@npc.shopkeeper",
       "file": "armor/legs_scout.shopkeeper.glb",
-      "tris": 2428,
+      "tris": 2420,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1113,7 +1142,7 @@
     {
       "id": "armor.legs.scout@npc.dispatcher",
       "file": "armor/legs_scout.dispatcher.glb",
-      "tris": 2436,
+      "tris": 2420,
       "license": "CC0",
       "source": "recipes/armor.legs.scout.json",
       "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1166,7 +1195,7 @@
     {
       "id": "armor.gloves.scout",
       "file": "armor/gloves_scout.glb",
-      "tris": 840,
+      "tris": 824,
       "license": "CC0",
       "source": "recipes/armor.gloves.scout.json",
       "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1196,7 +1225,7 @@
     {
       "id": "armor.gloves.scout@npc.grunt",
       "file": "armor/gloves_scout.grunt.glb",
-      "tris": 832,
+      "tris": 816,
       "license": "CC0",
       "source": "recipes/armor.gloves.scout.json",
       "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1226,7 +1255,7 @@
     {
       "id": "armor.gloves.scout@npc.shopkeeper",
       "file": "armor/gloves_scout.shopkeeper.glb",
-      "tris": 840,
+      "tris": 824,
       "license": "CC0",
       "source": "recipes/armor.gloves.scout.json",
       "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1256,7 +1285,7 @@
     {
       "id": "armor.gloves.scout@npc.dispatcher",
       "file": "armor/gloves_scout.dispatcher.glb",
-      "tris": 840,
+      "tris": 824,
       "license": "CC0",
       "source": "recipes/armor.gloves.scout.json",
       "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1382,7 +1411,7 @@
     {
       "id": "armor.boots.scout@npc.dispatcher",
       "file": "armor/boots_scout.dispatcher.glb",
-      "tris": 1392,
+      "tris": 1416,
       "license": "CC0",
       "source": "recipes/armor.boots.scout.json",
       "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1632,6 +1661,39 @@
       "pbr": true
     },
     {
+      "id": "armor.helmet.bulwark@char.ubc",
+      "file": "armor/helmet_bulwark.char.ubc.glb",
+      "tris": 1260,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.bulwark.json",
+      "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__cheek_l": [
+          "armor_heavy"
+        ],
+        "head__cheek_r": [
+          "armor_heavy"
+        ],
+        "head__crest": [
+          "armor_trim"
+        ],
+        "head__helmet_bulwark": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__slit": [
+          "armor_visor"
+        ]
+      },
+      "covers": [
+        "head/hair"
+      ],
+      "pbr": true
+    },
+    {
       "id": "armor.suit.bulwark",
       "file": "armor/suit_bulwark.glb",
       "tris": 3008,
@@ -1750,7 +1812,7 @@
     {
       "id": "armor.suit.bulwark@npc.shopkeeper",
       "file": "armor/suit_bulwark.shopkeeper.glb",
-      "tris": 3016,
+      "tris": 3008,
       "license": "CC0",
       "source": "recipes/armor.suit.bulwark.json",
       "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -1864,9 +1926,67 @@
       "arms": true
     },
     {
+      "id": "armor.suit.bulwark@char.ubc",
+      "file": "armor/suit_bulwark.char.ubc.glb",
+      "tris": 3512,
+      "license": "CC0",
+      "source": "recipes/armor.suit.bulwark.json",
+      "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__vambrace_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "lowerarm_r__vambrace_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_02__abs": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_03__back.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__gorget": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "upperarm_l__pauldron_l.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_top_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "upperarm_r__pauldron_r.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_top_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
       "id": "armor.legs.bulwark",
       "file": "armor/legs_bulwark.glb",
-      "tris": 2336,
+      "tris": 2328,
       "license": "CC0",
       "source": "recipes/armor.legs.bulwark.json",
       "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -1964,7 +2084,7 @@
     {
       "id": "armor.legs.bulwark@npc.shopkeeper",
       "file": "armor/legs_bulwark.shopkeeper.glb",
-      "tris": 2300,
+      "tris": 2364,
       "license": "CC0",
       "source": "recipes/armor.legs.bulwark.json",
       "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2013,7 +2133,56 @@
     {
       "id": "armor.legs.bulwark@npc.dispatcher",
       "file": "armor/legs_bulwark.dispatcher.glb",
-      "tris": 2340,
+      "tris": 2356,
+      "license": "CC0",
+      "source": "recipes/armor.legs.bulwark.json",
+      "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__greave_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_l__knee_l.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__greave_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__knee_r.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "pelvis__belt.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "thigh_l__tasset_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_l__thigh_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "thigh_r__tasset_r": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_r__thigh_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.bulwark@char.ubc",
+      "file": "armor/legs_bulwark.char.ubc.glb",
+      "tris": 2832,
       "license": "CC0",
       "source": "recipes/armor.legs.bulwark.json",
       "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2062,7 +2231,7 @@
     {
       "id": "armor.gloves.bulwark",
       "file": "armor/gloves_bulwark.glb",
-      "tris": 880,
+      "tris": 824,
       "license": "CC0",
       "source": "recipes/armor.gloves.bulwark.json",
       "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2092,7 +2261,7 @@
     {
       "id": "armor.gloves.bulwark@npc.grunt",
       "file": "armor/gloves_bulwark.grunt.glb",
-      "tris": 856,
+      "tris": 824,
       "license": "CC0",
       "source": "recipes/armor.gloves.bulwark.json",
       "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2122,7 +2291,7 @@
     {
       "id": "armor.gloves.bulwark@npc.shopkeeper",
       "file": "armor/gloves_bulwark.shopkeeper.glb",
-      "tris": 856,
+      "tris": 824,
       "license": "CC0",
       "source": "recipes/armor.gloves.bulwark.json",
       "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2152,7 +2321,37 @@
     {
       "id": "armor.gloves.bulwark@npc.dispatcher",
       "file": "armor/gloves_bulwark.dispatcher.glb",
-      "tris": 864,
+      "tris": 816,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.bulwark.json",
+      "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_l__gauntlet_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_r__gauntlet_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
+      "id": "armor.gloves.bulwark@char.ubc",
+      "file": "armor/gloves_bulwark.char.ubc.glb",
+      "tris": 972,
       "license": "CC0",
       "source": "recipes/armor.gloves.bulwark.json",
       "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2214,7 +2413,7 @@
     {
       "id": "armor.boots.bulwark@npc.grunt",
       "file": "armor/boots_bulwark.grunt.glb",
-      "tris": 1392,
+      "tris": 1416,
       "license": "CC0",
       "source": "recipes/armor.boots.bulwark.json",
       "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2278,7 +2477,39 @@
     {
       "id": "armor.boots.bulwark@npc.dispatcher",
       "file": "armor/boots_bulwark.dispatcher.glb",
-      "tris": 1392,
+      "tris": 1416,
+      "license": "CC0",
+      "source": "recipes/armor.boots.bulwark.json",
+      "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_l__boot_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_r__boot_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.bulwark@char.ubc",
+      "file": "armor/boots_bulwark.char.ubc.glb",
+      "tris": 1440,
       "license": "CC0",
       "source": "recipes/armor.boots.bulwark.json",
       "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2486,7 +2717,7 @@
     {
       "id": "armor.suit.raider@npc.shopkeeper",
       "file": "armor/suit_raider.shopkeeper.glb",
-      "tris": 1338,
+      "tris": 1334,
       "license": "CC0",
       "source": "recipes/armor.suit.raider.json",
       "description": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2558,7 +2789,7 @@
     {
       "id": "armor.legs.raider",
       "file": "armor/legs_raider.glb",
-      "tris": 1188,
+      "tris": 1192,
       "license": "CC0",
       "source": "recipes/armor.legs.raider.json",
       "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2590,7 +2821,7 @@
     {
       "id": "armor.legs.raider@npc.grunt",
       "file": "armor/legs_raider.grunt.glb",
-      "tris": 1204,
+      "tris": 1200,
       "license": "CC0",
       "source": "recipes/armor.legs.raider.json",
       "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2622,7 +2853,7 @@
     {
       "id": "armor.legs.raider@npc.shopkeeper",
       "file": "armor/legs_raider.shopkeeper.glb",
-      "tris": 1208,
+      "tris": 1204,
       "license": "CC0",
       "source": "recipes/armor.legs.raider.json",
       "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",

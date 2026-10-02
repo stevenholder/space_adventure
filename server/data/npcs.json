@@ -210,6 +210,22 @@
     "back": "pack.scout"
    },
    "primary": "weapon.pulse"
+  },
+  {
+   "$comment": "UBC spike review stand-in, beside Recruit Tam: the Quaternius Universal Base Characters body (art char.ubc) in the full Bulwark set, so the two bodies can be compared in game without a second client.",
+   "id": "npc.veteran",
+   "name": "Veteran Kade",
+   "asset": "char.ubc",
+   "kind": "shop",
+   "verb": "talk",
+   "worn": {
+    "head": "armor.helmet.bulwark",
+    "chest": "armor.suit.bulwark",
+    "legs": "armor.legs.bulwark",
+    "hands": "armor.gloves.bulwark",
+    "feet": "armor.boots.bulwark"
+   },
+   "primary": "weapon.dmr"
   }
  ]
 }
