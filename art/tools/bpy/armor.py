@@ -247,7 +247,9 @@ def smoothed_body(body):
     bpy.context.view_layer.objects.active = obj
     sm = obj.modifiers.new("sm", "SMOOTH")
     sm.factor = 0.8
-    sm.iterations = 12
+    # A muscular body (UBC) shrinks under 12 passes and plates sink into the
+    # real skin.
+    sm.iterations = 4 if human.ACTIVE.get("ubc") else 12
     bpy.ops.object.modifier_apply(modifier=sm.name)
     obj.hide_set(True)
     return obj
@@ -770,7 +772,7 @@ def pieces(body):
 # the robot gunner); the rest are races whose MakeHuman macro or eye height
 # differs, and get their own copy of every piece, exported as
 # "<asset>@<body>" -- the client picks it by the wearer's asset id.
-BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher")
+BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher", "char.ubc")
 
 
 def main():
@@ -787,7 +789,7 @@ def build_for(body_id):
     human.ACTIVE.clear()
     if body_id:                                   # the shape only, not the colours
         v = human.VARIANTS[body_id]
-        human.ACTIVE.update({k: v[k] for k in ("macro", "eye") if k in v})
+        human.ACTIVE.update({k: v[k] for k in ("macro", "eye", "ubc") if k in v})
     EYE = human.ACTIVE.get("eye", human.EYE)
     suffix = "@" + body_id if body_id else ""
     h, rig, _ = human.make_human(decimate=False)
