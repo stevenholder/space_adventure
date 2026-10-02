@@ -681,6 +681,7 @@ namespace SpaceAdventure.Game
             _views.Render(_timeline, _net.EntityId);
             if (_seat != 0) PlaceSeatCamera();
             else _fps.PlaceCamera(_predictor.State.Pos);
+            _views.PlaceSeated();   // after the vehicle you drive has moved
             _rigLight.GlobalPosition = _camera.GlobalTransform * new Vector3(0.35f, 0.25f, 0.1f); // above and right of the eye: lights the top and rear of the rifle
 
             // The rig follows the character sheet, which is the one place

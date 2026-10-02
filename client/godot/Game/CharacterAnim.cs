@@ -109,6 +109,18 @@ namespace SpaceAdventure.Game
         /// </summary>
         public bool Armed;
 
+        /// <summary>
+        /// Seated: hold `sit`, `sit_drive` or `sit_armed` (with the weapon
+        /// class suffix) instead of a gait.
+        /// </summary>
+        public void Sit(string clip)
+        {
+            string want = clip == "sit_armed" ? Clip(_player, clip, Class) : clip;
+            if (want == _current || !_player.HasAnimation(want)) return;
+            _player.Play(want, Fade);
+            _current = want;
+        }
+
         /// <summary>Call every frame with the body's observed ground speed.</summary>
         public void Drive(float speed, bool dead)
         {
