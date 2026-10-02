@@ -39,6 +39,9 @@ namespace SpaceAdventure.Game
         private bool _seeded;
 
         public ShipSimState State => _state;
+        /// <summary>The drawn pose (Smoothing.cs).</summary>
+        public readonly RenderSmoother Smooth = new RenderSmoother();
+
         public bool Ready => _terrain != null && _seeded;
 
         /// <summary>Inputs still unacked — the replay depth (see Predictor).</summary>
@@ -55,6 +58,7 @@ namespace SpaceAdventure.Game
             Flight.Apply(ref _state, input, _terrain, Rules.DT, Colliders);
             _pending.Add(new Pending(seq, input, _state.Omega));
             if (_pending.Count > MaxPending) _pending.RemoveAt(0);
+            Smooth.Stepped(_state.Pos, _state.Quat);
         }
 
         public bool Reconcile(Vec3 pos, Vec3 vel, Quat quat, bool grounded, bool space, ushort ackSeq)
@@ -83,6 +87,7 @@ namespace SpaceAdventure.Game
             foreach (var p in _pending)
                 Flight.Apply(ref s, p.Input, _terrain, Rules.DT, Colliders);
             _state = s;
+            Smooth.Corrected(_state.Pos, _state.Quat);
             return true;
         }
 
@@ -91,6 +96,7 @@ namespace SpaceAdventure.Game
             _pending.Clear();
             _lastAck = -1;
             _seeded = false;
+            Smooth.Reset();
         }
     }
 }

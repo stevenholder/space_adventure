@@ -7,6 +7,8 @@
 // smoother in a screenshot and is wrong in motion — it leaves the local body
 // somewhere neither the client nor the server believes in, which turns every
 // collision and every shot into a disagreement that grows with latency.
+// (The DRAWN body does ease out of the snap -- Smoothing.cs -- but nothing
+// reads that back; the simulated state never blends.)
 //
 // Mirrors the retired TypeScript client's predictor (git history), which C42
 // compares against on an identical input trace.
@@ -54,6 +56,9 @@ namespace SpaceAdventure.Game
         /// <summary>The predicted state right now. What the camera follows.</summary>
         public State State => _state;
 
+        /// <summary>The drawn position: blended between ticks, corrections eased out.</summary>
+        public readonly RenderSmoother Smooth = new RenderSmoother();
+
         /// <summary>
         /// Shoves the predicted position off the truth, on purpose.
         ///
@@ -90,6 +95,7 @@ namespace SpaceAdventure.Game
             _prevLook = _state.Facing;
             _pending.Clear();
             _lastAck = -1;
+            Smooth.Reset();
         }
 
         /// <summary>Replaces the collider set (arrives after terrain).</summary>
@@ -107,6 +113,7 @@ namespace SpaceAdventure.Game
 
             _pending.Add(new PendingInput(seq, input));
             if (_pending.Count > MaxPending) _pending.RemoveAt(0);
+            Smooth.Stepped(_state.Pos, Quat.Identity);
         }
 
         /// <summary>
@@ -152,6 +159,7 @@ namespace SpaceAdventure.Game
             _prevLook = look;
 
             LastCorrection = (_state.Pos - before).Length;
+            Smooth.Corrected(_state.Pos, Quat.Identity);
             return true;
         }
 
@@ -167,6 +175,7 @@ namespace SpaceAdventure.Game
             _pending.Clear();
             _lastAck = -1;
             LastCorrection = 0;
+            Smooth.Reset();
         }
     }
 }

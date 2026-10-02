@@ -224,6 +224,7 @@ internal static class Program
         PredictionChecks();
         RockScatterChecks();
         TimelineChecks();
+        SmoothingChecks();
         PropChecks();
         RoverPredictionChecks();
         BearingChecks();
@@ -461,14 +462,66 @@ internal static class Program
 
         // The one-way trip pushes the estimated server clock forward: at the
         // same wall instant, a 100 ms one-way (200 ms RTT) puts the render
-        // point ON the newest snapshot, and anything worse clamps there
-        // (Timeline.cs documents the clamp-not-extrapolate choice).
+        // point ON the newest snapshot. Past it, a body moves on along its
+        // wire velocity for at most MaxExtrapolateSeconds (these rows have
+        // none, so they hold).
         tl.OneWaySeconds = 0.1;
         Check("one-way delay advances the render point to the newest snapshot",
             Math.Abs(TimelineX(tl.Interpolate(0.10f), 1) - 12.0) < 1e-6);
         tl.OneWaySeconds = 0.5;
-        Check("past the newest snapshot the timeline clamps, never extrapolates",
+        Check("past the newest snapshot a body with no velocity holds",
             Math.Abs(TimelineX(tl.Interpolate(0.10f), 1) - 12.0) < 1e-6);
+
+        // 20 m/s, render point 0.4 s past the newest: carried 0.1 s (2 m), no further.
+        var run = new SnapshotTimeline { OneWaySeconds = 0.5 };
+        var fast = TimelineSnap(12, (1u, 12f));
+        fast.Entities[0].VelX = 20f;
+        run.Add(fast, 0.10);
+        Check("extrapolation follows the wire velocity and is capped",
+            Math.Abs(TimelineX(run.Interpolate(0.10), 1) - 14.0) < 1e-5);
+
+        // A packet 30 ms late must not drag the render point back 30 ms (it
+        // used to re-anchor on every arrival): one sample moves the averaged
+        // clock by OffsetGain of it, 1.5 ms.
+        var jit = new SnapshotTimeline { OneWaySeconds = 0 };
+        for (uint t = 10; t <= 20; t++) jit.Add(TimelineSnap(t, (1u, t)), (t - 10) * 0.05);
+        double before = TimelineX(jit.Interpolate(0.55), 1);
+        jit.Add(TimelineSnap(21, (1u, 21f)), 0.58);
+        double after = TimelineX(jit.Interpolate(0.58), 1);
+        Check("a late packet barely moves the render clock",
+            Math.Abs(after - (before + 0.6) + 0.03) < 0.01, $"before {before} after {after}");
+    }
+
+    // ---- drawn pose of a predicted body (Smoothing.cs) ----------------------
+
+    private static void SmoothingChecks()
+    {
+        var sm = new RenderSmoother();
+        sm.Stepped(new Vec3(0, 0, 0), Quat.Identity);
+        sm.Stepped(new Vec3(1, 0, 0), Quat.Identity);
+        sm.Advance(0.5, 0);
+        Check("drawn pose is blended between the last two ticks", Math.Abs(sm.Pos.X - 0.5) < 1e-12);
+
+        // A 0.5 m correction: no pop this frame, then it bleeds out.
+        sm.Corrected(new Vec3(1.5, 0, 0), Quat.Identity);
+        sm.Advance(0.5, 0);
+        Check("a correction does not move the drawn pose at once", Math.Abs(sm.Pos.X - 0.5) < 1e-12, $"{sm.Pos.X}");
+        sm.Advance(1.0, 1.0);
+        Check("a correction is gone after 10 tau", Math.Abs(sm.Pos.X - 1.5) < 1e-3, $"{sm.Pos.X}");
+
+        sm.Corrected(new Vec3(100, 0, 0), Quat.Identity);
+        sm.Advance(0.0, 0);
+        Check("a teleport-sized correction snaps", sm.Pos.X == 100);
+
+        // Rotation: a quarter turn about Y at alpha 0.5 is half of it, 45 degrees.
+        var r = new RenderSmoother();
+        double h = Math.Sqrt(0.5);
+        r.Stepped(Vec3.Zero, Quat.Identity);
+        r.Stepped(Vec3.Zero, new Quat(0, h, 0, h));
+        r.Advance(0.5, 0);
+        Vec3 fwd = Quat.Rotate(r.Rot, new Vec3(0, 0, 1));
+        Check("drawn rotation is blended between the last two ticks",
+            Math.Abs(Math.Atan2(fwd.X, fwd.Z) - Math.PI / 4) < 1e-9, $"{fwd}");
     }
 
     private static void RockScatterChecks()
