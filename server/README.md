@@ -55,8 +55,8 @@ internal/terrain/  cube-sphere radius field: generate (seeded), bilinear
                    sample, normal, walkable, wire encode/decode
 internal/sim/      on-foot movement integrator (GDD rule table, 1:1)
 internal/server/   world: 20 Hz tick loop, entity store, WS gateway
-                   (handshake, per-connection reader/writer, latest-wins
-                   input, per-client ack_seq patch, heartbeat)
+                   (handshake, per-connection reader/writer, queued
+                   input (one per tick), per-client ack_seq patch, heartbeat)
 ```
 
 ## Design notes

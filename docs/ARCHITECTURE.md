@@ -302,8 +302,8 @@ map inside them can become a client later without changing a caller.
   WebSocket message).
 - Server sends a snapshot (all entities: id, pos, quat, vel, parent_id,
   seat + tick + `ack_seq`) every tick.
-- Client sends `input` as **current command state** (latest wins, idempotent),
-  tagged with a `seq` counter. The server echoes the `seq` it last applied as
+- Client sends `input` as **current command state** (one applied per tick, in
+  arrival order, at most 2 queued), tagged with a `seq` counter. The server echoes the `seq` it last applied as
   `ack_seq`.
 - Prediction: the local player is simulated client-side in **fixed 50 ms steps
   — the same tick rate as the server**, with the render loop interpolating
