@@ -25,6 +25,15 @@ func init() {
 	RegisterStep(EntityKind(protocol.EntityTypeProjectile), StepProjectile)
 }
 
+// Body is a projectile target that lives outside World: a connected
+// player. A strike calls StepCtx.HitBody instead of touching health here.
+type Body struct {
+	ID     uint32
+	Feet   Vec
+	Height float64
+	Radius float64
+}
+
 // LifeTicksForRange derives LifeTicks from a weapon's max_range and
 // projectile_speed, in whole ticks (GDD "LifeTicks is derived from
 // range/speed in TICKS, not accumulated seconds" — summing dt instead
@@ -41,8 +50,9 @@ func LifeTicksForRange(rangeM, speed float64) int {
 //
 //  1. Move Speed*dt along Vel's direction, in a straight line — no gravity.
 //  2. Test the SWEPT SEGMENT from the previous to the new position against
-//     every damageable, alive entity's capsule except Owner and itself; the
-//     nearest hit along the segment wins. A point test at the new position
+//     every damageable, alive entity's capsule except Owner and itself, and
+//     every player Body (ctx.Bodies); the nearest hit along the segment
+//     wins. A Body hit goes to ctx.HitBody rather than damaging here. A point test at the new position
 //     alone would miss a body the projectile passed through mid-tick.
 //  3. Stop on the terrain (|newPos| below the sampled radius) or a static
 //     collider, whichever the tick's endpoint lands past.
@@ -95,6 +105,29 @@ func StepProjectile(e *Ent, dt float64, ctx StepCtx) {
 				continue
 			}
 			bestT, bestID, found = t, id, true
+		}
+		// The players: not World ents, so the server hands them in as
+		// Bodies and owns the damage (armor, invulnerability, the death
+		// timer all live behind its damagePlayer). Nearest along the
+		// segment still wins, against walls and world ents alike.
+		hitBody := false
+		for _, b := range ctx.Bodies {
+			if b.ID == state.Owner {
+				continue
+			}
+			head := b.Feet.Add(terrain.Normalize(b.Feet).Scale(b.Height))
+			t, hit := rayCapsule(prev, dir, b.Feet, head, b.Radius)
+			if !hit || t < 0 || t > segLen || t >= bestT {
+				continue
+			}
+			bestT, bestID, found, hitBody = t, b.ID, true, true
+		}
+		if hitBody {
+			if ctx.HitBody != nil {
+				ctx.HitBody(bestID, state.Owner, state.Damage)
+			}
+			ctx.World.Remove(e.ID)
+			return
 		}
 		if found {
 			victim := ctx.World.Ents[bestID]

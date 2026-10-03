@@ -248,3 +248,49 @@ func TestProjectileStopsAtWall(t *testing.T) {
 		}
 	}
 }
+
+// A player is not a World ent: the projectile strikes it as a Body and hands
+// the hit to HitBody (the server's damagePlayer), touching no health itself.
+func TestProjectileHitsPlayerBody(t *testing.T) {
+	type hitRec struct {
+		id, attacker uint32
+		dmg          int
+	}
+	for _, c := range []struct {
+		name     string
+		walls    []protocol.Collider
+		bodyID   uint32
+		target   bool // a world target nearer than the body
+		wantHits int
+	}{
+		{"hit", nil, 7, false, 1},
+		{"owner never hit", nil, 99, false, 0},
+		{"wall in between", []protocol.Collider{{Kind: protocol.ColliderBox, Center: [3]float32{200, 1, 10}, Half: [3]float32{3, 1.5, 0.4}, Quat: [4]float32{0, 0, 0, 1}}}, 7, false, 0},
+		{"nearer world ent takes it", nil, 7, true, 0},
+	} {
+		w, ctx, _ := newProjectileWorld(c.walls)
+		var hits []hitRec
+		ctx.Bodies = []Body{{ID: c.bodyID, Feet: Vec{200, 0, 20}, Height: 1.8, Radius: 0.35}}
+		ctx.HitBody = func(id, attacker uint32, dmg int) { hits = append(hits, hitRec{id, attacker, dmg}) }
+		var target *Ent
+		if c.target {
+			target = addProjTarget(w, 2, [3]float64{200, 0, 15})
+		}
+		w.Add(newProjectile(1, 99, [3]float64{200, 0, 0}, [3]float64{0, 0, 1}, 45, 8, 100))
+		for i := 0; i < 12 && w.Ents[1] != nil; i++ {
+			w.Step(DT, ctx)
+		}
+		if len(hits) != c.wantHits {
+			t.Fatalf("%s: %d body hits, want %d", c.name, len(hits), c.wantHits)
+		}
+		if c.wantHits == 1 && hits[0] != (hitRec{7, 99, 8}) {
+			t.Fatalf("%s: hit %+v, want body 7 by 99 for 8", c.name, hits[0])
+		}
+		if c.target && target.Health != 92 {
+			t.Fatalf("%s: target health %d, want 92", c.name, target.Health)
+		}
+		if c.name == "hit" && w.Ents[1] != nil {
+			t.Fatalf("%s: projectile not removed", c.name)
+		}
+	}
+}

@@ -252,6 +252,7 @@ func (s *Server) spawnProjectile(owner uint32, shot ai.Shot) {
 	// and announces the spawn — doing it here as well would announce nothing
 	// and hide the entity from the diff.
 	s.world.Add(e)
+	s.fresh = append(s.fresh, e)
 }
 
 // forwardOf extracts the forward (local +Z, the Sim's facing) axis from an
@@ -372,11 +373,11 @@ func (s *Server) nextWorldID() uint32 {
 // runtime arrived as a row of an unknown kind and the client had no renderer to
 // pick: gunners landed hits while nothing was ever drawn. Announce additions
 // and removals as they happen.
+//
+// No "same count, nothing changed" shortcut: an add and a remove in one tick
+// (a loot drop as a round dies) keep the count and hid both.
 func (s *Server) syncWorldEnts() {
 	order := s.world.Order()
-	if len(order) == len(s.worldEnts) {
-		return
-	}
 	had := make(map[uint32]bool, len(s.worldEnts))
 	for _, e := range s.worldEnts {
 		had[e.ID] = true
@@ -404,5 +405,15 @@ func (s *Server) syncWorldEnts() {
 			s.history.Forget(e.ID)
 		}
 	}
+	// A round fired point-blank hits in the tick it was fired and is gone
+	// before this runs. It still existed: spawn and despawn it, so a client
+	// learns the shot happened (the hit event alone names no projectile).
+	for _, e := range s.fresh {
+		if !live[e.ID] {
+			s.broadcast(protocol.EncodeSpawn(protocol.Spawn{EntityID: e.ID, EntityType: uint16(e.Kind), Data: []byte(e.Def)}))
+			s.broadcast(protocol.EncodeDespawn(protocol.Despawn{EntityID: e.ID}))
+		}
+	}
+	s.fresh = s.fresh[:0]
 	s.worldEnts = ents
 }

@@ -79,6 +79,8 @@ type Server struct {
 	dynColliders []protocol.Collider
 	dynOwners    []uint32
 	collScratch  []protocol.Collider
+	bodies       []sim.Body // players NPC projectiles can strike this tick (tick)
+	fresh        []*sim.Ent // projectiles fired since the last syncWorldEnts
 
 	reg   *defs.Registry
 	world *sim.World // static NPC/target entities, composed from zones
@@ -513,6 +515,16 @@ func (s *Server) tick() {
 
 	events := s.pendingEvents
 	s.pendingEvents = nil
+	// NPC rounds strike players too: live, on-foot bodies at their
+	// post-move positions, damaged through damagePlayer like a melee hit.
+	// A seated player is inside the vehicle's hull.
+	s.bodies = s.bodies[:0]
+	hb := s.reg.Entities["player"].Hitbox
+	for _, c := range s.clients {
+		if c.entity != nil && c.seat == 0 && c.entity.Health > 0 {
+			s.bodies = append(s.bodies, sim.Body{ID: c.entity.ID, Feet: sim.Vec(c.entity.State.Pos), Height: hb.Height, Radius: hb.Radius})
+		}
+	}
 	s.world.Step(sim.DT, sim.StepCtx{
 		Events:       &events,
 		World:        s.world,
@@ -520,6 +532,8 @@ func (s *Server) tick() {
 		Colliders:    s.colliders,
 		DefOf:        s.entityDef,
 		CollidersFor: s.collidersFor,
+		Bodies:       s.bodies,
+		HitBody:      func(id, attacker uint32, dmg int) { s.damagePlayer(id, dmg, attacker) },
 	})
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
