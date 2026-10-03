@@ -214,8 +214,8 @@ namespace SpaceAdventure.Game.UI
 
     /// <summary>
     /// The paper doll: the character's own model in a viewport of its own,
-    /// turning slowly, lit for the panel. OwnWorld3D keeps the planet's
-    /// sun and sky out of it.
+    /// lit for the panel; drag it left/right to turn it. OwnWorld3D keeps
+    /// the planet's sun and sky out of it.
     /// </summary>
     public sealed class Doll
     {
@@ -223,15 +223,23 @@ namespace SpaceAdventure.Game.UI
         private readonly Node3D _turn;
         private readonly AssetRegistry _assets;
         private bool _attached;
+        // ponytail: static, there is one doll; survives the rebuild on every equip
+        private static float _yaw;
 
         public Doll(AssetRegistry assets, int width, int height)
         {
             _assets = assets;
-            View = new SubViewportContainer { Stretch = true, CustomMinimumSize = new Vector2(width, height), MouseFilter = Control.MouseFilterEnum.Ignore };
+            View = new SubViewportContainer { Stretch = true, CustomMinimumSize = new Vector2(width, height), MouseFilter = Control.MouseFilterEnum.Stop };
+            View.GuiInput += e =>
+            {
+                if (e is InputEventMouseMotion m && (m.ButtonMask & MouseButtonMask.Left) != 0)
+                    _turn.Rotation = new Vector3(0f, _yaw += m.Relative.X * 0.01f, 0f);
+            };
             var vp = new SubViewport { OwnWorld3D = true, TransparentBg = true, RenderTargetUpdateMode = SubViewport.UpdateMode.Always, Size = new Vector2I(width, height) };
             View.AddChild(vp);
-            var cam = new Camera3D { Fov = 36f, Near = 0.05f, Far = 20f, Position = new Vector3(0f, 1.0f, 4.0f) };
-            cam.Basis = Basis.LookingAt(new Vector3(0f, 0.95f, 0f) - cam.Position, Vector3.Up);
+            // A 1.8 m body filling ~90% of the height: 36° vertical at 3.1 m sees ~2 m.
+            var cam = new Camera3D { Fov = 36f, Near = 0.05f, Far = 20f, Position = new Vector3(0f, 0.92f, 3.1f) };
+            cam.Basis = Basis.LookingAt(new Vector3(0f, 0.92f, 0f) - cam.Position, Vector3.Up);
             vp.AddChild(cam);
             cam.Current = true;
             var key = new DirectionalLight3D { LightEnergy = 1.3f, ShadowEnabled = false };
@@ -245,7 +253,7 @@ namespace SpaceAdventure.Game.UI
                 BackgroundMode = Godot.Environment.BGMode.Color, BackgroundColor = new Color(0, 0, 0, 0),
                 AmbientLightSource = Godot.Environment.AmbientSource.Color, AmbientLightColor = new Color(0.35f, 0.36f, 0.42f), AmbientLightEnergy = 1f,
             } });
-            _turn = new Node3D();
+            _turn = new Node3D { Rotation = new Vector3(0f, _yaw, 0f) };
             vp.AddChild(_turn);
         }
 
@@ -271,7 +279,6 @@ namespace SpaceAdventure.Game.UI
             });
         }
 
-        public void Tick(double dt) => _turn.RotateY((float)(dt * 0.6));
     }
 
     /// <summary>C: the character panel — slots around the doll, stats beneath.</summary>
@@ -281,6 +288,8 @@ namespace SpaceAdventure.Game.UI
         private readonly SkillSheet _skills;
         private readonly Icons _icons;
         private Doll _doll; // rebuilt with the body, freed with it: no orphaned viewport at quit
+        /// <summary>Screen centre of the doll, for the rig's -uiDollDrag.</summary>
+        public Vector2 DollCentre => _doll != null && GodotObject.IsInstanceValid(_doll.View) ? _doll.View.GlobalPosition + _doll.View.Size / 2f : Vector2.Zero;
         private readonly Func<ushort> _nextSeq;
         private readonly Action<byte[]> _send;
 
@@ -300,8 +309,6 @@ namespace SpaceAdventure.Game.UI
         }
 
         private readonly AssetRegistry _assets;
-
-        public void Tick(double dt) { if (Open) _doll?.Tick(dt); }
 
         private ItemSlot Slot(string name)
         {
@@ -335,7 +342,7 @@ namespace SpaceAdventure.Game.UI
 
         protected override void Fill(VBoxContainer body)
         {
-            _doll = new Doll(_assets, 220, 270);
+            _doll = new Doll(_assets, 300, 440);
 
             var top = Styles.Row(14);
             top.AddChild(SlotColumn(LeftSlots));

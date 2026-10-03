@@ -1293,7 +1293,6 @@ namespace SpaceAdventure.Game
         private void UpdateHudView()
         {
             _hudView.SetVitals(_hud.Health, 100);
-            _sheetView.Tick(Clock.Dt);
             _hudView.SetDeath(_hud.Dead ? _hud.RespawnIn : -1);
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
                 _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));

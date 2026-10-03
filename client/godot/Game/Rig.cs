@@ -20,6 +20,7 @@
 //   -uiGatherDemo           a local iron node + wreck ahead and the channel bar (Phase 12)
 //   -uiHotbarDemo           medkit on 1 (cooling), scanner on Q, from a faked bag (Phase 13)
 //   -uiShift                hold the hotbar's Shift row for the shot
+//   -uiDollDrag <px>        with -uiPanel sheet: drag across the doll to turn it
 //   -uiHotbarDragDemo       with -uiPanel backpack: drag the first bag cell onto slot 4, report
 //   -uiSellDemo             with the shop open: sell the first -uiBuy item, report the buyback count
 //   -uiBuyback              show the shop's BUYBACK tab
@@ -672,6 +673,26 @@ namespace SpaceAdventure.Game
                     await Wait(0.2);
                     var cf = new ConfigFile(); cf.Load("user://sa.cfg");
                     GD.Print($"ui: dragged {panel} {before} -> {target.Position}, saved={cf.HasSection("panels")}");
+                }
+
+                // -uiDollDrag <px>: with the character panel open, drag across
+                // the doll that far right (negative: left) to turn it.
+                string dollDrag = Arg("-uiDollDrag");
+                if (dollDrag != null && _sheetView.Open)
+                {
+                    Vector2 from = _sheetView.DollCentre, to = from + new Vector2(float.Parse(dollDrag, System.Globalization.CultureInfo.InvariantCulture), 0);
+                    Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = from, GlobalPosition = from, ButtonMask = MouseButtonMask.Left });
+                    Vector2 last = from;
+                    for (int i = 1; i <= 6; i++)
+                    {
+                        Vector2 at = from.Lerp(to, i / 6f);
+                        Godot.Input.ParseInputEvent(new InputEventMouseMotion { Position = at, GlobalPosition = at, Relative = at - last, ButtonMask = MouseButtonMask.Left });
+                        last = at;
+                        await Wait(0.05);
+                    }
+                    Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = to, GlobalPosition = to });
+                    await Wait(0.2);
+                    GD.Print($"ui: doll dragged {dollDrag} px");
                 }
             }
 
