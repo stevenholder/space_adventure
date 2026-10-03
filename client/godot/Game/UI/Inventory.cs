@@ -250,18 +250,24 @@ namespace SpaceAdventure.Game.UI
         }
 
         /// <summary>
-        /// Attach once the registry has the model, standing in idle and
-        /// wearing `worn` (slot -> item id) by the world's own dressing rule.
+        /// Attach once the registry has the model, standing in idle, wearing
+        /// the body slots and holding the weapon by the world's own rules.
         /// Safe to call every open; the panel rebuilds the doll on an equip.
         /// </summary>
-        public void Ensure(Dictionary<string, string> worn, Func<string, string> asset)
+        public void Ensure(Character character, IEnumerable<string> bodySlots)
         {
             if (_attached) return;
             _attached = true;
+            Defs defs = character.Defs;
+            var worn = new Dictionary<string, string>();
+            foreach (string slot in bodySlots) worn[slot] = character.Worn(slot);
+            string weapon = defs.ItemAsset(character.Primary);
             _assets.Attach("char.player", _turn, model =>
             {
-                CharacterAnim.For(model)?.Drive(0f, false);
-                EntityViews.Dress(_assets, asset, model, worn, new Dictionary<string, string>(), new Dictionary<string, Node3D>());
+                CharacterAnim anim = CharacterAnim.For(model);
+                if (anim != null) { anim.Class = defs.HoldSuffix(character.Primary); anim.Armed = weapon != ""; anim.Drive(0f, false); }
+                EntityViews.Dress(_assets, defs.ItemAsset, model, worn, new Dictionary<string, string>(), new Dictionary<string, Node3D>());
+                if (weapon != "") EntityViews.Hold(_assets, model, weapon, null);
             });
         }
 
@@ -330,9 +336,6 @@ namespace SpaceAdventure.Game.UI
         protected override void Fill(VBoxContainer body)
         {
             _doll = new Doll(_assets, 220, 270);
-            var worn = new Dictionary<string, string>();
-            foreach (string slot in LeftSlots) worn[slot] = _character.Worn(slot); // the slots drawn on the body
-            _doll.Ensure(worn, _character.Defs.ItemAsset);
 
             var top = Styles.Row(14);
             top.AddChild(SlotColumn(LeftSlots));
@@ -344,6 +347,9 @@ namespace SpaceAdventure.Game.UI
             top.AddChild(centre);
             top.AddChild(SlotColumn(RightSlots));
             body.AddChild(top);
+            // In the tree first: a cached model attaches synchronously, and
+            // holding a weapon reads the hand's global transform.
+            _doll.Ensure(_character, LeftSlots); // LeftSlots: the slots drawn on the body
             body.AddChild(Styles.Gap(6));
             body.AddChild(Styles.Header("Stats"));
 

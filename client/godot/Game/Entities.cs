@@ -360,19 +360,31 @@ namespace SpaceAdventure.Game
             string asset = Defs.ItemAsset(view.EquippedItem);
             if (string.IsNullOrEmpty(asset)) return;
 
-            Node3D hand = AssetRegistry.FindNode(view.Model, "hand.r");
-            if (hand == null) return;
-
-            _assets.Attach(asset, hand, weapon =>
+            Hold(_assets, view.Model, asset, weapon =>
             {
                 view.Held = weapon;
                 if (view.Anim != null) view.Anim.Armed = true;
+            });
+        }
+
+        /// <summary>
+        /// Hangs `asset` in `model`'s right hand, barrel down the forearm,
+        /// grip in the palm. Shared with the character panel's doll.
+        /// </summary>
+        public static void Hold(AssetRegistry assets, Node3D model, string asset, Action<Node3D> held)
+        {
+            Node3D hand = AssetRegistry.FindNode(model, "hand.r");
+            if (hand == null) return;
+
+            assets.Attach(asset, hand, weapon =>
+            {
+                held?.Invoke(weapon);
 
                 // Point the barrel down the forearm -- two frames from now.
                 // The mount is a BoneAttachment3D, and it is not posed until
                 // the skeleton has updated; aligned at attach time the barrel
                 // landed wherever the unposed mount happened to be (up, once).
-                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = view.Model });
+                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = model });
 
                 // Undo the body's scale: `hand.r` lives inside the model, under
                 // the wrapper that fits the character to 1.8 m, and a child
