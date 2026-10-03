@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 )
 
@@ -36,6 +38,27 @@ type Player struct {
 	Skills SkillsState
 	CreatedMs int64
 	UpdatedMs int64
+}
+
+// Clone is p with every map, slice and mission copied, so the copy can be
+// read with no lock held while the original keeps changing.
+func (p Player) Clone() Player {
+	p.Inventory = slices.Clone(p.Inventory)
+	p.Equipped = maps.Clone(p.Equipped)
+	if p.Missions != nil {
+		ms := make(map[string]*MissionState, len(p.Missions))
+		for k, m := range p.Missions {
+			if m != nil {
+				c := *m
+				m = &c
+			}
+			ms[k] = m
+		}
+		p.Missions = ms
+	}
+	p.Skills.XP = maps.Clone(p.Skills.XP)
+	p.Skills.Discovered = slices.Clone(p.Skills.Discovered)
+	return p
 }
 
 // SkillsState is the whole skill sheet.

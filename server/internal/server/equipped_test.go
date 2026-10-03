@@ -49,12 +49,7 @@ func TestEquippedEventBroadcastAndReplay(t *testing.T) {
 
 	// The default loadout carries ammo but no weapon, so put one in A's
 	// inventory the same way a shop purchase would.
-	srv.mu.Lock()
-	ac := srv.clients[aID]
-	srv.mu.Unlock()
-	if ac == nil {
-		t.Fatalf("client %d not published", aID)
-	}
+	ac := published(srv, aID)
 	ac.ident.Mutate(func(p *store.Player) {
 		if err := sim.AddItem(p, "weapon.pulse", 1, srv.reg); err != nil {
 			t.Fatalf("AddItem: %v", err)
@@ -92,9 +87,7 @@ func TestEquippedReplayReachesTheOwner(t *testing.T) {
 	srv, url := newTestServer(t)
 
 	a, aID := joinClient(t, url, "armed")
-	srv.mu.Lock()
-	ac := srv.clients[aID]
-	srv.mu.Unlock()
+	ac := published(srv, aID)
 	ac.ident.Mutate(func(p *store.Player) {
 		if err := sim.AddItem(p, "weapon.pulse", 1, srv.reg); err != nil {
 			t.Fatalf("AddItem: %v", err)
@@ -105,9 +98,7 @@ func TestEquippedReplayReachesTheOwner(t *testing.T) {
 	// Nothing has changed the slot since the join, so the only way this
 	// client can learn is the replay.
 	b, bID := joinClient(t, url, "rejoined")
-	srv.mu.Lock()
-	bc := srv.clients[bID]
-	srv.mu.Unlock()
+	bc := published(srv, bID)
 	bc.ident.Mutate(func(p *store.Player) {
 		if err := sim.AddItem(p, "weapon.pulse", 1, srv.reg); err != nil {
 			t.Fatalf("AddItem: %v", err)
