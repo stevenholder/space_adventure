@@ -145,6 +145,11 @@ record('C21b', 'gunner projectiles are entities the client receives',
   sawProjectile, `projectile spawns seen: ${sawProjectile}`)
 
 // ---- C22: death and respawn ----------------------------------------------
+// Stay in the fight until it kills us. The stand above is 12 s, and 100 hp
+// at a gunner's 8 per 1.6 s round is ~13 hits (~21 s): sampled here and now,
+// the death had not happened yet and C22 read died=false for a player the
+// respawn wait below then found back at spawn at full health.
+await wait(() => A.selfDeaths > 0 || (A.ents.get(A.id).flags & 0x04) !== 0, 45000)
 const deadSeen = A.selfDeaths > 0 || died || (A.ents.get(A.id).flags & 0x04) !== 0
 const respawnT0 = Date.now()
 const alive = await wait(() => A.ents.get(A.id).health >= 100 && (A.ents.get(A.id).flags & 0x04) === 0, 30000)

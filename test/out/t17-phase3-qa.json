@@ -9,7 +9,7 @@
   "id": "C20/21",
   "name": "camp NPCs damage a player who stands in range",
   "ok": true,
-  "detail": "15 hit events, health 100 -> 0 (died) at 8.8 m"
+  "detail": "2 hit events, health 100 -> 84 at 8.8 m"
  },
  {
   "id": "C21b",
@@ -21,25 +21,25 @@
   "id": "C22",
   "name": "player dies and respawns at the spawn point with full health",
   "ok": true,
-  "detail": "died=true respawned=true after 4.9 s, 0.00 m from spawn"
+  "detail": "died=true respawned=true after 5.0 s, 0.00 m from spawn"
  },
  {
   "id": "C19b",
   "name": "NPC leashes back to its post and stays on the surface",
   "ok": true,
-  "detail": "returned to 1.48 m of post (limit 2.5), |pos|=157.2 m"
+  "detail": "returned to 1.37 m of post (limit 2.5), |pos|=157.2 m"
  },
  {
   "id": "C24",
   "name": "two clients see the same NPC positions",
   "ok": true,
-  "detail": "worst disagreement across 10 camp NPCs: 0.000 m (limit 2.0)"
+  "detail": "worst disagreement across 13 camp NPCs: 0.000 m (limit 2.0)"
  },
  {
   "id": "C25a",
   "name": "per-client snapshot bandwidth under 100 KB/s",
   "ok": true,
-  "detail": "25.5 KB/s over 5.0 s, 32 entities (interest culling NOT wired)"
+  "detail": "29.7 KB/s over 5.0 s, 28 entities (interest culling NOT wired)"
  },
  {
   "id": "C25b",

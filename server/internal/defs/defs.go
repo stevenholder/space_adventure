@@ -46,7 +46,7 @@ type Item struct {
 	StackMax int     `json:"stack_max"`
 	Weapon   *Weapon `json:"weapon,omitempty"`
 	// Phase 11.7: the character panel reads these. desc is the tooltip
-	// line; armor is display-only until armor matters (GDD "Equipment").
+	// line; armor cuts incoming damage (sim.Mitigate, GDD "Equipment").
 	Desc  string `json:"desc,omitempty"`
 	Armor *Armor `json:"armor,omitempty"`
 	// Phase 12: Value is what shop_sell pays before sell_rate; 0/absent is
@@ -126,7 +126,7 @@ type ItemQty struct {
 const SellRate = 0.5
 
 // Armor is a wearable's protective value. Summed over the worn slots into
-// the character panel's ARMOR stat; no combat effect yet.
+// the character panel's ARMOR stat and into sim.Mitigate.
 type Armor struct {
 	Value int `json:"value"`
 }

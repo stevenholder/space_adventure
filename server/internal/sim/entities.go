@@ -64,6 +64,11 @@ type StepCtx struct {
 	// static colliders plus the moving bodies and vehicles other than id
 	// itself. Vehicles push their hulls out of it (ResolveHull). Nil: none.
 	CollidersFor func(id uint32) []protocol.Collider
+	// Bodies are the live, on-foot players a projectile can strike (they
+	// are not World ents); HitBody applies such a hit (the server's
+	// damagePlayer). Nil: projectiles pass through where players would be.
+	Bodies  []Body
+	HitBody func(id, attacker uint32, damage int)
 }
 
 // StepFunc steps a single entity forward by dt.
