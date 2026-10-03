@@ -1,8 +1,10 @@
 package server
 
 import (
+	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
@@ -39,15 +41,31 @@ func roverOf(t *testing.T, s *Server) *sim.Ent {
 // projected. White-box on purpose: walking 20 m through the movement model
 // makes a seat test into a movement test.
 func teleportNear(s *Server, id uint32, pos sim.Vec, dist float64) {
+	c := published(s, id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c := s.clients[id]
 	up := pos.Scale(1 / pos.Len())
 	// Nudge along an arbitrary tangent, then re-project to the surface.
 	tang := sim.Vec{-up[2], 0, up[0]}
 	p := pos.Add(tang.Scale(dist / tang.Len()))
 	u2 := p.Scale(1 / p.Len())
 	c.entity.State.Pos = u2.Scale(s.terrain.SampleRadius(u2))
+}
+
+// published waits for join to put id in s.clients. join sends hello_ack and
+// the rest of the handshake BEFORE it publishes the client (the stream order
+// PROTOCOL.md promises), so a test acting on hello_ack alone races it: the
+// merge of #58 nil-panicked in teleportNear on CI. Call without s.mu held.
+func published(s *Server, id uint32) *client {
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		s.mu.Lock()
+		c := s.clients[id]
+		s.mu.Unlock()
+		if c != nil {
+			return c
+		}
+	}
+	panic(fmt.Sprintf("client %d never published", id))
 }
 
 func seatResult(t *testing.T, ws *wsClient) protocol.SeatResult {

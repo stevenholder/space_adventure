@@ -95,11 +95,14 @@ func defaultPlayer(reg *defs.Registry, token, name string, spawn [3]float64) sto
 }
 
 // Snapshot returns a copy of the current player row. Safe to call from the
-// tick loop or any other goroutine.
+// tick loop or any other goroutine. A DEEP copy: a plain struct copy shares
+// the Equipped/Inventory/... maps and slices with the live row, and reading
+// them after the lock drops raced every Mutate (go test -race, 2026-10-03:
+// syncEquipped vs an equip cmd -- a concurrent map read/write is fatal).
 func (id *identity) Snapshot() store.Player {
 	id.mu.Lock()
 	defer id.mu.Unlock()
-	return id.player
+	return id.player.Clone()
 }
 
 // Mutate applies fn to the live player row under the lock. The tick loop

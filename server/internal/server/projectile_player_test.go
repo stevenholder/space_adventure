@@ -24,9 +24,7 @@ func TestNPCProjectileHitsPlayer(t *testing.T) {
 	} {
 		srv, url := newTestServer(t) // one body per world: a second spawns on the first and would soak the round
 		_, id := joinClient(t, url, "target")
-		srv.mu.Lock()
-		cl := srv.clients[id]
-		srv.mu.Unlock()
+		cl := published(srv, id)
 		if c.chest != "" {
 			cl.ident.Mutate(func(p *store.Player) { p.Equipped["chest"] = c.chest })
 		}

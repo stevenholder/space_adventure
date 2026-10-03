@@ -42,8 +42,9 @@ func waitShips(t *testing.T, s *Server, n int) []*sim.Ent {
 // actually face the shopkeeper).
 func aimAt(t *testing.T, s *Server, ws *wsClient, id uint32, target sim.Vec) {
 	t.Helper()
+	c := published(s, id)
 	s.mu.Lock()
-	me := s.clients[id].entity.State.Pos
+	me := c.entity.State.Pos
 	s.mu.Unlock()
 	d := target.Sub(me)
 	l := d.Len()
