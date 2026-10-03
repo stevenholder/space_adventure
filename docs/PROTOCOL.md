@@ -205,6 +205,12 @@ Constants:
   cleared). Broadcast per changed slot, and replayed per worn slot when a
   client joins, exactly like `equipped`. The client resolves the model from
   the item's `asset` in `defs` and hangs it on the wearer's skeleton.
+  And `0x0010` `attack` (mob library, 2026-10-03) — `entity_id` is an NPC
+  that has just begun an attack and `data` is `u32 target_id`. Sent once per
+  attack, broadcast, at the START of the wind-up (or on the tick an attack
+  with no wind-up lands), so the swing leads the `hit` by `attack_windup`.
+  Cosmetic: the client plays the body's `attack` clip once; damage still
+  arrives as `hit`/`death` or a projectile. Not replayed at join.
 
 ## Semantics
 

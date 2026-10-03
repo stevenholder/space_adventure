@@ -68,6 +68,20 @@ namespace SpaceAdventure.Game
             _flinchUntil = now + _player.GetAnimation(clip).Length;
         }
 
+        /// <summary>
+        /// The body began an attack (the server's `attack` event, sent at the
+        /// start of its wind-up): play `attack` once, then Drive takes over
+        /// again, as after a flinch. Bodies without the clip ignore it.
+        /// </summary>
+        public void Attack(double now)
+        {
+            if (_current == "die" || !_player.HasAnimation("attack")) return;
+            _player.Play("attack", 0.08);
+            _player.Seek(0, true);
+            _current = "attack";
+            _flinchUntil = now + _player.GetAnimation("attack").Length;
+        }
+
         /// <summary>Long enough not to snap, short enough not to moonwalk.</summary>
         private const double Fade = 0.15;
 

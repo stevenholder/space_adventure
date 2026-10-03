@@ -128,6 +128,7 @@ namespace SpaceAdventure.Net
         public const ushort SkillXP = 0x000D; // Phase 11: {skill,xp,level,next_at,leveled}
         public const ushort GatherEnd = 0x000E; // Phase 12: {node,reason,item,qty}
         public const ushort Worn = 0x000F; // armor: "slot=item", item empty = cleared
+        public const ushort Attack = 0x0010; // an NPC starts an attack: entity = attacker, data = u32 target
     }
 
     /// <summary>collider kinds.</summary>

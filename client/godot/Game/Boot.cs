@@ -1129,6 +1129,9 @@ namespace SpaceAdventure.Game
                             if (_skillsView.Open) _skillsView.Rebuild();
                             if (_benchView.Open) _benchView.Rebuild();
                             break;
+                        case EventId.Attack:
+                            _views.OnAttack(ev.EntityId);
+                            break;
                         case EventId.GatherEnd:
                             OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;

@@ -121,21 +121,46 @@ func (s *Server) stepNPCs(tick uint32) {
 		hasLOS := s.losBetween(eyeOf(n.ent.Pos, arch.EyeHeight()), eyeOf(target, eyeHeightMeters))
 
 		if arch.ProjectileSpeed > 0 {
+			before := n.ranged.WindupTicks
 			shot := ai.StepRanged(&n.ranged, inRange, hasLOS,
 				n.ent.Pos, selfUp, target, s.candidateVel(cands, n.brain.TargetID),
 				ai.Archetype{EyeHeight: arch.EyeHeight()}, arch.AttackDamage, arch.ProjectileSpeed,
 				ticksOf(arch.AttackInterval), ticksOf(arch.AttackWindup))
+			if attackStarted(before, n.ranged.WindupTicks, shot.Speed > 0) {
+				s.broadcastAttack(n.ent.ID, n.brain.TargetID)
+			}
 			if shot.Speed > 0 {
 				s.spawnProjectile(n.ent.ID, shot)
 			}
 			continue
 		}
 
-		if dmg := ai.StepMelee(&n.melee, inRange && hasLOS, arch.AttackDamage,
-			ticksOf(arch.AttackInterval), ticksOf(arch.AttackWindup)); dmg > 0 {
+		before := n.melee.WindupTicks
+		dmg := ai.StepMelee(&n.melee, inRange && hasLOS, arch.AttackDamage,
+			ticksOf(arch.AttackInterval), ticksOf(arch.AttackWindup))
+		if attackStarted(before, n.melee.WindupTicks, dmg > 0) {
+			s.broadcastAttack(n.ent.ID, n.brain.TargetID)
+		}
+		if dmg > 0 {
 			s.damagePlayer(n.brain.TargetID, dmg, n.ent.ID)
 		}
 	}
+}
+
+// attackStarted: this tick began an attack -- a wind-up that was not running
+// now is, or (no wind-up at all) one that landed straight away. A landing at
+// the END of a wind-up is not a start: that attack was announced already.
+func attackStarted(windupBefore, windupAfter int, landed bool) bool {
+	return windupBefore == 0 && (windupAfter > 0 || landed)
+}
+
+// broadcastAttack tells every client an NPC has begun an attack, so its body
+// can swing (the client plays the model's `attack` clip). Cosmetic: the
+// damage still lands on its own schedule, through damagePlayer or a projectile.
+func (s *Server) broadcastAttack(attacker, target uint32) {
+	s.broadcast(protocol.EncodeEvent(protocol.Event{
+		EntityID: attacker, EventID: protocol.EventAttack, Data: appendU32(nil, target),
+	}))
 }
 
 // stepSteer moves the NPC one tick and writes the result back onto the entity.
