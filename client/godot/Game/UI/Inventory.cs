@@ -463,15 +463,18 @@ namespace SpaceAdventure.Game.UI
 
             int armor = 0;
             var armorLines = new List<string>();
-            foreach (string slot in LeftSlots)
-                if (defs.Item(_character.Worn(slot))?.Armor is ArmorDef a)
+            foreach (var kv in _character.Equipped) // every worn item, as the server's sim.ArmorOf sums them
+                if (defs.Item(kv.Value)?.Armor is ArmorDef a)
                 {
                     armor += a.Value;
-                    armorLines.Add($"{defs.ItemName(_character.Worn(slot))}: {a.Value}");
+                    armorLines.Add($"{defs.ItemName(kv.Value)}: {a.Value}");
                 }
             if (armorLines.Count == 0) armorLines.Add("Nothing worn. Drag armor onto HEAD, CHEST, LEGS, HANDS, FEET or BACK.");
             armorLines.Insert(0, "The armor values of everything you wear, added up:");
-            armorLines.Add("!Not used in combat yet: armor does not reduce incoming damage.");
+            // sim.Mitigate: a hit × 100 / (100 + armor), rounded, never below 1.
+            double armorCut = 1 - 100.0 / (100.0 + armor);
+            armorLines.Add($"Every hit you take is cut by {Pct(armorCut)}: 100 / (100 + {armor}). A 20 damage hit lands as {Math.Max(1, Math.Round(20 * 100.0 / (100 + armor), MidpointRounding.AwayFromZero))}.");
+            armorLines.Add("More armor always helps, but each point is worth a little less. A hit always does at least 1.");
 
             WeaponDef w = defs.Item(_character.Primary)?.Weapon;
             // Phase 13: the worn mod's deltas add onto the table, as the server's sim.ApplyMod does.
@@ -489,10 +492,11 @@ namespace SpaceAdventure.Game.UI
 
             Stat("health", $"{_character.Health} / 100", Styles.Danger,
                 "How much damage you can take. 100 at most.",
+                "Armor cuts every hit you take (see ARMOR).",
                 "Regenerates 8 per second after 8 s without taking damage.",
                 "At 0 you are down for 5 s, then respawn at full health, protected for 3 s.",
                 "!Dying drops the materials in your bag where you fell. Gear, credits, tools and ammo stay with you.");
-            Stat("armor", armor.ToString(), Styles.Shield, armorLines.ToArray());
+            Stat("armor", armor > 0 ? $"{armor}  −{Pct(armorCut)}" : "0", Styles.Shield, armorLines.ToArray());
             Stat("damage", w != null ? $"{dmg:0.#}" : "—", mod?.Damage > 0 ? Styles.Good : Styles.Cream, w == null ? new[] { noWeapon } : new[]
             {
                 "Damage per hit, at close range.",

@@ -2017,8 +2017,10 @@ shooting a target range (`docs/ROADMAP.md`).
   one slot at a time. `equip` with an empty item clears a slot. `primary`
   and the worn slots (`head`, `chest`, `legs`, `hands`, `feet`, `back`) are
   visible on the body and on the wire to others (`equipped` and `worn`
-  events, PROTOCOL.md); armor values are summed for the character panel and
-  have no combat effect yet. Equipping an item you do not own is refused.
+  events, PROTOCOL.md); armor values of every worn item are summed
+  (the character panel's ARMOR) and scale each incoming hit by
+  100 / (100 + armor), rounded, never below 1 (`sim.Mitigate`): full Scout
+  (23) takes ~19% off, full Bulwark (46) ~32%. Equipping an item you do not own is refused.
 - Ammunition is an item like any other. The weapon's `magazine` is *not* in the
   inventory — it is loaded rounds, held per equipped weapon; `reload` moves
   rounds from the `ammo.cell` stack into the magazine.

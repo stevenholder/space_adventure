@@ -286,7 +286,8 @@ func (s *Server) damagePlayer(victimID uint32, amount int, attacker uint32) {
 	if !ok {
 		return
 	}
-	applied, died := sim.Damage(&c.vitals, amount)
+	snap := c.ident.Snapshot()
+	applied, died := sim.Damage(&c.vitals, sim.Mitigate(amount, sim.ArmorOf(s.reg, &snap)))
 	if applied == 0 {
 		return // invulnerable, already dead, or nothing to do — no event
 	}
