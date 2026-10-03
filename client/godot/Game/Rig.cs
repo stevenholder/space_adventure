@@ -121,12 +121,12 @@ namespace SpaceAdventure.Game
         {
             "wounded" => v.ShowHealthBar,
             "hostile" => v.Type == EntityType.Npc && v.Label != "npc.quartermaster",
-            _ when arg.StartsWith("npc.") => v.Type == EntityType.Npc && v.Label == arg,   // one archetype by id
+            _ when arg.StartsWith("npc.") || arg.StartsWith("mob.") => v.Type == EntityType.Npc && v.Label == arg,   // one archetype by id
             _ => v.Type == type,
         };
 
         private static ushort KindOf(string arg) =>
-            arg == "npc" || arg == "hostile" || arg.StartsWith("npc.") ? EntityType.Npc
+            arg == "npc" || arg == "hostile" || arg.StartsWith("npc.") || arg.StartsWith("mob.") ? EntityType.Npc
             : arg == "player" ? EntityType.Player
             : arg == "rover" ? EntityType.Vehicle
             : EntityType.Target;

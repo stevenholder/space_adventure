@@ -1129,6 +1129,9 @@ namespace SpaceAdventure.Game
                             if (_skillsView.Open) _skillsView.Rebuild();
                             if (_benchView.Open) _benchView.Rebuild();
                             break;
+                        case EventId.Attack:
+                            _views.OnAttack(ev.EntityId);
+                            break;
                         case EventId.GatherEnd:
                             OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;
@@ -1426,7 +1429,7 @@ namespace SpaceAdventure.Game
                     _moving.Add(v.Type == EntityType.Vehicle ? Sim.Collide.RoverCollider(pos, quat) : Sim.Collide.ShipCollider(pos, quat));
                 }
                 else if ((v.Type == EntityType.Player || v.Type == EntityType.Npc) && !v.Dead && v.ParentId == 0)
-                    _moving.Add(Sim.Collide.BodyCollider(pos));
+                    _moving.Add(Sim.Collide.BodyCollider(pos, v.Type == EntityType.Npc ? _views.Defs.Npc(v.Label).Radius : Sim.Collide.BodyRadius));
             }
             return _moving.ToArray();
         }

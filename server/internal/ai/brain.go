@@ -70,6 +70,9 @@ type Candidate struct {
 type Archetype struct {
 	AggroRadius, LeashRadius, AttackRange float64
 	AttackInterval, AttackWindup          float64
+	// EyeHeight is where a gunner's shot starts above its feet; 0 means a
+	// standing person's eye.
+	EyeHeight float64
 }
 
 // Brain is one NPC's decision state.

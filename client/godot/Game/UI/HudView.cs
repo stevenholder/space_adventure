@@ -5,6 +5,7 @@
 
 using System.Collections.Generic;
 using Godot;
+using SpaceAdventure.Net;
 
 namespace SpaceAdventure.Game.UI
 {
@@ -211,7 +212,9 @@ namespace SpaceAdventure.Game.UI
                 {
                     if (!v.ShowHealthBar || v.Root == null) continue;
                     Vector3 world = v.Root.GlobalPosition;
-                    Vector3 above = world + world.Normalized() * 2.05f;
+                    // A quarter metre over the head: 2.05 m on a standing person.
+                    float head = v.Type == EntityType.Npc ? views.Defs.Npc(v.Label).Height : 1.8f;
+                    Vector3 above = world + world.Normalized() * (head + 0.25f);
                     if (cam.IsPositionBehind(above)) continue;
                     Vector2 screen = cam.UnprojectPosition(above);
                     float depth = cam.GlobalPosition.DistanceTo(above);

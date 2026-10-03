@@ -189,6 +189,11 @@ namespace SpaceAdventure.Game
             if (_views.TryGetValue(victim, out var v)) v.Anim?.Hit(Clock.Now);
         }
 
+        public void OnAttack(uint attacker)
+        {
+            if (_views.TryGetValue(attacker, out var v)) v.Anim?.Attack(Clock.Now);
+        }
+
         /// <summary>Records what a `spawn` said, for the row that follows it.</summary>
         public void OnSpawn(Spawn spawn)
         {

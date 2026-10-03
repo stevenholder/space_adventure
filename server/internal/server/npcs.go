@@ -118,24 +118,49 @@ func (s *Server) stepNPCs(tick uint32) {
 		}
 		dist := vecDist(n.ent.Pos, target)
 		inRange := dist <= arch.AttackRange
-		hasLOS := s.losBetween(eyeOf(n.ent.Pos), eyeOf(target))
+		hasLOS := s.losBetween(eyeOf(n.ent.Pos, arch.EyeHeight()), eyeOf(target, eyeHeightMeters))
 
 		if arch.ProjectileSpeed > 0 {
+			before := n.ranged.WindupTicks
 			shot := ai.StepRanged(&n.ranged, inRange, hasLOS,
 				n.ent.Pos, selfUp, target, s.candidateVel(cands, n.brain.TargetID),
-				ai.Archetype{}, arch.AttackDamage, arch.ProjectileSpeed,
+				ai.Archetype{EyeHeight: arch.EyeHeight()}, arch.AttackDamage, arch.ProjectileSpeed,
 				ticksOf(arch.AttackInterval), ticksOf(arch.AttackWindup))
+			if attackStarted(before, n.ranged.WindupTicks, shot.Speed > 0) {
+				s.broadcastAttack(n.ent.ID, n.brain.TargetID)
+			}
 			if shot.Speed > 0 {
 				s.spawnProjectile(n.ent.ID, shot)
 			}
 			continue
 		}
 
-		if dmg := ai.StepMelee(&n.melee, inRange && hasLOS, arch.AttackDamage,
-			ticksOf(arch.AttackInterval), ticksOf(arch.AttackWindup)); dmg > 0 {
+		before := n.melee.WindupTicks
+		dmg := ai.StepMelee(&n.melee, inRange && hasLOS, arch.AttackDamage,
+			ticksOf(arch.AttackInterval), ticksOf(arch.AttackWindup))
+		if attackStarted(before, n.melee.WindupTicks, dmg > 0) {
+			s.broadcastAttack(n.ent.ID, n.brain.TargetID)
+		}
+		if dmg > 0 {
 			s.damagePlayer(n.brain.TargetID, dmg, n.ent.ID)
 		}
 	}
+}
+
+// attackStarted: this tick began an attack -- a wind-up that was not running
+// now is, or (no wind-up at all) one that landed straight away. A landing at
+// the END of a wind-up is not a start: that attack was announced already.
+func attackStarted(windupBefore, windupAfter int, landed bool) bool {
+	return windupBefore == 0 && (windupAfter > 0 || landed)
+}
+
+// broadcastAttack tells every client an NPC has begun an attack, so its body
+// can swing (the client plays the model's `attack` clip). Cosmetic: the
+// damage still lands on its own schedule, through damagePlayer or a projectile.
+func (s *Server) broadcastAttack(attacker, target uint32) {
+	s.broadcast(protocol.EncodeEvent(protocol.Event{
+		EntityID: attacker, EventID: protocol.EventAttack, Data: appendU32(nil, target),
+	}))
 }
 
 // stepSteer moves the NPC one tick and writes the result back onto the entity.
@@ -147,9 +172,10 @@ func (n *npcAI) stepSteer(target [3]float64, t *terrain.Field, cs []protocol.Col
 	n.ent.Quat = quatFromForward(n.steer.Facing, n.ent.Pos)
 }
 
-func eyeOf(pos [3]float64) [3]float64 {
+// eyeOf raises a body's feet to its eye, h metres along its up.
+func eyeOf(pos [3]float64, h float64) [3]float64 {
 	up := terrain.Normalize(terrain.Vec(pos))
-	return [3]float64{pos[0] + up[0]*eyeHeightMeters, pos[1] + up[1]*eyeHeightMeters, pos[2] + up[2]*eyeHeightMeters}
+	return [3]float64{pos[0] + up[0]*h, pos[1] + up[1]*h, pos[2] + up[2]*h}
 }
 
 func vecDist(a, b [3]float64) float64 {
@@ -228,13 +254,14 @@ func (s *Server) spawnProjectile(owner uint32, shot ai.Shot) {
 	s.world.Add(e)
 }
 
-// forwardOf extracts the forward (local -Z) axis from an orientation quat.
+// forwardOf extracts the forward (local +Z, the Sim's facing) axis from an
+// orientation quat.
 func forwardOf(q [4]float64) [3]float64 {
 	x, y, z, w := q[0], q[1], q[2], q[3]
 	return [3]float64{
-		-(2 * (x*z + w*y)),
-		-(2 * (y*z - w*x)),
-		-(1 - 2*(x*x+y*y)),
+		2 * (x*z + w*y),
+		2 * (y*z - w*x),
+		1 - 2*(x*x+y*y),
 	}
 }
 
@@ -245,7 +272,7 @@ func forwardOf(q [4]float64) [3]float64 {
 func quatFromForward(facing [3]float64, pos [3]float64) [4]float64 {
 	up := terrain.Normalize(terrain.Vec(pos))
 	f := terrain.Normalize(terrain.Vec(facing))
-	right := terrain.Normalize(terrain.Cross(f, up))
+	right := terrain.Normalize(terrain.Cross(up, f)) // as State.OrientationQuat: (f, up) mirrored the basis and turned every NPC to face away
 	return [4]float64(sim.QuatFromBasis(right, [3]float64(up), f))
 }
 

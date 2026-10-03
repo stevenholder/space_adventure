@@ -143,9 +143,11 @@ namespace SpaceAdventure.Game
                 // of the cone.
                 Vector3 targetPos = v.Root.GlobalPosition;
                 // A node is a metre of rock and the bench a slab at 0.9 m:
-                // aim at those, not 1.7 m over them (server cmd.go aimHeight).
+                // aim at those, not 1.7 m over them, and an NPC at its own
+                // eye (server cmd.go aimHeight).
                 float aim = v.Type == EntityType.Node ? 0.6f
                     : v.Type == EntityType.Npc && v.Label == "npc.workbench" ? 0.9f
+                    : v.Type == EntityType.Npc ? _character.Defs.Npc(v.Label).EyeHeight
                     : EyeHeight;
                 Vector3 targetEye = targetPos + targetPos.Normalized() * aim;
                 Vector3 to = targetEye - eye;

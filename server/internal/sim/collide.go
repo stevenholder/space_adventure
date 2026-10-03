@@ -106,13 +106,14 @@ func ShipCollider(pos Vec, q Quat) protocol.Collider {
 
 // BodyCollider is a standing body's collision sphere as a collider: the
 // same sphere ResolveColliders gives the stepping body, so two bodies rest
-// 2·BodyRadius apart.
-func BodyCollider(pos Vec) protocol.Collider {
+// 2·BodyRadius apart. radius is BodyRadius for a player, the archetype's
+// for an NPC.
+func BodyCollider(pos Vec, radius float64) protocol.Collider {
 	c := pos.Add(terrain.Normalize(pos).Scale(BodySphereH))
 	return protocol.Collider{
 		Kind:   protocol.ColliderSphere,
 		Center: [3]float32{float32(c[0]), float32(c[1]), float32(c[2])},
-		Half:   [3]float32{BodyRadius, 0, 0},
+		Half:   [3]float32{float32(radius), 0, 0},
 		Quat:   [4]float32{0, 0, 0, 1},
 	}
 }

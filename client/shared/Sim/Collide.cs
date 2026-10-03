@@ -103,12 +103,12 @@ namespace SpaceAdventure.Sim
             Rot = q,
         };
 
-        /// <summary>A standing body's collision sphere as a collider (collide.go BodyCollider).</summary>
-        public static Collider BodyCollider(Vec3 pos) => new Collider
+        /// <summary>A standing body's collision sphere as a collider (collide.go BodyCollider); an NPC passes its archetype's radius.</summary>
+        public static Collider BodyCollider(Vec3 pos, double radius = BodyRadius) => new Collider
         {
             Kind = ColliderKind.Sphere,
             Center = pos + pos.Normalized() * BodySphereH,
-            Half = new Vec3(BodyRadius, 0, 0),
+            Half = new Vec3(radius, 0, 0),
             Rot = new Quat(0, 0, 0, 1),
         };
 

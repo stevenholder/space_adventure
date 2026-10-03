@@ -454,7 +454,7 @@ func (s *Server) tick() {
 	s.dynOwners = s.dynOwners[:0]
 	for _, c := range s.clients {
 		if c.seat == 0 && c.entity.Health > 0 {
-			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(c.entity.State.Pos)))
+			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(c.entity.State.Pos), sim.BodyRadius))
 			s.dynOwners = append(s.dynOwners, c.entity.ID)
 		}
 	}
@@ -467,7 +467,7 @@ func (s *Server) tick() {
 			s.dynColliders = append(s.dynColliders, sim.ShipCollider(sim.Vec(e.Pos), sim.Quat(e.Quat)))
 			s.dynOwners = append(s.dynOwners, e.ID)
 		case e.Kind == sim.EntityKind(protocol.EntityTypeNPC) && e.Health > 0:
-			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(e.Pos)))
+			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(e.Pos), s.reg.NPCs[e.Def].Radius()))
 			s.dynOwners = append(s.dynOwners, e.ID)
 		}
 	}
@@ -1355,9 +1355,15 @@ func (s *Server) npcOf(id uint32) *npcAI {
 	return nil
 }
 
-// entityDef is ResolveShot's defOf callback.
+// entityDef is ResolveShot's defOf callback. An NPC's hitbox is its
+// archetype's size, not the one "npc" row.
 func (s *Server) entityDef(e *sim.Ent) defs.EntityDef {
-	return s.reg.Entities[entityDefKind(e.Kind)]
+	d := s.reg.Entities[entityDefKind(e.Kind)]
+	if e.Kind == sim.EntityKind(protocol.EntityTypeNPC) {
+		arch := s.reg.NPCs[e.Def]
+		d.Hitbox.Radius, d.Hitbox.Height = arch.Radius(), arch.Height()
+	}
+	return d
 }
 
 func appendU32(b []byte, v uint32) []byte { return binary.LittleEndian.AppendUint32(b, v) }
