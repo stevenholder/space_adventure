@@ -1,0 +1,20 @@
+{
+  "$comment": "Universal Base Characters Superhero male (Quaternius, CC0) as a body: tools/bpy/human.py variant char.ubc imports it from vendor/ubc (gitignored; quaternius.itch.io/universal-base-characters, Standard zip), keeps its textured head, adds our undersuit, rig re-rested to MakeHuman's A-pose so every clip and armor.py piece works. Spike: worn by npc.veteran at spawn for review. Simplified from ~15k to the char budget here.",
+  "id": "char.ubc",
+  "src": "build/char.ubc.raw.glb",
+  "out": "chars/ubc.glb",
+  "fit": false,
+  "budget": 9000,
+  "pbr": true,
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ]
+  },
+  "license": "CC0",
+  "author": "Quaternius (Universal Base Characters), dressed by Space Adventure",
+  "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+  "rig": "animated"
+}

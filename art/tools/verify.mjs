@@ -91,6 +91,11 @@ const NODE_CONTRACTS = {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
+  // Quaternius UBC body (human.py variant char.ubc): same rig names after its import.
+  "char.ubc": {
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    eyeHeadSiblings: true,
+  },
   "npc.dispatcher": {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,

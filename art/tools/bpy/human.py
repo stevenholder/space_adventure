@@ -92,6 +92,9 @@ VARIANTS = {
         "hair": "topknot",
         "head_parts": "orc",
     },
+    "char.ubc": {                              # spike: Quaternius Universal Base Characters body (CC0)
+        "ubc": {"body": "Superhero_Male_FullBody", "hair": "Hair_Buzzed"},
+    },
     "npc.gunner": {                            # ranged raider: a combat robot (player's build, so armor fits)
         "materials": {"skin": (0.48, 0.50, 0.54), "suit": (0.30, 0.32, 0.35), "glove": (0.40, 0.42, 0.45),
                       "boot": (0.22, 0.23, 0.25), "eye": (1.00, 0.45, 0.10)},
@@ -129,7 +132,127 @@ SURFACE = {"suit": "suit", "glove": "fabric", "boot": "fabric"}
 
 
 # ---- the human ----------------------------------------------------------------
+UBC = os.path.join(ART, "vendor", "ubc")
+
+
+def ubc_human():
+    """A Universal Base Characters body (art/vendor/ubc, CC0 from
+    quaternius.com) in place of MakeHuman. Its 65-bone skeleton is the
+    game_engine rig's 53 plus finger/toe leaf bones, so after two renames
+    and folding the leaves into their parents the rest of this file runs
+    unchanged. It keeps its own textured skin, eyes and hair (dress())."""
+    spec = ACTIVE["ubc"]
+    bpy.ops.import_scene.gltf(filepath=os.path.join(UBC, "Base Characters", "Godot - UE", spec["body"] + ".gltf"))
+    rig = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
+    for o in list(bpy.context.scene.objects):            # the pack ships a stray Icosphere
+        if o.type == "MESH" and o.parent != rig:
+            bpy.data.objects.remove(o, do_unlink=True)
+    if spec.get("hair"):
+        before = set(bpy.context.scene.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(UBC, "Hairstyles", "Rigged to Head Bone", "glTF (Godot -Unreal)",
+                                                        spec["hair"] + ".gltf"))
+        for o in set(bpy.context.scene.objects) - before:
+            if o.type == "MESH":
+                o.parent = rig
+                o.matrix_parent_inverse = Matrix.Identity(4)
+            else:
+                bpy.data.objects.remove(o, do_unlink=True)
+    # Some materials point at "<name>_png.png"; the pack ships "<name>.png".
+    for img in bpy.data.images:
+        if img.filepath and not os.path.exists(bpy.path.abspath(img.filepath)):
+            img.filepath = img.filepath.replace("_png.png", ".png")
+            img.reload()
+        if img.size[0] > 1024:                           # 2-4K maps: 16 MB glb; 1K is plenty at game scale
+            img.scale(1024, 1024 * img.size[1] // img.size[0])
+    meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    for m in bpy.data.materials:
+        m["keep_uv"] = True                              # textures.uv_box leaves these faces' UVs alone
+
+    eyes_obj = next(o for o in meshes if o.name.startswith("Eyes"))
+    pts = [eyes_obj.matrix_world @ v.co for v in eyes_obj.data.vertices]
+    eye_z = sum(p.z for p in pts) / len(pts)
+
+    # One mesh; vertex groups merge by name.
+    for o in meshes:
+        for mod in list(o.modifiers):
+            o.modifiers.remove(mod)
+        o.data.transform(o.matrix_world)
+        o.matrix_world = Matrix.Identity(4)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    h = next(o for o in meshes if o.name.startswith("SuperHero") or len(o.data.vertices) > 5000)
+    bpy.context.view_layer.objects.active = h
+    bpy.ops.object.join()
+    # The pack's all-white vertex colours make Godot set "vertex colour as
+    # albedo", and ViewModel.FpOverride then draws the first-person arms flat white.
+    while h.data.color_attributes:                       # removing one renames/invalidates the rest
+        h.data.color_attributes.remove(h.data.color_attributes[0])
+    # Four UV sets ship; the textures read the render one, uv_box writes the active one.
+    keep = next(u.name for u in h.data.uv_layers if u.active_render)
+    for name in [u.name for u in h.data.uv_layers if u.name != keep]:
+        h.data.uv_layers.remove(h.data.uv_layers[name])
+    h.data.uv_layers.active = h.data.uv_layers[keep]
+
+    # Leaf bones carry finger-tip weights: fold them into the parent, then drop them.
+    parents = {b.name: b.parent.name for b in rig.data.bones if "leaf" in b.name}
+    groups = {g.name: g for g in h.vertex_groups}
+    for leaf, parent in parents.items():
+        if leaf in groups:
+            gi = groups[leaf].index
+            for v in h.data.vertices:
+                w = sum(g.weight for g in v.groups if g.group == gi)
+                if w > 0:
+                    groups[parent].add([v.index], w, "ADD")
+            h.vertex_groups.remove(groups[leaf])
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    for leaf in parents:
+        rig.data.edit_bones.remove(rig.data.edit_bones[leaf])
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for old, new in (("Head", "head"), ("root", "Root")):
+        rig.data.bones[old].name = new
+        if old in h.vertex_groups:
+            h.vertex_groups[old].name = new
+
+    # Front -Y -> +Y and eyes to EYE, mesh and bones together (as make_human).
+    s = ACTIVE.get("eye", EYE) / eye_z
+    M = Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Rotation(math.pi, 4, "Z")
+    h.data.transform(M)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    rig.data.transform(M)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    rig.matrix_world = Matrix.Identity(4)
+    h.parent = rig
+    h.matrix_parent_inverse = Matrix.Identity(4)
+    pts = [M @ p for p in pts]
+    eyes = tuple(sum(q, Vector()) / len(q) for q in ([p for p in pts if p.x < 0], [p for p in pts if p.x > 0]))
+
+    # UBC rests in a T-pose; armor.py and every clip were tuned on MakeHuman's
+    # A-pose rest. Pose the arms to MakeHuman's rest directions and make that
+    # the rest (mesh through the armature, then the pose applied to the bones).
+    for p in rig.pose.bones:
+        p.rotation_mode = "QUATERNION"
+    for side, sx in (("r", 1), ("l", -1)):
+        aim(rig, "upperarm_" + side, (0.657 * sx, 0.001, -0.754))
+        aim(rig, "lowerarm_" + side, (0.502 * sx, 0.718, -0.482))
+        aim(rig, "hand_" + side, (0.327 * sx, 0.827, -0.457))
+    mod = h.modifiers.new("rest", "ARMATURE")
+    mod.object = rig
+    bpy.context.view_layer.objects.active = h
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="POSE")
+    bpy.ops.pose.armature_apply(selected=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    h.name = "human"
+    return h, rig, eyes
+
+
 def make_human(decimate=True):
+    if ACTIVE.get("ubc"):
+        return ubc_human()      # ponytail: no decimation, ~14k tris; decimate if the budget holds after the look is judged
     macro = dict(MACRO)
     macro.update(ACTIVE.get("macro", {}))
     h = HumanService.create_human(scale=0.1, macro_detail_dict=macro, feet_on_ground=True)
@@ -246,9 +369,10 @@ def dress(h, eye_l, eye_r):
     """Material per face from its dominant bone and where it is. The
     undersuit runs from the jaw line down; armor adds the detail, so there
     are no painted seams (bands on decimated triangles read as tears)."""
+    base = len(h.data.materials)            # an imported body (UBC) keeps its own slots first
     for n in MATERIALS:
         h.data.materials.append(material(n))
-    idx = {n: i for i, n in enumerate(MATERIALS)}
+    idx = {n: base + i for i, n in enumerate(MATERIALS)}
     dom = dominant_bones(h)
     head_pts = [v.co for v, b in zip(h.data.vertices, dom)          # not the eyeballs: their dense
                 if b == "head" and min((v.co - eye_l).length, (v.co - eye_r).length) > 0.016]   # spheres pull the hairline
@@ -258,6 +382,8 @@ def dress(h, eye_l, eye_r):
         bones = [dom[v] for v in p.vertices]
         b = max(set(bones), key=bones.count)
         r = c - hc
+        if ACTIVE.get("ubc") and b == "head":
+            continue                                     # the pack's textured skin, eyes, brows and hair
         if (c - eye_l).length < 0.016 or (c - eye_r).length < 0.016:
             # Every face this close is eyeball (r ~0.0145). One dark colour
             # over the whole ball read as an empty socket in game; the front
@@ -441,8 +567,24 @@ def hand_frame(rig, side):
     update()
     h = pb(rig, "hand_" + side)
     k = (pb(rig, "middle_01_" + side).matrix.translation - h.matrix.translation).normalized()
-    palm = (h.matrix.to_3x3() @ Vector((0, 0, 1))).normalized()
-    return k, palm
+    return k, palm_normal(rig, side)
+
+
+def palm_normal(rig, side):
+    """World palm normal. MakeHuman: the hand bone's +Z (every grip was
+    tuned on it; the knuckle row is ~40 degrees off it). UBC's hand axes
+    differ, so there it comes from the knuckle row: a right hand, fingers
+    forward with the index toward -X (thumb side, toward the body), palm
+    down, has knuckles x (index - pinky) = +Z, so the palm is its negative;
+    a left hand is the mirror."""
+    update()
+    if not ACTIVE.get("ubc"):
+        return (pb(rig, "hand_" + side).matrix.to_3x3() @ Vector((0, 0, 1))).normalized()
+    h = pb(rig, "hand_" + side).matrix.translation
+    k = pb(rig, "middle_01_" + side).matrix.translation - h
+    v = pb(rig, "index_01_" + side).matrix.translation - pb(rig, "pinky_01_" + side).matrix.translation
+    n = k.cross(v).normalized()
+    return -n if side == "r" else n
 
 
 def frame(fwd, up):
@@ -471,7 +613,7 @@ def curl_each(rig, side, degrees, thumb):
     """curl() with a per-finger amount (index first): a trigger finger lies
     straighter than the three wrapped round the grip."""
     update()
-    palm = (pb(rig, "hand_" + side).matrix.to_3x3() @ Vector((0, 0, 1))).normalized()
+    palm = palm_normal(rig, side)
     for f, deg_ in zip(FINGERS, degrees):
         for seg in ("01", "02", "03"):
             flex(rig, f"{f}_{seg}_{side}", palm, deg_)
@@ -506,7 +648,7 @@ def lay_thumb(rig, side, direction):
     d = Vector(direction).normalized()
     aim(rig, "thumb_02_" + side, d)
     aim(rig, "thumb_03_" + side, d)
-    palm = (pb(rig, "hand_" + side).matrix.to_3x3() @ Vector((0, 0, 1))).normalized()
+    palm = palm_normal(rig, side)
     flex(rig, "thumb_03_" + side, palm, 15)
 
 

@@ -11,6 +11,7 @@ free to use without attribution:
 |---|---|---|
 | The human base mesh under every body (`tools/bpy/human.py`) | MakeHuman, via the MPFB2 Blender add-on (makehumancommunity.org, extensions.blender.org/add-ons/mpfb) | CC0 |
 | The display font, Staatliches (`client/godot/fonts/`) | Google Fonts | SIL Open Font License 1.1 (`OFL.txt` ships beside it) |
+| Spike: the `char.ubc` body (Superhero male, its head textures and Hair_Buzzed), worn by `npc.veteran` | Quaternius, Universal Base Characters, Standard (quaternius.com/packs/universalbasecharacters.html; unpacked into gitignored `vendor/ubc`) | CC0 |
 
 ## Generators
 

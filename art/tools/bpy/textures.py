@@ -160,9 +160,9 @@ def uv_box(obj):
     uv = bm.loops.layers.uv.verify()
     slots = obj.material_slots
     for f in bm.faces:
-        if f.material_index < len(slots) and slots[f.material_index].material \
-                and slots[f.material_index].material.name == "armor_decal":
-            continue                                    # decals keep their atlas UVs
+        mat = slots[f.material_index].material if f.material_index < len(slots) else None
+        if mat and (mat.name == "armor_decal" or mat.get("keep_uv")):
+            continue                                    # decals and imported (UBC) textures keep their UVs
         n = mw.to_3x3() @ f.normal
         ax = max(range(3), key=lambda i: abs(n[i]))
         a, b = [i for i in range(3) if i != ax]
