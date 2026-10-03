@@ -99,6 +99,8 @@ namespace SpaceAdventure.Net
         [JsonProperty("tool")] public string Tool { get; set; } = "";
         [JsonProperty("channel")] public double Channel { get; set; }
         [JsonProperty("yields")] public int Yields { get; set; }
+        /// <summary>XP in `skill` per completed channel.</summary>
+        [JsonProperty("xp")] public long XP { get; set; }
     }
 
     /// <summary>An item and a count, as recipes name them.</summary>
@@ -137,6 +139,10 @@ namespace SpaceAdventure.Net
         [JsonProperty("magazine")] public int Magazine { get; set; }
         [JsonProperty("max_range")] public double MaxRange { get; set; }
         [JsonProperty("ammo_item")] public string AmmoItem { get; set; } = "";
+        /// <summary>Full damage to falloff_start m, linear down to ×falloff_min at falloff_end (sim/combat.go). Read for the sheet's tooltips.</summary>
+        [JsonProperty("falloff_start")] public double FalloffStart { get; set; }
+        [JsonProperty("falloff_end")] public double FalloffEnd { get; set; }
+        [JsonProperty("falloff_min")] public double FalloffMin { get; set; }
         /// <summary>Seconds a reload takes (server-authoritative; the client only times the arms to it).</summary>
         [JsonProperty("reload_time")] public double ReloadTime { get; set; }
         /// <summary>Hold family: "" long gun, "pistol". Picks the body's clip set.</summary>

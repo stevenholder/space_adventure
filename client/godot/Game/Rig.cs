@@ -21,6 +21,7 @@
 //   -uiHotbarDemo           medkit on 1 (cooling), scanner on Q, from a faked bag (Phase 13)
 //   -uiShift                hold the hotbar's Shift row for the shot
 //   -uiDollDrag <px>        with -uiPanel sheet: drag across the doll to turn it
+//   -uiTip <title>          with -uiPanel sheet: hover that stat/skill to raise its tooltip
 //   -uiHotbarDragDemo       with -uiPanel backpack: drag the first bag cell onto slot 4, report
 //   -uiSellDemo             with the shop open: sell the first -uiBuy item, report the buyback count
 //   -uiBuyback              show the shop's BUYBACK tab
@@ -693,6 +694,22 @@ namespace SpaceAdventure.Game
                     Godot.Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = to, GlobalPosition = to });
                     await Wait(0.2);
                     GD.Print($"ui: doll dragged {dollDrag} px");
+                }
+
+                // -uiTip <title>: hover the sheet's stat or skill whose tooltip
+                // title starts with that ("damage", "marksmanship") long enough
+                // for Godot to raise the tooltip.
+                string tipAt = Arg("-uiTip");
+                if (tipAt != null && _sheetView.Open)
+                {
+                    Vector2? at = _sheetView.TipCentre(tipAt);
+                    if (at is Vector2 p)
+                    {
+                        Godot.Input.WarpMouse(p);
+                        Godot.Input.ParseInputEvent(new InputEventMouseMotion { Position = p, GlobalPosition = p });
+                        await Wait(1.2);
+                    }
+                    GD.Print($"ui: tip {tipAt} at {at}");
                 }
             }
 

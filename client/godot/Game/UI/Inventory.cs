@@ -213,6 +213,36 @@ namespace SpaceAdventure.Game.UI
     }
 
     /// <summary>
+    /// A row that explains itself on hover: a title and lines of text in the
+    /// item tooltip's panel. The character sheet's stats and skills use it.
+    /// </summary>
+    public partial class Tip : HBoxContainer
+    {
+        public string Title = "";
+        public readonly List<(string Text, Color Color)> Lines = new List<(string, Color)>();
+
+        public Tip() { MouseFilter = MouseFilterEnum.Pass; TooltipText = " "; } // non-empty: Godot asks _MakeCustomTooltip
+
+        public Tip Add(string text, Color color) { Lines.Add((text, color)); return this; }
+
+        public override Control _MakeCustomTooltip(string forText)
+        {
+            var panel = Styles.Panel(Styles.SkewNone);
+            Styles.SetPadding(panel, 10, 8, 10, 8);
+            VBoxContainer body = Styles.Body(panel);
+            body.AddChild(Styles.Display_(Title, 15, Styles.Amber));
+            foreach (var (text, color) in Lines)
+            {
+                var l = Styles.Display_(text, 12, color);
+                l.AutowrapMode = TextServer.AutowrapMode.Word;
+                l.CustomMinimumSize = new Vector2(300, 0);
+                body.AddChild(l);
+            }
+            return panel;
+        }
+    }
+
+    /// <summary>
     /// The paper doll: the character's own model in a viewport of its own,
     /// lit for the panel; drag it left/right to turn it. OwnWorld3D keeps
     /// the planet's sun and sky out of it.
@@ -288,6 +318,13 @@ namespace SpaceAdventure.Game.UI
         private readonly SkillSheet _skills;
         private readonly Icons _icons;
         private Doll _doll; // rebuilt with the body, freed with it: no orphaned viewport at quit
+        private readonly List<Tip> _tips = new List<Tip>();
+        /// <summary>Screen centre of the stat or skill whose tooltip title starts with `title`, for the rig's -uiTip.</summary>
+        public Vector2? TipCentre(string title)
+        {
+            Tip t = _tips.Find(x => GodotObject.IsInstanceValid(x) && x.Title.StartsWith(title, StringComparison.OrdinalIgnoreCase));
+            return t == null ? null : t.GlobalPosition + t.Size / 2f;
+        }
         /// <summary>Screen centre of the doll, for the rig's -uiDollDrag.</summary>
         public Vector2 DollCentre => _doll != null && GodotObject.IsInstanceValid(_doll.View) ? _doll.View.GlobalPosition + _doll.View.Size / 2f : Vector2.Zero;
         private readonly Func<ushort> _nextSeq;
@@ -335,6 +372,38 @@ namespace SpaceAdventure.Game.UI
         private bool Known(string slot) => _character.Defs.EquipSlots == null || _character.Defs.EquipSlots.Count == 0
             ? slot == "primary" : _character.Defs.EquipSlots.Contains(slot);
 
+        /// <summary>What a skill's efficacy does, in play (server/skillsengine.go and its callers). "!" = caveat.</summary>
+        private static string SkillEffect(string id, string kind) => kind switch
+        {
+            "damage_mult" => "Multiplies the damage of every shot you land.",
+            "sprint_mult" => "Multiplies your sprint speed. Walking is unchanged.",
+            "drive_mult" => "Multiplies rover acceleration. Top speed and grip are unchanged.",
+            "flight_mult" => "Multiplies ship thrust, normal and boosted. Top speed is unchanged.",
+            "loot_extra_roll" => "The chance an enemy you kill drops its loot a second time.",
+            "buy_discount" => "Cuts every shop price.",
+            "discovery_range" => "!For now, points of interest are discovered within a fixed 84 m.",
+            "gather_speed" => id == "salvaging" ? "Shortens the time to salvage a wreck (never below 1 s)."
+                : "Shortens the time to drill iron and copper ore (never below 1 s).",
+            "craft_extra" => "The chance a craft makes one extra item. Not for single items such as tools.",
+            _ => "",
+        };
+
+        /// <summary>How each skill earns XP (server/data/skills.json `awards`, nodes.json, recipes.json).</summary>
+        private static string SkillTraining(string id) => id switch
+        {
+            "marksmanship" => "landing shots. 2 XP per point of damage, 40 per kill, 400 for the Warlord.",
+            "athletics" => "sprinting. 1 XP per 10 m.",
+            "driving" => "driving a rover. 1 XP per 10 m.",
+            "piloting" => "flying a ship. 1 XP per 10 m, and 50 for a landing after 3 s or more in the air.",
+            "scavenging" => "picking items up off the ground. 10 XP each.",
+            "commerce" => "trading at shops. 1 XP per 5 credits bought, sold or bought back.",
+            "recon" => "reaching a point of interest for the first time (250 XP) and finishing scout missions (100 XP).",
+            "mining" => "drilling ore.",
+            "salvaging" => "salvaging wrecks.",
+            "engineering" => "crafting at a bench. The recipe's XP for every item made.",
+            _ => "using it.",
+        };
+
         private static string NiceSlot(string n) => n switch
         {
             "accessory1" => "accessory", "accessory2" => "accessory", "primary" => "weapon", "secondary" => "sidearm", _ => n,
@@ -342,6 +411,7 @@ namespace SpaceAdventure.Game.UI
 
         protected override void Fill(VBoxContainer body)
         {
+            _tips.Clear();
             _doll = new Doll(_assets, 300, 440);
 
             var top = Styles.Row(14);
@@ -360,42 +430,118 @@ namespace SpaceAdventure.Game.UI
             body.AddChild(Styles.Gap(6));
             body.AddChild(Styles.Header("Stats"));
 
-            var grid = new GridContainer { Columns = 4 };
+            // Every stat and skill explains itself on hover (Tip). The numbers
+            // and rules are the server's (sim/combat.go, sim/player_death.go,
+            // server/skillsengine.go); a line starting "!" is a caveat, drawn amber.
+            var grid = new GridContainer { Columns = 2 };
             grid.AddThemeConstantOverride("h_separation", 18);
             grid.AddThemeConstantOverride("v_separation", 2);
-            void Stat(string k, string v, Color c)
+            static Tip Lines(Tip t, string[] lines)
             {
-                grid.AddChild(Styles.Display_(k, 12, Styles.Dust));
+                foreach (string l in lines)
+                    if (l.StartsWith("!")) t.Add(l.Substring(1), Styles.Amber); else t.Add(l, Styles.Cream);
+                return t;
+            }
+            void Stat(string k, string v, Color c, params string[] lines)
+            {
+                var row = Lines(new Tip { Title = k.ToUpperInvariant() }, lines);
+                var key = Styles.Display_(k, 12, Styles.Dust);
+                key.CustomMinimumSize = new Vector2(84, 0);
+                row.AddChild(key);
                 var val = Styles.Display_(v, 13, c);
                 val.HorizontalAlignment = HorizontalAlignment.Right;
                 val.CustomMinimumSize = new Vector2(80, 0);
-                grid.AddChild(val);
+                row.AddChild(val);
+                grid.AddChild(row); _tips.Add(row);
             }
             Defs defs = _character.Defs;
             double Bonus(string id) => _skills.EfficacyBonus(defs, id);
+            string Pct(double b) => SkillsView.Pct(b);
+            string Lv(string id) => $"{defs.Skills?.Find(s => s.Id == id)?.Name ?? id} {_skills.Level(id)}";
+            double Synergy(string source, string target) =>
+                defs.Synergies?.Find(s => s.Source == source && s.Target == target) is SynergyDef sy ? _skills.SynergyBonus(sy) : 0;
+
             int armor = 0;
-            foreach (var kv in _character.Equipped) armor += defs.Item(kv.Value)?.Armor?.Value ?? 0;
-            ItemDef weapon = defs.Item(_character.Primary);
+            var armorLines = new List<string>();
+            foreach (string slot in LeftSlots)
+                if (defs.Item(_character.Worn(slot))?.Armor is ArmorDef a)
+                {
+                    armor += a.Value;
+                    armorLines.Add($"{defs.ItemName(_character.Worn(slot))}: {a.Value}");
+                }
+            if (armorLines.Count == 0) armorLines.Add("Nothing worn. Drag armor onto HEAD, CHEST, LEGS, HANDS, FEET or BACK.");
+            armorLines.Insert(0, "The armor values of everything you wear, added up:");
+            armorLines.Add("!Not used in combat yet: armor does not reduce incoming damage.");
+
+            WeaponDef w = defs.Item(_character.Primary)?.Weapon;
             // Phase 13: the worn mod's deltas add onto the table, as the server's sim.ApplyMod does.
             ModDef mod = defs.Item(_character.Worn("mod"))?.Mod;
-            int baseDmg = (weapon?.Weapon?.Damage ?? 0) + (mod?.Damage ?? 0);
-            int mag = (weapon?.Weapon?.Magazine ?? 0) + (mod?.Magazine ?? 0);
-            double range = (weapon?.Weapon?.MaxRange ?? 0) + (mod?.MaxRange ?? 0);
+            string modName = mod != null ? defs.ItemName(_character.Worn("mod")) : "";
+            int baseDmg = (w?.Damage ?? 0) + (mod?.Damage ?? 0);
+            int mag = (w?.Magazine ?? 0) + (mod?.Magazine ?? 0);
+            double range = (w?.MaxRange ?? 0) + (mod?.MaxRange ?? 0);
+            double fStart = (w?.FalloffStart ?? 0) + (mod?.FalloffStart ?? 0), fEnd = (w?.FalloffEnd ?? 0) + (mod?.FalloffEnd ?? 0);
             double dmg = baseDmg * (1 + Bonus("marksmanship"));
-            Stat("health", $"{_character.Health} / 100", Styles.Danger);
-            Stat("armor", armor.ToString(), Styles.Shield);
-            Stat("damage", weapon?.Weapon != null ? $"{dmg:0.#}" : "—", mod?.Damage > 0 ? Styles.Good : Styles.Cream);
-            Stat("fire rate", weapon?.Weapon != null ? $"{60.0 / Math.Max(0.01, weapon.Weapon.FireInterval):0} rpm" : "—", Styles.Cream);
-            Stat("magazine", weapon?.Weapon != null ? mag.ToString() : "—", mod?.Magazine > 0 ? Styles.Good : Styles.Cream);
-            Stat("range", weapon?.Weapon != null ? $"{range:0} m" : "—", mod?.MaxRange > 0 ? Styles.Good : Styles.Cream);
-            Stat("sprint", $"{Sim.Rules.SprintSpeed * (1 + Bonus("athletics")):0.0} m/s", Styles.Cream);
-            Stat("rover", $"+{Bonus("driving") * 100:0.#}%", Styles.Cream);
-            Stat("ship", $"+{Bonus("piloting") * 100:0.#}%", Styles.Cream);
-            Stat("loot rolls", $"+{Bonus("scavenging") * 100:0.#}%", Styles.Good);
-            Stat("buy prices", $"−{Bonus("commerce") * 100:0.#}%", Styles.Amber);
-            Stat("discovery", $"+{Bonus("recon") * 100:0.#}%", Styles.Cream);
-            Stat("credits", _character.Credits < 0 ? "—" : _character.Credits.ToString(), Styles.Amber);
-            Stat("bag", $"{_character.UsedSlots} / {Character.InventorySlots}", Styles.Dust);
+            string falloff = w != null && fEnd > 0
+                ? $"Full damage out to {fStart:0} m, then falls off evenly to {(w.FalloffMin * 100):0}% at {fEnd:0} m."
+                : "Full damage at any distance in range.";
+            const string noWeapon = "No weapon equipped. Drag one onto the WEAPON slot.";
+
+            Stat("health", $"{_character.Health} / 100", Styles.Danger,
+                "How much damage you can take. 100 at most.",
+                "Regenerates 8 per second after 8 s without taking damage.",
+                "At 0 you are down for 5 s, then respawn at full health, protected for 3 s.",
+                "!Dying drops the materials in your bag where you fell. Gear, credits, tools and ammo stay with you.");
+            Stat("armor", armor.ToString(), Styles.Shield, armorLines.ToArray());
+            Stat("damage", w != null ? $"{dmg:0.#}" : "—", mod?.Damage > 0 ? Styles.Good : Styles.Cream, w == null ? new[] { noWeapon } : new[]
+            {
+                "Damage per hit, at close range.",
+                $"Weapon {w.Damage}" + (mod?.Damage != 0 && mod != null ? $" + {modName} {mod.Damage}" : "")
+                    + $", × {Lv("marksmanship")} (+{Pct(Bonus("marksmanship"))}) = {dmg:0.#}.",
+                falloff,
+                "One hitbox per body: no headshots.",
+            });
+            Stat("fire rate", w != null ? $"{60.0 / Math.Max(0.01, w.FireInterval):0} rpm" : "—", Styles.Cream, w == null ? new[] { noWeapon } : new[]
+            {
+                $"Rounds per minute: one shot every {w.FireInterval:0.###} s.",
+                "Shots faster than this are ignored. Mods do not change it.",
+            });
+            Stat("magazine", w != null ? mag.ToString() : "—", mod?.Magazine > 0 ? Styles.Good : Styles.Cream, w == null ? new[] { noWeapon } : new[]
+            {
+                $"Rounds before you must reload: weapon {w.Magazine}" + (mod?.Magazine > 0 ? $" + {modName} {mod.Magazine}" : "") + ".",
+                $"Reloading (R) takes {(string.IsNullOrEmpty(w.AmmoItem) ? "ammo" : defs.ItemName(w.AmmoItem))} from your bag. With none, you cannot reload.",
+                "Switching weapons refills the magazine.",
+            });
+            Stat("range", w != null ? $"{range:0} m" : "—", mod?.MaxRange > 0 ? Styles.Good : Styles.Cream, w == null ? new[] { noWeapon } : new[]
+            {
+                $"The farthest a shot can hit: weapon {w.MaxRange:0} m" + (mod?.MaxRange > 0 ? $" + {modName} {mod.MaxRange:0} m" : "") + ". Past it, shots never land.",
+                falloff,
+            });
+            Stat("sprint", $"{Sim.Rules.SprintSpeed * (1 + Bonus("athletics")):0.0} m/s", Styles.Cream,
+                $"Running speed: {Sim.Rules.SprintSpeed:0.0} m/s × {Lv("athletics")} (+{Pct(Bonus("athletics"))}).",
+                "Walking speed does not change.");
+            Stat("rover", $"+{Pct(Bonus("driving"))}", Styles.Cream,
+                $"Rover acceleration bonus from {Lv("driving")}, forwards and in reverse.",
+                "Top speed and grip do not change.");
+            Stat("ship", $"+{Pct(Bonus("piloting"))}", Styles.Cream,
+                $"Ship thrust bonus from {Lv("piloting")}, normal and boosted.",
+                "Top speed does not change.");
+            Stat("loot rolls", $"+{Pct(Bonus("scavenging"))}", Styles.Good,
+                $"The chance that an enemy you kill drops its loot a second time, from {Lv("scavenging")}.",
+                $"Inside a discovered point of interest, {Lv("recon")} adds +{Pct(Synergy("recon", "scavenging"))}.",
+                "Only enemy kills. Ore and wrecks are not affected.");
+            Stat("buy prices", $"−{Pct(Bonus("commerce"))}", Styles.Amber,
+                $"Shop prices cut by {Lv("commerce")}.",
+                $"Shops buy from you at half an item's value, +{Pct(Synergy("scavenging", "commerce"))} from {Lv("scavenging")}.");
+            Stat("discovery", $"+{Pct(Bonus("recon"))}", Styles.Cream,
+                $"Discovery range bonus from {Lv("recon")}.",
+                "!Not active yet: you discover a point of interest within a fixed 84 m. Recon still earns XP for every first discovery.");
+            Stat("credits", _character.Credits < 0 ? "—" : _character.Credits.ToString(), Styles.Amber,
+                "Money. Spent at shops on items and buybacks.",
+                "Earned by selling, missions and bounties. You keep it when you die.");
+            Stat("bag", $"{_character.UsedSlots} / {Character.InventorySlots}", Styles.Dust,
+                $"Bag slots in use, of {Character.InventorySlots} (B opens the bag).",
+                "Each stack takes one slot, up to its stack size. Worn gear takes none.");
             body.AddChild(grid);
 
             body.AddChild(Styles.Gap(6));
@@ -405,10 +551,32 @@ namespace SpaceAdventure.Game.UI
             if (defs.Skills != null)
                 foreach (var s in defs.Skills)
                 {
-                    var cell = Styles.Row(4);
-                    cell.AddChild(Styles.Display_(s.Name, 12, s.Reserved ? Styles.Dust : Styles.Cream));
-                    cell.AddChild(Styles.Display_(_skills.Level(s.Id).ToString(), 13, Styles.Amber));
-                    sk.AddChild(cell);
+                    int level = _skills.Level(s.Id);
+                    long xp = _skills.XP.TryGetValue(s.Id, out long x) ? x : 0;
+                    var tip = new Tip { Title = $"{s.Name}  ·  level {level}" };
+                    tip.Add(level >= SkillCurve.MaxLevel ? "Max level."
+                        : $"{xp} XP. Level {level + 1} at {SkillCurve.PointsForLevel(level + 1)} ({SkillCurve.PointsForLevel(level + 1) - xp} to go).", Styles.Dust);
+                    if (s.Efficacy != null)
+                    {
+                        tip.Add($"Now: {SkillsView.EfficacyText(s.Efficacy.Kind, Bonus(s.Id))}. Each level adds {Pct(s.Efficacy.PerLevel)}, up to {Pct((SkillCurve.MaxLevel - 1) * s.Efficacy.PerLevel)} at level {SkillCurve.MaxLevel}.", Styles.Cream);
+                        Lines(tip, new[] { SkillEffect(s.Id, s.Efficacy.Kind) });
+                    }
+                    if (defs.Synergies != null)
+                        foreach (var sy in defs.Synergies)
+                        {
+                            if (sy.Source != s.Id && sy.Target != s.Id) continue;
+                            string other = defs.Skills.Find(o => o.Id == (sy.Source == s.Id ? sy.Target : sy.Source))?.Name ?? "";
+                            string text = SkillsView.SynergyText(sy, _skills.SynergyBonus(sy));
+                            tip.Add(sy.Source == s.Id ? $"Helps {other}: {text}." : $"Helped by {other}: {text}.", Styles.Good);
+                        }
+                    tip.Add($"Trained by: {SkillTraining(s.Id)}", Styles.Dust);
+                    foreach (NodeDef n in defs.Nodes)
+                        if (n.Skill == s.Id)
+                            tip.Add($"{n.Name}: {n.XP} XP each, needs level {n.Level} and a {defs.ItemName(n.Tool)}.", Styles.Dust);
+                    tip.AddThemeConstantOverride("separation", 4);
+                    tip.AddChild(Styles.Display_(s.Name, 12, s.Reserved ? Styles.Dust : Styles.Cream));
+                    tip.AddChild(Styles.Display_(level.ToString(), 13, Styles.Amber));
+                    sk.AddChild(tip); _tips.Add(tip);
                 }
             body.AddChild(sk);
             body.AddChild(Styles.Gap(4));

@@ -20,28 +20,28 @@ namespace SpaceAdventure.Game.UI
             _character = character;
         }
 
-        private static string Pct(double bonus) => $"{bonus * 100:0.#}%";
+        internal static string Pct(double bonus) => $"{bonus * 100:0.#}%";
 
         /// <summary>What a level buys, in the GDD roster's words.</summary>
-        private static string EfficacyText(string kind, double bonus) => kind switch
+        internal static string EfficacyText(string kind, double bonus) => kind switch
         {
             "damage_mult" => $"+{Pct(bonus)} weapon damage",
             "sprint_mult" => $"+{Pct(bonus)} sprint speed",
-            "drive_mult" => $"+{Pct(bonus)} rover accel & grip",
-            "flight_mult" => $"+{Pct(bonus)} ship handling",
+            "drive_mult" => $"+{Pct(bonus)} rover acceleration",
+            "flight_mult" => $"+{Pct(bonus)} ship thrust",
             "loot_extra_roll" => $"+{Pct(bonus)} extra loot roll",
             "buy_discount" => $"−{Pct(bonus)} buy prices",
-            "discovery_range" => $"+{Pct(bonus)} discovery range",
+            "discovery_range" => $"+{Pct(bonus)} discovery range (not active yet)",
             // Phase 12
             "gather_speed" => $"−{Pct(bonus)} channel time",
             "craft_extra" => $"+{Pct(bonus)} bonus craft output",
             _ => "",
         };
 
-        private static string SynergyText(SynergyDef sy, double bonus) => sy.What switch
+        internal static string SynergyText(SynergyDef sy, double bonus) => sy.What switch
         {
             "loot_extra_roll" => $"+{Pct(bonus)} loot rolls" + (sy.Where == "poi" ? " in discovered POIs" : ""),
-            "drive_grip" => $"+{Pct(bonus)} rover grip",
+            "drive_grip" => $"+{Pct(bonus)} rover grip (not active yet)",
             "sell_bonus" => $"+{Pct(bonus)} sell prices",
             "gather_speed" => $"−{Pct(bonus)} drill time",
             _ => $"+{Pct(bonus)} {sy.What}",
