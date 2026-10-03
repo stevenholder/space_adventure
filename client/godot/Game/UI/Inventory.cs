@@ -249,12 +249,20 @@ namespace SpaceAdventure.Game.UI
             vp.AddChild(_turn);
         }
 
-        /// <summary>Attach once the registry has the model; safe to call every open.</summary>
-        public void Ensure()
+        /// <summary>
+        /// Attach once the registry has the model, standing in idle and
+        /// wearing `worn` (slot -> item id) by the world's own dressing rule.
+        /// Safe to call every open; the panel rebuilds the doll on an equip.
+        /// </summary>
+        public void Ensure(Dictionary<string, string> worn, Func<string, string> asset)
         {
             if (_attached) return;
             _attached = true;
-            _assets.Attach("char.player", _turn, null);
+            _assets.Attach("char.player", _turn, model =>
+            {
+                CharacterAnim.For(model)?.Drive(0f, false);
+                EntityViews.Dress(_assets, asset, model, worn, new Dictionary<string, string>(), new Dictionary<string, Node3D>());
+            });
         }
 
         public void Tick(double dt) => _turn.RotateY((float)(dt * 0.6));
@@ -322,7 +330,9 @@ namespace SpaceAdventure.Game.UI
         protected override void Fill(VBoxContainer body)
         {
             _doll = new Doll(_assets, 220, 270);
-            _doll.Ensure();
+            var worn = new Dictionary<string, string>();
+            foreach (string slot in LeftSlots) worn[slot] = _character.Worn(slot); // the slots drawn on the body
+            _doll.Ensure(worn, _character.Defs.ItemAsset);
 
             var top = Styles.Row(14);
             top.AddChild(SlotColumn(LeftSlots));
