@@ -60,6 +60,7 @@ const BUDGETS = [
   [/^prop\./, 1000],
   [/^armor\./, 5000],
   [/^pack\./, 800],
+  [/^mob\./, 20000],    // the mob library (mobs/mobs.json): pack creatures, the Bestiary Imp is 15k
 ];
 
 // Node-name contracts: the client mounts things by these names, so a rename
@@ -78,6 +79,10 @@ const CLIP_CONTRACTS = {
     "idle_armed", "walk_armed", "sprint_armed",
     "sit", "sit_drive", "sit_armed",
     "fp_idle", "fp_walk", "fp_sprint", "fp_ads", "fp_lower", "fp_unarmed", "fp_fire", "fp_reload"],
+  // A pack creature on its own skeleton (mobs/mobs.json). Only idle is
+  // guaranteed: a few ship nothing else, and the client falls back
+  // sprint -> walk -> idle and fells a body with no die clip itself.
+  creature: ["idle"],
 };
 
 const NODE_CONTRACTS = {
@@ -217,6 +222,7 @@ for (const asset of selected) {
   // track whose node is missing from the scene is one that will silently do
   // nothing at runtime.
   const rig = asset.rig ?? null;
+  if (rig && !CLIP_CONTRACTS[rig]) problems.push(`unknown rig "${rig}" (no clip contract)`);
   if (rig && CLIP_CONTRACTS[rig]) {
     const clips = new Map((gltf.animations ?? []).map((c) => [c.name, c]));
     for (const want of CLIP_CONTRACTS[rig]) {

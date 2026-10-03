@@ -2918,6 +2918,1656 @@
         ]
       },
       "pbr": true
+    },
+    {
+      "id": "mob.blob.alien",
+      "file": "mobs/blob_alien.glb",
+      "tris": 2616,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Alien Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.144": [
+          "Alien_Main",
+          "Alien_Secondary"
+        ],
+        "Cube.000": [
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.birb",
+      "file": "mobs/blob_birb.glb",
+      "tris": 3164,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Birb Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.172": [
+          "Birb_Main",
+          "Birb_Beak",
+          "Birb_Secondary",
+          "Eye_White",
+          "Eye_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.cactoro",
+      "file": "mobs/blob_cactoro.glb",
+      "tris": 2388,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Cactoro Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.146": [
+          "Cactoro_Main",
+          "Cactoro_Secondary"
+        ],
+        "Cube.000": [
+          "Cactoro_Main",
+          "Cactoro_Secondary",
+          "Cactoro_Red",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.cat",
+      "file": "mobs/blob_cat.glb",
+      "tris": 1772,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Cat Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.187": [
+          "Cat_Main",
+          "Cat_Secondary",
+          "Ears",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.chicken",
+      "file": "mobs/blob_chicken.glb",
+      "tris": 2904,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Chicken Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.211": [
+          "Chicken_Main",
+          "Chicken_Red",
+          "Beak",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.dog",
+      "file": "mobs/blob_dog.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Dog Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.015": [
+          "Dog_Main",
+          "Dog_Secondary",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.fish",
+      "file": "mobs/blob_fish.glb",
+      "tris": 3346,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Fish Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.039": [
+          "Fish_Main",
+          "Fish_Secondary",
+          "Fish_Flaps",
+          "Tongue"
+        ],
+        "Sphere.000": [
+          "Eye_Black",
+          "Eye_White"
+        ],
+        "Sphere.001": [
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.green_blob",
+      "file": "mobs/blob_green_blob.glb",
+      "tris": 1520,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Green Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.016": [
+          "Green_Main"
+        ],
+        "Cube.000": [
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.green_spiky_blob",
+      "file": "mobs/blob_green_spiky_blob.glb",
+      "tris": 4888,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Green Spiky Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.000": [
+          "Green_Main",
+          "Eye_White"
+        ],
+        "Sphere.001": [
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.mushnub",
+      "file": "mobs/blob_mushnub.glb",
+      "tris": 1248,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Mushnub Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.034": [
+          "MushroomKing_Secondary",
+          "MushroomKing_Main",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.mushnub_evolved",
+      "file": "mobs/blob_mushnub_evolved.glb",
+      "tris": 3072,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Mushnub (Evolved) Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.035": [
+          "MushroomKing_Secondary",
+          "MushroomKing_Main",
+          "Tongue",
+          "Spikes"
+        ],
+        "Cube.000": [
+          "Eye_Black",
+          "Eye_White"
+        ],
+        "Cube.001": [
+          "Tongue",
+          "Teeth"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.ninja",
+      "file": "mobs/blob_ninja.glb",
+      "tris": 2160,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Ninja Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.000": [
+          "Ninja_Main",
+          "Ninja_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Gold"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.orc",
+      "file": "mobs/blob_orc.glb",
+      "tris": 2296,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Orc Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.016": [
+          "Orc_Main",
+          "Orc_Mouth",
+          "Orc_Hair",
+          "Eye_Black",
+          "Eye_White",
+          "Gold",
+          "Tongue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.pigeon",
+      "file": "mobs/blob_pigeon.glb",
+      "tris": 2184,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Pigeon Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.228": [
+          "Pigeon_Main",
+          "Pigeon_Secondary",
+          "Eye_White",
+          "Eye_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.pink_blob",
+      "file": "mobs/blob_pink_blob.glb",
+      "tris": 1030,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Pink Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.010": [
+          "Pink_Main",
+          "Pink_Secondary"
+        ],
+        "Cube.000": [
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.wizard",
+      "file": "mobs/blob_wizard.glb",
+      "tris": 1674,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Wizard Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.196": [
+          "Wizard_Main",
+          "Wizard_Secondary"
+        ],
+        "Cube.000": [
+          "Wizard_Main",
+          "Wizard_Secondary",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.blob.yeti",
+      "file": "mobs/blob_yeti.glb",
+      "tris": 2136,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Yeti Blob: blobs from Quaternius Ultimate Monsters, role swarm. Own skeleton and clips (attack, dance, die, hit, idle, jump, no, walk, yes); turned to face -Z, feet at 0, scale 0.4, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.000": [
+          "Yeti_Main",
+          "Yeti_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Tongue",
+          "Teeth"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.alien",
+      "file": "mobs/big_alien.glb",
+      "tris": 7676,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Alien: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.116": [
+          "Alien_Main",
+          "Alien_Secondary",
+          "Eye_White",
+          "Eye_Black",
+          "Tongue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.birb",
+      "file": "mobs/big_birb.glb",
+      "tris": 5704,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Birb: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.183": [
+          "Birb_Main",
+          "Birb_Secondary",
+          "Birb_Beak",
+          "Eye_White",
+          "Eye_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.blue_demon",
+      "file": "mobs/big_blue_demon.glb",
+      "tris": 5798,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Blue Demon: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (idle); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py. Ships with an idle clip only: slides when it moves, falls over procedurally on death.",
+      "surfaces": {
+        "Cube.017": [
+          "BlueDemon_Main",
+          "BlueDemon_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Wood",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.bunny",
+      "file": "mobs/big_bunny.glb",
+      "tris": 8282,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Bunny: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.074": [
+          "Bunny_Main",
+          "Bunny_Secondary",
+          "Eye_Black",
+          "Eye_White"
+        ],
+        "Cube.077": [
+          "Material.024",
+          "Material.011"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.cactoro",
+      "file": "mobs/big_cactoro.glb",
+      "tris": 6398,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Cactoro: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.120": [
+          "Cactoro_Main",
+          "Cactoro_Secondary",
+          "Cactoro_Red",
+          "Eye_Black",
+          "Eye_White",
+          "Cactoro_Main"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.demon",
+      "file": "mobs/big_demon.glb",
+      "tris": 6712,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Demon: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.098": [
+          "Demon_Main",
+          "Black",
+          "Eye_White",
+          "Eye_Black"
+        ],
+        "Cylinder.005": [
+          "Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.dino",
+      "file": "mobs/big_dino.glb",
+      "tris": 5414,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Dino: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.081": [
+          "Dino_Main",
+          "Dino_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Eye_White",
+          "Dino_Tongue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.fish",
+      "file": "mobs/big_fish.glb",
+      "tris": 6854,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Fish: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.026": [
+          "Fish_Main",
+          "Fish_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Mouth",
+          "Fish_Flaps"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.frog",
+      "file": "mobs/big_frog.glb",
+      "tris": 5016,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Frog: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.057": [
+          "Frog_Main",
+          "Frog_Secondary",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.monkroose",
+      "file": "mobs/big_monkroose.glb",
+      "tris": 5824,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Monkroose: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.110": [
+          "Monkroose_Main",
+          "Monkroose_Secondary",
+          "Monkroose_Ears",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.mushroom_king",
+      "file": "mobs/big_mushroom_king.glb",
+      "tris": 6044,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Mushroom King: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.056": [
+          "MushroomKing_Secondary",
+          "MushroomKing_Main"
+        ],
+        "Cube.047": [
+          "MushroomKing_Main",
+          "MushroomKing_Secondary",
+          "Orc_Main",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.ninja",
+      "file": "mobs/big_ninja.glb",
+      "tris": 5964,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Ninja: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.092": [
+          "Ninja_Main",
+          "Ninja_Secondary",
+          "Belt",
+          "Gold",
+          "Eye_Black",
+          "Eye_White",
+          "Birb_Secondary"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.orc",
+      "file": "mobs/big_orc.glb",
+      "tris": 7344,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Orc: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.026": [
+          "Orc_Main",
+          "Orc_Secondary",
+          "Belt",
+          "Orc_Mouth",
+          "Tongue",
+          "Gold",
+          "Orc_Hair",
+          "Eye_Black",
+          "Eye_White"
+        ],
+        "Cylinder.008": [
+          "Wood",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.orc_skull",
+      "file": "mobs/big_orc_skull.glb",
+      "tris": 7363,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Orc Skull: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.038": [
+          "Orc_Main",
+          "Belt.001",
+          "Orc_Mouth",
+          "Orc_Secondary",
+          "Metal",
+          "MushroomKing_Main"
+        ],
+        "Cylinder.004": [
+          "Wood",
+          "Metal"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.tribal",
+      "file": "mobs/big_tribal.glb",
+      "tris": 6620,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Tribal: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.102": [
+          "Tribal_Main",
+          "Tribal_Secondary",
+          "Tribal_Gold",
+          "Eye_White",
+          "Eye_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.big.yeti",
+      "file": "mobs/big_yeti.glb",
+      "tris": 6094,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Yeti: big monsters from Quaternius Ultimate Monsters, role brute. Own skeleton and clips (attack, die, duck, hit, idle, jump, jump_idle, jump_land, no, sprint, walk, wave, weapon, yes); turned to face -Z, feet at 0, scale 0.72, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.059": [
+          "Yeti_Main",
+          "Yeti_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Yeti_Teeth",
+          "Tongue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.alpaking",
+      "file": "mobs/flying_alpaking.glb",
+      "tris": 2508,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Alpaking: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.052": [
+          "Alpaking_Main",
+          "Alpaking_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Wings"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.alpaking_evolved",
+      "file": "mobs/flying_alpaking_evolved.glb",
+      "tris": 4684,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Alpaking (Evolved): flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.001": [
+          "Alpaking_Main",
+          "Alpaking_Secondary",
+          "Eye_Black",
+          "Eye_White",
+          "Wings"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.armabee",
+      "file": "mobs/flying_armabee.glb",
+      "tris": 2280,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Armabee: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.018": [
+          "Armabee_Main",
+          "Armabee_Secondary",
+          "Armabee_Main",
+          "Eye_White",
+          "Wings"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.armabee_evolved",
+      "file": "mobs/flying_armabee_evolved.glb",
+      "tris": 3200,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Armabee (Evolved): flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.001": [
+          "Armabee_Main",
+          "Armabee_Secondary",
+          "Tongue",
+          "Teeth",
+          "Armabee_Main",
+          "Eye_White",
+          "Wings"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.demon",
+      "file": "mobs/flying_demon.glb",
+      "tris": 4784,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Flying Demon: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.125": [
+          "Demon_Main"
+        ],
+        "Cube.000": [
+          "Black",
+          "Eye_Black",
+          "Eye_White"
+        ],
+        "Cube.001": [
+          "Demon_Main",
+          "Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.dragon",
+      "file": "mobs/flying_dragon.glb",
+      "tris": 4562,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Dragon: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.222": [
+          "Dragon_Main",
+          "Dragon_Secondary",
+          "Dragon_Horn",
+          "Eye_Black",
+          "Dragon_Horn"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.dragon_evolved",
+      "file": "mobs/flying_dragon_evolved.glb",
+      "tris": 7440,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Dragon (Evolved): flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.221": [
+          "Dragon_Main",
+          "Dragon_Secondary",
+          "Dragon_Horn",
+          "Eye_Black",
+          "Dragon_Horn"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.ghost",
+      "file": "mobs/flying_ghost.glb",
+      "tris": 3192,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Ghost: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.001": [
+          "Ghost_Main",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.ghost_skull",
+      "file": "mobs/flying_ghost_skull.glb",
+      "tris": 3146,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Ghost Skull: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (idle); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py. Ships with an idle clip only: drifts in its idle when it moves, falls over procedurally on death.",
+      "surfaces": {
+        "Cube.001": [
+          "Ghost_Secondary",
+          "Ghost_Main"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.glub",
+      "file": "mobs/flying_glub.glb",
+      "tris": 2528,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Glub: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.051": [
+          "Eye_Black",
+          "Eye_White",
+          "Glub_Main",
+          "Wings"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.glub_evolved",
+      "file": "mobs/flying_glub_evolved.glb",
+      "tris": 4452,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Glub (Evolved): flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere.043": [
+          "Eye_Black",
+          "Eye_White",
+          "Glub_Main",
+          "Wings"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.goleling",
+      "file": "mobs/flying_goleling.glb",
+      "tris": 3696,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Goleling: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.009": [
+          "Goleling_Main",
+          "Goleling_Secondary",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.goleling_evolved",
+      "file": "mobs/flying_goleling_evolved.glb",
+      "tris": 5864,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Goleling (Evolved): flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.020": [
+          "Goleling_Main",
+          "Goleling_Secondary",
+          "Goleling_Teeth",
+          "Gold",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.hywirl",
+      "file": "mobs/flying_hywirl.glb",
+      "tris": 3296,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Hywirl: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Sphere": [
+          "Hywirl_Main",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.pigeon",
+      "file": "mobs/flying_pigeon.glb",
+      "tris": 3512,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Flying Pigeon: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.000": [
+          "Pigeon_Main",
+          "Pigeon_Secondary",
+          "Eye_White",
+          "Eye_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.squidle",
+      "file": "mobs/flying_squidle.glb",
+      "tris": 4880,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Squidle: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.001": [
+          "Squidle_Main",
+          "Squidle_Secondary",
+          "Tongue",
+          "Squidle_Horn",
+          "Eye_Black",
+          "Eye_White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.flying.tribal",
+      "file": "mobs/flying_tribal.glb",
+      "tris": 5252,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Flying Tribal: flyers from Quaternius Ultimate Monsters, role flyer. Own skeleton and clips (attack, die, hit, idle, no, punch, walk, yes); turned to face -Z, feet at 0, scale 0.6, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.000": [
+          "Tribal_Main",
+          "Tribal_Secondary",
+          "Tribal_Gold",
+          "Eye_White",
+          "Eye_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "author": "Quaternius (Ultimate Monsters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.adventurer",
+      "file": "mobs/human_adventurer.glb",
+      "tris": 10202,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Adventurer: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.063": [
+          "Skin",
+          "Green",
+          "LightGreen"
+        ],
+        "Cube.052": [
+          "Grey",
+          "Black"
+        ],
+        "Cube.039": [
+          "Skin",
+          "Eyebrows",
+          "Hair",
+          "Eye"
+        ],
+        "Cube.020": [
+          "Brown",
+          "Brown2"
+        ],
+        "Plane": [
+          "Brown",
+          "LightGreen",
+          "Gold",
+          "Green"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.beach",
+      "file": "mobs/human_beach.glb",
+      "tris": 6578,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Beach: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.070": [
+          "Skin",
+          "LightBrown"
+        ],
+        "Cube.017": [
+          "Skin",
+          "Red_Dark"
+        ],
+        "Cube.016": [
+          "Skin",
+          "Eyebrows",
+          "Eye",
+          "Hair",
+          "Earrings"
+        ],
+        "Cube.022": [
+          "Skin",
+          "Red_Dark",
+          "White"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.casual_2",
+      "file": "mobs/human_casual_2.glb",
+      "tris": 5776,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Casual: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.010": [
+          "Skin",
+          "LightBrown"
+        ],
+        "Cube.003": [
+          "Red_Dark",
+          "White"
+        ],
+        "Cube.015": [
+          "Skin",
+          "Skin_Darker",
+          "Eyebrows",
+          "Hair",
+          "Eye"
+        ],
+        "Cube.019": [
+          "LightBlue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.casual_hoodie",
+      "file": "mobs/human_casual_hoodie.glb",
+      "tris": 6206,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Hoodie: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.008": [
+          "Skin",
+          "Purple"
+        ],
+        "Cube.000": [
+          "Purple",
+          "White"
+        ],
+        "Cube.014": [
+          "Skin",
+          "Eyebrows",
+          "Eye",
+          "Hair"
+        ],
+        "Cube.005": [
+          "Skin",
+          "LightBlue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.farmer",
+      "file": "mobs/human_farmer.glb",
+      "tris": 5476,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Farmer: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.036": [
+          "Skin",
+          "LightBlue",
+          "Brown",
+          "Beige"
+        ],
+        "Cube.035": [
+          "Brown",
+          "Brown2"
+        ],
+        "Cube.032": [
+          "Skin",
+          "Eyebrows",
+          "Beige",
+          "Red",
+          "Eye"
+        ],
+        "Cube.034": [
+          "LightBlue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.king",
+      "file": "mobs/human_king.glb",
+      "tris": 11110,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "King: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.043": [
+          "Skin",
+          "Blue",
+          "Metal",
+          "Beige",
+          "Metal_Dark"
+        ],
+        "Cube.205": [
+          "Metal"
+        ],
+        "Cube.025": [
+          "Skin",
+          "Hair_White",
+          "Gold",
+          "Eye"
+        ],
+        "Cube.051": [
+          "DarkBrown",
+          "Metal",
+          "Metal_Dark"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.punk",
+      "file": "mobs/human_punk.glb",
+      "tris": 5500,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Punk: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.001": [
+          "Skin",
+          "White",
+          "Black"
+        ],
+        "Cube.208": [
+          "Skin",
+          "Black"
+        ],
+        "Cube.026": [
+          "Skin",
+          "Eye",
+          "Eyebrows",
+          "Red_Dark",
+          "Red",
+          "Earrings"
+        ],
+        "Cube.009": [
+          "Skin",
+          "LightBlue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.spacesuit",
+      "file": "mobs/human_spacesuit.glb",
+      "tris": 10558,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Spacesuit: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.002": [
+          "SciFi_Light",
+          "SciFi_Light_Accent",
+          "SciFi_Main",
+          "SciFi_MainDark"
+        ],
+        "Cube.047": [
+          "SciFi_Light_Accent",
+          "SciFi_Light"
+        ],
+        "Cube.049": [
+          "SciFi_Light",
+          "SciFi_Light_Accent",
+          "Grey"
+        ],
+        "Cube.046": [
+          "SciFi_Main",
+          "SciFi_Light",
+          "SciFi_Light_Accent",
+          "SciFi_MainDark"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.suit",
+      "file": "mobs/human_suit.glb",
+      "tris": 7674,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Suit: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.204": [
+          "DarkBrown",
+          "Grey",
+          "Black"
+        ],
+        "Cube.007": [
+          "Skin",
+          "Tie",
+          "Suit",
+          "White"
+        ],
+        "Cube.011": [
+          "Black"
+        ],
+        "Cube.006": [
+          "Skin",
+          "Eyebrows",
+          "Hair",
+          "Eye"
+        ],
+        "Cube.012": [
+          "Suit"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.swat",
+      "file": "mobs/human_swat.glb",
+      "tris": 8794,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Swat: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.204": [
+          "DarkBrown",
+          "Grey",
+          "Black"
+        ],
+        "Cube.018": [
+          "Skin",
+          "Swat",
+          "Swat_Black"
+        ],
+        "Cube.024": [
+          "Swat_Black"
+        ],
+        "Cube.037": [
+          "Swat_Black",
+          "Swat",
+          "Visor"
+        ],
+        "Cube.023": [
+          "Swat",
+          "Swat_Black"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.human.worker",
+      "file": "mobs/human_worker.glb",
+      "tris": 5240,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Worker: humans from Quaternius Ultimate Modular Men (Feb 2022), role raider. Own skeleton and clips (attack, die, gun_shoot, hit, hit_recieve_2, idle, idle_gun, idle_gun_pointing, idle_gun_shoot, idle_neutral, idle_sword, interact, kick_left, kick_right, punch_left, roll, run_back, run_left, run_right, run_shoot, sprint, sword_slash, walk, wave); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.027": [
+          "Skin",
+          "Worker_Yellow",
+          "Worker_Vest",
+          "LightBrown"
+        ],
+        "Cube.028": [
+          "Grey",
+          "Black"
+        ],
+        "Cube.031": [
+          "Skin",
+          "Eyebrows",
+          "Worker_Yellow",
+          "Moustache",
+          "Eye"
+        ],
+        "Cube.029": [
+          "Brown",
+          "Brown2"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.mech.eye_drone",
+      "file": "mobs/mech_eye_drone.glb",
+      "tris": 3530,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Eye Drone: mechs from Quaternius Sci-Fi Essentials Kit [Standard], role drone. Own skeleton and clips (attack, back_flip, charging, hit, idle, walk); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py. Floats; no walk or death clip (Look plays while it moves, procedural fall on death).",
+      "surfaces": {
+        "Sphere.015": [
+          "MI_Enemies"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/scifiessentialskit.html",
+      "author": "Quaternius (Sci-Fi Essentials Kit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.mech.quad_shell",
+      "file": "mobs/mech_quad_shell.glb",
+      "tris": 7494,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Quad Shell: mechs from Quaternius Sci-Fi Essentials Kit [Standard], role walker. Own skeleton and clips (attack, charge, die, hit, idle, look, sprint, walk); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cube.044": [
+          "MI_Enemies"
+        ],
+        "Cube.019": [
+          "MI_Enemies"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/scifiessentialskit.html",
+      "author": "Quaternius (Sci-Fi Essentials Kit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.mech.trilobite",
+      "file": "mobs/mech_trilobite.glb",
+      "tris": 8338,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Trilobite: mechs from Quaternius Sci-Fi Essentials Kit [Standard], role walker. Own skeleton and clips (attack, attack_auto, die, hanging, hit, idle, look, sprint, walk); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Cylinder.002": [
+          "MI_Enemies_Large"
+        ],
+        "Cube.004": [
+          "MI_Enemies_Large"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/scifiessentialskit.html",
+      "author": "Quaternius (Sci-Fi Essentials Kit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.alien.cyclop",
+      "file": "mobs/alien_cyclop.glb",
+      "tris": 2084,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Cyclops: aliens from Quaternius Modular Sci-Fi MegaKit [Standard], role lurker. Own skeleton and clips (idle); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py. Ships with an idle clip only (Alien_Idle).",
+      "surfaces": {
+        "Sphere.001_Retopology.001": [
+          "M_Alien_Eyes",
+          "M_Alien_Body_Blue"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius (Modular Sci-Fi MegaKit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.alien.oculichrysalis",
+      "file": "mobs/alien_oculichrysalis.glb",
+      "tris": 6440,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Oculichrysalis: aliens from Quaternius Modular Sci-Fi MegaKit [Standard], role lurker. Own skeleton and clips (idle); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py. Ships with an idle clip only (Alien_Idle).",
+      "surfaces": {
+        "Oculichrysalis": [
+          "M_Alien_Orange"
+        ],
+        "Sphere.004": [
+          "M_Alien_Eyes"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius (Modular Sci-Fi MegaKit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.alien.scolitex",
+      "file": "mobs/alien_scolitex.glb",
+      "tris": 11036,
+      "license": "CC0",
+      "source": "mobs/mobs.json",
+      "description": "Scolitex: aliens from Quaternius Modular Sci-Fi MegaKit [Standard], role lurker. Own skeleton and clips (idle); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py. Ships with an idle clip only (Alien_Idle).",
+      "surfaces": {
+        "Sphere.005": [
+          "M_Alien_Orange",
+          "M_Alien_Cyan",
+          "M_Alien_Eyes"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius (Modular Sci-Fi MegaKit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.dungeon.imp",
+      "file": "mobs/dungeon_imp.glb",
+      "tris": 15232,
+      "license": "Quaternius Asset License v1.0 (not CC0: use in games, no redistribution of the assets themselves)",
+      "source": "mobs/mobs.json",
+      "description": "Imp: dungeon monsters from Quaternius Bestiary - Dungeon Monsters Kit [Standard], role brute. Own skeleton and clips (attack, die, hit, idle, sprint, walk); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Imp_Body": [
+          "MI_Imp"
+        ],
+        "Imp_Chains": [
+          "MI_Imp"
+        ],
+        "Imp_Mace": [
+          "MI_Imp"
+        ],
+        "Teen_Male.004": [
+          "MI_Imp"
+        ],
+        "Imp_SpikedCollar": [
+          "MI_Imp"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/bestiarydungeonmonsterskit.html",
+      "author": "Quaternius (Bestiary - Dungeon Monsters Kit)",
+      "rig": "creature"
+    },
+    {
+      "id": "mob.dungeon.puglin",
+      "file": "mobs/dungeon_puglin.glb",
+      "tris": 7528,
+      "license": "Quaternius Asset License v1.0 (not CC0: use in games, no redistribution of the assets themselves)",
+      "source": "mobs/mobs.json",
+      "description": "Puglin: dungeon monsters from Quaternius Bestiary - Dungeon Monsters Kit [Standard], role swarm. Own skeleton and clips (attack, die, hit, idle, sprint, walk); turned to face -Z, feet at 0, scale 1, built by tools/bpy/mobs.py.",
+      "surfaces": {
+        "Puglin_Body": [
+          "MI_Puglin"
+        ],
+        "Puglin_Stick": [
+          "MI_Puglin"
+        ],
+        "Puglin_Tusks": [
+          "MI_Puglin"
+        ]
+      },
+      "pbr": true,
+      "source_url": "https://quaternius.com/packs/bestiarydungeonmonsterskit.html",
+      "author": "Quaternius (Bestiary - Dungeon Monsters Kit)",
+      "rig": "creature"
     }
   ]
 }

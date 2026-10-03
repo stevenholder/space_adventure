@@ -2,16 +2,18 @@
 
 Where the art came from, and under what licence.
 
-**Every model the game ships is our own** (2026-10-01). The last Kenney Space
-Kit props were replaced by `tools/gen_props.py`, and the vendored packs and
-the import paths that adapted them are gone. Two outside sources remain, both
-free to use without attribution:
+**Every model the game ships is our own** (2026-10-01), except the bodies and
+the mob library listed below. The last Kenney Space Kit props were replaced by
+`tools/gen_props.py`. Outside sources, all free to use without attribution:
 
 | what | source | licence |
 |---|---|---|
 | The human base mesh under every body (`tools/bpy/human.py`) | MakeHuman, via the MPFB2 Blender add-on (makehumancommunity.org, extensions.blender.org/add-ons/mpfb) | CC0 |
 | The display font, Staatliches (`client/godot/fonts/`) | Google Fonts | SIL Open Font License 1.1 (`OFL.txt` ships beside it) |
 | Spike: the `char.ubc` body (Superhero male, its head textures and Hair_Buzzed), worn by `npc.veteran` | Quaternius, Universal Base Characters, Standard (quaternius.com/packs/universalbasecharacters.html; unpacked into gitignored `vendor/ubc`) | CC0 |
+| The mob library (`mob.*`, `mobs/`): Ultimate Monsters, Ultimate Modular Men, the Sci-Fi Essentials Kit's enemies, the Modular Sci-Fi MegaKit's aliens (catalog and where each came from: `mobs/mobs.json`, `mobs/CATALOG.md`) | Quaternius (quaternius.com/packs: ultimatemonsters, ultimatemodularcharacters, scifiessentialskit, modularscifimegakit) | CC0 |
+| `mob.dungeon.imp`, `mob.dungeon.puglin` | Quaternius, Bestiary - Dungeon Monsters Kit, Standard | Quaternius Asset License v1.0: free for use in games; the assets themselves may not be redistributed |
+| The clips on `mob.dungeon.*` (retargeted onto them) | Quaternius, Universal Animation Library, Standard | CC0 |
 
 ## Generators
 

@@ -127,8 +127,8 @@ type cmdWorld struct {
 // had to stare at the floor to talk to a shopkeeper standing right in front of
 // them. Measured as a live out_of_range refusal at 2.04 m against a 3.0 m
 // interact_dist. Raise the target to its own eye height along its own up.
-func inRange(w cmdWorld, target sim.Vec) bool {
-	return inRangeAt(w, target, eyeHeightMeters)
+func inRange(w cmdWorld, npc defs.NPC, target sim.Vec) bool {
+	return inRangeAt(w, target, npc.EyeHeight())
 }
 
 // Aim heights for things that are not a standing person (Phase 12): a
@@ -142,12 +142,12 @@ const (
 )
 
 // aimHeight is where the cone check points on an NPC: a bench is aimed
-// at its top, anyone else at their eye.
+// at its top, anyone else at their own eye (a crawler's is not a person's).
 func aimHeight(npc defs.NPC) float64 {
 	if npc.Kind == "bench" {
 		return benchAimHeight
 	}
-	return eyeHeightMeters
+	return npc.EyeHeight()
 }
 
 // inRangeAt is inRange with the target raised by `height` instead of a
@@ -207,7 +207,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return reply(protocol.StatusNotFound, nil)
 		}
-		if !inRange(w, pos) {
+		if !inRange(w, npc, pos) {
 			return refuse("out_of_range")
 		}
 		out := map[string]any{"stock": npc.Stock}
@@ -233,7 +233,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return reply(protocol.StatusNotFound, nil)
 		}
-		if !inRange(w, pos) {
+		if !inRange(w, npc, pos) {
 			return refuse("out_of_range")
 		}
 		// Data-driven unlock gates (GDD "Skills"): a purchase below the
@@ -341,7 +341,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return reply(protocol.StatusNotFound, nil)
 		}
-		if !inRange(w, pos) {
+		if !inRange(w, npc, pos) {
 			return refuse("out_of_range")
 		}
 		bonus := synergyBonus(w.Reg, w.Player, "sell_bonus", "")
@@ -370,7 +370,7 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !ok {
 			return reply(protocol.StatusNotFound, nil)
 		}
-		if !inRange(w, pos) {
+		if !inRange(w, npc, pos) {
 			return refuse("out_of_range")
 		}
 		if npc.Kind != "shop" || w.PopBuyback == nil {

@@ -300,3 +300,33 @@ humanoid is a VARIANTS row plus a recipe pointing at `build/<id>.raw.glb`.
 M1 needs no ship. Vehicles are M2 — see `docs/ROADMAP.md`.
 
 M1 adds the real player character + surface props behind these ids.
+
+## The mob library (from 2026-10-03)
+
+Creatures and characters from Quaternius packs, each on **its own skeleton
+with its own clips** (not the humanoid rig above). The catalog is
+`mobs/mobs.json` (source file, clip map, role, family scale, provenance per
+pack); `mobs/CATALOG.md` is the generated, browsable list with thumbnails.
+
+    npm --prefix art run mobs                  # everything
+    blender -b --python tools/bpy/mobs.py -- mob.big.orc && node tools/mobs.mjs mob.big.orc
+
+- **Blender pass** (`tools/bpy/mobs.py`): imports the pack file from
+  `vendor/` (gitignored; mobs.json `packs` says where each came from), renames
+  the clips we play to `idle`/`walk`/`sprint`/`die`/`hit`/`attack` and the rest
+  to snake_case, turns the model to face -Z (every pack faces glTF +Z), puts
+  its lowest rest-pose point at 0, applies the family scale (Ultimate Monsters
+  is authored at toy scale), caps textures at 1024 px, measures it and renders
+  `mobs/thumbs/<family>_<name>.png`. A model shipped without clips (Bestiary)
+  gets them retargeted from the Universal Animation Library: same UE5 bone
+  names, each bone takes the source bone's rotation relative to its rest, the
+  pelvis moves scaled by pelvis height.
+- **Finish** (`tools/mobs.mjs`): manifest row (rig `creature`), import_pack's
+  dedup/prune into `mobs/*.glb`, and one hostile archetype per mob in
+  `../server/data/mobs.json` (generated; do not edit) with the measured
+  radius/height/eye height and stats from the role table, scaled by height.
+- **verify**: `mob.*` budget 20k; rig `creature` requires only `idle`. The
+  client falls back sprint -> walk -> idle and fells a body that has no `die`.
+- **Licences**: all CC0 except the Bestiary (Quaternius Asset License v1.0:
+  use in games, no redistribution of the assets themselves), committed at the
+  owner's decision.

@@ -249,7 +249,7 @@ func (s *Server) boardKind(c *client, npcID uint32) (starterOnly bool, ok bool) 
 		Up:   terrain.Normalize(c.entity.State.Pos),
 		Look: c.lookDir(),
 	}
-	if !inRange(w, pos) {
+	if !inRange(w, npc, pos) {
 		return false, false
 	}
 	switch npc.ID {

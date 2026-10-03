@@ -54,7 +54,7 @@ func StepRanged(r *RangedState, inRange, hasLOS bool,
 	if r.WindupTicks > 0 {
 		r.WindupTicks--
 		if r.WindupTicks == 0 && inRange && hasLOS {
-			return resolveShot(self, selfUp, targetPos, targetVel, damage, projectileSpeed)
+			return resolveShot(self, selfUp, targetPos, targetVel, a.EyeHeight, damage, projectileSpeed)
 		}
 		return Shot{}
 	}
@@ -63,7 +63,7 @@ func StepRanged(r *RangedState, inRange, hasLOS bool,
 		r.CooldownTicks = attackIntervalTicks
 		if windupTicks <= 0 {
 			// No telegraph: resolve immediately.
-			return resolveShot(self, selfUp, targetPos, targetVel, damage, projectileSpeed)
+			return resolveShot(self, selfUp, targetPos, targetVel, a.EyeHeight, damage, projectileSpeed)
 		}
 		r.WindupTicks = windupTicks
 	}
@@ -75,9 +75,15 @@ func StepRanged(r *RangedState, inRange, hasLOS bool,
 // time, not where it is now, using one iteration (t = distance /
 // projectileSpeed, aimPoint = targetPos + targetVel*t) — good enough at
 // gunner ranges without solving the quadratic.
-func resolveShot(self, selfUp, targetPos, targetVel [3]float64, damage int, projectileSpeed float64) Shot {
+//
+// The shot starts at the gunner's own eye (selfEye, 0 = a person's) and aims
+// at the target's: targets are players, always a person's eye high.
+func resolveShot(self, selfUp, targetPos, targetVel [3]float64, selfEye float64, damage int, projectileSpeed float64) Shot {
+	if selfEye <= 0 {
+		selfEye = eyeHeight
+	}
 	up := Vec(selfUp)
-	origin := Vec(self).Add(up.Scale(eyeHeight))
+	origin := Vec(self).Add(up.Scale(selfEye))
 
 	aimPoint := Vec(targetPos)
 	if projectileSpeed > 0 {

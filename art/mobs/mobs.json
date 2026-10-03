@@ -1,0 +1,1134 @@
+{
+  "$comment": "The mob library: every creature/character model brought in from the Quaternius packs, the clips we play from it, and its role. Source of truth for tools/bpy/mobs.py (Blender pass) and tools/mobs.mjs (import, manifest rows, server/data/mobs.json archetypes, CATALOG.md). Clip map: our name -> the pack's clip name. Edit here, then `npm --prefix art run mobs`.",
+  "version": 1,
+  "packs": {
+    "ultimate-monsters": {
+      "title": "Ultimate Monsters",
+      "license": "CC0",
+      "author": "Quaternius (Ultimate Monsters)",
+      "source_url": "https://quaternius.com/packs/ultimatemonsters.html",
+      "fetched": "GitHub mirror mika314/KitchenSink, Assets/Ultimate Monsters/*/glTF (the official Google Drive was over quota)"
+    },
+    "modular-characters": {
+      "title": "Ultimate Modular Men (Feb 2022)",
+      "license": "CC0",
+      "author": "Quaternius (Ultimate Modular Characters)",
+      "source_url": "https://quaternius.com/packs/ultimatemodularcharacters.html",
+      "fetched": "GitHub mirror osman-1002/3D-3rd-Person-Godot-Game-With-GenAI-Integration, addons/Ultimate Modular Men- Feb 2022 (Individual Characters/glTF; Worker.gltf at the pack root)"
+    },
+    "scifi-essentials": {
+      "title": "Sci-Fi Essentials Kit [Standard]",
+      "license": "CC0",
+      "author": "Quaternius (Sci-Fi Essentials Kit)",
+      "source_url": "https://quaternius.com/packs/scifiessentialskit.html",
+      "fetched": "itch.io quaternius/sci-fi-essentials-kit, Standard zip"
+    },
+    "scifi-megakit": {
+      "title": "Modular Sci-Fi MegaKit [Standard]",
+      "license": "CC0",
+      "author": "Quaternius (Modular Sci-Fi MegaKit)",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "fetched": "itch.io, Standard zip (Aliens folder; the rest is environment)"
+    },
+    "bestiary": {
+      "title": "Bestiary - Dungeon Monsters Kit [Standard]",
+      "license": "Quaternius Asset License v1.0 (not CC0: use in games, no redistribution of the assets themselves)",
+      "author": "Quaternius (Bestiary - Dungeon Monsters Kit)",
+      "source_url": "https://quaternius.com/packs/bestiarydungeonmonsterskit.html",
+      "fetched": "itch.io, Standard zip (no clips: animated from the Universal Animation Library)"
+    }
+  },
+  "families": {
+    "blob": {
+      "title": "Blobs",
+      "scale": 0.4,
+      "note": "Ultimate Monsters is authored at toy scale (median 2.6 m); scaled to a ~1 m median."
+    },
+    "big": {
+      "title": "Big monsters",
+      "scale": 0.72,
+      "note": "Ultimate Monsters 'Big' (median 3.3 m); scaled to a ~2.35 m median."
+    },
+    "flying": {
+      "title": "Flyers",
+      "scale": 0.6,
+      "note": "Ultimate Monsters 'Flying' (median 2.35 m); scaled to a ~1.4 m median."
+    },
+    "human": {
+      "title": "Humans",
+      "scale": 1.0
+    },
+    "mech": {
+      "title": "Mechs",
+      "scale": 1.0
+    },
+    "alien": {
+      "title": "Aliens",
+      "scale": 1.0
+    },
+    "dungeon": {
+      "title": "Dungeon monsters",
+      "scale": 1.0
+    }
+  },
+  "mobs": [
+    {
+      "id": "mob.blob.alien",
+      "name": "Alien Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Alien.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.birb",
+      "name": "Birb Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Birb.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.cactoro",
+      "name": "Cactoro Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Cactoro.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.cat",
+      "name": "Cat Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Cat.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.chicken",
+      "name": "Chicken Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Chicken.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.dog",
+      "name": "Dog Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Dog.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.fish",
+      "name": "Fish Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Fish.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.green_blob",
+      "name": "Green Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/GreenBlob.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.green_spiky_blob",
+      "name": "Green Spiky Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/GreenSpikyBlob.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.mushnub",
+      "name": "Mushnub Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Mushnub.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.mushnub_evolved",
+      "name": "Mushnub (Evolved) Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Mushnub_Evolved.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.ninja",
+      "name": "Ninja Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Ninja.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.orc",
+      "name": "Orc Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Orc.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.pigeon",
+      "name": "Pigeon Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Pigeon.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.pink_blob",
+      "name": "Pink Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/PinkBlob.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.wizard",
+      "name": "Wizard Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Wizard.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.blob.yeti",
+      "name": "Yeti Blob",
+      "family": "blob",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Blob/glTF/Yeti.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Bite_Front"
+      },
+      "role": "swarm"
+    },
+    {
+      "id": "mob.big.alien",
+      "name": "Alien",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Alien.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.birb",
+      "name": "Birb",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Birb.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.blue_demon",
+      "name": "Blue Demon",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/BlueDemon.gltf",
+      "clips": {
+        "idle": "Idle"
+      },
+      "role": "brute",
+      "notes": "Ships with an idle clip only: slides when it moves, falls over procedurally on death."
+    },
+    {
+      "id": "mob.big.bunny",
+      "name": "Bunny",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Bunny.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.cactoro",
+      "name": "Cactoro",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Cactoro.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.demon",
+      "name": "Demon",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Demon.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.dino",
+      "name": "Dino",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Dino.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.fish",
+      "name": "Fish",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Fish.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.frog",
+      "name": "Frog",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Frog.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.monkroose",
+      "name": "Monkroose",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Monkroose.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.mushroom_king",
+      "name": "Mushroom King",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/MushroomKing.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.ninja",
+      "name": "Ninja",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Ninja.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.orc",
+      "name": "Orc",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Orc.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.orc_skull",
+      "name": "Orc Skull",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Orc_Skull.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.tribal",
+      "name": "Tribal",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Tribal.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.big.yeti",
+      "name": "Yeti",
+      "family": "big",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Big/glTF/Yeti.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Punch"
+      },
+      "role": "brute"
+    },
+    {
+      "id": "mob.flying.alpaking",
+      "name": "Alpaking",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Alpaking.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.alpaking_evolved",
+      "name": "Alpaking (Evolved)",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Alpaking_Evolved.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.armabee",
+      "name": "Armabee",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Armabee.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.armabee_evolved",
+      "name": "Armabee (Evolved)",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Armabee_Evolved.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.demon",
+      "name": "Flying Demon",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Demon.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.dragon",
+      "name": "Dragon",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Dragon.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.dragon_evolved",
+      "name": "Dragon (Evolved)",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Dragon_Evolved.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.ghost",
+      "name": "Ghost",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Ghost.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.ghost_skull",
+      "name": "Ghost Skull",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Ghost_Skull.gltf",
+      "clips": {
+        "idle": "Flying_Idle"
+      },
+      "role": "flyer",
+      "notes": "Ships with an idle clip only: drifts in its idle when it moves, falls over procedurally on death."
+    },
+    {
+      "id": "mob.flying.glub",
+      "name": "Glub",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Glub.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.glub_evolved",
+      "name": "Glub (Evolved)",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Glub_Evolved.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.goleling",
+      "name": "Goleling",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Goleling.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.goleling_evolved",
+      "name": "Goleling (Evolved)",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Goleling_Evolved.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.hywirl",
+      "name": "Hywirl",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Hywirl.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.pigeon",
+      "name": "Flying Pigeon",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Pigeon.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.squidle",
+      "name": "Squidle",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Squidle.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.flying.tribal",
+      "name": "Flying Tribal",
+      "family": "flying",
+      "pack": "ultimate-monsters",
+      "src": "vendor/ultimate-monsters/Flying/glTF/Tribal.gltf",
+      "clips": {
+        "idle": "Flying_Idle",
+        "walk": "Fast_Flying",
+        "die": "Death",
+        "hit": "HitReact",
+        "attack": "Headbutt"
+      },
+      "role": "flyer"
+    },
+    {
+      "id": "mob.human.adventurer",
+      "name": "Adventurer",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Adventurer.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.beach",
+      "name": "Beach",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Beach.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.casual_2",
+      "name": "Casual",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Casual_2.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.casual_hoodie",
+      "name": "Hoodie",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Casual_Hoodie.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.farmer",
+      "name": "Farmer",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Farmer.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.king",
+      "name": "King",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/King.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.punk",
+      "name": "Punk",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Punk.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.spacesuit",
+      "name": "Spacesuit",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Spacesuit.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.suit",
+      "name": "Suit",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Suit.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.swat",
+      "name": "Swat",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Swat.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.human.worker",
+      "name": "Worker",
+      "family": "human",
+      "pack": "modular-characters",
+      "src": "vendor/modular-characters/Individual Characters/glTF/Worker.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "Death",
+        "hit": "HitRecieve",
+        "attack": "Punch_Right"
+      },
+      "role": "raider"
+    },
+    {
+      "id": "mob.mech.eye_drone",
+      "name": "Eye Drone",
+      "family": "mech",
+      "pack": "scifi-essentials",
+      "src": "vendor/scifi-essentials/glTF/Enemy_EyeDrone.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Look",
+        "hit": "Hit",
+        "attack": "Attack"
+      },
+      "role": "drone",
+      "notes": "Floats; no walk or death clip (Look plays while it moves, procedural fall on death)."
+    },
+    {
+      "id": "mob.mech.quad_shell",
+      "name": "Quad Shell",
+      "family": "mech",
+      "pack": "scifi-essentials",
+      "src": "vendor/scifi-essentials/glTF/Enemy_QuadShell.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "TurnOff",
+        "hit": "Hit",
+        "attack": "Attack"
+      },
+      "role": "walker"
+    },
+    {
+      "id": "mob.mech.trilobite",
+      "name": "Trilobite",
+      "family": "mech",
+      "pack": "scifi-essentials",
+      "src": "vendor/scifi-essentials/glTF/Enemy_Trilobite.gltf",
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "sprint": "Run",
+        "die": "TurnOff",
+        "hit": "Hit",
+        "attack": "Attack"
+      },
+      "role": "walker"
+    },
+    {
+      "id": "mob.alien.cyclop",
+      "name": "Cyclops",
+      "family": "alien",
+      "pack": "scifi-megakit",
+      "src": "vendor/scifi-megakit/Modular SciFi MegaKit[Standard]/glTF/Aliens/Alien_Cyclop.gltf",
+      "clips": {
+        "idle": "Alien_Idle"
+      },
+      "role": "lurker",
+      "notes": "Ships with an idle clip only (Alien_Idle)."
+    },
+    {
+      "id": "mob.alien.oculichrysalis",
+      "name": "Oculichrysalis",
+      "family": "alien",
+      "pack": "scifi-megakit",
+      "src": "vendor/scifi-megakit/Modular SciFi MegaKit[Standard]/glTF/Aliens/Alien_Oculichrysalis.gltf",
+      "clips": {
+        "idle": "Alien_Idle"
+      },
+      "role": "lurker",
+      "notes": "Ships with an idle clip only (Alien_Idle)."
+    },
+    {
+      "id": "mob.alien.scolitex",
+      "name": "Scolitex",
+      "family": "alien",
+      "pack": "scifi-megakit",
+      "src": "vendor/scifi-megakit/Modular SciFi MegaKit[Standard]/glTF/Aliens/Alien_Scolitex.gltf",
+      "clips": {
+        "idle": "Alien_Idle"
+      },
+      "role": "lurker",
+      "notes": "Ships with an idle clip only (Alien_Idle)."
+    },
+    {
+      "id": "mob.dungeon.imp",
+      "name": "Imp",
+      "family": "dungeon",
+      "pack": "bestiary",
+      "src": "vendor/bestiary/Bestiary - Dungeon Monsters Kit[Standard]/Exports/GLB (Godot-Unreal)/Imp.glb",
+      "clips": {},
+      "role": "brute",
+      "retarget": {
+        "from": "vendor/ual1/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb",
+        "clips": {
+          "idle": "Idle_Loop",
+          "walk": "Walk_Loop",
+          "sprint": "Jog_Fwd_Loop",
+          "die": "Death01",
+          "hit": "Hit_Chest",
+          "attack": "Sword_Attack"
+        }
+      }
+    },
+    {
+      "id": "mob.dungeon.puglin",
+      "name": "Puglin",
+      "family": "dungeon",
+      "pack": "bestiary",
+      "src": "vendor/bestiary/Bestiary - Dungeon Monsters Kit[Standard]/Exports/GLB (Godot-Unreal)/Puglin.glb",
+      "clips": {},
+      "role": "swarm",
+      "retarget": {
+        "from": "vendor/ual1/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb",
+        "clips": {
+          "idle": "Idle_Loop",
+          "walk": "Walk_Loop",
+          "sprint": "Jog_Fwd_Loop",
+          "die": "Death01",
+          "hit": "Hit_Chest",
+          "attack": "Sword_Attack"
+        }
+      }
+    }
+  ]
+}

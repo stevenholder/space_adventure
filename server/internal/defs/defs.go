@@ -237,6 +237,38 @@ type NPC struct {
 	TurnRate        float64 `json:"turn_rate"`
 	// Loot is the table id rolled when this archetype dies (loot.json).
 	Loot string `json:"loot"`
+	// Body size in metres: hitbox capsule radius and height, and the eye the
+	// AI sees and shoots from. Zero means the standing-person defaults; read
+	// them through Radius/Height/EyeHeight, never directly.
+	RadiusM    float64 `json:"radius,omitempty"`
+	HeightM    float64 `json:"height,omitempty"`
+	EyeHeightM float64 `json:"eye_height,omitempty"`
+}
+
+// The standing-person body every archetype without its own size gets: the
+// items.json "npc" hitbox (0.35 x 1.8), sim.BodyRadius and
+// terrain.EyeHeightMeters.
+const (
+	DefaultNPCRadius    = 0.35
+	DefaultNPCHeight    = 1.8
+	DefaultNPCEyeHeight = 1.7
+)
+
+// Radius is the archetype's hitbox and body-sphere radius.
+func (n NPC) Radius() float64 { return orDefault(n.RadiusM, DefaultNPCRadius) }
+
+// Height is the archetype's hitbox capsule height.
+func (n NPC) Height() float64 { return orDefault(n.HeightM, DefaultNPCHeight) }
+
+// EyeHeight is where the archetype sees and shoots from, and where a player
+// aims to interact with it.
+func (n NPC) EyeHeight() float64 { return orDefault(n.EyeHeightM, DefaultNPCEyeHeight) }
+
+func orDefault(v, def float64) float64 {
+	if v > 0 {
+		return v
+	}
+	return def
 }
 
 // ZoneCollider is one static collider authored in a zone's local tangent
@@ -350,8 +382,11 @@ type npcsFile struct {
 
 // Load parses the embedded server/data JSON into an indexed Registry and
 // builds the `defs` message payload.
-func Load() (*Registry, error) {
-	raw, err := data.FS.ReadFile("items.json")
+func Load() (*Registry, error) { return load(data.FS) }
+
+// load is Load over any file system, so a test can add or break a file.
+func load(fsys fs.FS) (*Registry, error) {
+	raw, err := fs.ReadFile(fsys, "items.json")
 	if err != nil {
 		return nil, fmt.Errorf("defs: read items.json: %w", err)
 	}
@@ -360,7 +395,7 @@ func Load() (*Registry, error) {
 		return nil, fmt.Errorf("defs: parse items.json: %w", err)
 	}
 
-	raw, err = data.FS.ReadFile("npcs.json")
+	raw, err = fs.ReadFile(fsys, "npcs.json")
 	if err != nil {
 		return nil, fmt.Errorf("defs: read npcs.json: %w", err)
 	}
@@ -368,12 +403,21 @@ func Load() (*Registry, error) {
 	if err := json.Unmarshal(raw, &npcsF); err != nil {
 		return nil, fmt.Errorf("defs: parse npcs.json: %w", err)
 	}
+	// mobs.json is the generated creature library (art/tools/mobs.mjs), the
+	// same shape as npcs.json; optional, appended after the hand-written ones.
+	if raw, err := fs.ReadFile(fsys, "mobs.json"); err == nil {
+		var mobsF npcsFile
+		if err := json.Unmarshal(raw, &mobsF); err != nil {
+			return nil, fmt.Errorf("defs: parse mobs.json: %w", err)
+		}
+		npcsF.NPCs = append(npcsF.NPCs, mobsF.NPCs...)
+	}
 
 	// Loot tables live in the registry with everything else under
 	// server/data. They were briefly parsed in internal/sim instead, which
 	// meant two parsers over one embedded dataset — the second one drifts the
 	// moment the schema moves.
-	raw, err = data.FS.ReadFile("loot.json")
+	raw, err = fs.ReadFile(fsys, "loot.json")
 	if err != nil {
 		return nil, fmt.Errorf("defs: read loot.json: %w", err)
 	}
@@ -382,7 +426,7 @@ func Load() (*Registry, error) {
 		return nil, fmt.Errorf("defs: parse loot.json: %w", err)
 	}
 
-	zoneFiles, err := fs.Glob(data.FS, "zones/*.json")
+	zoneFiles, err := fs.Glob(fsys, "zones/*.json")
 	if err != nil {
 		return nil, fmt.Errorf("defs: glob zones: %w", err)
 	}
@@ -399,7 +443,7 @@ func Load() (*Registry, error) {
 		Zones:        make(map[string]Zone, len(zoneFiles)),
 		Missions:     map[string]Mission{},
 	}
-	if raw, err := data.FS.ReadFile("skills.json"); err == nil {
+	if raw, err := fs.ReadFile(fsys, "skills.json"); err == nil {
 		var sf struct {
 			Skills    []Skill             `json:"skills"`
 			Synergies []Synergy           `json:"synergies"`
@@ -414,7 +458,7 @@ func Load() (*Registry, error) {
 		reg.Awards = sf.Awards
 		reg.Unlocks = sf.Unlocks
 	}
-	if raw, err := data.FS.ReadFile("missions.json"); err == nil {
+	if raw, err := fs.ReadFile(fsys, "missions.json"); err == nil {
 		var mf struct {
 			Missions []Mission `json:"missions"`
 		}
@@ -425,7 +469,7 @@ func Load() (*Registry, error) {
 			reg.Missions[m.ID] = m
 		}
 	}
-	if raw, err := data.FS.ReadFile("nodes.json"); err == nil {
+	if raw, err := fs.ReadFile(fsys, "nodes.json"); err == nil {
 		var nf struct {
 			Nodes []Node `json:"nodes"`
 		}
@@ -438,7 +482,7 @@ func Load() (*Registry, error) {
 			reg.Nodes[n.ID] = n
 		}
 	}
-	if raw, err := data.FS.ReadFile("recipes.json"); err == nil {
+	if raw, err := fs.ReadFile(fsys, "recipes.json"); err == nil {
 		var rf struct {
 			Recipes []Recipe `json:"recipes"`
 		}
@@ -458,10 +502,13 @@ func Load() (*Registry, error) {
 		reg.Entities[ed.Type] = ed
 	}
 	for _, n := range npcsF.NPCs {
+		if _, dup := reg.NPCs[n.ID]; dup {
+			return nil, fmt.Errorf("defs: npc %q defined twice (npcs.json, mobs.json)", n.ID)
+		}
 		reg.NPCs[n.ID] = n
 	}
 	for _, zf := range zoneFiles {
-		raw, err := data.FS.ReadFile(zf)
+		raw, err := fs.ReadFile(fsys, zf)
 		if err != nil {
 			return nil, fmt.Errorf("defs: read %s: %w", zf, err)
 		}
@@ -491,13 +538,17 @@ func Load() (*Registry, error) {
 	return reg, nil
 }
 
-// payloadNPC is the client-visible slice of an NPC: display name and verb,
-// not its stock (that arrives per-NPC via `shop_list`) or any other
-// server-side bookkeeping.
+// payloadNPC is the client-visible slice of an NPC: display name, verb and
+// body size (omitted when default, so the payload stays small), not its
+// stock (that arrives per-NPC via `shop_list`) or any other server-side
+// bookkeeping.
 type payloadNPC struct {
-	Name  string `json:"name"`
-	Asset string `json:"asset"`
-	Verb  string `json:"verb"`
+	Name      string  `json:"name"`
+	Asset     string  `json:"asset"`
+	Verb      string  `json:"verb"`
+	Radius    float64 `json:"radius,omitempty"`
+	Height    float64 `json:"height,omitempty"`
+	EyeHeight float64 `json:"eye_height,omitempty"`
 }
 
 // payloadConstants are the GDD "Interaction" constants a client needs to
@@ -547,7 +598,8 @@ func buildPayload(reg *Registry) ([]byte, error) {
 		},
 	}
 	for id, n := range reg.NPCs {
-		p.NPCs[id] = payloadNPC{Name: n.Name, Asset: n.Asset, Verb: n.Verb}
+		p.NPCs[id] = payloadNPC{Name: n.Name, Asset: n.Asset, Verb: n.Verb,
+			Radius: n.RadiusM, Height: n.HeightM, EyeHeight: n.EyeHeightM}
 	}
 	b, err := json.Marshal(p)
 	if err != nil {
@@ -558,7 +610,7 @@ func buildPayload(reg *Registry) ([]byte, error) {
 
 // auditArtisan is the load-time cross-check of the Phase 12 data: a node's
 // tool, loot table and skill must exist, a recipe's items must exist, and a
-// zone may only place node defs that exist. A typo here should kill the
+// zone may only place node and npc defs that exist. A typo here should kill the
 // server at startup with a name, not surface as a `gather` that always
 // refuses.
 func auditArtisan(reg *Registry) error {
@@ -625,6 +677,11 @@ func auditArtisan(reg *Registry) error {
 			if e.Type == "node" {
 				if _, ok := reg.Nodes[e.Def]; !ok {
 					return fmt.Errorf("defs: zone %s places unknown node %q", zid, e.Def)
+				}
+			}
+			if e.Type == "npc" {
+				if _, ok := reg.NPCs[e.Def]; !ok {
+					return fmt.Errorf("defs: zone %s places unknown npc %q", zid, e.Def)
 				}
 			}
 		}

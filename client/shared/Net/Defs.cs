@@ -6,7 +6,7 @@
 //
 //     { "items":    { "<item id>":   { name, kind, slot, asset, ... } },
 //       "entities": { "<type name>": { type, asset, max_health, hitbox } },
-//       "npcs":     { "<npc id>":    { name, asset, verb } },
+//       "npcs":     { "<npc id>":    { name, asset, verb, radius?, height?, eye_height? } },
 //       "constants": { interact_dist, interact_cone } }
 //
 // Every one of those is a JSON MAP, which is exactly what Unity's JsonUtility
@@ -151,12 +151,20 @@ namespace SpaceAdventure.Net
         [JsonProperty("max_health")] public int MaxHealth { get; set; }
     }
 
-    /// <summary>An NPC archetype's display name, model and interaction verb.</summary>
+    /// <summary>An NPC archetype's display name, model, interaction verb and body size.</summary>
     public sealed class NpcDef
     {
         [JsonProperty("name")] public string Name { get; set; } = "";
         [JsonProperty("asset")] public string Asset { get; set; } = "";
         [JsonProperty("verb")] public string Verb { get; set; } = "";
+        // Body size in metres; the server omits a default, which leaves a
+        // standing person's (defs.go DefaultNPC*).
+        [JsonProperty("radius")] public float Radius { get; set; } = 0.35f;
+        [JsonProperty("height")] public float Height { get; set; } = 1.8f;
+        [JsonProperty("eye_height")] public float EyeHeight { get; set; } = 1.7f;
+
+        /// <summary>What an archetype the client was never told about gets.</summary>
+        public static readonly NpcDef Default = new NpcDef();
     }
 
     /// <summary>
@@ -329,6 +337,11 @@ namespace SpaceAdventure.Net
         public string NpcAsset(string archetype) =>
             Npcs != null && archetype != null && Npcs.TryGetValue(archetype, out NpcDef d)
                 ? d.Asset ?? "" : "";
+
+        /// <summary>An NPC archetype's def, or <see cref="NpcDef.Default"/> (a standing person).</summary>
+        public NpcDef Npc(string archetype) =>
+            Npcs != null && archetype != null && Npcs.TryGetValue(archetype, out NpcDef d) && d != null
+                ? d : NpcDef.Default;
 
         /// <summary>Display name for an NPC archetype, or "".</summary>
         public string NpcName(string archetype) =>

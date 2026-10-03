@@ -290,29 +290,34 @@ async function selftest() {
 
 // ---------------------------------------------------------------------------
 
-const arg = process.argv[2];
-if (!arg) {
-  console.error("usage: import_pack.mjs <recipe.json> | --selftest");
-  process.exit(2);
-}
-if (arg === "--selftest") {
-  process.exit((await selftest()) === 0 ? 0 : 1);
+// Run as a command (tools/mobs.mjs imports importPack/updateManifest instead).
+async function main() {
+  const arg = process.argv[2];
+  if (!arg) {
+    console.error("usage: import_pack.mjs <recipe.json> | --selftest");
+    process.exit(2);
+  }
+  if (arg === "--selftest") {
+    process.exit((await selftest()) === 0 ? 0 : 1);
+  }
+
+  const recipePath = path.resolve(process.cwd(), arg);
+  const base = JSON.parse(readFileSync(recipePath, "utf8"));
+  base.recipe_path = path.relative(artDir, recipePath);
+  // `bodies`: the piece is also built for these wearers (armor.py BODIES), as
+  // "<id>@<body>" from build/<id>@<body>.raw.glb to <out stem>.<body>.glb.
+  const variants = [base, ...(base.bodies ?? []).map((b) => ({
+    ...base,
+    id: `${base.id}@${b}`,
+    variant_of: base.id,
+    src: base.src.replace(".raw.glb", `@${b}.raw.glb`),
+    out: base.out.replace(/\.glb$/, `.${b.replace("npc.", "")}.glb`),
+  }))];
+  for (const recipe of variants) {
+    const result = await importPack(recipe);
+    updateManifest(result, recipe);
+    console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);
+  }
 }
 
-const recipePath = path.resolve(process.cwd(), arg);
-const base = JSON.parse(readFileSync(recipePath, "utf8"));
-base.recipe_path = path.relative(artDir, recipePath);
-// `bodies`: the piece is also built for these wearers (armor.py BODIES), as
-// "<id>@<body>" from build/<id>@<body>.raw.glb to <out stem>.<body>.glb.
-const variants = [base, ...(base.bodies ?? []).map((b) => ({
-  ...base,
-  id: `${base.id}@${b}`,
-  variant_of: base.id,
-  src: base.src.replace(".raw.glb", `@${b}.raw.glb`),
-  out: base.out.replace(/\.glb$/, `.${b.replace("npc.", "")}.glb`),
-}))];
-for (const recipe of variants) {
-  const result = await importPack(recipe);
-  updateManifest(result, recipe);
-  console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);
-}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

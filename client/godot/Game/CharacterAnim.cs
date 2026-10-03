@@ -5,6 +5,10 @@
 // AnimationPlayer under the generated scene with no asset anywhere. This
 // drives that player directly.
 //
+// Creatures carry fewer: some have no sprint, walk or die, a few only idle.
+// A missing gait falls back to the next slower one, and a missing death is a
+// procedural fall (see Fall).
+//
 // DRIVEN BY OBSERVED SPEED, not by a state flag on the wire. The protocol
 // carries no gait: it sends positions, and remotes are drawn at an
 // interpolated pose (see Entities.cs). So the speed that should pick the clip
@@ -32,9 +36,10 @@ namespace SpaceAdventure.Game
         internal const float WalkAt = 0.35f;
         internal const float SprintAt = 6.0f;
 
-        /// <summary>Clips that play once and hold: dying, and the first-person fire and reload.</summary>
+        /// <summary>Clips that play once and hold: dying, flinching, a creature's attack, and the first-person fire and reload.</summary>
         internal static bool OneShot(string name) =>
-            name == "die" || name.StartsWith("fp_fire") || name.StartsWith("fp_reload") || name.StartsWith("hit");
+            name == "die" || name.StartsWith("fp_fire") || name.StartsWith("fp_reload") || name.StartsWith("hit")
+            || name.StartsWith("attack");
 
         /// <summary>
         /// Hold family suffix ("" or "_pistol"): `name + Class` when the body
@@ -69,9 +74,23 @@ namespace SpaceAdventure.Game
         private readonly AnimationPlayer _player;
         private string _current;
 
-        private CharacterAnim(AnimationPlayer player)
+        /// <summary>
+        /// No die clip: the body lingers this long after death, tipping over
+        /// in the first FallTime of it, instead of vanishing on the spot.
+        /// </summary>
+        private const float FallLinger = 1.2f;
+        private const double FallTime = 0.5;
+        private const float FallSink = 0.3f;
+
+        private readonly Node3D _model;
+        private readonly Transform3D _rest;
+        private double _fellAt = -1;
+
+        private CharacterAnim(AnimationPlayer player, Node3D model)
         {
             _player = player;
+            _model = model;
+            if (model != null) _rest = model.Transform;
             // Godot's glTF import drops constant tracks, so idle carries no
             // Root track and a non-deterministic mixer leaves any bone the new
             // clip doesn't key wherever the last clip put it: a body revived
@@ -92,16 +111,17 @@ namespace SpaceAdventure.Game
         public static CharacterAnim For(Node model)
         {
             foreach (AnimationPlayer ap in AssetRegistry.Descendants<AnimationPlayer>(model))
-                return ap.GetAnimationList().Length == 0 ? null : new CharacterAnim(ap);
+                return ap.GetAnimationList().Length == 0 ? null : new CharacterAnim(ap, model as Node3D);
             return null;
         }
 
         /// <summary>
         /// How long the death clip runs, so a caller knows when a body has
-        /// finished dying. Zero when there is no death clip: "do not wait".
+        /// finished dying. With no death clip, the procedural fall's linger.
         /// </summary>
         public float DeathLength =>
-            _player.HasAnimation("die") ? (float)_player.GetAnimation("die").Length : 0f;
+            _player.HasAnimation("die") ? (float)_player.GetAnimation("die").Length
+            : _model != null ? FallLinger : 0f;
 
         /// <summary>
         /// Something in hand: the gaits switch to their "_armed" variants (arms
@@ -124,16 +144,40 @@ namespace SpaceAdventure.Game
         /// <summary>Call every frame with the body's observed ground speed.</summary>
         public void Drive(float speed, bool dead)
         {
-            string want = dead ? "die"
+            bool fall = !_player.HasAnimation("die") && _model != null;
+            if (fall) Fall(dead);
+            string want = dead ? (fall ? "idle" : "die")
                         : speed > SprintAt ? "sprint"
                         : speed > WalkAt ? "walk"
                         : "idle";
+            if (want == "sprint" && !_player.HasAnimation(want)) want = "walk";
+            if (want == "walk" && !_player.HasAnimation(want)) want = "idle";
             if (Armed && !dead && _player.HasAnimation(want + "_armed")) want = Clip(_player, want + "_armed", Class);
             if (!dead && Clock.Now < _flinchUntil) return;   // let the flinch finish
             if (want == _current) return;
             if (!_player.HasAnimation(want)) return;
             _player.Play(want, Fade);
             _current = want;
+        }
+
+        /// <summary>
+        /// A death with no clip: tip 90 degrees about the model's right axis
+        /// while sinking FallSink, eased in like a fall, then hold until the
+        /// body is hidden. Alive again (respawn) puts the model back.
+        /// </summary>
+        private void Fall(bool dead)
+        {
+            if (!dead)
+            {
+                if (_fellAt >= 0) _model.Transform = _rest;
+                _fellAt = -1;
+                return;
+            }
+            if (_fellAt < 0) _fellAt = Clock.Now;
+            float t = Mathf.Clamp((float)((Clock.Now - _fellAt) / FallTime), 0f, 1f);
+            float e = t * t;
+            _model.Transform = _rest * new Transform3D(
+                new Basis(Vector3.Right, -Mathf.Pi / 2 * e), new Vector3(0, -FallSink * e, 0));
         }
     }
 }
