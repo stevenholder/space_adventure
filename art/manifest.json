@@ -4,7 +4,7 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 5600,
+      "tris": 6075,
       "license": "CC0",
       "source": "recipes/char.player.json",
       "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
@@ -24,7 +24,8 @@
           "suit",
           "skin",
           "hair",
-          "eye"
+          "eye",
+          "sclera"
         ]
       },
       "pbr": true
@@ -140,7 +141,7 @@
     {
       "id": "npc.shopkeeper",
       "file": "chars/shopkeeper.glb",
-      "tris": 5600,
+      "tris": 6099,
       "license": "CC0",
       "source": "recipes/npc.shopkeeper.json",
       "description": "Shop NPCs (quartermaster, dispatcher): tools/bpy/body.py VARIANTS, the player's skeleton, weights and clips in a khaki work suit with grey hair, bulk 1.10. Faces -Z; eye at 1.7 m.",
@@ -160,7 +161,8 @@
           "suit",
           "skin",
           "hair",
-          "eye"
+          "eye",
+          "sclera"
         ]
       },
       "pbr": true
@@ -168,7 +170,7 @@
     {
       "id": "npc.dispatcher",
       "file": "chars/dispatcher.glb",
-      "tris": 5624,
+      "tris": 6168,
       "license": "CC0",
       "source": "recipes/npc.dispatcher.json",
       "description": "Dispatcher Oru: an android on the shared skeleton (tools/bpy/body.py RACES): synthetic pale skin, lit cyan eyes, scalp seam, white suit, bulk 0.96. Faces -Z; eye at 1.7 m.",
@@ -187,7 +189,8 @@
         "head": [
           "suit",
           "skin",
-          "eye"
+          "eye",
+          "sclera"
         ]
       },
       "pbr": true
@@ -401,7 +404,7 @@
     {
       "id": "npc.grunt",
       "file": "chars/grunt.glb",
-      "tris": 6140,
+      "tris": 6648,
       "license": "CC0",
       "source": "recipes/npc.grunt.json",
       "description": "Melee raider: an orc on the shared skeleton (tools/bpy/body.py RACES): green skin, brow, tusks, pointed ears, topknot, bulk 1.20 and shoulders 1.15, rust jacket. Faces -Z; eye at 1.7 m.",
@@ -422,7 +425,8 @@
           "skin",
           "hair",
           "eye",
-          "ivory"
+          "ivory",
+          "sclera"
         ]
       },
       "pbr": true
@@ -430,7 +434,7 @@
     {
       "id": "npc.gunner",
       "file": "chars/gunner.glb",
-      "tris": 5936,
+      "tris": 6411,
       "license": "CC0",
       "source": "recipes/npc.gunner.json",
       "description": "Ranged raider: a robot on the shared skeleton (tools/bpy/body.py RACES): box head with one wide visor and an antenna, grey chassis, hazard stripe, dark mechanical hands. Faces -Z; eye at 1.7 m.",
@@ -450,7 +454,8 @@
           "suit",
           "skin",
           "glove",
-          "eye"
+          "eye",
+          "sclera"
         ]
       },
       "pbr": true

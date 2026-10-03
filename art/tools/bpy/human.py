@@ -57,9 +57,10 @@ MATERIALS = {
     "skin":  ((0.80, 0.62, 0.50), 0.55, 0.0),
     "glove": ((0.16, 0.16, 0.18), 0.7, 0.0),    # the suit's own gloves (a bare-hand seam showed at the wrist)
     "hair":  ((0.10, 0.07, 0.05), 0.8, 0.0),
-    "eye":   ((0.05, 0.05, 0.06), 0.15, 0.0),
+    "eye":   ((0.16, 0.10, 0.06), 0.15, 0.0),   # iris (variants recolour it: android cyan, orc red)
     "boot":  ((0.07, 0.07, 0.08), 0.85, 0.0),
     "ivory": ((0.86, 0.82, 0.70), 0.5, 0.0),    # orc tusks
+    "sclera": ((0.88, 0.86, 0.82), 0.3, 0.0),   # the white of the eye
 }
 
 KEEP_GROUPS = ("body", "helper-l-eye", "helper-r-eye")
@@ -184,8 +185,32 @@ def make_human(decimate=True):
     dec.ratio = min(1.0, BODY_TRIS / tris)
     bpy.context.view_layer.objects.active = h
     bpy.ops.object.modifier_apply(modifier=dec.name)
+    new_eyeballs(h, eyes)
     h.name = "human"
     return h, rig, eyes
+
+
+EYEBALL_R = 0.0145     # MakeHuman's eyeball, measured: every face within 1.6 cm of an eye centre
+
+
+def new_eyeballs(h, eyes):
+    """Decimation leaves each eyeball a handful of big triangles (the iris was
+    one jagged one). Swap them for clean spheres, pole forward (+Y) so the
+    iris dress() paints is a round cap, rigid on the head bone."""
+    bm = bmesh.new()
+    bm.from_mesh(h.data)
+    doomed = [f for f in bm.faces if min((f.calc_center_median() - e).length for e in eyes) < 0.016]
+    bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    deform = bm.verts.layers.deform.verify()
+    head = h.vertex_groups["head"].index
+    for e in eyes:
+        M = Matrix.Translation(e) @ Matrix.Rotation(-math.pi / 2, 4, "X")   # +Z pole -> +Y
+        ball = bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=12, radius=EYEBALL_R, matrix=M)
+        for v in ball["verts"]:
+            v[deform][head] = 1.0
+    bm.to_mesh(h.data)
+    bm.free()
 
 
 def vertex_group_centroid(obj, name):
@@ -225,7 +250,8 @@ def dress(h, eye_l, eye_r):
         h.data.materials.append(material(n))
     idx = {n: i for i, n in enumerate(MATERIALS)}
     dom = dominant_bones(h)
-    head_pts = [v.co for v, b in zip(h.data.vertices, dom) if b == "head"]
+    head_pts = [v.co for v, b in zip(h.data.vertices, dom)          # not the eyeballs: their dense
+                if b == "head" and min((v.co - eye_l).length, (v.co - eye_r).length) > 0.016]   # spheres pull the hairline
     hc = sum(head_pts, Vector()) / len(head_pts)       # skull centre: hair is measured from here
     for p in h.data.polygons:
         c = p.center
@@ -233,7 +259,11 @@ def dress(h, eye_l, eye_r):
         b = max(set(bones), key=bones.count)
         r = c - hc
         if (c - eye_l).length < 0.016 or (c - eye_r).length < 0.016:
-            m = "eye"
+            # Every face this close is eyeball (r ~0.0145). One dark colour
+            # over the whole ball read as an empty socket in game; the front
+            # cap (within ~25 degrees of straight ahead, +Y) is the iris.
+            e = eye_l if (c - eye_l).length < (c - eye_r).length else eye_r
+            m = "eye" if (c - e).normalized().y > 0.9 else "sclera"
         elif b == "head":
             # Short hair: the crown, and the back of the skull above the nape.
             hair = ACTIVE.get("hair", True)
