@@ -16,6 +16,7 @@ using System;
 // here interpolate between the two snapshots bracketing that render point.
 
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using SpaceAdventure.Net;
 using SpaceAdventure.Sim;
@@ -421,7 +422,7 @@ namespace SpaceAdventure.Game
             {
                 // The hand is the middle finger's parent: Godot renames the
                 // `hand_r` bone itself (it clashes with the `hand.r` mount).
-                int m = sk.FindBone("middle_01_r"), i = sk.FindBone("index_01_r"), p = sk.FindBone("pinky_01_r");
+                int m = Bone(sk, "middle_01_r"), i = Bone(sk, "index_01_r"), p = Bone(sk, "pinky_01_r");
                 int h = m < 0 ? -1 : sk.GetBoneParent(m);
                 if (h < 0 || i < 0 || p < 0) continue;
                 Vector3 P(int b) => sk.GlobalTransform * sk.GetBoneGlobalPose(b).Origin;
@@ -432,6 +433,20 @@ namespace SpaceAdventure.Game
                 return (a, k);
             }
             return null;
+        }
+
+        /// <summary>
+        /// A bone by name, or -1. A second instance of a model (the doll, the
+        /// FP arms) gets its bones suffixed `_2` by the importer.
+        /// </summary>
+        private static int Bone(Skeleton3D sk, string name)
+        {
+            for (int b = 0; b < sk.GetBoneCount(); b++)
+            {
+                string n = sk.GetBoneName(b);
+                if (n == name || n.StartsWith(name + "_") && n.Substring(name.Length + 1).All(c => char.IsDigit(c) || c == '_')) return b;
+            }
+            return -1;
         }
 
         /// <summary>The right elbow in world space: the forearm bone's origin, or null without a skeleton.</summary>
