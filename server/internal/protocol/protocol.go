@@ -93,6 +93,7 @@ const (
 	OpCraft        uint16 = 0x0012
 	OpUse          uint16 = 0x0013 // Phase 13: a consumable or a worn ability
 	OpShopBuyback  uint16 = 0x0014 // Phase 13: re-buy something sold this session, at what the shop paid
+	OpWield        uint16 = 0x0015 // melee: {"slot":"primary"|"melee"} picks the weapon in hand
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -107,7 +108,7 @@ const (
 
 // event_id values (PROTOCOL.md constants).
 const (
-	EventExplosion   uint16 = 0x0001 // reserved for later
+	EventExplosion   uint16 = 0x0001 // a thrown charge bursts: entity = thrower, data = pos f32x3, radius f32, item id UTF-8; broadcast
 	EventShotFired   uint16 = 0x0002
 	EventHit         uint16 = 0x0003
 	EventDeath       uint16 = 0x0004
@@ -123,7 +124,7 @@ const (
 	EventSkillXP         uint16 = 0x000D // Phase 11: {skill,xp,level,next_at,leveled}
 	EventGatherEnd       uint16 = 0x000E // Phase 12: {node,reason,item,qty}, unicast
 	EventWorn            uint16 = 0x000F // armor: data = "slot=item" UTF-8 (item empty = cleared), broadcast + replayed at join
-	EventAttack          uint16 = 0x0010 // an NPC starts an attack (its wind-up): entity = attacker, data = u32 target id; broadcast
+	EventAttack          uint16 = 0x0010 // an NPC starts an attack (its wind-up) or a body swings a melee weapon: entity = attacker, data = u32 target id (0 = a player swing, no target); broadcast
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

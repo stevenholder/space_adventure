@@ -733,14 +733,140 @@ P_FP_HOLD = dict(G=(0.13, 0.36, 1.30), forward=(-0.02, 1.0, 0.03))   # elbows be
 P_FP_ADS = dict(G=(0.00, 0.47, 1.55), forward=(0.0, 1.0, 0.02))     # client puts the rear sight 0.42 m out
 P_FP_LOWER = dict(G=(0.08, 0.26, 1.10), forward=(-0.20, 0.60, -0.75))
 
+# ---- melee -------------------------------------------------------------------
+# A hand weapon sits in the fist with its blade (haft) out of the THUMB side
+# and its edge toward the KNUCKLES. Both read off the bones the same way here
+# and in the client (EntityViews.BladeFrame): blade = index_01 - pinky_01
+# (the knuckle row, thumb side), made square to knuckles = middle_01 - hand.
+# Poses below say where the fist goes and where the blade/edge point; the
+# client hangs the weapon on hand.r along that frame, so the clip IS the hold.
+MELEE_SPACING = 0.18   # a two-hander: the left fist this far down the haft (rpg_items.py fore)
+
+
+def blade_frame(rig, side):
+    """(blade, knuckles), world: the fist's blade axis and edge direction."""
+    update()
+    P = lambda n: pb(rig, n + "_" + side).matrix.translation
+    k = (P("middle_01") - P("hand")).normalized()
+    row = P("index_01") - P("pinky_01")
+    return (row - k * row.dot(k)).normalized(), k
+
+
+def edge_for(blade):
+    """The default edge: forward (+Y), square to the blade; down for a blade
+    that itself points forward."""
+    a = Vector(blade).normalized()
+    e = Vector((0, 1, 0)) - a * a.y
+    if e.length < 0.3:
+        e = Vector((0, 0, -1)) - a * -a.z
+    return e.normalized()
+
+
+def grip_blade(rig, side, want, blade, edge, pole):
+    """Close a fist on `want` with the blade along `blade` and the edge along
+    `edge` (world): grip()'s loop, turning the hand by its knuckle row."""
+    A, E = Vector(blade).normalized(), Vector(edge).normalized()
+    target = Vector(want) - E * 0.07
+    for _ in range(5):
+        rest_fingers(rig, side)
+        reach(rig, side, target, pole)
+        a0, k0 = blade_frame(rig, side)
+        rotate_about_head(rig, "hand_" + side, (frame(E, A) @ frame(k0, a0).inverted()).to_quaternion())
+        curl_each(rig, side, (85, 90, 90, 90), 55)
+        miss = Vector(want) - mount_at(rig, side)
+        if miss.length < 0.002:
+            break
+        target += miss
+
+
+def melee1(rig, G, forward, edge=None, pole_r=(0.7, -0.3, -0.6)):
+    """One hand on the hilt at G, blade along `forward`; the left hand loose
+    at the hip, a fist."""
+    grip_blade(rig, "r", G, forward, edge if edge is not None else edge_for(forward), pole_r)
+    reach(rig, "l", (-0.24, 0.16, 1.02), (-0.6, -0.2, -0.8), hand_dir=(0.1, 0.5, -0.85))
+    curl(rig, "l", CURL * 1.6, thumb=CURL * 0.4)
+
+
+def melee2(rig, G, forward, edge=None, pole_r=(0.7, -0.3, -0.6), pole_l=(-0.7, -0.2, -0.7)):
+    """Both fists on the haft: the right at G (nearer the blade), the left
+    MELEE_SPACING down toward the pommel, same blade and edge."""
+    A = Vector(forward).normalized()
+    E = Vector(edge) if edge is not None else edge_for(A)
+    grip_blade(rig, "r", G, A, E, pole_r)
+    grip_blade(rig, "l", Vector(G) - A * MELEE_SPACING, A, E, pole_l)
+
+
+def keyed(keys, t):
+    """Piecewise-linear pose targets: keys = [(t, G, blade, edge|None), ...]
+    -> (G, blade, edge) at t, eased in each span."""
+    for (t0, g0, a0, e0), (t1, g1, a1, e1) in zip(keys, keys[1:]):
+        if t <= t1:
+            x = 0.0 if t1 <= t0 else max(0.0, min(1.0, (t - t0) / (t1 - t0)))
+            x = x * x * (3 - 2 * x)
+            a = Vector(a0).normalized().lerp(Vector(a1).normalized(), x).normalized()
+            e0 = Vector(e0) if e0 is not None else edge_for(a0)
+            e1 = Vector(e1) if e1 is not None else edge_for(a1)
+            e = e0.lerp(e1, x)
+            e = (e - a * e.dot(a)).normalized()
+            return Vector(g0).lerp(Vector(g1), x), a, e
+    _, g, a, e = keys[-1]
+    return Vector(g), Vector(a).normalized(), (Vector(e) if e is not None else edge_for(a))
+
+
+M1_AIM3P = dict(G=(0.24, 0.28, 1.05), forward=(0.05, 0.55, 0.83))      # blade up and forward at the hip
+M1_FP = dict(G=(0.20, 0.38, 1.12), forward=(0.48, -0.50, 0.72))   # first person: upright on screen, leaning right, clear of the crosshair (tipped back: the view pulls a forward lean left)
+M1_LOWER = dict(G=(0.20, 0.24, 1.00), forward=(0.0, 0.85, -0.5))
+M2_AIM3P = dict(G=(0.16, 0.30, 1.08), forward=(-0.25, 0.45, 0.86))      # two-hander held up across the body
+M2_FP = dict(G=(0.16, 0.38, 1.16), forward=(0.44, -0.50, 0.74))
+M2_LOWER = dict(G=(0.14, 0.26, 0.98), forward=(-0.2, 0.8, -0.55))
+
+# Swings: (t, fist, blade, edge). The edge leads the motion. Third person
+# twists the chest with it (TWIST, degrees, negative = turned right).
+SWING1 = [(0.0, *M1_AIM3P.values(), None),
+          (0.30, (0.32, 0.00, 1.55), (0.2, -0.5, 0.84), (0.0, 0.86, 0.5)),
+          (0.55, (0.00, 0.48, 1.25), (-0.75, 0.65, 0.1), (-0.4, -0.45, -0.8)),
+          (0.78, (-0.22, 0.32, 0.95), (-0.55, 0.1, -0.83), (-0.6, -0.6, 0.35)),
+          (1.0, *M1_AIM3P.values(), None)]
+SWING2 = [(0.0, *M2_AIM3P.values(), None),
+          (0.35, (0.30, -0.02, 1.60), (0.35, -0.55, 0.75), (0.1, 0.8, 0.55)),
+          (0.60, (0.02, 0.50, 1.15), (-0.55, 0.8, -0.2), (-0.3, 0.0, -0.95)),
+          (0.82, (-0.18, 0.30, 0.88), (-0.5, 0.2, -0.85), (-0.7, -0.6, 0.3)),
+          (1.0, *M2_AIM3P.values(), None)]
+SPIN = [(0.0, *M2_AIM3P.values(), None),                     # out to the right, flat, then all the way round
+        (0.15, (0.30, 0.30, 1.18), (0.80, 0.55, 0.20), (-0.5, 0.75, 0.0)),
+        (0.85, (0.30, 0.30, 1.18), (0.80, 0.55, 0.20), (-0.5, 0.75, 0.0)),
+        (1.0, *M2_AIM3P.values(), None)]
+FP_SWING1 = [(0.0, *M1_FP.values(), None),
+             (0.25, (0.30, 0.20, 1.55), (0.15, -0.2, 0.97), (0.0, 0.98, 0.2)),
+             (0.55, (0.00, 0.50, 1.35), (-0.85, 0.5, 0.1), (-0.3, -0.35, -0.9)),
+             (0.80, (-0.20, 0.36, 1.05), (-0.5, 0.3, -0.8), (-0.7, -0.5, 0.25)),
+             (1.0, *M1_FP.values(), None)]
+FP_SWING2 = [(0.0, *M2_FP.values(), None),
+             (0.30, (0.28, 0.16, 1.58), (0.3, -0.45, 0.84), (0.1, 0.85, 0.5)),
+             (0.58, (0.02, 0.52, 1.25), (-0.5, 0.85, -0.1), (-0.3, 0.1, -0.95)),
+             (0.82, (-0.16, 0.34, 0.95), (-0.5, 0.25, -0.83), (-0.7, -0.6, 0.3)),
+             (1.0, *M2_FP.values(), None)]
+FP_SPIN = [(0.0, *M2_FP.values(), None),                     # first person: a wide flat sweep right to left
+           (0.30, (0.34, 0.22, 1.30), (0.9, 0.3, 0.3), (-0.3, 0.95, 0.0)),
+           (0.60, (0.00, 0.52, 1.28), (-0.2, 1.0, 0.05), (-0.98, 0.2, 0.0)),
+           (0.82, (-0.30, 0.30, 1.22), (-0.9, 0.1, 0.2), (-0.1, -0.98, 0.0)),
+           (1.0, *M2_FP.values(), None)]
+
 # Weapon classes: a clip-name suffix, the hold, its targets and where its
 # magazine is (reload). The client picks the suffix from the weapon's def.
+# A melee class has swings instead of fire/reload/ads.
 CLASSES = {
     "": dict(hold=rifle, aim3p=AIM3P, fp=FP_HOLD, ads=FP_ADS, lower=FP_LOWER,
              fore=(FORE_ALONG, FORE_UP), mag=(0.12, -0.04)),
     "_pistol": dict(hold=pistol, aim3p=P_AIM3P, fp=P_FP_HOLD, ads=P_FP_ADS, lower=P_FP_LOWER,
                     fore=PISTOL_FORE, mag=(0.0, -0.09)),
+    "_melee": dict(hold=melee1, aim3p=M1_AIM3P, fp=M1_FP, ads=M1_FP, lower=M1_LOWER,
+                   melee={"attack": (SWING1, 0.55), "fp_attack": (FP_SWING1, 0.45)}),
+    "_melee2h": dict(hold=melee2, aim3p=M2_AIM3P, fp=M2_FP, ads=M2_FP, lower=M2_LOWER,
+                     melee={"attack": (SWING2, 0.85), "fp_attack": (FP_SWING2, 0.75),
+                            "attack_spin": (SPIN, 1.0), "fp_attack_spin": (FP_SPIN, 0.8)}),
 }
+TWIST = {"attack": 25, "attack_spin": 0}
 
 
 def pose_rest(rig):
@@ -774,6 +900,31 @@ def clip(rig, name, seconds, pose_at, keys, loop=True):
         key(rig, 1 + frames)
     bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, 1 + frames)
     pose_rest(rig)
+
+
+def quat_continuity(act):
+    """Flip each quaternion key into the previous key's hemisphere: a pose
+    past 180 degrees (a spin) decomposes to the opposite sign, and the
+    curves then interpolate the long way round between two near keys."""
+    curves = {}
+    for fc in act.fcurves:
+        if fc.data_path.endswith("rotation_quaternion"):
+            curves.setdefault(fc.data_path, [None] * 4)[fc.array_index] = fc
+    for fcs in curves.values():
+        if None in fcs:
+            continue
+        n = len(fcs[0].keyframe_points)
+        for i in range(1, n):
+            prev = [fc.keyframe_points[i - 1].co[1] for fc in fcs]
+            cur = [fc.keyframe_points[i].co[1] for fc in fcs]
+            if sum(a * b for a, b in zip(prev, cur)) < 0:
+                for fc in fcs:
+                    kp = fc.keyframe_points[i]
+                    kp.co[1] = -kp.co[1]
+                    kp.handle_left[1] = -kp.handle_left[1]
+                    kp.handle_right[1] = -kp.handle_right[1]
+        for fc in fcs:
+            fc.update()
 
 
 def gait(rig, t, leg, knee, arm, lean, armed=None):
@@ -906,6 +1057,9 @@ def clips(rig):
         clip(rig, "fp_ads" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["ads"]), (0.0,))
         clip(rig, "fp_lower" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["lower"]), (0.0,))
 
+        if "melee" in C:
+            continue
+
         def fire(t, hold=hold, fp=fp):
             k = math.sin(math.pi * min(1.0, t * 1.6))       # back and up, then settle
             G = Vector(fp["G"]) + Vector((0, -0.03 * k, 0.012 * k))
@@ -925,6 +1079,27 @@ def clips(rig):
                 grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
                      (-0.7, 0.2, -0.7), fingers=(45, 50, 50, 50), thumb=30)
         clip(rig, "fp_reload" + sfx, 2.0, reload, (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), loop=False)
+
+    # Melee swings. Third person twists the chest with the blade (a spin
+    # turns the whole body round once); first person only moves the arms.
+    for sfx, C in CLASSES.items():
+        for name, (keys, secs) in C.get("melee", {}).items():
+            fp = name.startswith("fp_")
+            spin = name.endswith("spin")
+
+            def swing_at(t, keys=keys, hold=C["hold"], fp=fp, spin=spin):
+                G, A, E = keyed(keys, t)
+                if not fp and not spin:
+                    tw = 25 * math.sin(math.pi * t) * (1 if t > 0.4 else -0.8)
+                    swing(rig, "spine_02", (0, 0, 1), tw * 0.5)
+                    swing(rig, "spine_03", (0, 0, 1), tw * 0.5)
+                if spin and not fp:
+                    k = max(0.0, min(1.0, (t - 0.15) / 0.7))
+                    swing(rig, "Root", (0, 0, 1), -360 * k * k * (3 - 2 * k))
+                hold(rig, G, A, E)
+            n = 16 if spin else 10
+            clip(rig, name + sfx, secs, swing_at, tuple(i / n for i in range(n + 1)), loop=False)
+            quat_continuity(bpy.data.actions[name + sfx])
 
     def unarmed(t):
         # Loose fists low in the view, knuckles forward, thumbs up and in.

@@ -76,11 +76,14 @@ func (r *cmdRate) allow(now time.Time) bool {
 // and look direction (for the interaction re-check), and a lookup from a
 // shop NPC's entity_id to its archetype and world position.
 type cmdWorld struct {
-	Player  *store.Player
-	Reg     *defs.Registry
-	Pos     sim.Vec
-	Up      sim.Vec
-	Look    sim.Vec
+	Player *store.Player
+	Reg    *defs.Registry
+	Pos    sim.Vec
+	Up     sim.Vec
+	Look   sim.Vec
+	// Throw launches a thrown charge from the player's hand along Look
+	// (use.go). Takes s.mu itself. Nil in fixtures that never throw.
+	Throw   func(item string, t defs.Throw)
 	FindNPC func(entityID uint32) (npc defs.NPC, pos sim.Vec, ok bool)
 	// FindNode resolves a resource node (Phase 12): its def, position and
 	// remaining yields. Nil in registries that place none.

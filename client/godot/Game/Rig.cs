@@ -40,6 +40,9 @@
 //   -uiFaceHeight <m>       with -uiFace: aim that far above the target's feet
 //   -uiReload <secs>        start the reload motion and shoot that far into it
 //   -uiLowered              lower the rifle as if a wall were in the way
+//   -uiWield melee          after -uiBuy: put the melee weapon in hand (Tab)
+//   -uiSwing <secs>         swing what is in hand; shoot that far into it
+//   -uiUse <item>           use / throw it (-uiUseWait <secs>, default 0.6)
 
 using System;
 using System.Collections.Generic;
@@ -513,6 +516,15 @@ namespace SpaceAdventure.Game
                 GD.Print($"ui: bought {buy}: worn={string.Join(",", _character.Equipped.Values)}");
             }
 
+            // -uiWield melee: Tab, as a key press would (melee in hand).
+            if (Arg("-uiWield") == "melee")
+            {
+                _character.WieldMelee = true;
+                _net.Send(Character.WieldCmd(NextCmdSeq(), true));
+                await Wait(0.8);
+                GD.Print($"ui: wield melee: held={_character.Held}");
+            }
+
             // -uiClaim: claim the priority bounty the way the journal's button
             // does, then report the log -- the accept result is what moves it.
             if (Flag("-uiClaim"))
@@ -781,6 +793,23 @@ namespace SpaceAdventure.Game
             }
             // -uiWalk: hold W through the shot (gait / aimed-while-moving checks).
             if (Flag("-uiWalk")) { _rigWalk = true; await Wait(1.0); }
+
+            // -uiSwing <secs>: swing what is in hand (a real `fire`), shoot that
+            // far into the swing. -uiUse <item> uses/throws it and waits 0.6 s.
+            string swingArg = Arg("-uiSwing");
+            if (swingArg != null)
+            {
+                var lk = Frame.ToSim(CameraForward);
+                _net.Send(Encode.Fire(_seq, (float)lk.X, (float)lk.Y, (float)lk.Z));
+                _viewModel.Swing(_character.Defs.SwingClip(_character.Held));
+                await Wait(double.Parse(swingArg, CultureInfo.InvariantCulture));
+            }
+            string useArg = Arg("-uiUse");
+            if (useArg != null)
+            {
+                _net.Send(Character.UseCmd(NextCmdSeq(), useArg));
+                await Wait(double.Parse(Arg("-uiUseWait") ?? "0.6", CultureInfo.InvariantCulture));
+            }
 
             // -uiReload <secs>: start the reload motion, shoot that far into it.
             string reloadArg = Arg("-uiReload");

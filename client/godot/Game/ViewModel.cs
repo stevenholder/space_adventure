@@ -48,6 +48,10 @@ namespace SpaceAdventure.Game
         private static readonly Vector3 HoldSight = new Vector3(0.12f, -0.12f, 0f);
         private static readonly Vector3 AdsSight = new Vector3(0f, -0.01f, 0f);
         private static readonly Vector3 UnarmedHand = new Vector3(0.20f, -0.20f, 0f);
+        // A hand weapon: one fixed lift of the arms (camera space). Measured
+        // off the weapon like a gun's sight, the framing would chase the fist
+        // and cancel the swing.
+        private static readonly Vector3 MeleeLift = new Vector3(-0.04f, 0.24f, 0f);
 
         /// <summary>
         /// The shared vertex-colour shading, with the depth squeezed into the
@@ -218,7 +222,7 @@ void fragment() {
                 _bodyAnim = CharacterAnim.For(model);
                 if (_bodyAnim != null) _bodyAnim.Class = _cls;
                 EntityViews.Dress(_assets, a => a, _bodyModel, _worn, _wornDrawn, _wornNodes, local: true);
-                string want = _heldAsset; _heldAsset = "\u0000"; Hold(want);
+                string want = _heldAsset; _heldAsset = "\u0000"; Hold(want, _cls);
                 foreach (Node3D n in AssetRegistry.Descendants<Node3D>(_body))
                     if (n.Name == "model" || n.Name == "head-shadow") n.Visible = false;
             });
@@ -285,7 +289,7 @@ void fragment() {
                     g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
                 float sc = hand.GlobalBasis.Scale.X;
                 if (sc > 1e-4f) weapon.Scale = Vector3.One / sc;
-                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = _bodyModel });
+                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = _bodyModel, Blade = cls.StartsWith("_melee") });
             });
         }
 
@@ -309,7 +313,7 @@ void fragment() {
                 if (sc > 1e-4f) weapon.Scale = Vector3.One / sc;
                 weapon.AddChild(new AlignToForearm
                 {
-                    Weapon = weapon, Hand = hand, Model = _fpModel,
+                    Weapon = weapon, Hand = hand, Model = _fpModel, Blade = _cls.StartsWith("_melee"),
                     // Aiming: the barrel down the line of sight, so the front
                     // post sits on the crosshair whatever the arms manage.
                     Ads = () => (_eye.GlobalTransform, _adsW, _kick),
@@ -327,6 +331,13 @@ void fragment() {
             // The recoil clip is built on the hip hold; aimed, the gun rides
             // the sight line and only the kick moves it (and the arms follow).
             if (!_aiming) _fpAnim?.Fire(Clock.Now);
+        }
+
+        /// <summary>A melee swing: `clip` (attack / attack_spin) on the arms and on the body.</summary>
+        public void Swing(string clip)
+        {
+            _fpAnim?.Swing("fp_" + clip, Clock.Now);
+            _bodyAnim?.Attack(Clock.Now, clip);
         }
 
         /// <summary>R was pressed with a gun in hand: the reload motion, stretched to the weapon's time.</summary>
@@ -404,6 +415,8 @@ void fragment() {
                 want = UnarmedHand - un;
                 want.Z = 0f;
             }
+            else if (Armed && _cls.StartsWith("_melee"))
+                want = MeleeLift;
             else if (Armed && _fpGrip != null && IsInstanceValidNode(_fpGrip) && _adsW > 0.5f)
             {
                 // Aimed: the gun sits on the sight line by itself, so pull
@@ -561,6 +574,16 @@ void fragment() {
             string clip = CharacterAnim.Clip(_player, "fp_fire", Class);
             if (!Armed || !_player.HasAnimation(clip) || now < _oneShotUntil && _current.StartsWith("fp_reload")) return;
             _player.Play(clip, 0.02);
+            _player.Seek(0, true);
+            _oneShotUntil = now + _player.GetAnimation(clip).Length;
+            _current = clip;
+        }
+
+        public void Swing(string name, double now)
+        {
+            string clip = CharacterAnim.Clip(_player, name, Class);
+            if (!Armed || !_player.HasAnimation(clip)) return;
+            _player.Play(clip, 0.04);
             _player.Seek(0, true);
             _oneShotUntil = now + _player.GetAnimation(clip).Length;
             _current = clip;

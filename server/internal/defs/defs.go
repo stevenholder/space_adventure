@@ -35,6 +35,19 @@ type Weapon struct {
 	Class string `json:"class,omitempty"`
 }
 
+// Melee is a hand weapon's swing (slot `melee`, GDD "Melee"). Every body
+// whose capsule comes within Range of the wielder's chest and lies inside
+// Arc degrees of the facing takes Damage; Arc 360 hits all around. Interval
+// is the swing cadence, server-enforced like fire_interval. Hands picks the
+// hold (1 or 2) and is the client's only reason to read it.
+type Melee struct {
+	Damage   int     `json:"damage"`
+	Interval float64 `json:"interval"`
+	Range    float64 `json:"range"`
+	Arc      float64 `json:"arc"`
+	Hands    int     `json:"hands"`
+}
+
 // Item is one row of the item table (server/data/items.json).
 type Item struct {
 	ID       string  `json:"id"`
@@ -45,6 +58,7 @@ type Item struct {
 	Rarity   string  `json:"rarity,omitempty"` // Phase 8: common…legendary; absent reads as common
 	StackMax int     `json:"stack_max"`
 	Weapon   *Weapon `json:"weapon,omitempty"`
+	Melee    *Melee  `json:"melee,omitempty"`
 	// Phase 11.7: the character panel reads these. desc is the tooltip
 	// line; armor cuts incoming damage (sim.Mitigate, GDD "Equipment").
 	Desc  string `json:"desc,omitempty"`
@@ -66,6 +80,17 @@ type Item struct {
 type Consumable struct {
 	Heal     int     `json:"heal,omitempty"`
 	Cooldown float64 `json:"cooldown"`
+	Throw    *Throw  `json:"throw,omitempty"`
+}
+
+// Throw makes a consumable a thrown charge (GDD "Throwables"): it leaves
+// the hand at Speed m/s along the look, falls under gravity, and bursts on
+// the first thing it touches, dealing Damage at the centre falling off
+// linearly to half at Radius.
+type Throw struct {
+	Damage int     `json:"damage"`
+	Radius float64 `json:"radius"`
+	Speed  float64 `json:"speed"`
 }
 
 // Ability is what worn gear does on `use`. ID names the effect the server
@@ -218,7 +243,14 @@ type NPC struct {
 	// Weapon in hand (item id), replayed as an `equipped` event after the
 	// spawn. Cosmetic: NPC combat does not read it.
 	Primary string `json:"primary"`
-	Stock   []struct {
+	// Melee is a hand weapon (item id with a `melee` table). An archetype
+	// with one fights with ITS numbers inside its reach; one that also
+	// shoots (projectile_speed) swaps to it when a target closes in.
+	Melee string `json:"melee,omitempty"`
+	// MeleeDamage is what this archetype's swing deals when it also shoots
+	// (its attack_damage is the round's); 0 = the weapon's own damage.
+	MeleeDamage int `json:"melee_damage,omitempty"`
+	Stock       []struct {
 		Item  string `json:"item"`
 		Price int64  `json:"price"`
 	} `json:"stock"`
@@ -653,6 +685,12 @@ func auditArtisan(reg *Registry) error {
 		if it.Consumable != nil && (it.Consumable.Cooldown <= 0 || it.Kind != "consumable") {
 			return fmt.Errorf("defs: item %s: a consumable needs kind consumable and a positive cooldown", it.ID)
 		}
+		if it.Melee != nil && (it.Slot != "melee" || it.Melee.Damage <= 0 || it.Melee.Interval <= 0 || it.Melee.Range <= 0 || it.Melee.Arc <= 0) {
+			return fmt.Errorf("defs: item %s: a melee weapon sits in slot melee with positive damage, interval, range and arc", it.ID)
+		}
+		if t := consumableThrow(it); t != nil && (t.Damage <= 0 || t.Radius <= 0 || t.Speed <= 0) {
+			return fmt.Errorf("defs: item %s: a throw needs positive damage, radius and speed", it.ID)
+		}
 		if it.Ability != nil && (it.Ability.Cooldown <= 0 || it.Ability.ID == "" || it.Slot == "") {
 			return fmt.Errorf("defs: item %s: an ability needs an id, a positive cooldown and a slot to be worn in", it.ID)
 		}
@@ -672,6 +710,14 @@ func auditArtisan(reg *Registry) error {
 			}
 		}
 	}
+	for _, n := range reg.NPCs {
+		if n.Melee == "" {
+			continue
+		}
+		if it, ok := reg.Items[n.Melee]; !ok || it.Melee == nil {
+			return fmt.Errorf("defs: npc %s: melee %q is not a melee weapon", n.ID, n.Melee)
+		}
+	}
 	for zid, z := range reg.Zones {
 		for _, e := range z.Entities {
 			if e.Type == "node" {
@@ -687,4 +733,11 @@ func auditArtisan(reg *Registry) error {
 		}
 	}
 	return nil
+}
+
+func consumableThrow(it Item) *Throw {
+	if it.Consumable == nil {
+		return nil
+	}
+	return it.Consumable.Throw
 }

@@ -35,6 +35,42 @@
      "price": 480
     },
     {
+     "item": "melee.dagger",
+     "price": 40
+    },
+    {
+     "item": "melee.sword",
+     "price": 110
+    },
+    {
+     "item": "melee.axe",
+     "price": 110
+    },
+    {
+     "item": "melee.greatsword",
+     "price": 280
+    },
+    {
+     "item": "melee.greataxe",
+     "price": 300
+    },
+    {
+     "item": "melee.hammer",
+     "price": 420
+    },
+    {
+     "item": "throw.fire",
+     "price": 20
+    },
+    {
+     "item": "throw.frag",
+     "price": 30
+    },
+    {
+     "item": "throw.acid",
+     "price": 36
+    },
+    {
      "item": "ammo.cell",
      "price": 1
     },
@@ -101,6 +137,10 @@
     {
      "item": "consumable.medkit",
      "price": 30
+    },
+    {
+     "item": "consumable.potion.heal",
+     "price": 16
     }
    ],
    "worn": {
@@ -146,7 +186,8 @@
     "chest": "armor.suit.raider",
     "legs": "armor.legs.raider",
     "feet": "armor.boots.scout"
-   }
+   },
+   "melee": "melee.axe"
   },
   {
    "id": "npc.gunner",
@@ -169,7 +210,9 @@
     "chest": "armor.plate.iron",
     "legs": "armor.legs.scout",
     "feet": "armor.boots.scout"
-   }
+   },
+   "melee": "melee.dagger",
+   "melee_damage": 8
   },
   {
    "$comment": "Phase 10 bounty target. Spawned by the bounty scheduler at a solver-eligible POI, never by a zone. Tough enough to want a party, generous enough to be worth one.",
@@ -192,7 +235,8 @@
     "chest": "armor.suit.raider",
     "legs": "armor.legs.raider",
     "feet": "armor.boots.scout"
-   }
+   },
+   "melee": "melee.hammer"
   },
   {
    "$comment": "Own-art review stand-in: the player model on a non-combat NPC (shop-shaped like the dispatcher: no move_speed, no health, no stock) so the body can be seen from outside without a second client. Wears the full Scout set (npcs.json `worn`) so the armor can be seen on a body without a second client.",

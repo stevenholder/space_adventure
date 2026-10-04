@@ -96,6 +96,7 @@ namespace SpaceAdventure.Net
         public const ushort Craft = 0x0012;
         public const ushort Use = 0x0013; // Phase 13: a consumable or a worn ability
         public const ushort ShopBuyback = 0x0014; // Phase 13: re-buy a sale at what the shop paid
+        public const ushort Wield = 0x0015; // {"slot":"primary"|"melee"}: which weapon is in hand
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -112,7 +113,7 @@ namespace SpaceAdventure.Net
     /// <summary>event_id values.</summary>
     public static class EventId
     {
-        public const ushort Explosion = 0x0001; // reserved
+        public const ushort Explosion = 0x0001; // a thrown charge bursts: pos f32x3, radius f32, item id
         public const ushort ShotFired = 0x0002;
         public const ushort Hit = 0x0003;
         public const ushort Death = 0x0004;
@@ -128,7 +129,7 @@ namespace SpaceAdventure.Net
         public const ushort SkillXP = 0x000D; // Phase 11: {skill,xp,level,next_at,leveled}
         public const ushort GatherEnd = 0x000E; // Phase 12: {node,reason,item,qty}
         public const ushort Worn = 0x000F; // armor: "slot=item", item empty = cleared
-        public const ushort Attack = 0x0010; // an NPC starts an attack: entity = attacker, data = u32 target
+        public const ushort Attack = 0x0010; // an attack starts (NPC wind-up or a melee swing): entity = attacker, data = u32 target (0 = none)
     }
 
     /// <summary>collider kinds.</summary>

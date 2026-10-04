@@ -4568,6 +4568,196 @@
       "source_url": "https://quaternius.com/packs/bestiarydungeonmonsterskit.html",
       "author": "Quaternius (Bestiary - Dungeon Monsters Kit)",
       "rig": "creature"
+    },
+    {
+      "id": "melee.axe",
+      "description": "1-handed melee weapon, 0.62 m (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack): blade/haft along -Z out of the fist, edge +Y, `grip` at the origin, `muzzle` = tip.",
+      "file": "items/melee.axe.glb",
+      "tris": 966,
+      "surfaces": {
+        "Cylinder.033": [
+          "Steel",
+          "LightWood",
+          "DarkWood",
+          "LightSteel"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "melee.dagger",
+      "description": "1-handed melee weapon, 0.38 m (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack): blade/haft along -Z out of the fist, edge +Y, `grip` at the origin, `muzzle` = tip.",
+      "file": "items/melee.dagger.glb",
+      "tris": 726,
+      "surfaces": {
+        "Cylinder.035": [
+          "Steel",
+          "LightWood",
+          "DarkWood",
+          "LightSteel",
+          "DarkSteel"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "melee.greataxe",
+      "description": "2-handed melee weapon, 1.1 m (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack): blade/haft along -Z out of the fist, edge +Y, `grip` at the origin, `muzzle` = tip, `fore` = the second hand.",
+      "file": "items/melee.greataxe.glb",
+      "tris": 1556,
+      "surfaces": {
+        "Cylinder.032": [
+          "Steel",
+          "LightWood",
+          "DarkWood",
+          "LightSteel"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "melee.greatsword",
+      "description": "2-handed melee weapon, 1.45 m (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack): blade/haft along -Z out of the fist, edge +Y, `grip` at the origin, `muzzle` = tip, `fore` = the second hand.",
+      "file": "items/melee.greatsword.glb",
+      "tris": 830,
+      "surfaces": {
+        "Cylinder.038": [
+          "Steel",
+          "LightWood",
+          "DarkWood",
+          "LightSteel",
+          "DarkSteel"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "melee.hammer",
+      "description": "2-handed melee weapon, 1.2 m (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack): blade/haft along -Z out of the fist, edge +Y, `grip` at the origin, `muzzle` = tip, `fore` = the second hand.",
+      "file": "items/melee.hammer.glb",
+      "tris": 1918,
+      "surfaces": {
+        "Cylinder.036": [
+          "Steel",
+          "LightWood",
+          "DarkWood",
+          "LightSteel"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "melee.sword",
+      "description": "1-handed melee weapon, 0.95 m (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack): blade/haft along -Z out of the fist, edge +Y, `grip` at the origin, `muzzle` = tip.",
+      "file": "items/melee.sword.glb",
+      "tris": 872,
+      "surfaces": {
+        "Cylinder.037": [
+          "Steel",
+          "LightWood",
+          "DarkWood",
+          "LightSteel",
+          "DarkSteel"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "potion.heal",
+      "description": "Throwable / drinkable flask (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack); upright, centred.",
+      "file": "items/potion.heal.glb",
+      "tris": 1662,
+      "surfaces": {
+        "Cube.056": [
+          "Glass",
+          "Liquid_Magenta",
+          "Brown"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "throw.acid",
+      "description": "Throwable / drinkable flask (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack); upright, centred.",
+      "file": "items/throw.acid.glb",
+      "tris": 1678,
+      "surfaces": {
+        "Cube.054": [
+          "Glass",
+          "Liquid_Green",
+          "Brown"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "throw.fire",
+      "description": "Throwable / drinkable flask (tools/bpy/rpg_items.py from the Quaternius Ultimate RPG pack); upright, centred.",
+      "file": "items/throw.fire.glb",
+      "tris": 1470,
+      "surfaces": {
+        "Cube.082": [
+          "Liquid_Red",
+          "Glass",
+          "Brown"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/ultimaterpg.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "throw.frag",
+      "description": "Frag grenade built from primitives in tools/bpy/rpg_items.py; upright, centred.",
+      "file": "items/throw.frag.glb",
+      "tris": 424,
+      "surfaces": {
+        "Cylinder": [
+          "Body",
+          "Band",
+          "Steel",
+          "Light"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "tools/bpy/rpg_items.py",
+      "author": "Space Adventure",
+      "source": "tools/bpy/rpg_items.py"
     }
   ]
 }

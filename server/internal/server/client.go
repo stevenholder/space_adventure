@@ -44,6 +44,7 @@ type entity struct {
 	Magazine       int
 	LastFireTick   uint32 // tick of the last accepted shot (0 = never fired)
 	FiringTick     uint32 // tick a shot last resolved, for the snapshot's firing flag
+	LastSwingTick  uint32 // tick+1 of the last accepted melee swing (0 = never)
 }
 
 // msg is one outbound frame on the client's outbound queue.
@@ -67,6 +68,10 @@ type client struct {
 
 	input  atomic.Pointer[protocol.Input] // the input this tick applies (popInput)
 	ackSeq atomic.Uint32                  // seq of the input last applied
+
+	// wieldMelee is the hand `wield` picked: the melee slot's weapon when
+	// true (heldItem). Per connection, never persisted: a join holds the gun.
+	wieldMelee atomic.Bool
 
 	// inQ holds inputs received but not yet applied, oldest first. One is
 	// applied per tick, so two arriving inside one tick (network jitter)

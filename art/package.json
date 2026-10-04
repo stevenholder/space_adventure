@@ -11,7 +11,8 @@
     "render": "python3 tools/render_check.py",
     "test": "python3 tools/glb.py && node tools/verify.mjs && node tools/import_pack.mjs --selftest",
     "import": "for r in recipes/*.json; do node tools/import_pack.mjs \"$r\" || exit 1; done",
-    "mobs": "B=${BLENDER:-$HOME/opt/blender/4.5.14/blender}; $B -b --python tools/bpy/mobs.py && node tools/mobs.mjs"
+    "mobs": "B=${BLENDER:-$HOME/opt/blender/4.5.14/blender}; $B -b --python tools/bpy/mobs.py && node tools/mobs.mjs",
+    "rpg": "B=${BLENDER:-$HOME/opt/blender/4.5.14/blender}; $B -b --python tools/bpy/rpg_items.py && node tools/rpg_items.mjs"
   },
   "devDependencies": {
     "three": "^0.185.1",

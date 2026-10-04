@@ -167,11 +167,19 @@ Constants:
   `0x0014` `shop_buyback` `{"npc": <entity_id>, "item": "<id>"}` — the
   newest sale of that item this session comes back whole at what the
   shop paid; result is `shop_buy`'s shape.
-  `0x0015`+ still reserved.
+  `0x0015` `wield` `{"slot": "primary"|"melee"}` (melee, 2026-10-03) —
+  which weapon is in the hand: the gun in `primary` or the hand weapon in
+  `melee` (Tab on the client). Per connection, never persisted: a join holds
+  the gun. A missing weapon falls back to the other slot (no gun worn: the
+  melee weapon is held regardless). Result `{"slot", "item"}`, `item` being
+  what is now held; a change is broadcast as `equipped`.
+  `0x0016`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
-- `event_id`: `0x0001` explosion (reserved); `0x0002` shot fired; `0x0003`
+- `event_id`: `0x0001` explosion (thrown charges, 2026-10-03: `entity_id` is
+  the thrower, `data` is `f32 pos[3]` | `f32 radius` | item id UTF-8;
+  broadcast; damage still arrives as `hit`/`death`); `0x0002` shot fired; `0x0003`
   hit; `0x0004` death; `0x0005` loot dropped (Phase 3); Phase 10 events carry
   UTF-8 JSON in `data` and are UNICAST to the players they concern unless
   noted: `0x0007` `mission_progress` `{"id","count","goal"}`;
@@ -192,8 +200,10 @@ Constants:
   or `moved` / `hit` / `died` / `cancel` / `depleted`, with `item`/`qty`
   absent; `entity_id` is the player);
   and `0x0006` `equipped`
-  (Phase 3.5) — `entity_id` is the player whose primary slot changed and
-  `data` is the item id as UTF-8, empty for "nothing equipped". Broadcast when
+  (Phase 3.5) — `entity_id` is the body whose item IN HAND changed and
+  `data` is the item id as UTF-8, empty for "nothing equipped". Since melee
+  (2026-10-03) that is the gun or the melee weapon, whichever `wield` picked
+  (an NPC that carries both swaps by range and says so the same way). Broadcast when
   the slot changes, and sent once per already-armed player when a client
   joins, so a late joiner starts with correct state. This is how another
   client learns what someone is holding: the entity row has no weapon field,
@@ -206,7 +216,8 @@ Constants:
   client joins, exactly like `equipped`. The client resolves the model from
   the item's `asset` in `defs` and hangs it on the wearer's skeleton.
   And `0x0010` `attack` (mob library, 2026-10-03) — `entity_id` is an NPC
-  that has just begun an attack and `data` is `u32 target_id`. Sent once per
+  that has just begun an attack and `data` is `u32 target_id`; or (melee) a
+  player whose swing the server accepted, with `target_id` 0. Sent once per
   attack, broadcast, at the START of the wind-up (or on the tick an attack
   with no wind-up lands), so the swing leads the `hit` by `attack_windup`.
   Cosmetic: the client plays the body's `attack` clip once; damage still
@@ -477,6 +488,13 @@ arrives. Not command state, not idempotent, not replayed.
 - Cadence is enforced server-side from the weapon's rule table with one tick of
   tolerance; an early shot is dropped, not queued. Ammunition is likewise
   checked and decremented server-side.
+- **With a melee weapon in hand a `fire` is a swing** (GDD "Melee"): cadence
+  from the weapon's `interval` (one tick of tolerance), no ammunition, no
+  rewind. Every damageable world entity whose capsule comes within `range`
+  of the swinger's chest and inside `arc` degrees of `dir` (flattened onto
+  the ground; `arc` 360 is all round) takes `damage`. Broadcast: `attack`
+  (target 0) always, `hit`/`death` per body touched; never `shot fired`.
+  Players are not hit (no PvP). Not from a seat.
 - A resolved shot produces broadcast `event`s — `shot fired` always, `hit` and
   `death` when applicable — so every client draws the same tracer and the same
   outcome. There is no `fire_result`: the shooter learns what happened from the
@@ -490,6 +508,8 @@ arrives. Not command state, not idempotent, not replayed.
 | hit `0x0003` | victim | `u32 shooter` \| `f32 point[3]` \| `u16 damage` \| `u16 health_after` |
 | death `0x0004` | victim | `u32 killer` (0 = none) |
 | equipped `0x0006` | the player | item id, UTF-8 (empty = nothing equipped) |
+| explosion `0x0001` | thrower | `f32 pos[3]` \| `f32 radius` \| item id, UTF-8 |
+| attack `0x0010` | attacker | `u32 target` (0 = a player's melee swing) |
 
 ### `colliders` — static world geometry (Phase 2)
 

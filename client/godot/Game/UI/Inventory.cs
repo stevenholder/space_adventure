@@ -128,7 +128,7 @@ namespace SpaceAdventure.Game.UI
 
         private static string EmptyLabel(string slot) => slot switch
         {
-            "accessory1" => "ACC", "accessory2" => "ACC", "primary" => "WEAPON", "secondary" => "SIDEARM", _ => slot.ToUpperInvariant(),
+            "accessory1" => "ACC", "accessory2" => "ACC", "primary" => "WEAPON", "melee" => "MELEE", _ => slot.ToUpperInvariant(),
         };
 
         private static StyleBoxFlat FrameStyle(Color bg, Color border, int width)
@@ -198,6 +198,13 @@ namespace SpaceAdventure.Game.UI
                 body.AddChild(Styles.Display_($"{def.Weapon.Damage} damage  ·  {60.0 / Math.Max(0.01, def.Weapon.FireInterval):0} rpm  ·  {def.Weapon.Magazine} rounds", 12, Styles.Cream));
                 body.AddChild(Styles.Display_($"{def.Weapon.MaxRange:0} m range", 12, Styles.Cream));
             }
+            if (def?.Melee is MeleeDef m)
+            {
+                body.AddChild(Styles.Display_($"{m.Damage} damage  ·  {m.Interval:0.0#} s swing  ·  {(m.Hands >= 2 ? "two" : "one")}-handed", 12, Styles.Cream));
+                body.AddChild(Styles.Display_(m.Arc >= 360 ? $"hits all around, {m.Range:0.#} m" : $"{m.Arc:0}° arc ahead, {m.Range:0.#} m  ·  Tab swaps", 12, Styles.Cream));
+            }
+            if (def?.Consumable?.Throw is ThrowDef th)
+                body.AddChild(Styles.Display_($"thrown: {th.Damage} damage, {th.Radius:0.#} m blast", 12, Styles.Cream));
             if (def?.Armor != null) body.AddChild(Styles.Display_($"{def.Armor.Value} armor", 12, Styles.Cream));
             if (Qty > 1) body.AddChild(Styles.Display_($"×{Qty}" + (def != null && def.StackMax > 1 ? $" of {def.StackMax}" : ""), 12, Styles.Dust));
             if (!string.IsNullOrEmpty(def?.Desc))
@@ -299,13 +306,14 @@ namespace SpaceAdventure.Game.UI
             Defs defs = character.Defs;
             var worn = new Dictionary<string, string>();
             foreach (string slot in bodySlots) worn[slot] = character.Worn(slot);
-            string weapon = defs.ItemAsset(character.Primary);
+            string inHand = character.Held;
+            string weapon = defs.ItemAsset(inHand);
             _assets.Attach("char.player", _turn, model =>
             {
                 CharacterAnim anim = CharacterAnim.For(model);
-                if (anim != null) { anim.Class = defs.HoldSuffix(character.Primary); anim.Armed = weapon != ""; anim.Drive(0f, false); }
+                if (anim != null) { anim.Class = defs.HoldSuffix(inHand); anim.Armed = weapon != ""; anim.Drive(0f, false); }
                 EntityViews.Dress(_assets, defs.ItemAsset, model, worn, new Dictionary<string, string>(), new Dictionary<string, Node3D>());
-                if (weapon != "") EntityViews.Hold(_assets, model, weapon, null);
+                if (weapon != "") EntityViews.Hold(_assets, model, weapon, null, blade: defs.Item(inHand)?.Melee != null);
             });
         }
 
@@ -331,7 +339,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Action<byte[]> _send;
 
         private static readonly string[] LeftSlots = { "head", "chest", "legs", "hands", "feet", "back" };
-        private static readonly string[] RightSlots = { "accessory1", "accessory2", "primary", "mod", "secondary", "tool", "gadget" }; // Phase 13: MOD under WEAPON
+        private static readonly string[] RightSlots = { "accessory1", "accessory2", "primary", "mod", "melee", "tool", "gadget" }; // Phase 13: MOD under WEAPON; MELEE the hand weapon Tab swaps to
 
         public CharacterView(Control root, Character character, SkillSheet skills, Icons icons, AssetRegistry assets,
             Func<ushort> nextSeq, Action<byte[]> send)
@@ -406,7 +414,7 @@ namespace SpaceAdventure.Game.UI
 
         private static string NiceSlot(string n) => n switch
         {
-            "accessory1" => "accessory", "accessory2" => "accessory", "primary" => "weapon", "secondary" => "sidearm", _ => n,
+            "accessory1" => "accessory", "accessory2" => "accessory", "primary" => "weapon", "melee" => "melee", _ => n,
         };
 
         protected override void Fill(VBoxContainer body)

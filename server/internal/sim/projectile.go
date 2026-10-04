@@ -19,6 +19,12 @@ type ProjectileState struct {
 	Damage    int
 	Speed     float64
 	LifeTicks int // remaining
+	// Thrown charges (GDD "Throwables"): Falls bends the path under
+	// Gravity, and a non-empty Burst (the thrown item id) makes ANY stop --
+	// a body, a wall, the ground, running out of life -- a burst through
+	// ctx.Burst at that point instead of a direct hit.
+	Falls bool
+	Burst string
 }
 
 func init() {
@@ -66,9 +72,20 @@ func StepProjectile(e *Ent, dt float64, ctx StepCtx) {
 	}
 
 	prev := Vec(e.Pos)
-	dir := terrain.Normalize(Vec(e.Vel))
+	vel := Vec(e.Vel)
+	if state.Falls {
+		vel = vel.Sub(terrain.Normalize(prev).Scale(Gravity * dt))
+	}
+	dir := terrain.Normalize(vel)
 	segLen := state.Speed * dt
+	if state.Falls {
+		segLen = vel.Len() * dt
+	}
 	next := prev.Add(dir.Scale(segLen))
+	if state.Burst != "" {
+		stepBurst(e, state, prev, dir, segLen, next, vel, ctx)
+		return
+	}
 
 	// Step 1 — the wall between here and there. Step 3 used to test only
 	// the END point, and a gunner's round covers more than a wall's
@@ -202,4 +219,64 @@ func StepProjectile(e *Ent, dt float64, ctx StepCtx) {
 	// Step 6 — commit.
 	e.Pos = [3]float64(next)
 	e.Vel = [3]float64(dir.Scale(state.Speed))
+}
+
+// stepBurst is StepProjectile for a thrown charge: the same swept tests
+// (walls, world capsules, player bodies), the ground and expiry, but every
+// stop ends in ctx.Burst at the stopping point.
+func stepBurst(e *Ent, state *ProjectileState, prev, dir Vec, segLen float64, next, vel Vec, ctx StepCtx) {
+	stopT := math.Inf(1)
+	if t, hit := SegmentColliderHit([3]float64(prev), [3]float64(dir), segLen, ctx.Colliders); hit {
+		stopT = t
+	}
+	if ctx.World != nil && ctx.DefOf != nil {
+		for _, id := range ctx.World.order {
+			if id == e.ID || id == state.Owner {
+				continue
+			}
+			v := ctx.World.Ents[id]
+			if v == nil || v.Health <= 0 || v.Flags&protocol.FlagDead != 0 {
+				continue
+			}
+			def := ctx.DefOf(v)
+			if !def.Damageable {
+				continue
+			}
+			feet := Vec(v.Pos)
+			t, hit := rayCapsule(prev, dir, feet, feet.Add(terrain.Normalize(feet).Scale(def.Hitbox.Height)), def.Hitbox.Radius)
+			if hit && t >= 0 && t <= segLen && t < stopT {
+				stopT = t
+			}
+		}
+	}
+	for _, b := range ctx.Bodies {
+		if b.ID == state.Owner {
+			continue
+		}
+		t, hit := rayCapsule(prev, dir, b.Feet, b.Feet.Add(terrain.Normalize(b.Feet).Scale(b.Height)), b.Radius)
+		if hit && t >= 0 && t <= segLen && t < stopT {
+			stopT = t
+		}
+	}
+	at, stop := next, false
+	if !math.IsInf(stopT, 1) {
+		at, stop = prev.Add(dir.Scale(stopT)), true
+	} else if ctx.Terrain != nil {
+		up := terrain.Normalize(next)
+		if r := ctx.Terrain.SampleRadius(up); next.Len() < r {
+			at, stop = up.Scale(r), true // on the surface, not under it
+		}
+	}
+	state.LifeTicks--
+	if stop || state.LifeTicks <= 0 {
+		if ctx.Burst != nil {
+			ctx.Burst(at, state.Owner, state.Burst)
+		}
+		if ctx.World != nil {
+			ctx.World.Remove(e.ID)
+		}
+		return
+	}
+	e.Pos = [3]float64(next)
+	e.Vel = [3]float64(vel)
 }

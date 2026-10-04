@@ -39,7 +39,7 @@ namespace SpaceAdventure.Game
         /// <summary>Clips that play once and hold: dying, flinching, a creature's attack, and the first-person fire and reload.</summary>
         internal static bool OneShot(string name) =>
             name == "die" || name.StartsWith("fp_fire") || name.StartsWith("fp_reload") || name.StartsWith("hit")
-            || name.StartsWith("attack");
+            || name.StartsWith("attack") || name.StartsWith("fp_attack");
 
         /// <summary>
         /// Hold family suffix ("" or "_pistol"): `name + Class` when the body
@@ -73,13 +73,16 @@ namespace SpaceAdventure.Game
         /// start of its wind-up): play `attack` once, then Drive takes over
         /// again, as after a flinch. Bodies without the clip ignore it.
         /// </summary>
-        public void Attack(double now)
+        public void Attack(double now, string name = "attack")
         {
-            if (_current == "die" || !_player.HasAnimation("attack")) return;
-            _player.Play("attack", 0.08);
+            // A body with a hand weapon swings its family's clip
+            // (attack_melee, attack_spin_melee2h); a creature has a plain one.
+            string clip = Armed ? Clip(_player, name, Class) : name;
+            if (_current == "die" || !_player.HasAnimation(clip)) return;
+            _player.Play(clip, 0.06);
             _player.Seek(0, true);
-            _current = "attack";
-            _flinchUntil = now + _player.GetAnimation("attack").Length;
+            _current = clip;
+            _flinchUntil = now + _player.GetAnimation(clip).Length;
         }
 
         /// <summary>Long enough not to snap, short enough not to moonwalk.</summary>
