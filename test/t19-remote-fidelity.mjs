@@ -56,7 +56,7 @@ function fire(seq, dir) {
 
 async function session(name) {
   const s = { myId: 0, ents: new Map(), spawns: new Map(), results: [], events: [], equipped: new Map(), defs: null, seq: 1 }
-  const ws = new WebSocket('ws://127.0.0.1:18080/ws'); ws.binaryType = 'arraybuffer'
+  const ws = new WebSocket(`ws://127.0.0.1:${process.env.SA_PORT ?? 18080}/ws`); ws.binaryType = 'arraybuffer'
   const token = `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   ws.addEventListener('open', () => ws.send(hello(name, token)))
   ws.addEventListener('message', (ev) => {

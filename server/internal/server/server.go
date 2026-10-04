@@ -715,6 +715,44 @@ func v4f32(v [4]float64) [4]float32 {
 // publication, so the client's stream order is hello_ack, terrain, defs,
 // colliders, spawn(s), then snapshots (FIFO per connection; PROTOCOL.md
 // "terrain"/"defs"/"colliders").
+// clearSpawn is the spawn state moved off anyone already standing on the
+// spawn point: two bodies on one point have no sideways way apart, so
+// ResolveColliders lifted the second 2*BodyRadius onto the first's head.
+// Steps out in 1 m rings, 8 bearings each (beside the spawn first, not in
+// front of it), onto the ground there. self is
+// the player being placed (0 at join). Caller holds s.mu.
+func (s *Server) clearSpawn(self uint32) sim.State {
+	st := sim.SpawnState(s.terrain)
+	side := terrain.Cross(st.Facing, terrain.Normalize(st.Pos))
+	free := func(p sim.Vec) bool {
+		for _, o := range s.clients {
+			if o.entity == nil || o.entity.ID == self || o.seat != 0 || o.entity.Health <= 0 {
+				continue
+			}
+			if o.entity.State.Pos.Sub(p).Len() < 2*sim.BodyRadius+0.1 {
+				return false
+			}
+		}
+		return true
+	}
+	if free(st.Pos) {
+		return st
+	}
+	for ring := 1; ring <= 4; ring++ {
+		for k := 0; k < 8; k++ {
+			a := math.Pi/2 + float64(k)*math.Pi/4 // side first: not in the line everyone spawns facing
+			dir := terrain.Normalize(st.Pos.Add(st.Facing.Scale(float64(ring) * math.Cos(a))).Add(side.Scale(float64(ring) * math.Sin(a))))
+			p := dir.Scale(s.terrain.SampleRadius(dir))
+			if free(p) {
+				st.Pos = p
+				st.Grounded = s.terrain.Walkable(dir)
+				return st
+			}
+		}
+	}
+	return st // ponytail: 32 spots taken, stack them; a bigger search if a crowd ever spawns at once
+}
+
 func (s *Server) join(c *client, h protocol.Hello) {
 	if h.ClientVer != protocol.VersionPhase2 {
 		c.fail() // wrong protocol version (PROTOCOL.md "Versioning"): close 1002
@@ -730,7 +768,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	id := s.nextID
 	c.id = id
 	name := SanitizeName(h.Name, id)
-	spawnState := sim.SpawnState(s.terrain)
+	spawnState := s.clearSpawn(0)
 	c.entity = &entity{
 		ID:     id,
 		Name:   name,

@@ -324,8 +324,7 @@ func (s *Server) damagePlayer(victimID uint32, amount int, attacker uint32) {
 func (s *Server) stepPlayerVitals() {
 	for _, c := range s.clients {
 		if respawned := sim.StepVitals(&c.vitals, sim.DT); respawned {
-			spawn := sim.SpawnState(s.terrain)
-			c.entity.State = spawn
+			c.entity.State = s.clearSpawn(c.entity.ID)
 			c.entity.Health = c.vitals.Health
 		}
 		c.entity.Health = c.vitals.Health
