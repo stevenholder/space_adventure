@@ -54,7 +54,7 @@ function connect(name, token) {
       }
     } else if (t === 7) {
       const id = pv.getUint32(0, true), evId = pv.getUint16(4, true)
-      c.events.push({ id, ev: evId, at: Date.now() })
+      c.events.push({ id, ev: evId, at: Date.now(), data: dec.decode(p.subarray(10)) })
       // Latch our own deaths. Sampling the dead flag at one instant misses a
       // death that happens between the fight loop ending and the check
       // running — which reported died=false for a player sitting at the spawn
@@ -140,9 +140,13 @@ record('C20/21', 'camp NPCs damage a player who stands in range',
   hits > 0 && (hpAfter < hpBefore || died),
   `${hits} hit events, health ${hpBefore} -> ${hpAfter}${died ? ' (died)' : ''} at ${reEntry.toFixed(1)} m`)
 
+// A gunner shoots from range and draws its blade inside reach (+1.5 m); the
+// camp's walls keep its eye off this stand until it is that close, so either
+// answer is the gunner engaging. t16 owns the projectile-delivery check.
 const sawProjectile = [...A.spawns.values()].some((v) => v.type === 7)
-record('C21b', 'gunner projectiles are entities the client receives',
-  sawProjectile, `projectile spawns seen: ${sawProjectile}`)
+const drewBlade = A.events.some((e) => e.ev === 6 && gunners.includes(e.id) && e.data.startsWith('melee.'))
+record('C21b', 'a gunner engages: its projectiles reach the client, or it draws its blade up close',
+  sawProjectile || drewBlade, `projectile spawns seen: ${sawProjectile}; gunner drew blade: ${drewBlade}`)
 
 // ---- C22: death and respawn ----------------------------------------------
 // Stay in the fight until it kills us. The stand above is 12 s, and 100 hp
