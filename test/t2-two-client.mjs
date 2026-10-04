@@ -48,8 +48,8 @@ const EVENTS = new URL('./out/t2-two-client-events.jsonl', import.meta.url)
 const EVIDENCE = new URL('./out/t2-two-client.json', import.meta.url)
 
 const HOST = '127.0.0.1'
-const A_PORT = 18080 // NodePort /ws — the only path since U18 retired nginx
-const B_PORT = 18080
+const A_PORT = Number(process.env.SA_PORT ?? 18080) // NodePort /ws — the only path since U18 retired nginx
+const B_PORT = A_PORT
 const B_DELAY_MS = 500
 const SEE_MS = 1000 // "within 1 s"
 const ON_SURFACE_EPS = 0.05 // m

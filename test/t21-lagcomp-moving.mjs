@@ -296,6 +296,14 @@ const nearest = gruntIds.map(id => ({ id, pos: bait.ents.get(id).pos }))
   .sort((a, b) => dist(a.pos, bait.me()) - dist(b.pos, bait.me()))[0]
 const centre = add(nearest.pos, mul(norm(sub(bait.me(), nearest.pos)), KITE_STANDOFF))
 await bait.walkTo(centre, 3.0, 200)
+// Aggro is gated on line of sight (ai/brain.go selectTarget) and the camp's
+// walls block it, so a bait parked at the standoff can sit there unseen and
+// the volleys later find no moving grunt. Step in until the grunt moves.
+const post0 = bait.ents.get(nearest.id).pos.slice()
+for (let i = 1; i <= 6 && dist(bait.ents.get(nearest.id).pos, post0) < 1; i++) {
+  await bait.walkTo(nearest.pos, Math.max(4, KITE_STANDOFF - 2 * i), 40)
+  await sleep(1000)
+}
 
 // The shuttle runs perpendicular to the SHOOTER's line of sight, so a grunt
 // chasing the bait crosses that line instead of running along it. Motion along
