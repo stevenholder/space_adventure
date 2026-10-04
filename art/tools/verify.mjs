@@ -60,7 +60,10 @@ const BUDGETS = [
   [/^prop\./, 1000],
   [/^armor\./, 5000],
   [/^pack\./, 800],
-  [/^mob\./, 20000],    // the mob library (mobs/mobs.json): pack creatures, the Bestiary Imp is 15k
+  [/^mob\./, 20000],
+  [/^melee\./, 2000],  // hand weapons (tools/bpy/rpg_items.py)
+  [/^throw\./, 2000],  // thrown charges
+  [/^potion\./, 2000],    // the mob library (mobs/mobs.json): pack creatures, the Bestiary Imp is 15k
 ];
 
 // Node-name contracts: the client mounts things by these names, so a rename
@@ -126,6 +129,14 @@ const NODE_CONTRACTS = {
   "weapon.smg.frost": { nodes: ["grip", "muzzle", "fore", "sight", "front"] },
   // Phase 12 hand tools ride the weapon mount path: the client lines `grip`
   // up with hand.r and the channel effect starts at `muzzle`.
+  // Hand weapons: `grip` in the fist, `muzzle` the tip (the client aims the
+  // blade along it), `fore` the second hand of a two-hander.
+  "melee.dagger": { nodes: ["grip", "muzzle"] },
+  "melee.sword": { nodes: ["grip", "muzzle"] },
+  "melee.axe": { nodes: ["grip", "muzzle"] },
+  "melee.greatsword": { nodes: ["grip", "muzzle", "fore"] },
+  "melee.greataxe": { nodes: ["grip", "muzzle", "fore"] },
+  "melee.hammer": { nodes: ["grip", "muzzle", "fore"] },
   "tool.drill": { nodes: ["grip", "muzzle"] },
   "tool.cutter": { nodes: ["grip", "muzzle"] },
   "prop.target": { nodes: ["plate"] },

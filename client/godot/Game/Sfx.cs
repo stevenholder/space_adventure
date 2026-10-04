@@ -26,7 +26,7 @@ namespace SpaceAdventure.Game
         private readonly Node _root;
         private readonly Dictionary<string, AudioStreamWav> _shot = new Dictionary<string, AudioStreamWav>();
         private readonly AudioStreamWav[] _steps = new AudioStreamWav[4];
-        private readonly AudioStreamWav _impact, _magOut, _magIn, _rack, _dry;
+        private readonly AudioStreamWav _impact, _magOut, _magIn, _rack, _dry, _swing, _swingHeavy, _boom;
 
         public Sfx(Node root)
         {
@@ -43,6 +43,9 @@ namespace SpaceAdventure.Game
             _magIn = Click(rng, 1200, 0.07, 2);
             _rack = Click(rng, 2400, 0.09, 3);
             _dry = Click(rng, 3000, 0.03, 1);
+            _swing = Whoosh(rng, 0.28, 1400);
+            _swingHeavy = Whoosh(rng, 0.45, 800);
+            _boom = Shot(rng, 300, 1.1, 45, 0.7);   // a shot's recipe, long and low: a burst
         }
 
         /// <summary>Every sound by name (self-test, -dumpSfx).</summary>
@@ -53,6 +56,7 @@ namespace SpaceAdventure.Game
             for (int i = 0; i < _steps.Length; i++) all.Add(($"step_{i}", _steps[i]));
             all.Add(("impact", _impact)); all.Add(("mag_out", _magOut)); all.Add(("mag_in", _magIn));
             all.Add(("rack", _rack)); all.Add(("dry", _dry));
+            all.Add(("swing", _swing)); all.Add(("swing_heavy", _swingHeavy)); all.Add(("boom", _boom));
             return all.ToArray();
         }
 
@@ -71,6 +75,10 @@ namespace SpaceAdventure.Game
         public void StepAt(Vector3 at, int n) => PlayAt(at, _steps[n & 3], -27f, 12f);
         public void OwnStep(int n) => Play2D(_steps[n & 3], -33f);
         public void DryFire() => Play2D(_dry, -8f);
+        public void Swing(bool heavy) => Play2D(heavy ? _swingHeavy : _swing, -6f);
+        public void SwingAt(Vector3 at, bool heavy) => PlayAt(at, heavy ? _swingHeavy : _swing, -2f, 25f);
+        /// <summary>A thrown charge bursting; a bigger blast carries further.</summary>
+        public void ExplosionAt(Vector3 at, float radius) => PlayAt(at, _boom, 6f, 60f + radius * 20f);
 
         /// <summary>Mag out, mag in, rack -- timed to the reload.</summary>
         public void Reload(double seconds)
@@ -182,6 +190,30 @@ namespace SpaceAdventure.Game
                 double thump = Math.Sin(ph) * Math.Exp(-t / 0.035);
                 double grit = lp2 * 6.0 * Math.Exp(-t / 0.018);
                 x[i] = (float)(attack * (0.8 * thump + 0.35 * grit));
+            }
+            return Wav(x);
+        }
+
+        /// <summary>
+        /// A blade through air: band-passed noise whose pitch rises then
+        /// falls with a swell -- fast for a sword, lower and longer for a
+        /// two-hander.
+        /// </summary>
+        private static AudioStreamWav Whoosh(Random rng, double len, double hz)
+        {
+            int n = (int)(Rate * len);
+            var x = new float[n];
+            double lp = 0, hp = 0;
+            for (int i = 0; i < n; i++)
+            {
+                double t = (double)i / Rate, u = t / len;
+                double f = hz * (0.6 + 0.8 * Math.Sin(Math.PI * u));
+                double a = Math.Exp(-2 * Math.PI * f / Rate);
+                double w = rng.NextDouble() * 2 - 1;
+                lp = a * lp + (1 - a) * w;
+                hp = 0.97 * hp + (lp - hp) * 0.03;                     // take the rumble out
+                double env = Math.Pow(Math.Sin(Math.PI * u), 2);
+                x[i] = (float)((lp - hp) * 4.0 * env);
             }
             return Wav(x);
         }

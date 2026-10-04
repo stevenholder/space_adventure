@@ -102,6 +102,9 @@ type Server struct {
 	// pendingSpills are deaths whose material spill waits for the identity
 	// (gather.go); guarded by mu, drained by tick() after it unlocks.
 	pendingSpills []spill
+	// pendingKills are thrown-charge kills (burstLocked, inside the tick)
+	// whose mission/bounty credit waits for s.mu to drop, like spills.
+	pendingKills []kill
 
 	// store is the persistence backend. It is nil until something wires a
 	// *store.Store into New (out of scope here: New's signature is shared
@@ -534,7 +537,10 @@ func (s *Server) tick() {
 		CollidersFor: s.collidersFor,
 		Bodies:       s.bodies,
 		HitBody:      func(id, attacker uint32, dmg int) { s.damagePlayer(id, dmg, attacker) },
+		Burst:        s.burstLocked,
 	})
+	kills := s.pendingKills
+	s.pendingKills = nil
 	for _, e := range s.worldEnts {
 		s.history.Record(tick, e.ID, e.Pos, [3]float64(terrain.Normalize(terrain.Vec(e.Pos))))
 	}
@@ -619,6 +625,7 @@ func (s *Server) tick() {
 	s.mu.Unlock()
 	s.drainYields(yields)
 	s.drainSpills(spills)
+	s.payKills(kills)
 	step := time.Since(t0)
 	tickSeconds.Observe(step.Seconds())
 	if step > 5*time.Millisecond {
@@ -764,8 +771,8 @@ func (s *Server) join(c *client, h protocol.Hello) {
 		// An NPC archetype can wear armor (npcs.json `worn`): same event as
 		// a player's, right after the spawn it belongs to.
 		if a, ok := s.reg.NPCs[e.Def]; ok {
-			if a.Primary != "" {
-				others = append(others, msg{data: equippedFrame(e.ID, a.Primary)})
+			if h := s.npcHeld(e.ID, a); h != "" {
+				others = append(others, msg{data: equippedFrame(e.ID, h)})
 			}
 			for _, slot := range wornSlots {
 				if item := a.Worn[slot]; item != "" {
@@ -888,6 +895,8 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		return s.missionCmd(c, req)
 	case protocol.OpSkills:
 		return s.skillsCmd(c, req)
+	case protocol.OpWield:
+		return s.wieldCmd(c, req)
 	}
 	var result protocol.CmdResult
 	var before, after string
@@ -895,15 +904,20 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	var creditsBefore, creditsAfter int64
 	c.ident.Mutate(func(p *store.Player) {
 		creditsBefore = p.Credits
-		before = p.Equipped[slotPrimary]
+		before = heldItem(p.Equipped, c.wieldMelee.Load())
 		wornBefore = wornOf(p.Equipped)
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
-			Player:   p,
-			Reg:      s.reg,
-			Pos:      c.entity.State.Pos,
-			Up:       terrain.Normalize(c.entity.State.Pos),
-			Look:     c.lookDir(),
-			FindNPC:  s.findNPC,
+			Player:  p,
+			Reg:     s.reg,
+			Pos:     c.entity.State.Pos,
+			Up:      terrain.Normalize(c.entity.State.Pos),
+			Look:    c.lookDir(),
+			FindNPC: s.findNPC,
+			Throw: func(item string, t defs.Throw) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				s.throwLocked(c, item, t, c.lookDir())
+			},
 			FindNode: s.findNode,
 			Ent:      c.entity,
 			Busy: func() bool {
@@ -975,7 +989,7 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 				return s.scanLocked(c, rng)
 			},
 		})
-		after = p.Equipped[slotPrimary]
+		after = heldItem(p.Equipped, c.wieldMelee.Load())
 		wornAfter = wornOf(p.Equipped)
 		creditsAfter = p.Credits
 	})
@@ -1099,7 +1113,7 @@ func (s *Server) syncEquipped(c *client) {
 	frames := make([][]byte, 0, len(peers))
 	for _, oc := range peers {
 		eq := oc.ident.Snapshot().Equipped
-		if item := eq[slotPrimary]; item != "" {
+		if item := heldItem(eq, oc.wieldMelee.Load()); item != "" {
 			frames = append(frames, equippedFrame(oc.entity.ID, item))
 		}
 		for _, slot := range wornSlots {
@@ -1109,7 +1123,7 @@ func (s *Server) syncEquipped(c *client) {
 		}
 	}
 	selfEq := c.ident.Snapshot().Equipped
-	self := selfEq[slotPrimary]
+	self := heldItem(selfEq, c.wieldMelee.Load())
 
 	for _, f := range frames {
 		c.send(msg{data: f})
@@ -1204,6 +1218,10 @@ func (s *Server) weaponFor(id string) (defs.Weapon, bool) {
 // follows a tick later from sim.StepTarget's own health check, reused
 // rather than duplicated here).
 func (s *Server) fire(c *client, f protocol.Fire) {
+	if it, ok := s.reg.Items[c.held()]; ok && it.Melee != nil {
+		s.swing(c, f, *it.Melee)
+		return
+	}
 	members, victimArch, victimID, killed := s.fireLocked(c, f)
 	if killed {
 		// Identity locks are only safe with s.mu released (doCmd's order);

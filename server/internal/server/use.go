@@ -68,6 +68,13 @@ func handleUse(w cmdWorld, item string, reply func(uint8, []byte) protocol.CmdRe
 			}
 			effect["health"] = after
 		}
+		if c.Throw != nil {
+			if w.Throw == nil {
+				return refuse("unusable")
+			}
+			w.Throw(item, *c.Throw)
+			effect["thrown"] = true
+		}
 		if err := sim.TakeItem(w.Player, item, 1); err != nil {
 			return refuse(sim.ReasonNotOwned)
 		}

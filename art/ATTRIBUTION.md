@@ -14,6 +14,7 @@ the mob library listed below. The last Kenney Space Kit props were replaced by
 | The mob library (`mob.*`, `mobs/`): Ultimate Monsters, Ultimate Modular Men, the Sci-Fi Essentials Kit's enemies, the Modular Sci-Fi MegaKit's aliens (catalog and where each came from: `mobs/mobs.json`, `mobs/CATALOG.md`) | Quaternius (quaternius.com/packs: ultimatemonsters, ultimatemodularcharacters, scifiessentialskit, modularscifimegakit) | CC0 |
 | `mob.dungeon.imp`, `mob.dungeon.puglin` | Quaternius, Bestiary - Dungeon Monsters Kit, Standard | Quaternius Asset License v1.0: free for use in games; the assets themselves may not be redistributed |
 | The clips on `mob.dungeon.*` (retargeted onto them) | Quaternius, Universal Animation Library, Standard | CC0 |
+| Hand weapons and flasks (`melee.*`, `throw.fire`, `throw.acid`, `potion.heal`; `items/`), recoloured and re-framed by `tools/bpy/rpg_items.py` | Quaternius, Ultimate RPG pack (quaternius.com/packs/ultimaterpg.html; FBX unpacked into gitignored `vendor/ultimate-rpg`) | CC0 |
 
 ## Generators
 
@@ -22,6 +23,7 @@ the mob library listed below. The last Kenney Space Kit props were replaced by
 | `char.player`, `npc.*` | `tools/bpy/human.py` (Blender, headless) |
 | `armor.*`, `pack.scout` | `tools/bpy/armor.py`, textures and decals by `tools/bpy/textures.py` |
 | `weapon.*` | `tools/gen_weapon.py` |
+| `throw.frag` | `tools/bpy/rpg_items.py` (primitives) |
 | `tool.*`, `prop.node.*`, `prop.wreck`, `prop.bench` | `tools/gen_nodes.py` |
 | `prop.rock.*`, `prop.loot.crate`, `prop.barrel(s)`, `prop.generator`, `prop.dish`, `prop.bones`, `vehicle.rover.v1` | `tools/gen_props.py` |
 | `struct.*` | `tools/gen_struct.py`, `tools/gen_kit.py` |

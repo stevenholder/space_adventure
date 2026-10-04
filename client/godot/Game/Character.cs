@@ -38,6 +38,40 @@ namespace SpaceAdventure.Game
             set { if (string.IsNullOrEmpty(value)) Equipped.Remove("primary"); else Equipped["primary"] = value; }
         }
 
+        /// <summary>The hand weapon (slot melee), or "".</summary>
+        public string Melee => Worn("melee");
+
+        /// <summary>Tab's choice: the melee weapon in hand rather than the gun.</summary>
+        public bool WieldMelee { get; set; }
+
+        /// <summary>
+        /// What is in the hand: the melee weapon when asked for (or no gun is
+        /// worn), else the gun. The server's heldItem, mirrored.
+        /// </summary>
+        public string Held =>
+            WieldMelee && Melee != "" ? Melee : Primary != "" ? Primary : Melee;
+
+        /// <summary>The `wield` cmd: which weapon goes in the hand.</summary>
+        public static byte[] WieldCmd(ushort seq, bool melee) =>
+            Encode.Cmd(seq, Op.Wield, melee ? "{\"slot\":\"melee\"}" : "{\"slot\":\"primary\"}");
+
+        /// <summary>
+        /// Our own `equipped` event: what the server says we hold. A melee
+        /// item means the melee hand; anything else is the gun (and is the
+        /// join replay's only word on it before the inventory arrives).
+        /// </summary>
+        public void OnHeld(string item)
+        {
+            if (!string.IsNullOrEmpty(item) && Defs.Item(item)?.Melee != null)
+            {
+                Equipped["melee"] = item;
+                WieldMelee = true;
+                return;
+            }
+            WieldMelee = false;
+            if (!string.IsNullOrEmpty(item)) Primary = item;
+        }
+
         /// <summary>The item worn in a slot, or "".</summary>
         public string Worn(string slot) => Equipped.TryGetValue(slot, out string p) ? p : "";
 

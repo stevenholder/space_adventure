@@ -191,7 +191,7 @@ namespace SpaceAdventure.Game
 
         public void OnAttack(uint attacker)
         {
-            if (_views.TryGetValue(attacker, out var v)) v.Anim?.Attack(Clock.Now);
+            if (_views.TryGetValue(attacker, out var v)) v.Anim?.Attack(Clock.Now, Defs.SwingClip(v.EquippedItem ?? ""));
         }
 
         /// <summary>Records what a `spawn` said, for the row that follows it.</summary>
@@ -360,7 +360,7 @@ namespace SpaceAdventure.Game
             string asset = Defs.ItemAsset(view.EquippedItem);
             if (string.IsNullOrEmpty(asset)) return;
 
-            Hold(_assets, view.Model, asset, weapon =>
+            Hold(_assets, view.Model, asset, blade: Defs.Item(view.EquippedItem)?.Melee != null, held: weapon =>
             {
                 view.Held = weapon;
                 if (view.Anim != null) view.Anim.Armed = true;
@@ -371,7 +371,7 @@ namespace SpaceAdventure.Game
         /// Hangs `asset` in `model`'s right hand, barrel down the forearm,
         /// grip in the palm. Shared with the character panel's doll.
         /// </summary>
-        public static void Hold(AssetRegistry assets, Node3D model, string asset, Action<Node3D> held)
+        public static void Hold(AssetRegistry assets, Node3D model, string asset, Action<Node3D> held, bool blade = false)
         {
             Node3D hand = AssetRegistry.FindNode(model, "hand.r");
             if (hand == null) return;
@@ -384,7 +384,7 @@ namespace SpaceAdventure.Game
                 // The mount is a BoneAttachment3D, and it is not posed until
                 // the skeleton has updated; aligned at attach time the barrel
                 // landed wherever the unposed mount happened to be (up, once).
-                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = model });
+                weapon.AddChild(new AlignToForearm { Weapon = weapon, Hand = hand, Model = model, Blade = blade });
 
                 // Undo the body's scale: `hand.r` lives inside the model, under
                 // the wrapper that fits the character to 1.8 m, and a child
@@ -406,6 +406,32 @@ namespace SpaceAdventure.Game
                 if (grip != null)
                     weapon.GlobalPosition += hand.GlobalPosition - grip.GlobalPosition;
             });
+        }
+
+        /// <summary>
+        /// The right fist's blade frame, world: (blade, knuckles). The blade
+        /// leaves the thumb side along the knuckle row (index_01 - pinky_01,
+        /// square to the knuckles), the edge faces the knuckles (middle_01 -
+        /// hand). art/tools/bpy/human.py blade_frame authors every melee clip
+        /// against exactly this; null without those bones.
+        /// </summary>
+        internal static (Vector3 blade, Vector3 edge)? BladeFrame(Node3D model)
+        {
+            foreach (Skeleton3D sk in AssetRegistry.Descendants<Skeleton3D>(model))
+            {
+                // The hand is the middle finger's parent: Godot renames the
+                // `hand_r` bone itself (it clashes with the `hand.r` mount).
+                int m = sk.FindBone("middle_01_r"), i = sk.FindBone("index_01_r"), p = sk.FindBone("pinky_01_r");
+                int h = m < 0 ? -1 : sk.GetBoneParent(m);
+                if (h < 0 || i < 0 || p < 0) continue;
+                Vector3 P(int b) => sk.GlobalTransform * sk.GetBoneGlobalPose(b).Origin;
+                Vector3 k = (P(m) - P(h)).Normalized();
+                Vector3 row = P(i) - P(p);
+                Vector3 a = (row - k * row.Dot(k)).Normalized();
+                if (a.LengthSquared() < 0.5f || k.LengthSquared() < 0.5f) return null;
+                return (a, k);
+            }
+            return null;
         }
 
         /// <summary>The right elbow in world space: the forearm bone's origin, or null without a skeleton.</summary>
@@ -696,6 +722,7 @@ namespace SpaceAdventure.Game
             EntityType.Ship => Defs.EntityAsset("ship"),
             EntityType.Loot => "prop.loot.crate",
             EntityType.Node => Defs.NodeAsset(def),
+            EntityType.Projectile => Defs.ItemAsset(def ?? ""),   // a thrown charge flies as its item; a round stays a box
             _ => "",
         };
 
@@ -729,6 +756,8 @@ namespace SpaceAdventure.Game
     public sealed partial class AlignToForearm : Node
     {
         public Node3D Weapon, Hand, Model;
+        /// <summary>A hand weapon: rides the fist's blade frame (EntityViews.BladeFrame) every frame, so a swing clip swings it.</summary>
+        public bool Blade;
         /// <summary>
         /// First-person aim: the camera, a weight 0..1 (blends hip -> aimed)
         /// and the recoil kick in metres. When set and the weight is above
@@ -810,6 +839,26 @@ namespace SpaceAdventure.Game
             Node3D muzzle = AssetRegistry.FindNode(Weapon, "muzzle");
             if (grip == null || muzzle == null) { QueueFree(); return; }
             if (_frames == 3) _left = AssetRegistry.FindNode(Model, "hand.l");
+            if (Blade)
+            {
+                var f = EntityViews.BladeFrame(Model);
+                if (!f.HasValue) { QueueFree(); return; }
+                (Vector3 a, Vector3 e) = f.Value;
+                // grip -> muzzle onto the blade, then roll the weapon's top
+                // (+Y, the edge) onto the knuckles; grip into the fist.
+                Vector3 now = (muzzle.GlobalPosition - grip.GlobalPosition).Normalized();
+                Vector3 ax = now.Cross(a);
+                if (ax.LengthSquared() > 1e-8f)
+                    Weapon.GlobalBasis = new Basis(ax.Normalized(), now.AngleTo(a)) * Weapon.GlobalBasis;
+                else if (now.Dot(a) < 0)
+                    Weapon.GlobalBasis = new Basis(e, Mathf.Pi) * Weapon.GlobalBasis;
+                Vector3 top = Weapon.GlobalBasis.Y.Normalized();
+                top = (top - a * top.Dot(a)).Normalized();
+                if (top.LengthSquared() > 0.5f)
+                    Weapon.GlobalBasis = new Basis(a, top.SignedAngleTo(e, a)) * Weapon.GlobalBasis;
+                Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
+                return;
+            }
             Vector3 arm;
             // Two contact points when the gun has a `fore` and the body a left
             // hand: grip -> fore runs to hand.r -> hand.l, so the rifle sits in

@@ -168,6 +168,182 @@
       "value": 30
     },
     {
+      "id": "melee.dagger",
+      "name": "Shiv",
+      "kind": "weapon",
+      "rarity": "common",
+      "slot": "melee",
+      "asset": "melee.dagger",
+      "stack_max": 1,
+      "melee": {
+        "damage": 16,
+        "interval": 0.4,
+        "range": 1.8,
+        "arc": 70,
+        "hands": 1
+      },
+      "desc": "A short blade for close work. Quick, and it never needs a reload.",
+      "value": 15
+    },
+    {
+      "id": "melee.sword",
+      "name": "Cutlass",
+      "kind": "weapon",
+      "rarity": "uncommon",
+      "slot": "melee",
+      "asset": "melee.sword",
+      "stack_max": 1,
+      "melee": {
+        "damage": 28,
+        "interval": 0.6,
+        "range": 2.2,
+        "arc": 100,
+        "hands": 1
+      },
+      "desc": "A one-handed blade. Cuts a wide arc in front of you.",
+      "value": 45
+    },
+    {
+      "id": "melee.axe",
+      "name": "Hatchet",
+      "kind": "weapon",
+      "rarity": "uncommon",
+      "slot": "melee",
+      "asset": "melee.axe",
+      "stack_max": 1,
+      "melee": {
+        "damage": 32,
+        "interval": 0.7,
+        "range": 2.0,
+        "arc": 90,
+        "hands": 1
+      },
+      "desc": "A camp axe that found other work. Heavy chop, narrow arc.",
+      "value": 45
+    },
+    {
+      "id": "melee.greatsword",
+      "name": "Greatsword",
+      "kind": "weapon",
+      "rarity": "rare",
+      "slot": "melee",
+      "asset": "melee.greatsword",
+      "stack_max": 1,
+      "melee": {
+        "damage": 48,
+        "interval": 1.0,
+        "range": 2.8,
+        "arc": 150,
+        "hands": 2
+      },
+      "desc": "Two hands, long reach, a sweep across everything ahead.",
+      "value": 110
+    },
+    {
+      "id": "melee.greataxe",
+      "name": "Cleaver",
+      "kind": "weapon",
+      "rarity": "rare",
+      "slot": "melee",
+      "asset": "melee.greataxe",
+      "stack_max": 1,
+      "melee": {
+        "damage": 56,
+        "interval": 1.1,
+        "range": 2.6,
+        "arc": 130,
+        "hands": 2
+      },
+      "desc": "A double-bitted axe. Slow, and it does not stop for armour.",
+      "value": 120
+    },
+    {
+      "id": "melee.hammer",
+      "name": "Maul",
+      "kind": "weapon",
+      "rarity": "epic",
+      "slot": "melee",
+      "asset": "melee.hammer",
+      "stack_max": 1,
+      "melee": {
+        "damage": 42,
+        "interval": 1.3,
+        "range": 2.6,
+        "arc": 360,
+        "hands": 2
+      },
+      "desc": "Swung in a full circle: everything around you gets the head.",
+      "value": 160
+    },
+    {
+      "id": "throw.frag",
+      "name": "Frag Grenade",
+      "kind": "consumable",
+      "rarity": "uncommon",
+      "asset": "throw.frag",
+      "stack_max": 10,
+      "consumable": {
+        "cooldown": 1.5,
+        "throw": {
+          "damage": 60,
+          "radius": 5.0,
+          "speed": 18.0
+        }
+      },
+      "desc": "Throw it, it bursts where it lands. 5 m blast.",
+      "value": 15
+    },
+    {
+      "id": "throw.fire",
+      "name": "Firebomb Flask",
+      "kind": "consumable",
+      "rarity": "common",
+      "asset": "throw.fire",
+      "stack_max": 10,
+      "consumable": {
+        "cooldown": 1.5,
+        "throw": {
+          "damage": 40,
+          "radius": 4.0,
+          "speed": 16.0
+        }
+      },
+      "desc": "A flask of something that wants to burn. Shatters on impact.",
+      "value": 10
+    },
+    {
+      "id": "throw.acid",
+      "name": "Acid Vial",
+      "kind": "consumable",
+      "rarity": "rare",
+      "asset": "throw.acid",
+      "stack_max": 10,
+      "consumable": {
+        "cooldown": 1.5,
+        "throw": {
+          "damage": 30,
+          "radius": 6.5,
+          "speed": 16.0
+        }
+      },
+      "desc": "Thin glass, thick acid. A wide splash, a gentler bite.",
+      "value": 18
+    },
+    {
+      "id": "consumable.potion.heal",
+      "name": "Healing Draught",
+      "kind": "consumable",
+      "rarity": "common",
+      "asset": "potion.heal",
+      "stack_max": 10,
+      "consumable": {
+        "heal": 30,
+        "cooldown": 5
+      },
+      "desc": "Tastes of rust and berries. +30 health.",
+      "value": 8
+    },
+    {
       "id": "ammo.cell",
       "name": "Energy Cell",
       "kind": "ammo",
@@ -621,7 +797,7 @@
     "accessory1",
     "accessory2",
     "primary",
-    "secondary",
+    "melee",
     "tool",
     "gadget",
     "mod"

@@ -22,6 +22,16 @@
     "item": "armor.legs.raider",
     "qty": 1,
     "chance": 0.06
+   },
+   {
+    "item": "throw.fire",
+    "qty": 1,
+    "chance": 0.15
+   },
+   {
+    "item": "melee.axe",
+    "qty": 1,
+    "chance": 0.04
    }
   ],
   "loot.gunner": [
@@ -29,6 +39,16 @@
     "item": "ammo.cell",
     "qty": 25,
     "chance": 1.0
+   },
+   {
+    "item": "throw.frag",
+    "qty": 1,
+    "chance": 0.12
+   },
+   {
+    "item": "melee.dagger",
+    "qty": 1,
+    "chance": 0.05
    }
   ],
   "loot.node.iron": [

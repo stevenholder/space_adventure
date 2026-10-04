@@ -2087,6 +2087,63 @@ deviation is a client-chosen hit.
 head multiplier land in Phase 3 with enemies worth aiming at — they change every
 damage number, and doing that once, against real enemies, beats doing it twice.
 
+### Melee (2026-10-03)
+
+A body carries a gun in `primary` and a **hand weapon in `melee`** (the
+equip slot `secondary` became `melee`; nothing had used it). **Tab** swaps
+which is in the hand (`wield`, PROTOCOL `0x0015`); with no gun worn the
+blade is in hand anyway. The left mouse button does whatever the hand holds:
+shoot, or swing. No physics: a swing is an **area check** — every
+damageable world entity whose capsule comes within `range` of the swinger's
+chest (1.1 m up) and lies inside `arc` degrees of the facing, flattened onto
+the ground, takes `damage` (`sim.InArc`). `arc` 360 hits everything around
+you. Cadence is `interval`, server-enforced like `fire_interval`; no
+ammunition, no rewind (targets at their current positions — at 2–3 m reach
+the lag reads fine). Players are not hit (no PvP). Damage trains Athletics.
+
+| item | name | hands | `damage` | `interval` s | `range` m | `arc` ° | price |
+|---|---|---|---|---|---|---|---|
+| `melee.dagger` | Shiv | 1 | 16 | 0.4 | 1.8 | 70 | 40 |
+| `melee.sword` | Cutlass | 1 | 28 | 0.6 | 2.2 | 100 | 110 |
+| `melee.axe` | Hatchet | 1 | 32 | 0.7 | 2.0 | 90 | 110 |
+| `melee.greatsword` | Greatsword | 2 | 48 | 1.0 | 2.8 | 150 | 280 |
+| `melee.greataxe` | Cleaver | 2 | 56 | 1.1 | 2.6 | 130 | 300 |
+| `melee.hammer` | Maul | 2 | 42 | 1.3 | 2.6 | 360 | 420 |
+
+The hold family is `_melee` (one hand) or `_melee2h`; the swing clip is
+`attack` (`attack_spin` for a 360° weapon) with that suffix, `fp_attack…`
+in first person. The weapon rides the fist: blade out of the thumb side
+along the knuckle row, edge toward the knuckles (`human.py blade_frame`,
+the client's `EntityViews.BladeFrame` — one rule, so the clip is the hold).
+
+**NPCs.** An archetype names a `melee` item. A pure brawler (no
+`projectile_speed`) keeps its own `attack_*` numbers and lands them on
+everyone in the weapon's arc; a shooter with a blade (`npc.gunner`: dagger)
+swaps to it when its target comes within the blade's reach + 1.5 m and back
+when the target leaves, taking 0.5 s to swap, and swings for `melee_damage`
+(else the weapon's). The swap is an `equipped` event. `npc.grunt` carries a
+Hatchet, `npc.warlord` a Maul.
+
+### Throwables (2026-10-03)
+
+A consumable with `consumable.throw {damage, radius, speed}` is thrown by
+`use` (the hotbar): it leaves the hand (1.5 m up, 0.5 m ahead) at `speed`
+along the look, falls under gravity, and bursts on the first thing it
+touches — a body, a wall, the ground — or after 8 s. The burst (`explosion`
+event, PROTOCOL `0x0001`) deals `damage` at the centre falling linearly to
+half at `radius` to every damageable world entity in reach (a player's
+charge never hurts players). Kills pay missions and bounties like a shot.
+
+| item | name | `damage` | `radius` m | `speed` m/s | price |
+|---|---|---|---|---|---|
+| `throw.fire` | Firebomb Flask | 40 | 4.0 | 16 | 20 |
+| `throw.frag` | Frag Grenade | 60 | 5.0 | 18 | 30 |
+| `throw.acid` | Acid Vial | 30 | 6.5 | 16 | 36 |
+
+All cool 1.5 s and stack to 10. `consumable.potion.heal` (Healing Draught,
++30, 16 cr) uses the same flask art. Grunts drop flasks (15 %), gunners
+grenades (12 %).
+
 ### Health and damage
 
 - `health` is an integer, `0` = dead, maximum from the entity's def.

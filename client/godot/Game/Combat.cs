@@ -38,12 +38,17 @@ namespace SpaceAdventure.Game
             public double DiesAt;
             public double BornAt;
             public bool ScaleOut;
+            /// <summary>A burst: grows to this radius (m) while its material fades.</summary>
+            public float Burst;
+            public StandardMaterial3D Fade;
+            public float Alpha;
         }
 
         private readonly List<Fx> _live = new List<Fx>();
         private readonly Node _parent;
         private readonly ArrayMesh _tracerMesh;
         private readonly SphereMesh _sphere = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 8, Rings = 4 };
+        private readonly SphereMesh _burstSphere = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 24, Rings = 12 };
         private readonly Dictionary<Color, StandardMaterial3D> _unlit = new Dictionary<Color, StandardMaterial3D>();
 
         private MeshInstance3D _flash;
@@ -172,6 +177,45 @@ namespace SpaceAdventure.Game
             _flashDiesAt = Clock.Now + FlashSeconds;
         }
 
+        /// <summary>Seconds a burst takes to bloom and fade.</summary>
+        private const double BurstSeconds = 0.6;
+
+        /// <summary>
+        /// A thrown charge burst at `at`: a bright core and a translucent
+        /// shell blooming out to the blast radius (so the area it hurt is
+        /// visible), coloured by what was thrown, with a flash of light.
+        /// </summary>
+        public void OnExplosion(Vector3 at, float radius, string item)
+        {
+            Color c = item.Contains("acid") ? new Color(0.55f, 1f, 0.3f)
+                : item.Contains("fire") ? new Color(1f, 0.45f, 0.12f)
+                : new Color(1f, 0.85f, 0.5f);
+            foreach ((float r, float a) in new[] { (radius * 0.45f, 0.95f), (radius, 0.35f) })
+            {
+                var mat = new StandardMaterial3D
+                {
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                    AlbedoColor = new Color(c, a),
+                    Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                    CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+                };
+                var ball = new MeshInstance3D
+                {
+                    Name = "burst",
+                    Mesh = _burstSphere,
+                    MaterialOverride = mat,
+                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                    Position = at,
+                    Scale = Vector3.One * 2f * r * 0.35f,
+                };
+                _parent.AddChild(ball);
+                _live.Add(new Fx { Node = ball, BornAt = Clock.Now, DiesAt = Clock.Now + BurstSeconds, Burst = r, Fade = mat, Alpha = a });
+            }
+            var light = new OmniLight3D { LightColor = c, LightEnergy = 6f, OmniRange = radius * 3f, Position = at };
+            _parent.AddChild(light);
+            Add(light, 0.18, scaleOut: false);
+        }
+
         private void Add(Node3D node, double seconds, bool scaleOut)
             => _live.Add(new Fx { Node = node, BornAt = Clock.Now, DiesAt = Clock.Now + seconds, ScaleOut = scaleOut });
 
@@ -190,7 +234,15 @@ namespace SpaceAdventure.Game
                     _live.RemoveAt(i);
                     continue;
                 }
-                if (fx.ScaleOut)
+                if (fx.Burst > 0)
+                {
+                    float k = (float)((now - fx.BornAt) / (fx.DiesAt - fx.BornAt));
+                    fx.Node.Scale = Vector3.One * 2f * fx.Burst * (0.35f + 0.65f * Mathf.Sqrt(k));
+                    Color col = fx.Fade.AlbedoColor;
+                    col.A = fx.Alpha * (1f - k);
+                    fx.Fade.AlbedoColor = col;
+                }
+                else if (fx.ScaleOut)
                 {
                     float k = 1f - (float)((now - fx.BornAt) / (fx.DiesAt - fx.BornAt));
                     fx.Node.Scale = Vector3.One * (0.22f * Mathf.Max(k, 0.05f));

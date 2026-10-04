@@ -179,6 +179,9 @@ namespace SpaceAdventure.Game
         /// gunner, the driver's hands are on the wheel, a ship's crew is
         /// inside a hull. Mirrors server.go fireLocked, which drops the rest.
         /// </summary>
+        /// <summary>The melee table of the weapon in hand, null for a gun or empty hands.</summary>
+        private MeleeDef Swung => _character.Defs.Item(_character.Held)?.Melee;
+
         private bool CanShoot => _seat == 0 || (_seat >= 2 && SeatKind == EntityType.Vehicle);
         private Hud _hud;
         private Character _character;
@@ -586,7 +589,15 @@ namespace SpaceAdventure.Game
             if (_input.Pressed(Key.M)) _map.Toggle();
             // R reloads when a gun is worn; the server would refuse otherwise,
             // and a refusal for pressing R with empty hands is noise.
-            if (_input.Pressed(Key.R) && _character.Defs.Item(_character.Primary)?.Weapon != null)
+            // Tab swaps the hand between the gun and the melee weapon (when
+            // both are worn). The server answers with `equipped`; flipping
+            // here too means the swap shows on the frame the key went down.
+            if (_input.Pressed(Key.Tab) && _character.Primary != "" && _character.Melee != "")
+            {
+                _character.WieldMelee = !_character.WieldMelee;
+                _net.Send(Character.WieldCmd(NextCmdSeq(), _character.WieldMelee));
+            }
+            if (_input.Pressed(Key.R) && _character.Held == _character.Primary && _character.Defs.Item(_character.Primary)?.Weapon != null)
             {
                 _net.Send(Character.ReloadCmd(NextCmdSeq()));
                 // Cosmetic and local, like the muzzle flash: the arms time
@@ -697,14 +708,15 @@ namespace SpaceAdventure.Game
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
             _viewModel.ArmsVisible = CanShoot;
-            bool holding = CanShoot && !string.IsNullOrEmpty(_character.Primary);
-            _viewModel.Hold(holding ? _views.Defs.ItemAsset(_character.Primary) : "", holding ? _views.Defs.HoldSuffix(_character.Primary) : "");
+            string held = _character.Held;
+            bool holding = CanShoot && !string.IsNullOrEmpty(held);
+            _viewModel.Hold(holding ? _views.Defs.ItemAsset(held) : "", holding ? _views.Defs.HoldSuffix(held) : "");
             _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
             _viewModel.Place(_predictor.Smooth.Pos, body.Facing);
             // Right mouse aims, only while the world has the pointer (a free
             // cursor's right-click belongs to the bags and the hotbar).
-            bool aiming = _rigAim || (CanShoot && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
+            bool aiming = _rigAim || (CanShoot && Swung == null && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
             float clear = _rigLowered ? 0f
                 : _seat == 0 ? ViewModel.Blocked(_camera.GlobalPosition, -_camera.GlobalBasis.Z, ViewModel.Reach, _colliders, _terrain)
                 : float.PositiveInfinity;
@@ -911,7 +923,19 @@ namespace SpaceAdventure.Game
             // An empty magazine does not fire: the server drops the shot anyway
             // (server.go fireLocked), and drawing a flash and recoil for it
             // made an empty gun look like it was shooting. -1 = not known yet.
-            if (li.FirePressed && _viewModel.Armed && CanShoot && _character.Magazine != 0 && Clock.Now >= _nextFireAt)
+            // A hand weapon swings instead: same `fire`, no magazine, paced by
+            // its interval; the server resolves who the arc touches.
+            if (Swung is MeleeDef melee)
+            {
+                if (li.FirePressed && _viewModel.Armed && _seat == 0 && Clock.Now >= _nextFireAt)
+                {
+                    _nextFireAt = Clock.Now + (melee.Interval > 0 ? melee.Interval : 0.6);
+                    _net.Send(Encode.Fire(_seq, (float)li.Look.X, (float)li.Look.Y, (float)li.Look.Z));
+                    _viewModel.Swing(_character.Defs.SwingClip(_character.Held));
+                    _sfx.Swing(melee.Hands >= 2);
+                }
+            }
+            else if (li.FirePressed && _viewModel.Armed && CanShoot && _character.Magazine != 0 && Clock.Now >= _nextFireAt)
             {
                 double fi = _character.Defs.Item(_character.Primary)?.Weapon?.FireInterval ?? 0;
                 _nextFireAt = Clock.Now + (fi > 0 ? fi : FireIntervalSeconds);
@@ -1130,8 +1154,25 @@ namespace SpaceAdventure.Game
                             if (_benchView.Open) _benchView.Rebuild();
                             break;
                         case EventId.Attack:
-                            _views.OnAttack(ev.EntityId);
+                            // Our own swing was played when the button went down.
+                            if (ev.EntityId != _net.EntityId)
+                            {
+                                _views.OnAttack(ev.EntityId);
+                                if (_views.TryGet(ev.EntityId, out var swinger) && _views.Defs.Item(swinger.EquippedItem)?.Melee is MeleeDef m)
+                                    _sfx.SwingAt(swinger.Model?.GlobalPosition ?? Vector3.Zero, m.Hands >= 2);
+                            }
                             break;
+                        case EventId.Explosion when ev.Data.Length >= 16:
+                        {
+                            // A thrown charge burst: pos, radius, item id.
+                            var xr = new WireReader(ev.Data);
+                            Vector3 at = Frame.ToGodot(new Vec3(xr.ReadF32(), xr.ReadF32(), xr.ReadF32()));
+                            float radius = xr.ReadF32();
+                            string what = WireReader.Utf8.GetString(ev.Data, 16, ev.Data.Length - 16);
+                            _fx.OnExplosion(at, radius, what);
+                            _sfx.ExplosionAt(at, radius);
+                            break;
+                        }
                         case EventId.GatherEnd:
                             OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;
@@ -1156,7 +1197,7 @@ namespace SpaceAdventure.Game
                             // Our own weapon comes down the same channel, and
                             // is replayed at join, so a reconnect holding a
                             // rifle shows one (PROTOCOL event_id 0x0006).
-                            if (ev.EntityId == _net.EntityId) _character.Primary = item;
+                            if (ev.EntityId == _net.EntityId) _character.OnHeld(item);
                             break;
                         }
                     }
@@ -1295,7 +1336,7 @@ namespace SpaceAdventure.Game
             _hudView.SetVitals(_hud.Health, 100);
             _hudView.SetDeath(_hud.Dead ? _hud.RespawnIn : -1);
             _hudView.SetAmmo(_character.Magazine, _character.Reserve,
-                _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary));
+                _character.Magazine >= 0 && !string.IsNullOrEmpty(_character.Primary) && _character.Held == _character.Primary);
             _hudView.SetCredits(_character.Credits);
             _hotbarView.Refresh(Clock.Now);
             if (_channelEnd > 0)

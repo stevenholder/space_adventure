@@ -145,6 +145,10 @@ def load_triangles(path):
             attrs = prim["attributes"]
             mat = mats[prim["material"]] if mats and "material" in prim else {}
             is_glass = mat.get("alphaMode") == "BLEND"
+            # No vertex colour: the material's base colour (linear in glTF,
+            # back to display sRGB), white when it has none.
+            lin = mat.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1.0, 1.0, 1.0])
+            base = tuple(x * 12.92 if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055 for x in lin[:3])
 
             pos = accessor_array(doc, binbuf, doc["accessors"][attrs["POSITION"]], 3)
             nrm = (accessor_array(doc, binbuf, doc["accessors"][attrs["NORMAL"]], 3)
@@ -179,7 +183,7 @@ def load_triangles(path):
                 # Colour is clamped on the way in: a value outside [0,1] is
                 # out of spec, and letting one through only turns into a
                 # "byte must be in range(0, 256)" a hundred lines later.
-                c0 = col[k0] if col else (1.0, 1.0, 1.0)
+                c0 = col[k0] if col else base
                 c0 = tuple(min(1.0, max(0.0, x)) for x in c0[:3])
                 tris.append((wp[k0], wp[k1], wp[k2], n, c0, is_glass))
 

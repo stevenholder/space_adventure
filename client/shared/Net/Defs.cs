@@ -49,6 +49,8 @@ namespace SpaceAdventure.Net
         [JsonProperty("desc")] public string Desc { get; set; } = "";
         [JsonProperty("armor")] public ArmorDef Armor { get; set; }
         [JsonProperty("weapon")] public WeaponDef Weapon { get; set; }
+        /// <summary>A hand weapon (slot melee): swung, not fired.</summary>
+        [JsonProperty("melee")] public MeleeDef Melee { get; set; }
         [JsonProperty("stack_max")] public int StackMax { get; set; } = 1;
 
         // Phase 12: what a shop pays before sell_rate (0 = unsellable), and
@@ -69,6 +71,25 @@ namespace SpaceAdventure.Net
     {
         [JsonProperty("heal")] public int Heal { get; set; }
         [JsonProperty("cooldown")] public double Cooldown { get; set; }
+        /// <summary>A thrown charge: `use` throws it along the look.</summary>
+        [JsonProperty("throw")] public ThrowDef Throw { get; set; }
+    }
+
+    public sealed class ThrowDef
+    {
+        [JsonProperty("damage")] public int Damage { get; set; }
+        [JsonProperty("radius")] public double Radius { get; set; }
+        [JsonProperty("speed")] public double Speed { get; set; }
+    }
+
+    /// <summary>A hand weapon's swing (server sim.InArc): everything within `range` and `arc` degrees of the facing; 360 = all round.</summary>
+    public sealed class MeleeDef
+    {
+        [JsonProperty("damage")] public int Damage { get; set; }
+        [JsonProperty("interval")] public double Interval { get; set; }
+        [JsonProperty("range")] public double Range { get; set; }
+        [JsonProperty("arc")] public double Arc { get; set; }
+        [JsonProperty("hands")] public int Hands { get; set; } = 1;
     }
 
     public sealed class AbilityDef
@@ -323,9 +344,17 @@ namespace SpaceAdventure.Net
         /// <summary>The art/manifest.json model id for an item, or "".</summary>
         public string ItemAsset(string id) => TryItem(id, out ItemDef it) ? it.Asset ?? "" : "";
 
-        /// <summary>Clip-name suffix for the item's hold family: "" or "_pistol".</summary>
-        public string HoldSuffix(string id) =>
-            TryItem(id, out ItemDef it) && !string.IsNullOrEmpty(it.Weapon?.Class) ? "_" + it.Weapon.Class : "";
+        /// <summary>Clip-name suffix for the item's hold family: "", "_pistol", "_melee" or "_melee2h".</summary>
+        public string HoldSuffix(string id)
+        {
+            if (!TryItem(id, out ItemDef it)) return "";
+            if (it.Melee != null) return it.Melee.Hands >= 2 ? "_melee2h" : "_melee";
+            return !string.IsNullOrEmpty(it.Weapon?.Class) ? "_" + it.Weapon.Class : "";
+        }
+
+        /// <summary>The swing clip for a melee item: a full-circle weapon spins.</summary>
+        public string SwingClip(string id) =>
+            TryItem(id, out ItemDef it) && it.Melee != null && it.Melee.Arc >= 360 ? "attack_spin" : "attack";
 
         /// <summary>
         /// The model id for an entity type name ("player", "npc", "target").

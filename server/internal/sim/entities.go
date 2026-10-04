@@ -69,6 +69,9 @@ type StepCtx struct {
 	// damagePlayer). Nil: projectiles pass through where players would be.
 	Bodies  []Body
 	HitBody func(id, attacker uint32, damage int)
+	// Burst sets off a thrown charge (ProjectileState.Burst, the item id)
+	// at a point; the server owns the area damage. Nil: it fizzles.
+	Burst func(at Vec, owner uint32, item string)
 }
 
 // StepFunc steps a single entity forward by dt.

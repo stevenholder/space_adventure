@@ -31,6 +31,34 @@ type npcAI struct {
 	steer     ai.Steerer
 	melee     ai.MeleeState
 	ranged    ai.RangedState
+	// closeIn: a shooter carrying a melee weapon has it in hand (the target
+	// is within reach); swapTicks counts down the swap before it can strike.
+	closeIn   bool
+	swapTicks int
+}
+
+// npcSwapSeconds is how long an NPC takes to change weapons.
+const npcSwapSeconds = 0.5
+
+// npcMelee is archetype arch's melee table, nil without one.
+func (s *Server) npcMelee(arch defs.NPC) *defs.Melee {
+	if it, ok := s.reg.Items[arch.Melee]; ok && it.Melee != nil {
+		m := *it.Melee
+		return &m
+	}
+	return nil
+}
+
+// npcHeld is what NPC entity id (archetype a) holds: its gun, or its melee
+// weapon when it has no gun or has closed in. Caller holds s.mu.
+func (s *Server) npcHeld(id uint32, a defs.NPC) string {
+	if n := s.npcOf(id); n != nil && n.closeIn && a.Melee != "" {
+		return a.Melee
+	}
+	if a.Primary != "" {
+		return a.Primary
+	}
+	return a.Melee
 }
 
 // ticksOf converts a duration in seconds to whole ticks. The tick rate is
@@ -120,6 +148,39 @@ func (s *Server) stepNPCs(tick uint32) {
 		inRange := dist <= arch.AttackRange
 		hasLOS := s.losBetween(eyeOf(n.ent.Pos, arch.EyeHeight()), eyeOf(target, eyeHeightMeters))
 
+		mw := s.npcMelee(arch)
+		if mw != nil && arch.ProjectileSpeed > 0 {
+			// A shooter with a blade: the blade once the target is inside
+			// its reach (plus a step), the gun otherwise. Each swap costs
+			// npcSwapSeconds and restarts both attack machines.
+			want := dist <= mw.Range+1.5
+			if want != n.closeIn {
+				n.closeIn = want
+				n.swapTicks = ticksOf(npcSwapSeconds)
+				n.melee, n.ranged = ai.MeleeState{}, ai.RangedState{}
+				s.broadcast(equippedFrame(n.ent.ID, s.npcHeld(n.ent.ID, arch)))
+			}
+			if n.swapTicks > 0 {
+				n.swapTicks--
+				continue
+			}
+			if n.closeIn {
+				if arch.MeleeDamage > 0 {
+					mw.Damage = arch.MeleeDamage
+				}
+				before := n.melee.WindupTicks
+				hit := ai.StepMelee(&n.melee, dist <= mw.Range+0.5 && hasLOS, mw.Damage,
+					ticksOf(mw.Interval), ticksOf(arch.AttackWindup))
+				if attackStarted(before, n.melee.WindupTicks, hit > 0) {
+					s.broadcastAttack(n.ent.ID, n.brain.TargetID)
+				}
+				if hit > 0 {
+					s.npcSwing(n, forwardOf(n.ent.Quat), *mw)
+				}
+				continue
+			}
+		}
+
 		if arch.ProjectileSpeed > 0 {
 			before := n.ranged.WindupTicks
 			shot := ai.StepRanged(&n.ranged, inRange, hasLOS,
@@ -141,7 +202,15 @@ func (s *Server) stepNPCs(tick uint32) {
 		if attackStarted(before, n.melee.WindupTicks, dmg > 0) {
 			s.broadcastAttack(n.ent.ID, n.brain.TargetID)
 		}
-		if dmg > 0 {
+		if dmg > 0 && mw != nil {
+			// A brawler with a weapon in hand hits everyone in its arc, with
+			// its own numbers and at least its own reach.
+			mw.Damage = dmg
+			if mw.Range < arch.AttackRange {
+				mw.Range = arch.AttackRange
+			}
+			s.npcSwing(n, forwardOf(n.ent.Quat), *mw)
+		} else if dmg > 0 {
 			s.damagePlayer(n.brain.TargetID, dmg, n.ent.ID)
 		}
 	}
