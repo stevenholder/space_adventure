@@ -1372,6 +1372,18 @@ Settings, when PLAY is pressed — the launcher never inherits the 1920×1080
 canvas scaled down to a thumbnail, and the game never runs in the
 launcher's window.
 
+**The engine's window is born invisible.** Velopack runs the executable
+twice around every update (`--veloapp-obsolete` on the old build,
+`--veloapp-updated` on the new) and there is no switch to skip those
+runs; each boots the engine far enough to show a window before any of our
+code can exit. So `project.godot` creates the OS window as a 1×1 (Godot
+floors it to 64×64) **borderless, per-pixel-transparent** window with a
+zero-alpha splash, and `Boot` gives it borders, opacity, its real size and
+the centre of the screen before the first frame of a real launch. A hook
+run shows nothing; off-screen placement does not work because Godot
+clamps the start position back onto a screen. Verified by screen capture
+on Windows: the corner during a hook-shaped run shows only the desktop.
+
 **Layout** (left to right, top to bottom):
 
 | Region | Content |

@@ -376,10 +376,14 @@ namespace SpaceAdventure.Game
             w.ContentScaleMode = Window.ContentScaleModeEnum.Disabled;
             w.ContentScaleFactor = 1f;
             w.Mode = Window.ModeEnum.Windowed;
+            w.Borderless = false; // created as a transparent borderless dot (project.godot)
+            w.Transparent = false;
+            w.TransparentBg = false;
             w.Unresizable = true;
             w.Title = "Space Adventure";
             w.Size = new Vector2I(LauncherView.Width, LauncherView.Height);
             w.MoveToCenter();
+            GD.Print($"window: launcher {w.Size.X}x{w.Size.Y} at {w.Position.X},{w.Position.Y}");
         }
 
         /// <summary>
@@ -394,11 +398,19 @@ namespace SpaceAdventure.Game
         private void OpenGameWindow()
         {
             Window w = GetWindow();
+            w.Borderless = false; // created as a transparent borderless dot (project.godot)
+            w.Transparent = false;
+            w.TransparentBg = false;
             w.Unresizable = false;
-            if (w.Size != new Vector2I(LauncherView.Width, LauncherView.Height)) return;
-            Vector2I screen = DisplayServer.ScreenGetUsableRect(w.CurrentScreen).Size;
-            w.Size = new Vector2I(Math.Min(w.ContentScaleSize.X, screen.X), Math.Min(w.ContentScaleSize.Y, screen.Y));
+            // The boot dot, or the launcher's window: grow to the canvas. A
+            // CLI --resolution (rig shots) is bigger than both and is kept.
+            if (w.Size.X <= LauncherView.Width)
+            {
+                Vector2I screen = DisplayServer.ScreenGetUsableRect(w.CurrentScreen).Size;
+                w.Size = new Vector2I(Math.Min(w.ContentScaleSize.X, screen.X), Math.Min(w.ContentScaleSize.Y, screen.Y));
+            }
             w.MoveToCenter();
+            GD.Print($"window: game {w.Size.X}x{w.Size.Y} at {w.Position.X},{w.Position.Y}");
         }
 
         /// <summary>The launcher's UI, over everything; the HUD stays hidden until PLAY.</summary>
@@ -509,7 +521,7 @@ namespace SpaceAdventure.Game
 
             GD.Print($"boot: godot {Engine.GetVersionInfo()["string"]} " +
                      $"dotnet {RuntimeInformation.FrameworkDescription} " +
-                     $"display {DisplayServer.GetName()} window {DisplayServer.WindowGetSize().X}x{DisplayServer.WindowGetSize().Y}");
+                     $"display {DisplayServer.GetName()} window {DisplayServer.WindowGetSize().X}x{DisplayServer.WindowGetSize().Y} at {DisplayServer.WindowGetPosition().X},{DisplayServer.WindowGetPosition().Y}");
 
             if (Flag("-selftest"))
             {
@@ -519,8 +531,11 @@ namespace SpaceAdventure.Game
 
             // A player's launch opens the launcher window first (GDD
             // "Launcher"): sized and unscaled before anything else draws.
+            // Rig: -uiDot leaves the window exactly as the engine created it
+            // (what a Velopack hook run shows), for a screen capture.
             bool launcher = LauncherMode;
-            if (launcher) OpenLauncherWindow();
+            if (Flag("-uiDot")) { /* stay the dot; -quitAfter ends the run */ }
+            else if (launcher) OpenLauncherWindow();
             else OpenGameWindow();
 
             _material = new StandardMaterial3D
