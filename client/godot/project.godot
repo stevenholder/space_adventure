@@ -10,11 +10,23 @@ config/name="Space Adventure"
 run/main_scene="res://Boot.tscn"
 run/max_fps=120
 config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+; No engine splash: the first frames are the launcher's page colour
+; (Styles.Ink #10131A), so the window never shows grey or a logo before the
+; launcher draws (GDD "Launcher (Phase 15)").
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.0627, 0.0745, 0.102, 1)
 
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+; The OS window opens at the LAUNCHER's size, centred, from its very first
+; frame; the 1920x1080 above stays the canvas the game scales. Boot resizes
+; to the game size on PLAY (or straight away for rig / -play runs). Without
+; this the window opened at 1920x1080 and shrank a frame later -- a flash.
+window/size/window_width_override=560
+window/size/window_height_override=360
+window/size/initial_position_type=1
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/vsync/vsync_mode=0

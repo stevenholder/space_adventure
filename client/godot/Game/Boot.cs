@@ -382,6 +382,25 @@ namespace SpaceAdventure.Game
             w.MoveToCenter();
         }
 
+        /// <summary>
+        /// The game's window: the project's canvas size clamped to the screen,
+        /// centred, resizable. The OS window opens at the LAUNCHER's size
+        /// (project.godot window_*_override, so the launcher never flashes a
+        /// 1920x1080 frame first); rig and -play runs grow it here at boot and
+        /// PLAY grows it after the launcher. A window that is not the launcher
+        /// size is left alone: a CLI --resolution, or a display mode already
+        /// applied.
+        /// </summary>
+        private void OpenGameWindow()
+        {
+            Window w = GetWindow();
+            w.Unresizable = false;
+            if (w.Size != new Vector2I(LauncherView.Width, LauncherView.Height)) return;
+            Vector2I screen = DisplayServer.ScreenGetUsableRect(w.CurrentScreen).Size;
+            w.Size = new Vector2I(Math.Min(w.ContentScaleSize.X, screen.X), Math.Min(w.ContentScaleSize.Y, screen.Y));
+            w.MoveToCenter();
+        }
+
         /// <summary>The launcher's UI, over everything; the HUD stays hidden until PLAY.</summary>
         private void BuildLauncher()
         {
@@ -441,15 +460,10 @@ namespace SpaceAdventure.Game
             _launcherView.Show(false);
             _ui.Root.Visible = true;
             Window w = GetWindow();
-            w.Unresizable = false;
             w.ContentScaleMode = _gameScaleMode;
             w.ContentScaleAspect = _gameScaleAspect;
             w.ContentScaleSize = _gameScaleSize;
-            // Windowed mode keeps the size it has, so leave the launcher's
-            // thumbnail for the project size, clamped to the screen.
-            Vector2I screen = DisplayServer.ScreenGetUsableRect(w.CurrentScreen).Size;
-            w.Size = new Vector2I(Math.Min(_gameScaleSize.X, screen.X), Math.Min(_gameScaleSize.Y, screen.Y));
-            w.MoveToCenter();
+            OpenGameWindow();
             ApplySettings();
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
             Connect();
@@ -495,7 +509,7 @@ namespace SpaceAdventure.Game
 
             GD.Print($"boot: godot {Engine.GetVersionInfo()["string"]} " +
                      $"dotnet {RuntimeInformation.FrameworkDescription} " +
-                     $"display {DisplayServer.GetName()}");
+                     $"display {DisplayServer.GetName()} window {DisplayServer.WindowGetSize().X}x{DisplayServer.WindowGetSize().Y}");
 
             if (Flag("-selftest"))
             {
@@ -507,6 +521,7 @@ namespace SpaceAdventure.Game
             // "Launcher"): sized and unscaled before anything else draws.
             bool launcher = LauncherMode;
             if (launcher) OpenLauncherWindow();
+            else OpenGameWindow();
 
             _material = new StandardMaterial3D
             {
