@@ -35,6 +35,10 @@ type npcAI struct {
 	// is within reach); swapTicks counts down the swap before it can strike.
 	closeIn   bool
 	swapTicks int
+	// wander is how far (m) this NPC strays from its post while in PATROL
+	// (GDD "Wildlife — herds and wandering"). 0, the zone-NPC default,
+	// keeps PATROL inert.
+	wander float64
 }
 
 // npcSwapSeconds is how long an NPC takes to change weapons.
