@@ -687,3 +687,17 @@ data where PROTOCOL promises `u32 killer`; the sim now sends 0.
 | C145 | PASS | `t41`: rifle bought, 99 m walk east in 17 s; blob 1048603 closed 17 m and landed a `hit`; three shots → `death`; drop 1048628 `mat.scrap` 0.00 m from the body; alive again after 20.0 s at 23/23 and 0.00 m from its post |
 | C146 | PASS | `t41`: three camp grunts 0.000 m over the same 30 s; `t16` 6/6, `t17` 8/8 on the same build |
 | C147 | PASS | `go vet && go test ./...` green, art 39 assets, `godot-gate`, `godot-test`, `godot-codec` 9/9, `godot-conformance`; no wire change, no client change |
+
+# Phase 15 — the launcher (2026-10-05)
+
+Headless proofs from source and the exported Linux build, the six states
+photographed at the launcher's own size, and the installed Windows client
+updated to 1.0.51 (release `v2026.10.05-949963b`) by hand on the night.
+
+| # | Result | Evidence |
+|---|---|---|
+| C148 | PASS | Windows install after the 1.0.51 update: the launcher opened at its own size, no 1920×1080 frame first (user, 2026-10-05); `boot: … window 560x360` under WSLg before any script runs; `-uiShot`, `-quitAfter`, `-selftest`, `godot-cli run` skip it; `make godot-run` still ends `world ready` / `colliders: 28` |
+| C149 | PASS | `test/out/ui/p15-launcher-{checking,updating,restarting,uptodate,devbuild,offline}.png`, 560×360 each, the lines of the GDD table; `-selftest`: nine launcher checks (Updating line exact, Found→Progress→Downloaded = Restarting with PLAY off, Current = UpToDate on, Failed and a mid-download failure = Offline on, NotInstalled = DevBuild on, site URL, server line). Live: `UP TO DATE · V1.0.51` on the install. **Not yet seen live:** `UPDATING … %` → `RESTARTING…` inside the launcher — 1.0.51 was applied by the pre-launcher client; the first update *through* the launcher is the next release |
+| C150 | PASS | PLAY on the install opened the game in the saved display mode and connected (user); headless `-uiPlayAfter 4 -quitAfter 11` through the real launcher → `world ready`; HUD, F1 panel and the in-session banner untouched |
+| C151 | PASS | `SERVER · ONLINE · 0 PLAYING` on the install from `https://game.stevenholder.info/api/stats`; `Launcher.SiteUrl` self-tested for `wss://host/ws` and `ws://host:port/ws`; `UNREACHABLE` on any failure, PLAY unaffected |
+| C152 | PASS | `dotnet build` 0 warnings, `godot-gate`, `godot-test`, `-selftest`, export + packaged join; the account column is an empty framed panel, ~40 % of the width |
