@@ -1,0 +1,15 @@
+{
+ "$comment": "Wildlife herds: groups of one mob archetype (server/data/mobs.json) placed in the open country between the POIs, after the rover, in file order. Centres are the poi solver's sites for seed 1337 (go run ./cmd/server poi -count 12 -flatten 6 -falloff 4 -spacing 45 -slope-max 20), pasted and reviewed like a zone's origin_dir; the site each herd took is in docs/ROADMAP.md 'Phase 14'. Herds also keep aggro_radius + wander + 5 m clear of the committed harness route test/out/route-camp.json (t16/t17 walk it unarmed; t41 checks this) -- the drones first sat at site 4, 26 m off it, and shot the walker. Contract and audit rules: docs/GDD.md 'Wildlife -- herds and wandering (Phase 14)'.",
+ "version": 1,
+ "herds": [
+  {"id": "herd.blobs.east", "def": "mob.blob.green_blob", "count": 4, "origin_dir": [0.2462021, 0.7891895, 0.5626407], "spread": 5.0, "wander": 10.0},
+  {"id": "herd.birbs.north", "def": "mob.blob.birb", "count": 3, "origin_dir": [-0.0167048, 0.6930847, 0.7206626], "spread": 4.0, "wander": 12.0},
+  {"id": "herd.dinos", "def": "mob.big.dino", "count": 2, "origin_dir": [-0.6496288, 0.4976749, -0.5747192], "spread": 5.0, "wander": 8.0},
+  {"id": "herd.mushnubs", "def": "mob.blob.mushnub", "count": 4, "origin_dir": [0.2315145, 0.4532727, 0.8607816], "spread": 5.0, "wander": 6.0},
+  {"id": "herd.drones", "def": "mob.mech.eye_drone", "count": 3, "origin_dir": [0.8834698, 0.4653733, -0.0539330], "spread": 6.0, "wander": 10.0},
+  {"id": "herd.scolitex", "def": "mob.alien.scolitex", "count": 3, "origin_dir": [0.9259246, -0.2496625, 0.2834294], "spread": 6.0, "wander": 8.0},
+  {"id": "herd.imps", "def": "mob.dungeon.imp", "count": 3, "origin_dir": [0.8264972, -0.5428771, -0.1489521], "spread": 5.0, "wander": 10.0},
+  {"id": "herd.yeti", "def": "mob.big.yeti", "count": 1, "origin_dir": [-0.6826016, -0.6733837, 0.2839181], "spread": 0.0, "wander": 15.0},
+  {"id": "herd.frogs", "def": "mob.big.frog", "count": 2, "origin_dir": [-0.2341688, -0.7129856, -0.6609209], "spread": 4.0, "wander": 8.0}
+ ]
+}

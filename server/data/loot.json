@@ -88,6 +88,62 @@
     "qty": 1,
     "chance": 1.0
    }
+  ],
+  "loot.wild.small": [
+   {
+    "item": "mat.scrap",
+    "qty": 2,
+    "chance": 1.0
+   },
+   {
+    "item": "consumable.potion.heal",
+    "qty": 1,
+    "chance": 0.1
+   },
+   {
+    "item": "charm.rabbit",
+    "qty": 1,
+    "chance": 0.02
+   }
+  ],
+  "loot.wild.big": [
+   {
+    "item": "mat.scrap",
+    "qty": 5,
+    "chance": 1.0
+   },
+   {
+    "item": "mat.ore.iron",
+    "qty": 2,
+    "chance": 0.5
+   },
+   {
+    "item": "consumable.potion.heal",
+    "qty": 1,
+    "chance": 0.25
+   },
+   {
+    "item": "charm.rabbit",
+    "qty": 1,
+    "chance": 0.05
+   }
+  ],
+  "loot.wild.mech": [
+   {
+    "item": "mat.scrap",
+    "qty": 4,
+    "chance": 1.0
+   },
+   {
+    "item": "mat.ore.copper",
+    "qty": 2,
+    "chance": 0.4
+   },
+   {
+    "item": "ammo.cell",
+    "qty": 10,
+    "chance": 0.6
+   }
   ]
  }
 }

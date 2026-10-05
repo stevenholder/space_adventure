@@ -24,7 +24,7 @@ function input(mx,my,lk,mask,seq){const b=u8(24),d=new DataView(b.buffer)
 const norm=v=>{const l=Math.hypot(...v);return v.map(x=>x/l)}
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]]
 const sleep=ms=>new Promise(r=>setTimeout(r,ms))
-const ws=new WebSocket('ws://127.0.0.1:18080/ws');ws.binaryType='arraybuffer'
+const ws=new WebSocket(`ws://127.0.0.1:${process.env.SA_PORT ?? 18080}/ws`);ws.binaryType='arraybuffer'
 let myId=0;const ents=new Map(),spawns=new Map(),events=[]
 ws.addEventListener('open',()=>ws.send(hello('camper','camp-'+Date.now())))
 ws.addEventListener('message',ev=>{const dv=new DataView(ev.data),t=dv.getUint16(0,true),pv=new DataView(ev.data,2),p=new Uint8Array(ev.data,2)

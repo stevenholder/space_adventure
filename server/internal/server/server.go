@@ -249,6 +249,35 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 	world.Add(rover)
 	worldEnts = append(worldEnts, rover)
 
+	// Phase 14: wildlife herds, after the rover and in file order so no
+	// earlier entity id moves (GDD "Wildlife — herds and wandering"). Each
+	// member is built exactly as the zone loop above builds an NPC
+	// placement; the audit guarantees a combat archetype, so CombatStateFor
+	// always returns a post.
+	wanderOf := map[uint32]float64{}
+	for _, h := range reg.Herds {
+		arch := reg.NPCs[h.Def]
+		for _, p := range defs.ComposeHerd(h, radiusFn) {
+			worldID++
+			var data any
+			if st := sim.CombatStateFor(p.Def, arch, p.Pos, p.Quat); st != nil {
+				data = st
+			}
+			ent := &sim.Ent{
+				ID:     worldID,
+				Kind:   sim.EntityKind(protocol.EntityTypeNPC),
+				Pos:    p.Pos,
+				Quat:   p.Quat,
+				Health: arch.MaxHealth,
+				Def:    p.Def,
+				Data:   data,
+			}
+			world.Add(ent)
+			worldEnts = append(worldEnts, ent)
+			wanderOf[worldID] = h.Wander
+		}
+	}
+
 	s := &Server{
 		terrain: t,
 		seed:    seed,
@@ -275,6 +304,7 @@ func New(t *terrain.Field, seed uint64) (*Server, error) {
 			continue
 		}
 		if n := newNPCAI(e, reg.NPCs[e.Def]); n != nil {
+			n.wander = wanderOf[e.ID] // 0 for every zone NPC
 			s.npcAI = append(s.npcAI, n)
 		}
 	}

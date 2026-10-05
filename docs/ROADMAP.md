@@ -1479,6 +1479,88 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
 - **C136 Nothing else moved.** t14, t34, t36 and the whole sweep green;
   a fresh profile plays the game it had. (sweep)
 
+# Phase 14 — wildlife (2026-10-05)
+
+### Where Phase 14 stands (2026-10-05)
+
+Built and green on a bare server: C142–C147 recorded (docs/QA-STATUS.md
+"Phase 14"). Nine herds, 25 members, wandering; `t41` plays the proof
+herd end to end. Owed to humans: the walk east with a real client, and
+whether a herd reads as alive or as scenery that twitches.
+
+PR #57 shipped 69 creatures as hostile archetypes and not one of them is
+in the world: the zones place five grunts, three gunners and the vendors.
+This phase puts the library on the ground as **herds** in the open country
+between the POIs, gives them a wander leg so the planet moves when nobody
+is shooting at it, and gives a creature kill a creature's loot instead of a
+raider's helmet. Contract: GDD "Wildlife — herds and wandering (Phase 14)",
+`server/data/wildlife.json`. No wire change: a herd member is an NPC
+entity like a grunt, announced by the same `spawn` frame with its `mob.*`
+def, drawn by the client's existing mob renderer.
+
+**Playable proof.** Walk a hundred metres east of spawn. Four green blobs
+are grazing on the slope, each drifting a few metres and stopping. One
+notices you and the others follow a moment later; kill one and it drops
+scrap, not ammo; twenty seconds later it is back where it stood. The camp
+grunts, meanwhile, have not moved a step.
+
+**Herds** (the `poi` solver's sites at `-flatten 6 -falloff 4 -spacing 45
+-slope-max 20`, nearest first; 25 members):
+
+| herd | def | n | site | spread | wander |
+|---|---|---|---|---|---|
+| `herd.blobs.east` | `mob.blob.green_blob` | 4 | 11 (99 m from spawn — the proof herd) | 5 | 10 |
+| `herd.birbs.north` | `mob.blob.birb` | 3 | 3 | 4 | 12 |
+| `herd.dinos` | `mob.big.dino` | 2 | 5 | 5 | 8 |
+| `herd.mushnubs` | `mob.blob.mushnub` | 4 | 10 | 5 | 6 |
+| `herd.drones` | `mob.mech.eye_drone` | 3 | 23 of a 24-site run at `-spacing 40` (site 4 sat 26 m off the camp route and shot t16's walker) | 6 | 10 |
+| `herd.scolitex` | `mob.alien.scolitex` | 3 | 8 | 6 | 8 |
+| `herd.imps` | `mob.dungeon.imp` | 3 | 12 | 5 | 10 |
+| `herd.yeti` | `mob.big.yeti` | 1 | 1 | 0 | 15 |
+| `herd.frogs` | `mob.big.frog` | 2 | 9 | 4 | 8 |
+
+Site directions are the solver's output for seed 1337, recorded in
+`wildlife.json` and reviewed there, as zones are. One more rule than the
+solver knows: a herd centre stays `aggro_radius + wander + 5 m` clear of
+the committed harness route (`test/out/route-camp.json`), because t16 and
+t17 walk it unarmed; t41 asserts it.
+
+### Task list
+
+Wave 1 lands the data and the herds standing still; wave 2 makes them
+walk; wave 3 is `qa`.
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | Data: `wildlife.json` with the nine herds; `loot.wild.small` / `loot.wild.big` / `loot.wild.mech` in loot.json (scrap, ore, potions, a charm — no armor, no ammo except the mechs); `ROLES` in `art/tools/mobs.mjs` point swarm+flyer, brute+lurker, drone+walker at them (raiders keep `loot.grunt`) and `mobs.json` + `CATALOG.md` regenerated | `server/data`, `art/tools` | defs audit test, `npm --prefix art test` |
+| 2 | 1 | Registry: `Herd` type, `Herds` on `Registry`, `wildlife.json` loaded and audited per the GDD table, `ComposeHerd(h, radiusFn) []Placement` (golden-angle disc, outward yaw) | `internal/defs` | `TestWildlifeAudit`, `TestComposeHerd` |
+| 3 | 1 | Placement: herds after the rover, in file order, ids continuing; `npcAI.wander` set from the herd | `server/server.go` | `TestWildlifePlaced` (count, ids after the rover, posts within spread) |
+| 4 | 2 | The leg: `PATROL` with `wander > 0` picks, walks at half speed, pauses, repeats per the GDD param table; any other state drops the leg | `server/npcs.go` | `TestWanderStaysInRadius`, `TestWanderZeroIsInert`, `TestWanderDropsOnAggro` |
+| 5 | 3 | `t41-wildlife.mjs`: C142–C146 over the wire (herd counts from `spawn` frames, a watched far member's track, the walk east to the proof herd, a kill, the drop, the respawn) | `test/` | `node test/t41-wildlife.mjs` |
+| 6 | 3 | Record: QA-STATUS "Phase 14", this section's status line | `docs/` | — |
+
+### Acceptance criteria (C142–C147)
+
+- **C142 Herds exist.** A joiner's `spawn` frames carry exactly the
+  members `wildlife.json` declares, by def and count, with ids above the
+  rover's. (t41)
+- **C143 Placed clear and apart.** Every member stands within
+  `spread + 1 m` of its herd centre on the surface; no two members of a
+  herd are closer than their archetype's diameter; every herd centre is
+  `>= 30 m` from spawn and from every zone origin. (audit test + t41)
+- **C144 They wander.** A member with no player inside its `aggro_radius`,
+  watched for 30 s from spawn, moves at least 2 m in total and is never
+  more than `wander + 2 m` from its post. (t41, a far herd)
+- **C145 They fight, drop and return.** Walking into the proof herd draws
+  aggro (a member closes and `hit` events land); killing a member emits
+  its `death`, spawns a drop whose contents come from a `loot.wild.*`
+  table, and `npc_respawn` later it stands at its post again at full
+  health. (t41)
+- **C146 The camp has not moved.** A camp grunt's position over 30 s of
+  idling is unchanged to 0.01 m; t16 and t17 stay green. (t41 + sweep)
+- **C147 Nothing else moved.** The whole sweep green; conformance
+  untouched (NPC motion is not in it). (sweep)
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
@@ -1495,6 +1577,8 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Chat, guilds | after Phase 5; not on the critical path (crafting landed in Phase 12, quests in Phase 10) |
 | A persistent world players mutate (bases, territory) | Phase 6 candidate — the persistence layer from Phase 2 is the seed |
 | Rig + animation clips | procedural motion stops carrying the fidelity |
+| Pack aggro (one herd member waking the rest) | a playtest finds herds too easy to pick off one at a time; until then overlapping `aggro_radius` does it |
+| NPC flight (the `mob.flying.*` archetypes off the ground) | a herd that should be unreachable on foot is wanted; it needs an NPC airborne regime in steer.go |
 | Gear abilities in the movement sim (hover boots, a dash) | Phase 13's `use`/ability framework and hotbar exist; the first sim ability needs both sims stepped identically plus conformance cases, like Phase 11's multipliers — build it when a second ability wants the sim, not the first |
 | UDP / WebTransport | WebSocket latency is measured as the limiter, not assumed to be |
 

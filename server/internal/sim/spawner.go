@@ -145,6 +145,7 @@ func StepNPCRespawn(e *Ent, dt float64, ctx StepCtx) {
 			*ctx.Events = append(*ctx.Events, protocol.Event{
 				EntityID: e.ID,
 				EventID:  protocol.EventDeath,
+				Data:     make([]byte, 4), // PROTOCOL: u32 killer, 0 = none (the sim has no shooter to name)
 			})
 		}
 		return

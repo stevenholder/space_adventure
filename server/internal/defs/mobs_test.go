@@ -52,8 +52,10 @@ func TestNPCSizeDefaults(t *testing.T) {
 }
 
 func TestMobsAppend(t *testing.T) {
+	// The shipped herds place shipped mobs; this mobs.json replaces them all.
 	reg, err := load(dataWith(t, map[string]string{"mobs.json": `{"version":1,"npcs":[
-		{"id":"mob.crawler","name":"Crawler","asset":"mob.crawler","radius":0.6,"height":0.9,"eye_height":0.5}]}`}))
+		{"id":"mob.crawler","name":"Crawler","asset":"mob.crawler","radius":0.6,"height":0.9,"eye_height":0.5}]}`,
+		"wildlife.json": `{"version":1,"herds":[]}`}))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

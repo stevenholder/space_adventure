@@ -2443,6 +2443,85 @@ is far more expensive than the two box tests it replaces.
 | `npc_respawn` | 20 | s |
 | `attack_range_hysteresis` | 1.15 | × |
 
+### Wildlife — herds and wandering (Phase 14)
+
+The mob library (`art/mobs/CATALOG.md`, 69 archetypes in `server/data/mobs.json`)
+is placed in the open country between the POIs as **herds**: small groups of
+one archetype that stand on unflattened ground, wander a few metres around
+where they spawned, and fight with the same brain, steering, loot and
+respawn rules as a camp grunt. Nothing about an individual mob is new; the
+herd is the unit of authoring and the wander leg is the one new behaviour.
+
+**Data — `server/data/wildlife.json`** (loaded into `defs.Registry.Herds`,
+file order kept; the defs audit refuses the file rather than the server
+limping on a bad herd):
+
+```json
+{
+ "version": 1,
+ "herds": [
+  {"id": "herd.blobs.east", "def": "mob.blob.green_blob", "count": 4,
+   "origin_dir": [0.2462021, 0.7891895, 0.5626407], "spread": 5.0, "wander": 10.0}
+ ]
+}
+```
+
+| Field | Meaning | Audit |
+|---|---|---|
+| `id` | herd id, `herd.*` | unique |
+| `def` | an NPC archetype id | exists in `reg.NPCs`; `max_health > 0` and `move_speed > 0` (a combatant) |
+| `count` | members | 1–12 |
+| `origin_dir` | unit direction of the herd centre (the `poi` solver's output, pasted and reviewed, exactly like a zone) | finite, non-zero; normalised at load |
+| `spread` | metres: members are scattered inside this disc around the centre | `>= 0`; for `count > 1`, `>= 1.5 × def radius × sqrt(count)` so members never spawn stacked |
+| `wander` | metres: how far a member strays from its own post while idle; `0` = stands still like a camp NPC | `0 <= wander <= def.leash_radius − 2` |
+
+The audit also rejects a herd centre within `30 m` surface distance of
+spawn or of any zone `origin_dir`, and a file whose members total more than
+`64` — snapshots carry every world entity to every client (no interest
+management yet), so the herd budget is a bandwidth budget.
+
+**Placement (`defs.ComposeHerd`, deterministic, no RNG).** Member `i` of
+`count` sits at polar offset `r = spread · sqrt((i + 0.5) / count)`,
+`θ = i · 2.399963 rad` (the golden angle) in the herd's tangent frame — the
+same east/north frame `ComposeZone` builds from `origin_dir` — glued to the
+surface with the terrain's radius function, facing outward along its offset
+(a lone member faces east). Herds are placed **after the rover**, in file
+order, continuing the world-entity id range, so no existing entity id moves.
+Each member is an ordinary NPC entity: `CombatStateFor` post at its own
+spot, `npc_respawn` returns it there, the loot table is the archetype's.
+
+**Wandering** is the `PATROL` state given a leg to walk. The brain's table
+above is unchanged (`IDLE → PATROL` after `idle_dwell`; `PATROL → AGGRO` on a
+target); what `PATROL` does is decided by the member's `wander` radius:
+
+| `wander` | `PATROL` means |
+|---|---|
+| `0` (every zone NPC) | inert, exactly as today |
+| `> 0` | pick a point, walk to it, pause, repeat |
+
+The leg, binding:
+
+| Param | Value | Unit | Rule |
+|---|---|---|---|
+| `wander_pick` | uniform in the disc | — | a point inside `wander` of the member's **post** (not its current position, so legs never drift away), in the post's tangent plane, glued to the surface; re-rolled (up to 8 tries) while the ground there is not `Walkable`; after 8 misses the leg is skipped and the pause restarts |
+| `wander_speed` | 0.5 | × `move_speed` | the walk; `AGGRO`/`LEASH` steer at full `move_speed` as before |
+| `wander_arrive` | 1.0 | m | the leg ends when the member is within this of its point |
+| `wander_leg` | 8.0 | s | or when the leg has run this long (a point behind a rock is abandoned, not pushed at forever) |
+| `wander_pause` | uniform 1.0–4.0 | s | standing still between legs; the first leg starts after a pause too |
+
+The server's RNG rolls the point and the pause (it is server-owned and
+already under `s.mu`; NPC motion is not in the conformance diff). Leaving
+`PATROL` for any reason drops the current leg; dying drops it; a respawned
+member starts from `IDLE` at its post with no leg. A wandering member is
+still subject to the leash rule — it never needs it, because
+`wander <= leash_radius − 2` is audited.
+
+**What a herd is not.** No pack aggro (a member that notices you does not
+wake its neighbours — their own `aggro_radius` does that soon enough), no
+herd-level respawn, no migration, no flyers in the air (the `mob.flying.*`
+archetypes walk; a flight regime for NPCs waits for a reason). Each of those
+is a one-line trigger in the ROADMAP's Deferred table when it is wanted.
+
 ### Steering (binding)
 
 NPCs move on the sphere with the same radial-up frame the player uses. They do
