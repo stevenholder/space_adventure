@@ -1561,6 +1561,62 @@ walk; wave 3 is `qa`.
 - **C147 Nothing else moved.** The whole sweep green; conformance
   untouched (NPC motion is not in it). (sweep)
 
+# Phase 15 — the launcher (2026-10-05)
+
+### Where Phase 15 stands (2026-10-05)
+
+Built on `feat/launcher`: the model, the window, the six states
+photographed (`test/out/ui/p15-launcher-*.png`), PLAY proven headless
+(`-uiPlayAfter 4 -quitAfter 11` → `world ready`), `make godot-run`
+unchanged. Owed: task 5, the real Velopack round-trip on an installed
+Windows client when the first release after the merge lands.
+
+The 2026-10-05 playtest: an update opened the game full screen with a
+black world and `UPDATING…` at the top, and nothing else worked until the
+restart. Phase 7's accounts also need a place to log in that is not the
+HUD. This phase puts a small launcher window in front of the game: it
+owns the update, shows whether the server is up, and hands over on PLAY.
+Same executable, same Velopack package. Login is NOT in this phase; its
+column is reserved. Contract: GDD "Launcher (Phase 15)".
+
+**Playable proof.** Launch the installed client. A 560×360 window, not
+the game: `CHECKING FOR UPDATES…`, then either `UP TO DATE · v1.0.42` or a
+progress bar that fills, a restart, and the same window again now up to
+date. `SERVER · ONLINE · 1 PLAYING`. Press PLAY: the window becomes the
+game at your saved display mode and connects as before. Pull the network
+cable first and the launcher says the check failed and lets you play the
+installed build anyway.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | `Launcher` model: the pure state machine of the GDD table (`Checking`, `Updating`, `Restarting`, `UpToDate`, `DevBuild`, `Offline`), events in, line text + PLAY-enabled out | `client/godot/Game/UI/Launcher.cs` | `-selftest` transition checks |
+| 2 | 1 | `LauncherView`: the 560×360 window (content scale `Disabled`, centred, fixed), header + build label, reserved account column, status column with progress bar, server line, PLAY / QUIT; Scrapyard Comic styles from `Styles.cs` / `Panels.cs` | `UI/Launcher.cs` | shots |
+| 3 | 1 | Boot: launcher mode unless `Rigged` or `-play`; `UpdateThenConnect` split into the update step feeding the model (5 s check budget, failures → `Offline`) and `Play()` (apply settings, restore stretch, hide, connect); server line poll from the derived site URL every 10 s; in-session banner untouched | `Boot.cs` | `make godot-run` unchanged, shots |
+| 4 | 1 | Rig: `-uiLauncher <state>` forces a state with fake version/server text; shots of all six states at the launcher's own size into `test/out/ui/p15-launcher-*.png` | `Boot.cs` rig block | shots |
+| 5 | 2 | End to end: `SA_UPDATE_SOURCE` local feed (`vpk pack` two versions as #44 did) — launcher updates, restarts, shows `UpToDate`, PLAY connects | manual on a Windows install | the record below |
+| 6 | 2 | Record: QA-STATUS "Phase 15" | `docs/` | — |
+
+### Acceptance criteria (C148–C152)
+
+- **C148 Launcher first.** An installed/packaged client and `make
+  godot-play` open the 560×360 centred window, never the game; the world
+  is not built or shown before PLAY. `-uiShot`, `-quitAfter`, `-selftest`,
+  `godot-cli run`/`dev` and `-play` skip it; `make godot-run` still prints
+  `world ready`.
+- **C149 The six states.** Each renders per the GDD table (shots); the
+  transitions hold in `-selftest`; a check that takes longer than 5 s or
+  throws lands in `Offline` with PLAY enabled; `DevBuild` when not
+  installed.
+- **C150 PLAY.** Applies the saved display mode and canvas stretch, hides
+  the launcher, connects; the HUD, the F1 account panel and the in-session
+  update banner behave exactly as before.
+- **C151 Server line.** `ONLINE · N PLAYING` from `/api/stats` against the
+  derived site URL; `UNREACHABLE` on failure; PLAY unaffected either way.
+- **C152 Nothing else moved.** Sweep green; the account column is empty
+  and the layout leaves it room.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
