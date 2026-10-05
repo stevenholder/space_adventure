@@ -37,10 +37,10 @@ func TestWildlifeAudit(t *testing.T) {
 		{"wander past leash", func(hs []Herd) []Herd { hs[0].Wander = 39; return hs }, "wander"},
 		{"near spawn", func(hs []Herd) []Herd { hs[0].OriginDir = [3]float64{0.1, 1, 0}; return hs }, "from spawn"},
 		{"near a zone", func(hs []Herd) []Herd {
-			for _, z := range reg.Zones {
-				hs[0].OriginDir = vNormalize(z.OriginDir)
-				break
-			}
+			// A named zone, not "the first in the map": map order once
+			// handed back the spawn zone, which sits on spawn, so the
+			// spawn rule fired first and CI went red on main.
+			hs[0].OriginDir = vNormalize(reg.Zones["camp"].OriginDir)
 			return hs
 		}, "from zone"},
 		{"over budget", func(hs []Herd) []Herd {
