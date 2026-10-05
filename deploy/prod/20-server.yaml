@@ -35,6 +35,11 @@ spec:
           image: ghcr.io/stevenholder/space_adventure/server:latest
           imagePullPolicy: Always
           env:
+            # Traces -> Alloy (deploy/observability). Unset = tracing off.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://alloy:4317
+            - name: DEPLOY_ENV
+              value: prod
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -6,8 +6,8 @@ The full stack runs in a kind cluster (namespace `space-adventure`):
 
 | Component | Image (built from) | Port | Notes |
 |---|---|---|---|
-| server | `space-adventure/server:latest` (`Dockerfile.server`) | 8080, 9100 | WS at `/ws`, health at `/healthz`, build id at `/version`; readiness + liveness probes on `/healthz`. Prometheus `/metrics` on 9100, in-cluster only |
-| alloy | `grafana/alloy:v1.20.1` | 12345 | Scrapes the server's ServiceMonitor, labels every series `env=kind`, pushes OTLP to the LGTM box (`observability/`) |
+| server | `space-adventure/server:latest` (`Dockerfile.server`) | 8080, 9100 | WS at `/ws`, health at `/healthz`, build id at `/version`; readiness + liveness probes on `/healthz`. Prometheus `/metrics` on 9100, in-cluster only. JSON logs on stdout; traces to `OTEL_EXPORTER_OTLP_ENDPOINT` when set |
+| alloy | `grafana/alloy:v1.20.1` | 12345, 4317 | Scrapes the server's ServiceMonitor (metrics), tails every pod's stdout in the namespace (logs), receives the server's OTLP traces on Service `alloy:4317`; stamps `env=kind` / `deployment.environment=kind` and pushes all three over OTLP to the LGTM box (`observability/`) |
 
 There is no client container. The client is a packaged Godot desktop build
 (`make godot-build`) that connects to this cluster; it is not something the
@@ -37,7 +37,8 @@ Files:
   CRD, Alloy's ClusterRole, the CI Role widened for it; once by hand on the
   pandas, every `make up` on kind), `base/` (Alloy, the server
   ServiceMonitor, `config.alloy`), and `kind/` / `prod/` overlays that
-  differ only in the `env` / `cluster` labels stamped on every series.
+  differ only in the `env` / `cluster` labels stamped on every series
+  (and log / span: `deployment.environment`, `k8s.cluster.name`).
   `deploy/prod` includes `prod/`, so CD ships it; RUNBOOK "Metrics".
 - `.logs/` — port-forward logs (created by `make up`, removed by `make down`;
   not committed)

@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -92,6 +93,19 @@ func runServer(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	// JSON lines on stdout: Alloy tails them to Loki. log.Printf elsewhere
+	// flows through this handler as INFO, so no call site has to change.
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	shutdownTracing, err := initTracing(context.Background())
+	if err != nil {
+		return fmt.Errorf("tracing: %w", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownTracing(ctx) // flush the last spans on SIGTERM
+	}()
 
 	field := terrain.Generate(uint64(*seed))
 	world, err := server.New(field, uint64(*seed))
@@ -178,7 +192,7 @@ func runServer(args []string) error {
 
 	errCh := make(chan error, 2)
 	go func() {
-		fmt.Printf("listening on %s (seed %d, build %s)\n", *listen, *seed, buildID)
+		log.Printf("listening on %s (seed %d, build %s)", *listen, *seed, buildID)
 		errCh <- srv.ListenAndServe()
 	}()
 	if *metrics != "" {

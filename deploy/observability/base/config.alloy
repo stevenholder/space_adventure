@@ -1,4 +1,6 @@
 // ServiceMonitors -> scrape -> label with where we are -> OTLP to LGTM.
+// Plus: pod logs (loki.source.kubernetes) and server traces (OTLP :4317),
+// both stamped with the same env/cluster and pushed the same way.
 //
 // DEPLOY_ENV and CLUSTER_NAME come from the overlay (kind/, prod/); they
 // are the whole answer to "is this the laptop or the pandas?" — plain
@@ -29,9 +31,98 @@ otelcol.receiver.prometheus "otlp" {
   }
 }
 
+// Logs: every pod's stdout in this namespace, tailed through the API
+// server (pods/log -- no hostPath, no DaemonSet), turned into OTLP. Loki
+// is not reachable directly from here; OTLP on :4317 is the only way in.
+discovery.kubernetes "pods" {
+  role = "pod"
+  namespaces {
+    names = ["space-adventure"]
+  }
+}
+
+discovery.relabel "pods" {
+  targets = discovery.kubernetes.pods.targets
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    target_label  = "service_name"
+    replacement   = "space-adventure-$1" // same name the server's traces carry
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+}
+
+loki.source.kubernetes "pods" {
+  targets    = discovery.relabel.pods.output
+  forward_to = [otelcol.receiver.loki.pods.receiver]
+}
+
+otelcol.receiver.loki "pods" {
+  output {
+    logs = [otelcol.processor.transform.where.input]
+  }
+}
+
+// Traces: the server pushes OTLP gRPC to Service alloy:4317.
+otelcol.receiver.otlp "apps" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  output {
+    traces = [otelcol.processor.transform.where.input]
+  }
+}
+
+// The Loki labels arrive as LOG attributes; the LGTM box indexes RESOURCE
+// attributes, so lift them (one resource per entry from receiver.loki, so
+// a per-record write is safe). Same env/cluster stamp the metrics carry.
+otelcol.processor.transform "where" {
+  error_mode = "ignore"
+  log_statements {
+    context    = "log"
+    statements = [
+      `set(resource.attributes["service.name"], attributes["service_name"])`,
+      `set(resource.attributes["k8s.namespace.name"], attributes["namespace"])`,
+      `set(resource.attributes["k8s.pod.name"], attributes["pod"])`,
+      `set(resource.attributes["k8s.container.name"], attributes["container"])`,
+      `delete_matching_keys(attributes, "^(service_name|namespace|pod|container|loki\\.attribute\\.labels)$")`,
+    ]
+  }
+  log_statements {
+    context    = "resource"
+    statements = [
+      string.format(`set(attributes["deployment.environment"], "%s")`, sys.env("DEPLOY_ENV")),
+      string.format(`set(attributes["k8s.cluster.name"], "%s")`, sys.env("CLUSTER_NAME")),
+    ]
+  }
+  trace_statements {
+    context    = "resource"
+    statements = [
+      string.format(`set(attributes["deployment.environment"], "%s")`, sys.env("DEPLOY_ENV")),
+      string.format(`set(attributes["k8s.cluster.name"], "%s")`, sys.env("CLUSTER_NAME")),
+    ]
+  }
+  output {
+    logs   = [otelcol.processor.batch.default.input]
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
 otelcol.processor.batch "default" {
   output {
     metrics = [otelcol.exporter.otlp.lgtm.input]
+    logs    = [otelcol.exporter.otlp.lgtm.input]
+    traces  = [otelcol.exporter.otlp.lgtm.input]
   }
 }
 
