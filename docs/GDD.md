@@ -1357,6 +1357,67 @@ a **UI scale** slider (0.75–1.5×, on top of the window scaling) and
 `[settings]` and apply at boot; the rig and the self-test own their own
 window and ignore the display mode.
 
+### Launcher (Phase 15)
+
+The game no longer opens full screen into an update. The same executable
+boots into a **launcher**: one small window that owns the update, says
+whether the server is up, and hands over to the game on PLAY. One binary,
+one Velopack package; the update's restart lands back in the launcher.
+
+**Window.** 560 × 360, centred, windowed, not resizable, title "Space
+Adventure", the Scrapyard Comic palette on a plain dark panel. The game's
+`canvas_items` stretch is OFF while the launcher shows (content scale
+`Disabled`, 1:1 pixels) and restored, with the saved display mode from
+Settings, when PLAY is pressed — the launcher never inherits the 1920×1080
+canvas scaled down to a thumbnail, and the game never runs in the
+launcher's window.
+
+**Layout** (left to right, top to bottom):
+
+| Region | Content |
+|---|---|
+| Header | `SPACE ADVENTURE`, the build label (`v1.0.41 · 3cbd797` / `dev · 3cbd797`) right-aligned |
+| Account column (left, ~40 %) | **reserved, empty** — the login (email + password against the site's `/api/login`) lands here in a later phase; nothing is drawn now beyond the panel frame |
+| Status column (right) | the update line and its progress bar; the server line; `PLAY` (wide, primary) and `QUIT` (small) underneath |
+
+**Update line, binding states** (the launcher model is a pure state
+machine, testable in `-selftest`):
+
+| State | Line | PLAY |
+|---|---|---|
+| `Checking` | `CHECKING FOR UPDATES…` | disabled |
+| `Updating(p)` | `UPDATING TO v1.0.42 … 37 %` + bar | disabled |
+| `Restarting` | `RESTARTING…` (Velopack swaps and relaunches into the launcher) | disabled |
+| `UpToDate` | `UP TO DATE · v1.0.42` | enabled |
+| `DevBuild` | `DEV BUILD · not installed, no update check` | enabled |
+| `Offline(reason)` | `UPDATE CHECK FAILED · playing the installed build` (reason in the log) | enabled |
+
+Rules: the check is given 5 s before it is declared `Offline` (an
+unreachable GitHub must never keep anyone out of the game — Phase 6's
+rule, kept); a download that fails mid-way is `Offline` too, not a
+half-applied client; after the Velopack restart the launcher shows
+`UpToDate` and waits for PLAY (no auto-launch); the in-session banner
+("update ready, applies on exit", Phase 8/#48) is unchanged.
+
+**Server line.** `SERVER · ONLINE · 3 PLAYING` from `GET <site>/api/stats`
+(`online`, `players`) where `<site>` is the game URL's host over http(s)
+(`wss://game.stevenholder.info/ws` → `https://game.stevenholder.info`,
+`ws://127.0.0.1:18080/ws` → `http://127.0.0.1:18080`), polled every 10 s
+while the launcher shows; `SERVER · UNREACHABLE` on any failure. PLAY is
+never gated on it — a connect failure is reported by the game as today.
+
+**PLAY.** Applies the saved display mode and UI scale, restores the canvas
+stretch, hides the launcher, and connects exactly as `UpdateThenConnect`
+did after its update step. **QUIT** quits.
+
+**Who skips it.** Every rig and harness flow: `-uiShot`, `-quitAfter`,
+`-selftest`, `-dumpNodes`, `-dumpSfx` (the existing `Rigged` set) and a
+new `-play` flag for a human who wants straight in. `make godot-run` /
+`godot-dev` still print `world ready` with no launcher in the way. For
+photographs: `-uiShot … -uiLauncher <state>` forces the launcher into
+one of the states above (with a fake version and a fake server line) so
+each one has a shot in `test/out/ui/`.
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
