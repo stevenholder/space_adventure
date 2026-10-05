@@ -2,6 +2,7 @@ package server
 
 import (
 	"math"
+	"math/rand"
 
 	"space-adventure/server/internal/ai"
 	"space-adventure/server/internal/defs"
@@ -39,7 +40,24 @@ type npcAI struct {
 	// (GDD "Wildlife — herds and wandering"). 0, the zone-NPC default,
 	// keeps PATROL inert.
 	wander float64
+	// The current wander leg (GDD "Wandering"). legOn: a leg cycle has
+	// begun in this PATROL stint (so the first leg waits a pause too);
+	// hasPoint: legPoint is being walked to, for legTicks so far;
+	// pauseTicks: standing still before the next pick.
+	legOn, hasPoint      bool
+	legPoint             [3]float64
+	legTicks, pauseTicks int
 }
+
+// Wander leg parameters (GDD "Wildlife — herds and wandering", binding).
+const (
+	wanderTries    = 8   // wander_pick: re-rolls while the ground is not Walkable
+	wanderSpeed    = 0.5 // wander_speed: × move_speed
+	wanderArrive   = 1.0 // wander_arrive: m
+	wanderLeg      = 8.0 // wander_leg: s
+	wanderPauseMin = 1.0 // wander_pause: uniform 1.0–4.0 s
+	wanderPauseMax = 4.0
+)
 
 // npcSwapSeconds is how long an NPC takes to change weapons.
 const npcSwapSeconds = 0.5
@@ -112,10 +130,12 @@ func (s *Server) stepNPCs(tick uint32) {
 
 	for _, n := range s.npcAI {
 		if n.ent.Health <= 0 {
+			n.clearLeg() // dying drops the leg
 			s.dropNPCLoot(n)
 			continue
 		}
 		if n.ent.Flags&protocol.FlagDead != 0 {
+			n.clearLeg()
 			n.dropped = false // respawning: arm the next death's roll
 			continue          // the sim's respawn timer owns a dead NPC
 		}
@@ -135,7 +155,12 @@ func (s *Server) stepNPCs(tick uint32) {
 		target, haveTarget := s.candidatePos(cands, n.brain.TargetID)
 
 		// Move: toward the target while chasing, back to the post while
-		// leashing, still otherwise.
+		// leashing, a wander leg in PATROL when the member wanders, still
+		// otherwise. Full speed unless the wander leg slows it.
+		n.steer.Speed = arch.MoveSpeed
+		if state != ai.StatePatrol || n.wander <= 0 {
+			n.clearLeg() // leaving PATROL for any reason drops the leg
+		}
 		switch {
 		// Against everything solid -- structures, rocks, props, players,
 		// rovers, ships, other NPCs -- not just the shipped walls.
@@ -143,6 +168,8 @@ func (s *Server) stepNPCs(tick uint32) {
 			n.stepSteer(target, s.terrain, s.collidersFor(n.ent.ID))
 		case state == ai.StateLeash:
 			n.stepSteer(n.brain.Post, s.terrain, s.collidersFor(n.ent.ID))
+		case state == ai.StatePatrol && n.wander > 0:
+			n.stepWander(s)
 		}
 
 		if !haveTarget {
@@ -234,6 +261,72 @@ func (s *Server) broadcastAttack(attacker, target uint32) {
 	s.broadcast(protocol.EncodeEvent(protocol.Event{
 		EntityID: attacker, EventID: protocol.EventAttack, Data: appendU32(nil, target),
 	}))
+}
+
+// clearLeg forgets the wander leg and any pause: the next PATROL stint
+// starts its cycle afresh.
+func (n *npcAI) clearLeg() {
+	n.legOn, n.hasPoint = false, false
+	n.legTicks, n.pauseTicks = 0, 0
+}
+
+// startPause stands the member still for wander_pause before its next pick.
+func (n *npcAI) startPause(rng *rand.Rand) {
+	n.pauseTicks = ticksOf(wanderPauseMin + (wanderPauseMax-wanderPauseMin)*rng.Float64())
+	n.ent.Vel = [3]float64{}
+}
+
+// stepWander advances one PATROL tick of a wandering member: pause, pick a
+// point, walk to it at half speed, pause again (GDD "Wandering").
+// Caller holds s.mu (s.rng).
+func (n *npcAI) stepWander(s *Server) {
+	if !n.legOn {
+		n.legOn = true
+		n.startPause(s.rng) // the first leg starts after a pause too
+	}
+	if n.pauseTicks > 0 {
+		n.pauseTicks--
+		return
+	}
+	if !n.hasPoint {
+		p, ok := s.pickWanderPoint(n.brain.Post, n.wander)
+		if !ok {
+			n.startPause(s.rng) // 8 misses: skip the leg
+			return
+		}
+		n.legPoint, n.hasPoint, n.legTicks = p, true, 0
+	}
+	n.steer.Speed = n.arch.MoveSpeed * wanderSpeed
+	n.stepSteer(n.legPoint, s.terrain, s.collidersFor(n.ent.ID))
+	n.legTicks++
+	if vecDist(n.ent.Pos, n.legPoint) <= wanderArrive || n.legTicks >= ticksOf(wanderLeg) {
+		n.hasPoint = false
+		n.startPause(s.rng)
+	}
+}
+
+// pickWanderPoint rolls a point uniform in the disc of radius r around post,
+// in post's tangent plane, glued to the surface; re-rolled up to wanderTries
+// times while the ground there is not Walkable. Caller holds s.mu.
+func (s *Server) pickWanderPoint(post [3]float64, r float64) ([3]float64, bool) {
+	up := terrain.Normalize(terrain.Vec(post))
+	k := terrain.Vec{0, 1, 0}
+	if math.Abs(up.Dot(k)) > 0.9 {
+		k = terrain.Vec{1, 0, 0}
+	}
+	east := terrain.Normalize(terrain.Cross(k, up))
+	north := terrain.Cross(up, east)
+	for i := 0; i < wanderTries; i++ {
+		d := r * math.Sqrt(s.rng.Float64())
+		th := 2 * math.Pi * s.rng.Float64()
+		p := terrain.Vec(post).Add(east.Scale(d * math.Cos(th))).Add(north.Scale(d * math.Sin(th)))
+		dir := terrain.Normalize(p)
+		if !s.terrain.Walkable(dir) {
+			continue
+		}
+		return [3]float64(dir.Scale(s.terrain.SampleRadius(dir))), true
+	}
+	return [3]float64{}, false
 }
 
 // stepSteer moves the NPC one tick and writes the result back onto the entity.
