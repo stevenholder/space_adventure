@@ -31,7 +31,7 @@ const dist = (a, b) => Math.hypot(...sub(a, b))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function connect(name, token) {
-  const ws = new WebSocket('ws://127.0.0.1:18080/ws')
+  const ws = new WebSocket(`ws://127.0.0.1:${process.env.SA_PORT ?? 18080}/ws`)
   ws.binaryType = 'arraybuffer'
   const c = { ws, id: 0, ents: new Map(), spawns: new Map(), events: [], bytes: 0, snaps: 0, seq: 1, despawns: [], selfDeaths: 0 }
   ws.addEventListener('open', () => ws.send(hello(name, token)))

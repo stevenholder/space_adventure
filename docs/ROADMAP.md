@@ -1483,7 +1483,10 @@ changes a number); wave 2 builds the bar and the panels; wave 3 is `qa`.
 
 ### Where Phase 14 stands (2026-10-05)
 
-Wave 0 written; waves 1–3 in flight on `feat/wildlife`.
+Built and green on a bare server: C142–C147 recorded (docs/QA-STATUS.md
+"Phase 14"). Nine herds, 25 members, wandering; `t41` plays the proof
+herd end to end. Owed to humans: the walk east with a real client, and
+whether a herd reads as alive or as scenery that twitches.
 
 PR #57 shipped 69 creatures as hostile archetypes and not one of them is
 in the world: the zones place five grunts, three gunners and the vendors.
@@ -1510,14 +1513,17 @@ grunts, meanwhile, have not moved a step.
 | `herd.birbs.north` | `mob.blob.birb` | 3 | 3 | 4 | 12 |
 | `herd.dinos` | `mob.big.dino` | 2 | 5 | 5 | 8 |
 | `herd.mushnubs` | `mob.blob.mushnub` | 4 | 10 | 5 | 6 |
-| `herd.drones` | `mob.mech.eye_drone` | 3 | 4 | 6 | 10 |
+| `herd.drones` | `mob.mech.eye_drone` | 3 | 23 of a 24-site run at `-spacing 40` (site 4 sat 26 m off the camp route and shot t16's walker) | 6 | 10 |
 | `herd.scolitex` | `mob.alien.scolitex` | 3 | 8 | 6 | 8 |
 | `herd.imps` | `mob.dungeon.imp` | 3 | 12 | 5 | 10 |
 | `herd.yeti` | `mob.big.yeti` | 1 | 1 | 0 | 15 |
 | `herd.frogs` | `mob.big.frog` | 2 | 9 | 4 | 8 |
 
 Site directions are the solver's output for seed 1337, recorded in
-`wildlife.json` and reviewed there, as zones are.
+`wildlife.json` and reviewed there, as zones are. One more rule than the
+solver knows: a herd centre stays `aggro_radius + wander + 5 m` clear of
+the committed harness route (`test/out/route-camp.json`), because t16 and
+t17 walk it unarmed; t41 asserts it.
 
 ### Task list
 
@@ -1530,29 +1536,29 @@ walk; wave 3 is `qa`.
 | 2 | 1 | Registry: `Herd` type, `Herds` on `Registry`, `wildlife.json` loaded and audited per the GDD table, `ComposeHerd(h, radiusFn) []Placement` (golden-angle disc, outward yaw) | `internal/defs` | `TestWildlifeAudit`, `TestComposeHerd` |
 | 3 | 1 | Placement: herds after the rover, in file order, ids continuing; `npcAI.wander` set from the herd | `server/server.go` | `TestWildlifePlaced` (count, ids after the rover, posts within spread) |
 | 4 | 2 | The leg: `PATROL` with `wander > 0` picks, walks at half speed, pauses, repeats per the GDD param table; any other state drops the leg | `server/npcs.go` | `TestWanderStaysInRadius`, `TestWanderZeroIsInert`, `TestWanderDropsOnAggro` |
-| 5 | 3 | `t41-wildlife.mjs`: C141–C145 over the wire (herd counts from `spawn` frames, a watched far member's track, the walk east to the proof herd, a kill, the drop, the respawn) | `test/` | `node test/t41-wildlife.mjs` |
+| 5 | 3 | `t41-wildlife.mjs`: C142–C146 over the wire (herd counts from `spawn` frames, a watched far member's track, the walk east to the proof herd, a kill, the drop, the respawn) | `test/` | `node test/t41-wildlife.mjs` |
 | 6 | 3 | Record: QA-STATUS "Phase 14", this section's status line | `docs/` | — |
 
-### Acceptance criteria (C141–C146)
+### Acceptance criteria (C142–C147)
 
-- **C141 Herds exist.** A joiner's `spawn` frames carry exactly the
+- **C142 Herds exist.** A joiner's `spawn` frames carry exactly the
   members `wildlife.json` declares, by def and count, with ids above the
   rover's. (t41)
-- **C142 Placed clear and apart.** Every member stands within
+- **C143 Placed clear and apart.** Every member stands within
   `spread + 1 m` of its herd centre on the surface; no two members of a
   herd are closer than their archetype's diameter; every herd centre is
   `>= 30 m` from spawn and from every zone origin. (audit test + t41)
-- **C143 They wander.** A member with no player inside its `aggro_radius`,
+- **C144 They wander.** A member with no player inside its `aggro_radius`,
   watched for 30 s from spawn, moves at least 2 m in total and is never
   more than `wander + 2 m` from its post. (t41, a far herd)
-- **C144 They fight, drop and return.** Walking into the proof herd draws
+- **C145 They fight, drop and return.** Walking into the proof herd draws
   aggro (a member closes and `hit` events land); killing a member emits
   its `death`, spawns a drop whose contents come from a `loot.wild.*`
   table, and `npc_respawn` later it stands at its post again at full
   health. (t41)
-- **C145 The camp has not moved.** A camp grunt's position over 30 s of
+- **C146 The camp has not moved.** A camp grunt's position over 30 s of
   idling is unchanged to 0.01 m; t16 and t17 stay green. (t41 + sweep)
-- **C146 Nothing else moved.** The whole sweep green; conformance
+- **C147 Nothing else moved.** The whole sweep green; conformance
   untouched (NPC motion is not in it). (sweep)
 
 ## Deferred — and what would earn each one a place

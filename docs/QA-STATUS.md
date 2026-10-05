@@ -668,3 +668,22 @@ played by `t37`.
 
 Owed to the playtest: dragging on a real mouse, the shift row while
 sprinting, a barrel mod landing a 140 m hit, a scan in the scrapyard.
+
+# Phase 14 — wildlife (2026-10-05)
+
+Bare `server -listen :18082` (no store), one fresh process per harness,
+`SA_PORT=18082`. `t41` over the wire; the placement and wander rules in
+Go. The first run put the drone herd 26 m off the camp route and `t16` /
+`t17` walked into it (3/8, 2/6 — the walker shot, then wedged on a
+drone); the herd moved to a site 66 m off the route and the rule is now
+in `t41` (C143). On the way `t41` found NPC `death` events carrying no
+data where PROTOCOL promises `u32 killer`; the sim now sends 0.
+
+| # | Result | Evidence |
+|---|---|---|
+| C142 | PASS | `t41`: nine herds, 25 `spawn` frames by def and count (blobs 4, birbs 3, dinos 2, mushnubs 4, drones 3, scolitex 3, imps 3, yeti 1, frogs 2), ids 1048602–1048626 above the rover's 1048601; `TestWildlifePlaced` same in Go |
+| C143 | PASS | `t41`: every member within `spread + 1` m of its centre (worst 5.38/7 m), closest pair per herd 3.91–6.55 m against a 0.54–2.58 m floor, centres 99–355 m from spawn and ≥ 99 m from every zone, ≥ 66 m from the camp route against `aggro + wander + 5`; join positions match the composed posts to 0.000 m. `TestWildlifeAudit` 15 rules, `TestComposeHerd` |
+| C144 | PASS | `t41`: the yeti (wander 15), 600 samples over 30 s from spawn: path 34.6 m, never past 13.5 m from its post (limit 17), a 4.8 s pause; every other herd walked 17–39 m. `TestWanderStaysInRadius`, `TestWanderZeroIsInert`, `TestWanderDropsOnAggro` |
+| C145 | PASS | `t41`: rifle bought, 99 m walk east in 17 s; blob 1048603 closed 17 m and landed a `hit`; three shots → `death`; drop 1048628 `mat.scrap` 0.00 m from the body; alive again after 20.0 s at 23/23 and 0.00 m from its post |
+| C146 | PASS | `t41`: three camp grunts 0.000 m over the same 30 s; `t16` 6/6, `t17` 8/8 on the same build |
+| C147 | PASS | `go vet && go test ./...` green, art 39 assets, `godot-gate`, `godot-test`, `godot-codec` 9/9, `godot-conformance`; no wire change, no client change |

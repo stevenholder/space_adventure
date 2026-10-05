@@ -1,0 +1,962 @@
+{
+ "at": "2026-10-05T16:24:23.749Z",
+ "joinMs": 21,
+ "joinTick": 9,
+ "fresh": true,
+ "myId": 1,
+ "rover": 1048601,
+ "herds": {
+  "herd.blobs.east": {
+   "def": "mob.blob.green_blob",
+   "ids": [
+    1048602,
+    1048603,
+    1048604,
+    1048605
+   ],
+   "posts": [
+    [
+     39.185,
+     119.677,
+     85.697
+    ],
+    [
+     34.94,
+     119.556,
+     87.252
+    ],
+    [
+     38.775,
+     123.125,
+     83.062
+    ],
+    [
+     38.951,
+     115.469,
+     87.326
+    ]
+   ],
+   "joinPos": [
+    [
+     39.185,
+     119.677,
+     85.697
+    ],
+    [
+     34.94,
+     119.556,
+     87.252
+    ],
+    [
+     38.775,
+     123.125,
+     83.062
+    ],
+    [
+     38.951,
+     115.469,
+     87.326
+    ]
+   ],
+   "maxOffset": 4.6,
+   "minPair": 4.36,
+   "fromSpawn": 99.2,
+   "fromZones": 99.2,
+   "fromRoute": 99.2,
+   "joinVsComposed": 0
+  },
+  "herd.birbs.north": {
+   "def": "mob.blob.birb",
+   "ids": [
+    1048606,
+    1048607,
+    1048608
+   ],
+   "posts": [
+    [
+     -1.016,
+     109.708,
+     114.033
+    ],
+    [
+     -4.678,
+     108.024,
+     115.115
+    ],
+    [
+     -2.373,
+     111.576,
+     110.812
+    ]
+   ],
+   "joinPos": [
+    [
+     -1.016,
+     109.708,
+     114.033
+    ],
+    [
+     -4.678,
+     108.024,
+     115.115
+    ],
+    [
+     -2.373,
+     111.576,
+     110.812
+    ]
+   ],
+   "maxOffset": 3.45,
+   "minPair": 3.96,
+   "fromSpawn": 120.76,
+   "fromZones": 120.76,
+   "fromRoute": 120.76,
+   "joinVsComposed": 0
+  },
+  "herd.dinos": {
+   "def": "mob.big.dino",
+   "ids": [
+    1048609,
+    1048610
+   ],
+   "posts": [
+    [
+     -105.951,
+     84.326,
+     -95.083
+    ],
+    [
+     -109.773,
+     80.099,
+     -91.855
+    ]
+   ],
+   "joinPos": [
+    [
+     -105.951,
+     84.326,
+     -95.083
+    ],
+    [
+     -109.773,
+     80.099,
+     -91.855
+    ]
+   ],
+   "maxOffset": 3.94,
+   "minPair": 6.55,
+   "fromSpawn": 157.48,
+   "fromZones": 106.84,
+   "fromRoute": 157.48,
+   "joinVsComposed": 0
+  },
+  "herd.mushnubs": {
+   "def": "mob.blob.mushnub",
+   "ids": [
+    1048611,
+    1048612,
+    1048613,
+    1048614
+   ],
+   "posts": [
+    [
+     37.288,
+     69.097,
+     132.754
+    ],
+    [
+     32.562,
+     68.696,
+     132.562
+    ],
+    [
+     37.602,
+     72.855,
+     130.867
+    ],
+    [
+     36.861,
+     65.866,
+     134.906
+    ]
+   ],
+   "joinPos": [
+    [
+     37.288,
+     69.097,
+     132.754
+    ],
+    [
+     32.562,
+     68.696,
+     132.562
+    ],
+    [
+     37.602,
+     72.855,
+     130.867
+    ],
+    [
+     36.861,
+     65.866,
+     134.906
+    ]
+   ],
+   "maxOffset": 4.57,
+   "minPair": 3.91,
+   "fromSpawn": 165.05,
+   "fromZones": 165.05,
+   "fromRoute": 165.05,
+   "joinVsComposed": 0
+  },
+  "herd.drones": {
+   "def": "mob.mech.eye_drone",
+   "ids": [
+    1048615,
+    1048616,
+    1048617
+   ],
+   "posts": [
+    [
+     147.767,
+     75.057,
+     -8.951
+    ],
+    [
+     144.912,
+     79.875,
+     -6.061
+    ],
+    [
+     146.491,
+     76.622,
+     -14.413
+    ]
+   ],
+   "joinPos": [
+    [
+     147.767,
+     75.057,
+     -8.951
+    ],
+    [
+     144.912,
+     79.875,
+     -6.061
+    ],
+    [
+     146.491,
+     76.622,
+     -14.413
+    ]
+   ],
+   "maxOffset": 4.97,
+   "minPair": 5.82,
+   "fromSpawn": 163.01,
+   "fromZones": 163.01,
+   "fromRoute": 65.59,
+   "joinVsComposed": 0
+  },
+  "herd.scolitex": {
+   "def": "mob.alien.scolitex",
+   "ids": [
+    1048618,
+    1048619,
+    1048620
+   ],
+   "posts": [
+    [
+     150.904,
+     -43.223,
+     46.387
+    ],
+    [
+     152.219,
+     -37.794,
+     49.342
+    ],
+    [
+     152.99,
+     -41.747,
+     41.184
+    ]
+   ],
+   "joinPos": [
+    [
+     150.904,
+     -43.223,
+     46.387
+    ],
+    [
+     152.219,
+     -37.794,
+     49.342
+    ],
+    [
+     152.99,
+     -41.747,
+     41.184
+    ]
+   ],
+   "maxOffset": 5.01,
+   "minPair": 5.8,
+   "fromSpawn": 273.47,
+   "fromZones": 193.25,
+   "fromRoute": 164.04,
+   "joinVsComposed": 0
+  },
+  "herd.imps": {
+   "def": "mob.dungeon.imp",
+   "ids": [
+    1048621,
+    1048622,
+    1048623
+   ],
+   "posts": [
+    [
+     128.441,
+     -86.826,
+     -23.351
+    ],
+    [
+     131.122,
+     -82.988,
+     -20.941
+    ],
+    [
+     128.183,
+     -84.675,
+     -27.753
+    ]
+   ],
+   "joinPos": [
+    [
+     128.441,
+     -86.826,
+     -23.351
+    ],
+    [
+     131.122,
+     -82.988,
+     -20.941
+    ],
+    [
+     128.183,
+     -84.675,
+     -27.753
+    ]
+   ],
+   "maxOffset": 4.4,
+   "minPair": 4.91,
+   "fromSpawn": 321.7,
+   "fromZones": 115.7,
+   "fromRoute": 109.11,
+   "joinVsComposed": 0
+  },
+  "herd.yeti": {
+   "def": "mob.big.yeti",
+   "ids": [
+    1048624
+   ],
+   "posts": [
+    [
+     -97.061,
+     -95.75,
+     40.371
+    ]
+   ],
+   "joinPos": [
+    [
+     -97.061,
+     -95.75,
+     40.371
+    ]
+   ],
+   "maxOffset": 0,
+   "minPair": null,
+   "fromSpawn": 346.44,
+   "fromZones": 199.67,
+   "fromRoute": 259.17,
+   "joinVsComposed": 0
+  },
+  "herd.frogs": {
+   "def": "mob.big.frog",
+   "ids": [
+    1048625,
+    1048626
+   ],
+   "posts": [
+    [
+     -37.476,
+     -107.714,
+     -100.425
+    ],
+    [
+     -33.781,
+     -111.051,
+     -99.08
+    ]
+   ],
+   "joinPos": [
+    [
+     -37.476,
+     -107.714,
+     -100.425
+    ],
+    [
+     -33.781,
+     -111.051,
+     -99.08
+    ]
+   ],
+   "maxOffset": 3.41,
+   "minPair": 5.16,
+   "fromSpawn": 354.68,
+   "fromZones": 102.24,
+   "fromRoute": 104.39,
+   "joinVsComposed": 0
+  }
+ },
+ "c143": {
+  "herd.blobs.east": [
+   {
+    "id": 1048602,
+    "samples": 600,
+    "path": 26.79,
+    "maxFrom": 6.2,
+    "maxDisp": 6.31265,
+    "longestPauseS": 5.35,
+    "longestPauseEndTick": 117,
+    "firstTick": 10
+   },
+   {
+    "id": 1048603,
+    "samples": 600,
+    "path": 30.42,
+    "maxFrom": 7.42,
+    "maxDisp": 7.59643,
+    "longestPauseS": 4.5,
+    "longestPauseEndTick": 100,
+    "firstTick": 10
+   },
+   {
+    "id": 1048604,
+    "samples": 600,
+    "path": 31.23,
+    "maxFrom": 8.74,
+    "maxDisp": 9.60015,
+    "longestPauseS": 4.7,
+    "longestPauseEndTick": 104,
+    "firstTick": 10
+   },
+   {
+    "id": 1048605,
+    "samples": 600,
+    "path": 26.8,
+    "maxFrom": 9.13,
+    "maxDisp": 9.65803,
+    "longestPauseS": 6.35,
+    "longestPauseEndTick": 137,
+    "firstTick": 10
+   }
+  ],
+  "herd.birbs.north": [
+   {
+    "id": 1048606,
+    "samples": 600,
+    "path": 31.97,
+    "maxFrom": 9.29,
+    "maxDisp": 10.27118,
+    "longestPauseS": 6.1,
+    "longestPauseEndTick": 132,
+    "firstTick": 10
+   },
+   {
+    "id": 1048607,
+    "samples": 600,
+    "path": 33.63,
+    "maxFrom": 8.56,
+    "maxDisp": 9.1128,
+    "longestPauseS": 5.45,
+    "longestPauseEndTick": 119,
+    "firstTick": 10
+   },
+   {
+    "id": 1048608,
+    "samples": 600,
+    "path": 38.28,
+    "maxFrom": 9.97,
+    "maxDisp": 10.5033,
+    "longestPauseS": 5.15,
+    "longestPauseEndTick": 113,
+    "firstTick": 10
+   }
+  ],
+  "herd.dinos": [
+   {
+    "id": 1048609,
+    "samples": 600,
+    "path": 25.93,
+    "maxFrom": 5.36,
+    "maxDisp": 5.93787,
+    "longestPauseS": 6,
+    "longestPauseEndTick": 130,
+    "firstTick": 10
+   },
+   {
+    "id": 1048610,
+    "samples": 600,
+    "path": 22.54,
+    "maxFrom": 5.61,
+    "maxDisp": 6.13823,
+    "longestPauseS": 6.25,
+    "longestPauseEndTick": 135,
+    "firstTick": 10
+   }
+  ],
+  "herd.mushnubs": [
+   {
+    "id": 1048611,
+    "samples": 600,
+    "path": 17.54,
+    "maxFrom": 3.88,
+    "maxDisp": 4.02041,
+    "longestPauseS": 6.4,
+    "longestPauseEndTick": 138,
+    "firstTick": 10
+   },
+   {
+    "id": 1048612,
+    "samples": 600,
+    "path": 25.75,
+    "maxFrom": 4.61,
+    "maxDisp": 5.24603,
+    "longestPauseS": 4.8,
+    "longestPauseEndTick": 106,
+    "firstTick": 10
+   },
+   {
+    "id": 1048613,
+    "samples": 600,
+    "path": 33.45,
+    "maxFrom": 4.5,
+    "maxDisp": 4.65082,
+    "longestPauseS": 4.7,
+    "longestPauseEndTick": 104,
+    "firstTick": 10
+   },
+   {
+    "id": 1048614,
+    "samples": 600,
+    "path": 26,
+    "maxFrom": 5.04,
+    "maxDisp": 5.47268,
+    "longestPauseS": 4.1,
+    "longestPauseEndTick": 92,
+    "firstTick": 10
+   }
+  ],
+  "herd.drones": [
+   {
+    "id": 1048615,
+    "samples": 600,
+    "path": 30.94,
+    "maxFrom": 6.45,
+    "maxDisp": 7.62563,
+    "longestPauseS": 4,
+    "longestPauseEndTick": 90,
+    "firstTick": 10
+   },
+   {
+    "id": 1048616,
+    "samples": 600,
+    "path": 37.97,
+    "maxFrom": 8.17,
+    "maxDisp": 9.0249,
+    "longestPauseS": 5.25,
+    "longestPauseEndTick": 115,
+    "firstTick": 10
+   },
+   {
+    "id": 1048617,
+    "samples": 600,
+    "path": 39.37,
+    "maxFrom": 7.05,
+    "maxDisp": 8.62411,
+    "longestPauseS": 5.85,
+    "longestPauseEndTick": 127,
+    "firstTick": 10
+   }
+  ],
+  "herd.scolitex": [
+   {
+    "id": 1048618,
+    "samples": 600,
+    "path": 21.59,
+    "maxFrom": 5.92,
+    "maxDisp": 6.72595,
+    "longestPauseS": 6,
+    "longestPauseEndTick": 130,
+    "firstTick": 10
+   },
+   {
+    "id": 1048619,
+    "samples": 600,
+    "path": 20.91,
+    "maxFrom": 4.59,
+    "maxDisp": 5.0789,
+    "longestPauseS": 3.95,
+    "longestPauseEndTick": 89,
+    "firstTick": 10
+   },
+   {
+    "id": 1048620,
+    "samples": 600,
+    "path": 17.12,
+    "maxFrom": 5.34,
+    "maxDisp": 5.93206,
+    "longestPauseS": 6.1,
+    "longestPauseEndTick": 132,
+    "firstTick": 10
+   }
+  ],
+  "herd.imps": [
+   {
+    "id": 1048621,
+    "samples": 600,
+    "path": 29.27,
+    "maxFrom": 6.15,
+    "maxDisp": 6.43605,
+    "longestPauseS": 4.45,
+    "longestPauseEndTick": 99,
+    "firstTick": 10
+   },
+   {
+    "id": 1048622,
+    "samples": 600,
+    "path": 30.43,
+    "maxFrom": 7.33,
+    "maxDisp": 8.00161,
+    "longestPauseS": 4.2,
+    "longestPauseEndTick": 94,
+    "firstTick": 10
+   },
+   {
+    "id": 1048623,
+    "samples": 600,
+    "path": 29.65,
+    "maxFrom": 8.71,
+    "maxDisp": 9.12365,
+    "longestPauseS": 5.25,
+    "longestPauseEndTick": 115,
+    "firstTick": 10
+   }
+  ],
+  "herd.yeti": [
+   {
+    "id": 1048624,
+    "samples": 600,
+    "path": 34.57,
+    "maxFrom": 13.47,
+    "maxDisp": 12.79164,
+    "longestPauseS": 4.8,
+    "longestPauseEndTick": 106,
+    "firstTick": 10
+   }
+  ],
+  "herd.frogs": [
+   {
+    "id": 1048625,
+    "samples": 600,
+    "path": 24.32,
+    "maxFrom": 5.87,
+    "maxDisp": 6.47832,
+    "longestPauseS": 5.6,
+    "longestPauseEndTick": 122,
+    "firstTick": 10
+   },
+   {
+    "id": 1048626,
+    "samples": 600,
+    "path": 27.83,
+    "maxFrom": 5.82,
+    "maxDisp": 5.97261,
+    "longestPauseS": 5.6,
+    "longestPauseEndTick": 122,
+    "firstTick": 10
+   }
+  ]
+ },
+ "c144": {
+  "walkS": 16.87,
+  "wedges": 1,
+  "walkLog": [
+   {
+    "t": 12083,
+    "wedgedAt": [
+     27.168,
+     143.562,
+     58.407
+    ]
+   }
+  ],
+  "arrivedAt": [
+   33.054,
+   135.556,
+   72.565
+  ],
+  "nearestOnArrival": 14.91,
+  "closure": {
+   "1048603": {
+    "d0": 17.46,
+    "min": 2.77
+   },
+   "1048604": {
+    "d0": 17.49,
+    "min": 0.7
+   }
+  },
+  "hitsOnMe": 1,
+  "hitFrom": [
+   1048604
+  ],
+  "shots": 4,
+  "herdDeaths": [
+   {
+    "id": 1048602,
+    "killer": 0,
+    "atMs": 19
+   },
+   {
+    "id": 1048605,
+    "killer": 0,
+    "atMs": 219
+   },
+   {
+    "id": 1048604,
+    "killer": 0,
+    "atMs": 419
+   },
+   {
+    "id": 1048603,
+    "killer": 0,
+    "atMs": 619
+   }
+  ],
+  "deathDataLen": 4,
+  "drops": [
+   {
+    "id": 1048628,
+    "def": "mat.scrap",
+    "d": 0
+   },
+   {
+    "id": 1048629,
+    "def": "mat.scrap",
+    "d": 4.1
+   },
+   {
+    "id": 1048630,
+    "def": "mat.scrap",
+    "d": 26.99
+   },
+   {
+    "id": 1048631,
+    "def": "mat.scrap",
+    "d": 27.28
+   }
+  ],
+  "victim": 1048602,
+  "deathPos": [
+   37.837,
+   113.978,
+   88.466
+  ],
+  "respawnS": 20,
+  "respawnPos": [
+   39.185,
+   119.677,
+   85.697
+  ],
+  "respawnHealth": 23,
+  "respawnOffPost": 0
+ },
+ "c145": [
+  {
+   "id": 1048579,
+   "samples": 600,
+   "path": 0,
+   "maxFrom": 0,
+   "maxDisp": 0,
+   "longestPauseS": 29.95,
+   "longestPauseEndTick": 609,
+   "firstTick": 10
+  },
+  {
+   "id": 1048580,
+   "samples": 600,
+   "path": 0,
+   "maxFrom": 0,
+   "maxDisp": 0,
+   "longestPauseS": 29.95,
+   "longestPauseEndTick": 609,
+   "firstTick": 10
+  },
+  {
+   "id": 1048581,
+   "samples": 600,
+   "path": 0,
+   "maxFrom": 0,
+   "maxDisp": 0,
+   "longestPauseS": 29.95,
+   "longestPauseEndTick": 609,
+   "firstTick": 10
+  }
+ ],
+ "checks": [
+  {
+   "id": "C142",
+   "name": "herd.blobs.east: 4× mob.blob.green_blob, ids > rover",
+   "ok": true,
+   "detail": "got 4 (1048602,1048603,1048604,1048605), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.birbs.north: 3× mob.blob.birb, ids > rover",
+   "ok": true,
+   "detail": "got 3 (1048606,1048607,1048608), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.dinos: 2× mob.big.dino, ids > rover",
+   "ok": true,
+   "detail": "got 2 (1048609,1048610), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.mushnubs: 4× mob.blob.mushnub, ids > rover",
+   "ok": true,
+   "detail": "got 4 (1048611,1048612,1048613,1048614), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.drones: 3× mob.mech.eye_drone, ids > rover",
+   "ok": true,
+   "detail": "got 3 (1048615,1048616,1048617), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.scolitex: 3× mob.alien.scolitex, ids > rover",
+   "ok": true,
+   "detail": "got 3 (1048618,1048619,1048620), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.imps: 3× mob.dungeon.imp, ids > rover",
+   "ok": true,
+   "detail": "got 3 (1048621,1048622,1048623), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.yeti: 1× mob.big.yeti, ids > rover",
+   "ok": true,
+   "detail": "got 1 (1048624), rover 1048601"
+  },
+  {
+   "id": "C142",
+   "name": "herd.frogs: 2× mob.big.frog, ids > rover",
+   "ok": true,
+   "detail": "got 2 (1048625,1048626), rover 1048601"
+  },
+  {
+   "id": "C143",
+   "name": "herd.blobs.east: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 4.60/6 m, min pair 4.36/0.68 m, spawn 99 m, zones 99 m, camp route 99/33 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.birbs.north: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 3.45/5 m, min pair 3.96/0.84 m, spawn 121 m, zones 121 m, camp route 121/35 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.dinos: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 3.94/6 m, min pair 6.55/1.10 m, spawn 157 m, zones 107 m, camp route 157/33 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.mushnubs: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 4.57/6 m, min pair 3.91/0.86 m, spawn 165 m, zones 165 m, camp route 165/29 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.drones: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 4.97/7 m, min pair 5.82/0.72 m, spawn 163 m, zones 163 m, camp route 66/43 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.scolitex: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 5.01/7 m, min pair 5.80/2.58 m, spawn 273 m, zones 193 m, camp route 164/29 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.imps: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 4.40/6 m, min pair 4.91/0.54 m, spawn 322 m, zones 116 m, camp route 109/35 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.yeti: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 0.00/1 m, min pair -/0.84 m, spawn 346 m, zones 200 m, camp route 259/40 m"
+  },
+  {
+   "id": "C143",
+   "name": "herd.frogs: within spread+1, apart, clear, at the composed posts",
+   "ok": true,
+   "detail": "join vs composed 0.000 m, max off 3.41/5 m, min pair 5.16/0.90 m, spawn 355 m, zones 102 m, camp route 104/33 m"
+  },
+  {
+   "id": "C144",
+   "name": "herd.yeti 1048624 wanders: path >= 2 m, within wander+2 of post",
+   "ok": true,
+   "detail": "600 samples, path 34.57 m, max from post 13.47/17 m, longest pause 4.8 s ending tick 106 (window from tick 10; info)"
+  },
+  {
+   "id": "C146",
+   "name": "camp grunts idle (3) move < 0.01 m over 30 s",
+   "ok": true,
+   "detail": "max displacement 0 m (1048579:0 1048580:0 1048581:0)"
+  },
+  {
+   "id": "C145",
+   "name": "aggro: a member closes > 3 m and hits us",
+   "ok": true,
+   "detail": "best closure 1048604 16.8 m, hits on us 1 from 1048604 after 3.7 s"
+  },
+  {
+   "id": "C145",
+   "name": "a member dies to our rifle",
+   "ok": true,
+   "detail": "1048602 died (death data 4 B, fatal hit from 1) after 4 shots, 4/4 herd deaths"
+  },
+  {
+   "id": "C145",
+   "name": "drop within 3 m names a loot.wild.small item",
+   "ok": true,
+   "detail": "1048628:mat.scrap@0.00m (all drops since death: 4)"
+  },
+  {
+   "id": "C145",
+   "name": "1048602 back within 25 s at full health at its post",
+   "ok": true,
+   "detail": "alive after 20.0 s, health 23/23, 0.00 m from post"
+  }
+ ]
+}
