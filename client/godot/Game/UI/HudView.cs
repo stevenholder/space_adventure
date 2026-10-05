@@ -32,6 +32,12 @@ namespace SpaceAdventure.Game.UI
         private readonly Label _deathLine;
         private readonly Dictionary<uint, (Panel box, ColorRect fill)> _healthBars = new();
         private readonly List<uint> _staleBars = new();
+        // Bars only for what you could plausibly shoot: 45 m, inside the pulse
+        // rifle's 120 m max_range (+10 = 130), so the smaller one wins.
+        private const float HealthBarRange = 45f;
+        // Set by Boot alongside Sfx's copies; bars hide behind walls and hills.
+        public SpaceAdventure.Sim.Collider[] Colliders;
+        public SpaceAdventure.Sim.TerrainField Terrain;
 
         public HudView(Control root)
         {
@@ -218,6 +224,8 @@ namespace SpaceAdventure.Game.UI
                     if (cam.IsPositionBehind(above)) continue;
                     Vector2 screen = cam.UnprojectPosition(above);
                     float depth = cam.GlobalPosition.DistanceTo(above);
+                    if (depth > HealthBarRange) continue;
+                    if (Sfx.Occluded(cam.GlobalPosition, above, Colliders, Terrain)) continue;
 
                     // Sized by eye on a 1280x720 shot: 900/26/90 and 5 px tall read as a
                     // hairline at 9 m and vanished at 13 m.

@@ -977,6 +977,7 @@ namespace SpaceAdventure.Game
                     TerrainMsg t = Decode.Terrain(frame.Reader);
                     _terrain = TerrainField.FromWire(t.Radii, t.RadiusMin, t.RadiusMax);
                     _sfx.Terrain = _terrain;
+                    _hudView.Terrain = _terrain;
                     BuildWorld();
                     break;
                 }
@@ -999,6 +1000,7 @@ namespace SpaceAdventure.Game
                     // you walk into is what you can see.
                     _structures.Build(_colliders);
                     _sfx.Colliders = _colliders;   // and what you hear through
+                    _hudView.Colliders = _colliders;   // and whose health bar you see
                     GD.Print($"colliders: {_colliders.Length}");
                     break;
                 }
