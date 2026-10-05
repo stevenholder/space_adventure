@@ -483,6 +483,14 @@ namespace SpaceAdventure.Game
 
                 if (!_views.TryGetValue(id, out var view))
                 {
+                    // Rows are drawn interp_delay behind, so a despawned id
+                    // stays in the buffer ~100 ms after OnDespawn forgot it.
+                    // Recreating it then made a typeless view -- the loot-crate
+                    // fallback -- that nothing ever despawned again: crates
+                    // left where every grenade burst, round landed or player
+                    // left. A spawn always precedes an entity's rows, so no
+                    // known type means it is already gone.
+                    if (!_pendingTypes.ContainsKey(id)) continue;
                     view = Create(id);
                     _views[id] = view;
                 }
