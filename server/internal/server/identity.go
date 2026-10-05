@@ -16,6 +16,9 @@ import (
 	"space-adventure/server/internal/defs"
 	"space-adventure/server/internal/sim"
 	"space-adventure/server/internal/store"
+
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // saveInterval is how often a joined session autosaves while connected.
@@ -35,6 +38,9 @@ const storeTimeout = 5 * time.Second
 type identity struct {
 	st    *store.Store // nil for an ephemeral session (Token == "")
 	token string
+	// session carries the join span (no deadline, no cancel) so autosaves
+	// land in the player's session trace instead of one root trace each.
+	session context.Context
 
 	mu     sync.Mutex
 	player store.Player
@@ -49,7 +55,8 @@ type identity struct {
 // EPHEMERAL session: the server never mints a token, so an empty one means
 // no row is ever read or written for it (docs/PROTOCOL.md).
 func joinIdentity(ctx context.Context, st *store.Store, reg *defs.Registry, token, name string, spawn [3]float64) *identity {
-	id := &identity{token: token, stop: make(chan struct{})}
+	id := &identity{token: token, stop: make(chan struct{}),
+		session: trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx))}
 	id.player = defaultPlayer(reg, token, name, spawn)
 
 	if token == "" {
@@ -57,7 +64,7 @@ func joinIdentity(ctx context.Context, st *store.Store, reg *defs.Registry, toke
 	}
 	id.st = st
 
-	loaded, err := callStore(ctx, func(ctx context.Context) (*store.Player, error) {
+	loaded, err := callStore(ctx, "store.get_player", func(ctx context.Context) (*store.Player, error) {
 		return st.GetPlayer(ctx, token)
 	})
 	if err != nil {
@@ -121,7 +128,7 @@ func (id *identity) autosave() {
 	for {
 		select {
 		case <-t.C:
-			id.save(context.Background())
+			id.save(id.session)
 		case <-id.stop:
 			return
 		}
@@ -137,7 +144,7 @@ func (id *identity) save(parent context.Context) {
 		return // ephemeral session: never write a row
 	}
 	p := id.Snapshot()
-	if _, err := callStore(parent, func(ctx context.Context) (struct{}, error) {
+	if _, err := callStore(parent, "store.put_player", func(ctx context.Context) (struct{}, error) {
 		return struct{}{}, id.st.PutPlayer(ctx, &p)
 	}); err != nil {
 		log.Printf("identity: save %q: %v", id.token, err)
@@ -157,8 +164,15 @@ func (id *identity) Close(ctx context.Context) {
 // deadline and waits for it. It never runs from the tick loop; callers are
 // join/save/Close, all off that loop. Returning on ctx.Done() even if fn
 // has not finished keeps a stuck driver from hanging the caller forever.
-func callStore[T any](parent context.Context, fn func(context.Context) (T, error)) (T, error) {
-	ctx, cancel := context.WithTimeout(parent, storeTimeout)
+func callStore[T any](parent context.Context, name string, fn func(context.Context) (T, error)) (v T, err error) {
+	ctx, span := tracer.Start(parent, name)
+	defer func() {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
 	defer cancel()
 	type result struct {
 		v   T

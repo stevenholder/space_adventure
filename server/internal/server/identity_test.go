@@ -105,7 +105,7 @@ func TestIdentity_FailingStoreDoesNotAbortSession(t *testing.T) {
 // not run on the caller's goroutine (a panic in fn must not surface here).
 func TestCallStore_RunsOffCaller(t *testing.T) {
 	start := time.Now()
-	v, err := callStore(context.Background(), func(context.Context) (int, error) {
+	v, err := callStore(context.Background(), "test", func(context.Context) (int, error) {
 		return 7, nil
 	})
 	if err != nil || v != 7 {

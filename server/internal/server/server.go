@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"space-adventure/server/internal/defs"
 	"space-adventure/server/internal/protocol"
@@ -630,6 +632,10 @@ func (s *Server) tick() {
 	tickSeconds.Observe(step.Seconds())
 	if step > 5*time.Millisecond {
 		log.Printf("slow tick %d: step %s with %d entities", tick, step, len(s.list))
+		// Started at t0 so the span covers the tick's real duration.
+		_, span := tracer.Start(context.Background(), "tick.slow", trace.WithTimestamp(t0))
+		span.SetAttributes(attribute.Int("tick", int(tick)), attribute.Int("entities", len(s.list)))
+		span.End()
 	}
 }
 
@@ -760,7 +766,7 @@ func (s *Server) clearSpawn(self uint32) sim.State {
 	return st // ponytail: 32 spots taken, stack them; a bigger search if a crowd ever spawns at once
 }
 
-func (s *Server) join(c *client, h protocol.Hello) {
+func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	if h.ClientVer != protocol.VersionPhase2 {
 		c.fail() // wrong protocol version (PROTOCOL.md "Versioning"): close 1002
 		return
@@ -793,7 +799,7 @@ func (s *Server) join(c *client, h protocol.Hello) {
 	if s.store == nil {
 		token = "" // no store attached: sessions are ephemeral by design (SetStore)
 	}
-	c.ident = joinIdentity(context.Background(), s.store, s.reg, token, name, [3]float64(spawnState.Pos))
+	c.ident = joinIdentity(ctx, s.store, s.reg, token, name, [3]float64(spawnState.Pos))
 
 	// Collect the world's entities and the existing players' spawn rows before
 	// publishing self. World entities exist from server start and never

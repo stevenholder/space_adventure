@@ -24,6 +24,11 @@ spec:
           image: space-adventure/server:latest
           imagePullPolicy: IfNotPresent
           env:
+            # Traces -> Alloy (deploy/observability). Unset = tracing off.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://alloy:4317
+            - name: DEPLOY_ENV
+              value: kind
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -1,12 +1,15 @@
 package server
 
 import (
+	"context"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
@@ -55,6 +58,10 @@ type msg struct {
 
 // client is one WebSocket connection and the entity it drives.
 type client struct {
+	// session is the join span's context: cmd spans hang off it, so one
+	// trace in Tempo is one player session (join, then its commands).
+	session context.Context
+
 	// vitals is this player's health, death timer and regen state. Server-side
 	// only: the client renders what the snapshot and events tell it, and never
 	// decides it died (docs/GDD.md, "Player death and respawn").
@@ -407,7 +414,11 @@ func (c *client) reader() {
 				c.closeCode(websocket.CloseProtocolError)
 				return
 			}
-			c.srv.join(c, h)
+			ctx, span := tracer.Start(context.Background(), "join")
+			c.session = trace.ContextWithSpanContext(context.Background(), span.SpanContext())
+			c.srv.join(ctx, c, h)
+			span.SetAttributes(attribute.Int("player.id", int(c.id)), attribute.Bool("player.has_token", h.Token != ""))
+			span.End()
 		case protocol.MsgInput:
 			if c.entity == nil {
 				c.closeCode(websocket.CloseProtocolError) // input before hello
@@ -440,7 +451,10 @@ func (c *client) reader() {
 				c.closeCode(websocket.CloseProtocolError)
 				return
 			}
+			_, span := tracer.Start(c.session, "cmd")
 			res := c.srv.doCmd(c, req)
+			span.SetAttributes(attribute.Int("player.id", int(c.id)), attribute.Int("cmd.opcode", int(req.Opcode)), attribute.Int("cmd.status", int(res.Status)))
+			span.End()
 			c.send(msg{data: protocol.EncodeCmdResult(res)})
 		case protocol.MsgBoard:
 			if c.entity == nil {

@@ -165,7 +165,7 @@ kubectl --context default -n space-adventure logs deploy/server --tail=100
 kubectl --context default -n space-adventure logs jobs/db-backup --tail=20   # last backup
 ```
 
-## Metrics
+## Metrics (and logs, traces)
 
 The server serves Prometheus `/metrics` on its own port, 9100 (never the
 ingress: that routes the whole public origin). Grafana Alloy, in the same
@@ -198,7 +198,9 @@ kubectl --context default -n space-adventure port-forward deploy/alloy 12345 &
 curl -s localhost:12345/metrics | grep -E 'otelcol_exporter_(sent|send_failed)_metric_points'
 ```
 
-`sent` climbing and `send_failed` flat is healthy.
+`sent` climbing and `send_failed` flat is healthy. The same counters
+exist for the other two signals: `otelcol_exporter_sent_log_records_total`
+and `otelcol_exporter_sent_spans_total`.
 
 The dashboard: `http://192.168.1.112:3000/d/space-adventure` — players,
 build, scrape health, tick rate, tick p50/p99 against the 5 ms / 50 ms
@@ -211,6 +213,44 @@ The server's own series
 are `space_adventure_build_info{build=...}` (equals `/version`),
 `space_adventure_players_online`, and `space_adventure_tick_seconds`
 (histogram; the 50 ms budget of 20 Hz is the line that matters).
+
+**Logs.** The server writes JSON lines to stdout (`log/slog`; every
+`log.Printf` arrives as `level=INFO`). Alloy tails every pod's stdout in
+`space-adventure` through the API server (`loki.source.kubernetes`, which
+is why its ClusterRole has `pods/log get`), lifts the pod's labels into
+OTLP resource attributes, and pushes OTLP to the LGTM box -- Loki :3100 is
+not reachable from the clusters, OTLP is the only way in. Index labels:
+`service_name` (`space-adventure-` + the pod's `app.kubernetes.io/name`:
+`-server`, `-postgres`, `-alloy`), `deployment_environment` (kind|prod),
+`k8s_cluster_name`, `k8s_namespace_name`, `k8s_pod_name`,
+`k8s_container_name`. In Grafana Explore → Loki:
+
+```logql
+{service_name="space-adventure-server", deployment_environment="prod"} | json | msg=~"slow tick.*"
+```
+
+**Traces.** With `OTEL_EXPORTER_OTLP_ENDPOINT` set (the manifests set
+`http://alloy:4317`; unset = no tracer, zero cost -- tests run without
+it) the server exports spans to Alloy's OTLP receiver (Service `alloy`,
+:4317), which stamps `k8s.cluster.name` and forwards them. Resource:
+`service.name=space-adventure-server`, `service.version` = `/version`,
+`deployment.environment` from `DEPLOY_ENV`. One trace is one player
+session: root `join` (attrs `player.id`, `player.has_token`), children
+`store.get_player`, a `cmd` per command (`cmd.opcode`, `cmd.status`) and
+the autosave `store.put_player`s. Ticks are never traced except
+`tick.slow`, emitted only past the 5 ms slow-tick line and spanning the
+real tick. In Grafana Explore → Tempo (TraceQL):
+
+```
+{resource.service.name="space-adventure-server" && resource.deployment.environment="prod" && name="join"}
+{name="tick.slow"}
+```
+
+The pandas needs by hand, once, before the first deploy that carries
+this: re-apply `deploy/observability/bootstrap` (above) -- its ClusterRole
+gained `pods/log get`, and CD cannot widen a ClusterRole. Without it Alloy
+still runs and ships metrics and traces; only the log tailers fail
+(`forbidden` in `kubectl logs deploy/alloy`).
 
 ## CD plumbing (when deploys stop arriving)
 

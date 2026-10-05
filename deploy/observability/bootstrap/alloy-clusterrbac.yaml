@@ -1,4 +1,4 @@
-# Read-only discovery: which ServiceMonitors exist, and the Services /
+# Read-only discovery, plus pod logs: which ServiceMonitors exist, and the Services /
 # Endpoints / Pods they select. Alloy scrapes pod IPs directly. The
 # ServiceAccount it binds lives with the Deployment (base/alloy.yaml).
 apiVersion: rbac.authorization.k8s.io/v1
@@ -9,6 +9,9 @@ rules:
   - apiGroups: [""]
     resources: [namespaces, pods, services, endpoints]
     verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log] # loki.source.kubernetes tails stdout via the API
+    verbs: [get]
   - apiGroups: [discovery.k8s.io]
     resources: [endpointslices]
     verbs: [get, list, watch]

@@ -3,6 +3,23 @@ kind: ServiceAccount
 metadata:
   name: alloy
 ---
+# The server's OTLP endpoint (OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317).
+# No part-of label, like the Deployment: `make up` prunes labeled Services
+# that are not in deploy/manifests.
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  labels:
+    app.kubernetes.io/name: alloy
+spec:
+  selector:
+    app.kubernetes.io/name: alloy
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,6 +57,8 @@ spec:
           ports:
             - name: http
               containerPort: 12345
+            - name: otlp-grpc
+              containerPort: 4317
           readinessProbe:
             httpGet:
               path: /-/ready
