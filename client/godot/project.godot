@@ -14,19 +14,34 @@ config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
 ; (Styles.Ink #10131A), so the window never shows grey or a logo before the
 ; launcher draws (GDD "Launcher (Phase 15)").
 boot_splash/show_image=false
-boot_splash/bg_color=Color(0.0627, 0.0745, 0.102, 1)
+; Alpha 0: with the window transparent (below) the splash is invisible, so a
+; Velopack hook run shows nothing at all; Boot turns transparency off for a
+; real launch before its first frame.
+boot_splash/bg_color=Color(0.0627, 0.0745, 0.102, 0)
 
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-; The OS window opens at the LAUNCHER's size, centred, from its very first
-; frame; the 1920x1080 above stays the canvas the game scales. Boot resizes
-; to the game size on PLAY (or straight away for rig / -play runs). Without
-; this the window opened at 1920x1080 and shrank a frame later -- a flash.
-window/size/window_width_override=560
-window/size/window_height_override=360
-window/size/initial_position_type=1
+; The OS window is created as a 1x1 BORDERLESS dot at the screen origin, and
+; Boot gives it borders, its real size and the centre before its first frame
+; (the launcher's 560x360, or the game's canvas size for rig / -play runs).
+; The 1920x1080 above stays the canvas the game scales.
+;
+; Why a dot and not the launcher's size: Velopack runs this exe twice around
+; every update (`--veloapp-obsolete` on the old build, `--veloapp-updated`
+; on the new; there is no switch to skip them), and each run boots the
+; engine far enough to show a window before our code can exit -- two blank
+; launcher-sized windows blinked past on the first real update. Off-screen
+; does not work (Godot clamps the start position back onto a screen), so
+; the window a hook run shows is one pixel for under a second.
+window/size/window_width_override=1
+window/size/window_height_override=1
+window/size/borderless=true
+window/size/transparent=true
+window/per_pixel_transparency/allowed=true
+window/size/initial_position_type=0
+window/size/initial_position=Vector2i(0, 0)
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/vsync/vsync_mode=0
