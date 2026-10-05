@@ -46,13 +46,13 @@ namespace SpaceAdventure.Game
         /// compiled in, so -serverUrl or the env var wins over the default.
         /// </summary>
         /// <summary>What the HUD says while there is no world to look at.</summary>
-        private string LinkBanner() => _updating ?? (_net == null ? "" : _net.State switch
+        private string LinkBanner() => _net == null ? "" : _net.State switch
         {
             LinkState.Failed => $"CONNECTION FAILED: {_serverUrl} — {_net.LastError}",
             LinkState.Reconnecting => $"RECONNECTING to {_serverUrl}… ({_net.LastError})",
             LinkState.Joined => "JOINED — loading the world…",
             _ => $"CONNECTING to {_serverUrl}…",
-        });
+        };
 
         private static string ResolveServerUrl()
         {
@@ -257,9 +257,6 @@ namespace SpaceAdventure.Game
         private double _quitAfter = -1;
         private double _elapsed;
 
-        /// <summary>The HUD banner while an update downloads; null otherwise.</summary>
-        private string _updating;
-
         /// <summary>Set once installed: the feed this session keeps watching.</summary>
         private UpdateManager _updates;
         /// <summary>An update downloaded mid-session, applied when the game closes.</summary>
@@ -289,12 +286,14 @@ namespace SpaceAdventure.Game
 
         /// <summary>
         /// An installed client (Setup.exe / AppImage) updates itself from the
-        /// GitHub releases before it connects; deploy.yml publishes the feed.
-        /// Source runs, godot-cli flows and loose exports are not installed and
-        /// skip straight to Connect. Any failure plays the current build: an
-        /// unreachable GitHub must never keep anyone out of the game.
+        /// GitHub releases; deploy.yml publishes the feed. Source runs,
+        /// godot-cli flows and loose exports are not installed (DevBuild).
+        /// The check gets 5 s; a timeout, a throw or a failed download is
+        /// Offline and plays the current build: an unreachable GitHub must
+        /// never keep anyone out of the game. Drives `_launch`; true when
+        /// an update was downloaded and the process is restarting into it.
         /// </summary>
-        private async System.Threading.Tasks.Task UpdateThenConnect()
+        private async System.Threading.Tasks.Task<bool> UpdateStep()
         {
             try
             {
@@ -303,29 +302,157 @@ namespace SpaceAdventure.Game
                 var mgr = string.IsNullOrEmpty(feed)
                     ? new UpdateManager(new GithubSource(ReleasesRepo, null, true))
                     : new UpdateManager(feed);
-                if (mgr.IsInstalled)
+                if (!mgr.IsInstalled)
                 {
-                    _updates = mgr;
-                    _nextUpdateCheck = Clock.Now + UpdateEvery;
+                    _launch.NotInstalled();
+                    return false;
                 }
-                if (mgr.IsInstalled && await mgr.CheckForUpdatesAsync() is { } update)
+                _updates = mgr;
+                _nextUpdateCheck = Clock.Now + UpdateEvery;
+
+                var check = mgr.CheckForUpdatesAsync();
+                if (await System.Threading.Tasks.Task.WhenAny(check, System.Threading.Tasks.Task.Delay(CheckBudgetMs)) != check)
                 {
-                    GD.Print($"update: {mgr.CurrentVersion} -> {update.TargetFullRelease.Version}");
-                    _updating = $"UPDATING to {update.TargetFullRelease.Version}…";
-                    await mgr.DownloadUpdatesAsync(update, p => _updating = $"UPDATING to {update.TargetFullRelease.Version}… {p}%");
-                    // Not ApplyUpdatesAndRestart: that Environment.Exit()s under a
-                    // running engine. Hand the swap to Velopack and quit cleanly.
-                    mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: true, OS.GetCmdlineArgs());
-                    GetTree().Quit(0);
-                    return;
+                    _ = check.ContinueWith(t => _ = t.Exception, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
+                    throw new TimeoutException($"no answer in {CheckBudgetMs / 1000} s");
                 }
+                if (await check is not { } update)
+                {
+                    _launch.Current(mgr.CurrentVersion?.ToString());
+                    return false;
+                }
+                GD.Print($"update: {mgr.CurrentVersion} -> {update.TargetFullRelease.Version}");
+                _launch.Found(update.TargetFullRelease.Version.ToString());
+                await mgr.DownloadUpdatesAsync(update, p => _launch.Progress(p));
+                _launch.Downloaded();
+                await ToSignal(GetTree().CreateTimer(0.5), SceneTreeTimer.SignalName.Timeout); // let RESTARTING… draw
+                // Not ApplyUpdatesAndRestart: that Environment.Exit()s under a
+                // running engine. Hand the swap to Velopack and quit cleanly.
+                mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: true, OS.GetCmdlineArgs());
+                GetTree().Quit(0);
+                return true;
             }
             catch (Exception e)
             {
                 GD.Print($"update: skipped ({e.Message})");
+                _launch.Failed(e.Message);
+                return false;
             }
-            _updating = null;
-            _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
+        }
+
+        private const int CheckBudgetMs = 5000;
+
+        /// <summary>The rig and -play: update (if installed), then straight in, no launcher.</summary>
+        private async System.Threading.Tasks.Task UpdateThenConnect()
+        {
+            if (await UpdateStep()) return;
+            Connect();
+        }
+
+        private void Connect() => _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
+
+        // ---- the launcher (GDD "Launcher (Phase 15)") ------------------------
+
+        private readonly Launcher _launch = new Launcher();
+        private LauncherView _launcherView;
+        private bool _launcherUp;
+        private double _nextStats;
+        private bool _statsBusy;
+        private static readonly System.Net.Http.HttpClient StatsHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        private Window.ContentScaleModeEnum _gameScaleMode;
+        private Window.ContentScaleAspectEnum _gameScaleAspect;
+        private Vector2I _gameScaleSize;
+
+        /// <summary>A player's launch: everything not rigged and not `-play`; `-uiLauncher` photographs it.</summary>
+        private bool LauncherMode => (!Rigged && !Flag("-play")) || Arg("-uiLauncher") != null || Arg("-uiPlayAfter") != null;
+
+        /// <summary>The 560×360 window at 1:1 pixels; the game's stretch is kept to restore on PLAY.</summary>
+        private void OpenLauncherWindow()
+        {
+            Window w = GetWindow();
+            _gameScaleMode = w.ContentScaleMode;
+            _gameScaleAspect = w.ContentScaleAspect;
+            _gameScaleSize = w.ContentScaleSize;
+            w.ContentScaleMode = Window.ContentScaleModeEnum.Disabled;
+            w.ContentScaleFactor = 1f;
+            w.Mode = Window.ModeEnum.Windowed;
+            w.Unresizable = true;
+            w.Title = "Space Adventure";
+            w.Size = new Vector2I(LauncherView.Width, LauncherView.Height);
+            w.MoveToCenter();
+        }
+
+        /// <summary>The launcher's UI, over everything; the HUD stays hidden until PLAY.</summary>
+        private void BuildLauncher()
+        {
+            var layer = new CanvasLayer { Name = "Launcher", Layer = 120 };
+            AddChild(layer);
+            var root = new Control { Name = "root", MouseFilter = Control.MouseFilterEnum.Ignore };
+            root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            layer.AddChild(root);
+            _launcherView = new LauncherView(root, Play, () => GetTree().Quit(0));
+            _launcherView.SetServer("SERVER · …");
+            _launcherUp = true;
+            _ui.Root.Visible = false;
+            Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
+        }
+
+        /// <summary>The launcher's frame: the model onto the view, the server poll.</summary>
+        private void LauncherFrame()
+        {
+            _launcherView.Set(_launch, BuildLabel);
+            // Rig: -uiPlayAfter <s> presses PLAY, so the restore-and-connect
+            // path runs headless (`world ready` under -quitAfter is the proof).
+            string playAfter = Arg("-uiPlayAfter");
+            if (playAfter != null && _elapsed >= double.Parse(playAfter, CultureInfo.InvariantCulture)) { Play(); return; }
+            if (Arg("-uiLauncher") != null || _statsBusy || Clock.Now < _nextStats) return;
+            _nextStats = Clock.Now + 10;
+            _ = PollStats();
+        }
+
+        /// <summary>GET &lt;site&gt;/api/stats; any failure is UNREACHABLE. Never gates PLAY.</summary>
+        private async System.Threading.Tasks.Task PollStats()
+        {
+            _statsBusy = true;
+            int? online = null;
+            try
+            {
+                string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
+                string body = await StatsHttp.GetStringAsync(site + "/api/stats");
+                online = (int?)Newtonsoft.Json.Linq.JObject.Parse(body)["online"];
+            }
+            catch (Exception e)
+            {
+                GD.Print($"launcher: stats unreachable ({e.Message})");
+            }
+            _statsBusy = false;
+            if (_launcherUp) _launcherView.SetServer(Launcher.ServerLine(online));
+        }
+
+        /// <summary>
+        /// PLAY: the saved display mode and UI scale, the game's canvas
+        /// stretch back, the launcher gone, and the connect UpdateThenConnect
+        /// always made.
+        /// </summary>
+        private void Play()
+        {
+            if (!_launcherUp || !_launch.PlayEnabled) return;
+            _launcherUp = false;
+            _launcherView.Show(false);
+            _ui.Root.Visible = true;
+            Window w = GetWindow();
+            w.Unresizable = false;
+            w.ContentScaleMode = _gameScaleMode;
+            w.ContentScaleAspect = _gameScaleAspect;
+            w.ContentScaleSize = _gameScaleSize;
+            // Windowed mode keeps the size it has, so leave the launcher's
+            // thumbnail for the project size, clamped to the screen.
+            Vector2I screen = DisplayServer.ScreenGetUsableRect(w.CurrentScreen).Size;
+            w.Size = new Vector2I(Math.Min(_gameScaleSize.X, screen.X), Math.Min(_gameScaleSize.Y, screen.Y));
+            w.MoveToCenter();
+            ApplySettings();
+            Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
+            Connect();
         }
 
         /// <summary>
@@ -375,6 +502,11 @@ namespace SpaceAdventure.Game
                 GetTree().Quit(SelfTest());
                 return;
             }
+
+            // A player's launch opens the launcher window first (GDD
+            // "Launcher"): sized and unscaled before anything else draws.
+            bool launcher = LauncherMode;
+            if (launcher) OpenLauncherWindow();
 
             _material = new StandardMaterial3D
             {
@@ -470,7 +602,9 @@ namespace SpaceAdventure.Game
             _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0), () => _settingsView.Show(true));
             // The rig fixes its own window (--resolution, headless shots), so
             // the saved display mode is for a player's session only.
-            if (!Rigged) ApplySettings();
+            // The launcher holds them back until PLAY.
+            if (launcher) _fps.Sensitivity = FpsController.BaseSensitivity * _settings.MouseSensitivity;
+            else if (!Rigged) ApplySettings();
             else GetTree().Root.ContentScaleFactor = _settings.UiScale;
             _accountView = new AccountView(_ui.Root,
                 code => { _accountView.SetStatus("redeeming…"); _ = RedeemLinkCode(code); },
@@ -497,15 +631,25 @@ namespace SpaceAdventure.Game
 
             _net = new NetClient();
             _serverUrl = ResolveServerUrl();
-            _ = UpdateThenConnect();
-
-            Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
+            string fake = Arg("-uiLauncher");
+            if (launcher)
+            {
+                BuildLauncher();
+                if (fake != null) FakeLauncher(fake);
+                else _ = UpdateStep();
+            }
+            else
+            {
+                _ = UpdateThenConnect();
+                Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
+            }
 
             // -uiShot <path>: save a screenshot once the world settles, the
             // review artifact for C60 (test/out/ui/) and the only eyes a
             // headless agent has.
             string shot = Arg("-uiShot");
-            if (shot != null) _ = SaveUiShot(shot);
+            if (shot != null && fake != null) _ = SaveLauncherShot(shot);
+            else if (shot != null) _ = SaveUiShot(shot);
         }
 
         public override void _ExitTree()
@@ -538,6 +682,13 @@ namespace SpaceAdventure.Game
             try
             {
                 Clock.Dt = delta;
+                if (_launcherUp)
+                {
+                    _elapsed += delta;
+                    if (_quitAfter >= 0 && _elapsed >= _quitAfter) GetTree().Quit(0);
+                    else LauncherFrame();
+                    return;
+                }
                 RunFrame(delta);
             }
             catch (Exception ex)
@@ -1845,6 +1996,36 @@ namespace SpaceAdventure.Game
             _net.Connect(ResolveServerUrl(), System.Environment.MachineName ?? "player", token);
         }
 
+        // ---- launcher rig (-uiShot … -uiLauncher <state>) ----------------------
+
+        /// <summary>Puts the model in a named state with fake text: no update check, no network.</summary>
+        private void FakeLauncher(string state)
+        {
+            switch (state)
+            {
+                case "updating": _launch.Found("1.0.42"); _launch.Progress(37); break;
+                case "restarting": _launch.Found("1.0.42"); _launch.Downloaded(); break;
+                case "uptodate": _launch.Current("1.0.42"); break;
+                case "devbuild": _launch.NotInstalled(); break;
+                case "offline": _launch.Failed("fake"); break;
+                case "checking": break;
+                default: GD.PushError($"-uiLauncher: unknown state {state}"); break;
+            }
+            _launcherView.SetServer(Launcher.ServerLine(3));
+            GD.Print($"launcher: faked {_launch.Now}");
+        }
+
+        private async System.Threading.Tasks.Task SaveLauncherShot(string path)
+        {
+            double wait = double.Parse(Arg("-uiShotAfter") ?? "2", CultureInfo.InvariantCulture);
+            await ToSignal(GetTree().CreateTimer(wait), SceneTreeTimer.SignalName.Timeout);
+            await ToSignal(RenderingServer.Singleton, RenderingServerInstance.SignalName.FramePostDraw);
+            await ToSignal(RenderingServer.Singleton, RenderingServerInstance.SignalName.FramePostDraw);
+            Image img = GetViewport().GetTexture().GetImage();
+            Error err = img.SavePng(path);
+            GD.Print($"uiShot: {path} {img.GetWidth()}x{img.GetHeight()} {err}");
+        }
+
         // ---- self-test --------------------------------------------------------
 
         /// <summary>
@@ -1912,6 +2093,31 @@ namespace SpaceAdventure.Game
                 for (int i = 0; i + 1 < d.Length; i += 2) peak = Math.Max(peak, Math.Abs((int)(short)(d[i] | d[i + 1] << 8)));
                 return d.Length > 400 && peak > 25000 && peak < 32000;
             }));
+            // Phase 15: the launcher's state machine (GDD table).
+            var l1 = new UI.Launcher();
+            Check("launcher: starts Checking with PLAY disabled", l1.Now == UI.Launcher.State.Checking && !l1.PlayEnabled && l1.Line == "CHECKING FOR UPDATES…");
+            l1.Found("1.0.42");
+            l1.Progress(37);
+            Check("launcher: Updating line is exact", l1.Line == "UPDATING TO v1.0.42 … 37 %" && Math.Abs(l1.Fraction - 0.37f) < 1e-6f && !l1.PlayEnabled);
+            l1.Downloaded();
+            Check("launcher: Found→Progress→Downloaded is Restarting, PLAY disabled", l1.Now == UI.Launcher.State.Restarting && !l1.PlayEnabled && l1.Line == "RESTARTING…");
+            var l2 = new UI.Launcher();
+            l2.Current("1.0.42");
+            Check("launcher: Current is UpToDate, PLAY enabled", l2.Now == UI.Launcher.State.UpToDate && l2.PlayEnabled && l2.Line == "UP TO DATE · v1.0.42" && l2.Fraction < 0);
+            var l3 = new UI.Launcher();
+            l3.Failed("timeout");
+            Check("launcher: Failed is Offline, PLAY enabled", l3.Now == UI.Launcher.State.Offline && l3.PlayEnabled && l3.Line == "UPDATE CHECK FAILED · playing the installed build" && l3.Reason == "timeout");
+            var l4 = new UI.Launcher();
+            l4.Found("1.0.42");
+            l4.Failed("download died");
+            Check("launcher: a download failing mid-way is Offline, PLAY enabled", l4.Now == UI.Launcher.State.Offline && l4.PlayEnabled);
+            var l5 = new UI.Launcher();
+            l5.NotInstalled();
+            Check("launcher: NotInstalled is DevBuild, PLAY enabled", l5.Now == UI.Launcher.State.DevBuild && l5.PlayEnabled && l5.Line == "DEV BUILD · not installed, no update check");
+            Check("launcher: site URL from the game URL",
+                UI.Launcher.SiteUrl("wss://game.stevenholder.info/ws") == "https://game.stevenholder.info"
+                && UI.Launcher.SiteUrl("ws://127.0.0.1:18080/ws") == "http://127.0.0.1:18080");
+            Check("launcher: server line", UI.Launcher.ServerLine(3) == "SERVER · ONLINE · 3 PLAYING" && UI.Launcher.ServerLine(null) == "SERVER · UNREACHABLE");
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));
             Check("the same triangle reversed is inward", TerrainMesh.FacesInward(verts, new[] { 0, 2, 1 }));
 

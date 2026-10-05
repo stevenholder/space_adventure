@@ -1565,7 +1565,11 @@ walk; wave 3 is `qa`.
 
 ### Where Phase 15 stands (2026-10-05)
 
-Wave 0 written; the client work in flight.
+Built on `feat/launcher`: the model, the window, the six states
+photographed (`test/out/ui/p15-launcher-*.png`), PLAY proven headless
+(`-uiPlayAfter 4 -quitAfter 11` → `world ready`), `make godot-run`
+unchanged. Owed: task 5, the real Velopack round-trip on an installed
+Windows client when the first release after the merge lands.
 
 The 2026-10-05 playtest: an update opened the game full screen with a
 black world and `UPDATING…` at the top, and nothing else worked until the
