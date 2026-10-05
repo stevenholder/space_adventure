@@ -1565,11 +1565,11 @@ walk; wave 3 is `qa`.
 
 ### Where Phase 15 stands (2026-10-05)
 
-Built on `feat/launcher`: the model, the window, the six states
-photographed (`test/out/ui/p15-launcher-*.png`), PLAY proven headless
-(`-uiPlayAfter 4 -quitAfter 11` → `world ready`), `make godot-run`
-unchanged. Owed: task 5, the real Velopack round-trip on an installed
-Windows client when the first release after the merge lands.
+Shipped: #66 (+ #67, a flaky audit test), release `v2026.10.05-949963b`
+= 1.0.51. C148–C152 recorded (docs/QA-STATUS.md "Phase 15"); the user's
+Windows install opened the launcher at its own size and PLAY went
+straight into the game. Owed: the first update *through* the launcher
+(`UPDATING … %` → restart → `UP TO DATE`) is the next release — watch it.
 
 The 2026-10-05 playtest: an update opened the game full screen with a
 black world and `UPDATING…` at the top, and nothing else worked until the
