@@ -27,13 +27,13 @@ const only = process.argv.slice(2);
 // damage scale with height/ref (clamped), so a 2.8 m brute hits harder than
 // a 2.0 m one. Melee reach adds the mob's own radius.
 const ROLES = {
-  swarm:  { ref: 1.0, kind: "melee",  max_health: 30,  move_speed: 3.6, aggro_radius: 18, leash_radius: 40, attack_range: 1.2, attack_damage: 6,  attack_interval: 1.0, attack_windup: 0.3,  turn_rate: 420, loot: "loot.grunt" },
-  brute:  { ref: 2.3, kind: "melee",  max_health: 110, move_speed: 3.2, aggro_radius: 20, leash_radius: 40, attack_range: 1.6, attack_damage: 18, attack_interval: 1.6, attack_windup: 0.5,  turn_rate: 240, loot: "loot.grunt" },
-  flyer:  { ref: 1.4, kind: "melee",  max_health: 35,  move_speed: 4.6, aggro_radius: 24, leash_radius: 45, attack_range: 1.4, attack_damage: 8,  attack_interval: 1.1, attack_windup: 0.3,  turn_rate: 480, loot: "loot.grunt" },
+  swarm:  { ref: 1.0, kind: "melee",  max_health: 30,  move_speed: 3.6, aggro_radius: 18, leash_radius: 40, attack_range: 1.2, attack_damage: 6,  attack_interval: 1.0, attack_windup: 0.3,  turn_rate: 420, loot: "loot.wild.small" },
+  brute:  { ref: 2.3, kind: "melee",  max_health: 110, move_speed: 3.2, aggro_radius: 20, leash_radius: 40, attack_range: 1.6, attack_damage: 18, attack_interval: 1.6, attack_windup: 0.5,  turn_rate: 240, loot: "loot.wild.big" },
+  flyer:  { ref: 1.4, kind: "melee",  max_health: 35,  move_speed: 4.6, aggro_radius: 24, leash_radius: 45, attack_range: 1.4, attack_damage: 8,  attack_interval: 1.1, attack_windup: 0.3,  turn_rate: 480, loot: "loot.wild.small" },
   raider: { ref: 1.8, kind: "melee",  max_health: 60,  move_speed: 4.0, aggro_radius: 22, leash_radius: 45, attack_range: 1.6, attack_damage: 12, attack_interval: 1.2, attack_windup: 0.35, turn_rate: 360, loot: "loot.grunt" },
-  lurker: { ref: 2.0, kind: "melee",  max_health: 70,  move_speed: 2.2, aggro_radius: 16, leash_radius: 30, attack_range: 1.8, attack_damage: 14, attack_interval: 1.8, attack_windup: 0.5,  turn_rate: 200, loot: "loot.grunt" },
-  drone:  { ref: 1.0, kind: "ranged", max_health: 30,  move_speed: 4.0, aggro_radius: 28, leash_radius: 45, attack_range: 22,  attack_damage: 6,  attack_interval: 1.6, attack_windup: 0.3,  turn_rate: 360, projectile_speed: 40, loot: "loot.gunner" },
-  walker: { ref: 1.5, kind: "ranged", max_health: 80,  move_speed: 3.0, aggro_radius: 30, leash_radius: 45, attack_range: 26,  attack_damage: 9,  attack_interval: 1.4, attack_windup: 0.25, turn_rate: 240, projectile_speed: 45, loot: "loot.gunner" },
+  lurker: { ref: 2.0, kind: "melee",  max_health: 70,  move_speed: 2.2, aggro_radius: 16, leash_radius: 30, attack_range: 1.8, attack_damage: 14, attack_interval: 1.8, attack_windup: 0.5,  turn_rate: 200, loot: "loot.wild.big" },
+  drone:  { ref: 1.0, kind: "ranged", max_health: 30,  move_speed: 4.0, aggro_radius: 28, leash_radius: 45, attack_range: 22,  attack_damage: 6,  attack_interval: 1.6, attack_windup: 0.3,  turn_rate: 360, projectile_speed: 40, loot: "loot.wild.mech" },
+  walker: { ref: 1.5, kind: "ranged", max_health: 80,  move_speed: 3.0, aggro_radius: 30, leash_radius: 45, attack_range: 26,  attack_damage: 9,  attack_interval: 1.4, attack_windup: 0.25, turn_rate: 240, projectile_speed: 45, loot: "loot.wild.mech" },
 };
 
 const r2 = (x) => Math.round(x * 100) / 100;

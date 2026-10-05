@@ -385,6 +385,8 @@ type Registry struct {
 	NPCs       map[string]NPC
 	Zones      map[string]Zone
 	Loot       map[string][]LootEntry
+	// Phase 14: wildlife herds (wildlife.json), file order kept.
+	Herds []Herd
 	// Phase 12: nodes and recipes, indexed by id; the slices keep file order
 	// for the payload so every client lists them the same way.
 	Nodes      map[string]Node
@@ -555,6 +557,12 @@ func load(fsys fs.FS) (*Registry, error) {
 	}
 
 	if err := auditArtisan(reg); err != nil {
+		return nil, err
+	}
+	if reg.Herds, err = loadHerds(fsys); err != nil {
+		return nil, err
+	}
+	if err := auditHerds(reg); err != nil {
 		return nil, err
 	}
 

@@ -51,3 +51,4 @@ test/out/t10-sim-result-prefix.json
 client/build/
 client/**/bin/
 client/**/obj/
+.claude/worktrees/
