@@ -242,6 +242,8 @@ namespace SpaceAdventure.Game.UI
     {
         /// <summary>The list column's share of the screen; the stage has the rest.</summary>
         public const float ListShare = 0.4f;
+        /// <summary>Horizontal drag across the stage side, in pixels; Boot turns the stage body with it.</summary>
+        public Action<float> OnStageDrag { get; set; }
 
         private readonly Control _root;
         private readonly Action<int> _onSelect;
@@ -280,6 +282,17 @@ namespace SpaceAdventure.Game.UI
             edge.AnchorLeft = 1; edge.AnchorRight = 1; edge.AnchorTop = 0; edge.AnchorBottom = 1;
             edge.OffsetLeft = -4; edge.OffsetRight = 0;
             column.AddChild(edge);
+
+            // The stage side: transparent, catches a left-button drag and
+            // reports its horizontal travel (the stage turns the body).
+            var stage = new Control { Name = "stage", MouseFilter = Control.MouseFilterEnum.Stop, MouseDefaultCursorShape = Control.CursorShape.Drag };
+            stage.AnchorLeft = ListShare; stage.AnchorRight = 1; stage.AnchorTop = 0; stage.AnchorBottom = 1;
+            stage.OffsetLeft = stage.OffsetTop = stage.OffsetRight = stage.OffsetBottom = 0;
+            stage.GuiInput += e =>
+            {
+                if (e is InputEventMouseMotion m && (m.ButtonMask & MouseButtonMask.Left) != 0) OnStageDrag?.Invoke(m.Relative.X);
+            };
+            _root.AddChild(stage);
 
             var margin = new MarginContainer();
             margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -610,7 +623,7 @@ namespace SpaceAdventure.Game.UI
     {
         /// <summary>Far below any world, so nothing of one ever shares the frame.</summary>
         private static readonly Vector3 Origin = new Vector3(0, -5000f, 0);
-        private const float TurnRate = 0.3f;   // rad/s
+        private const float DragRadPerPx = 0.012f;   // a full turn is ~520 px of drag
         private const float EyeDistance = 6.2f, EyeHeight = 1.75f, LookHeight = 0.95f;
         private const float FovDeg = 30f;
 
@@ -653,6 +666,10 @@ namespace SpaceAdventure.Game.UI
             {
                 Name = "Key", LightEnergy = 3.5f, SpotRange = 14f, SpotAngle = 24f, SpotAttenuation = 0.6f,
                 LightColor = new Color(1f, 0.93f, 0.82f), ShadowEnabled = true,
+                // Against acne on the suit's smooth curves: a little more bias
+                // than the default, and the world's Sun is off while the stage
+                // shows (Boot) -- its cascades were the stripes.
+                ShadowBias = 0.06f, ShadowNormalBias = 2.5f,
             };
             key.Transform = new Transform3D(Basis.Identity, new Vector3(-2.2f, 5.2f, 3.0f))
                 .LookingAt(new Vector3(0, 0.9f, 0), Vector3.Up);
@@ -741,11 +758,13 @@ namespace SpaceAdventure.Game.UI
             }
         }
 
-        /// <summary>The turntable, and the camera kept so the body sits mid-stage at any aspect.</summary>
+        /// <summary>Drag across the stage turns the body: dx in pixels, left drag turns it left.</summary>
+        public void Drag(float dx) => _turntable.RotateY(-dx * DragRadPerPx);
+
+        /// <summary>The camera kept so the body sits mid-stage at any aspect. The body only turns when dragged.</summary>
         public void Frame(double dt)
         {
             if (!_root.Visible) return;
-            _turntable.RotateY((float)(TurnRate * dt));
             Viewport vp = _camera.GetViewport();
             if (vp == null) return;
             Vector2 size = vp.GetVisibleRect().Size;
