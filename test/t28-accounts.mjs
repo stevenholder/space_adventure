@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Phase 16 acceptance, live: C153, C154, C156, C157, C159; Phase 17: C163.
+ * Phase 16 acceptance, live: C153, C154, C156, C157, C159; Phase 17: C163;
+ * Phase 18: C166, C167, C168.
  *
  * Register → POST /api/game-login (the launcher's sign-in: a session in the
  * body, sent back as `Authorization: Bearer`) → GET /api/characters is []
@@ -16,7 +17,17 @@
  * other client sees the same bytes, and it sees the first as a bare name → a
  * password change kills the bearer (401) but the character token still joins →
  * logout ends a bearer → the Phase 7 link-code / redeem / import routes are
- * 404 → delete the account: its characters go with it.
+ * 404 → delete the account: its (three remaining) characters go with it.
+ *
+ * Phase 18 (GDD "Edit a character (Phase 18)"), after the C159 wire checks:
+ * C166 PATCH /api/characters/<token> renames Kade to "Kadence <tag>" and
+ * re-hairs her (name+hair, hair only, own name re-cased; 409 name taken,
+ * 400 bad name / bad hair); she joins under the new name wearing hair.buzzed;
+ * a PATCH while she is connected survives her disconnect save. C168 a second
+ * account's PATCH/DELETE on her token and an unknown token are one 404; POST
+ * on the token path is 405. C167 DELETE pilot 5 → list −1, again 404, its
+ * token refused 1008 (strict) / a fresh guest (guests); DELETE pilot 4 while
+ * connected → that socket closes 1008 and the row stays gone.
  *
  * C163 (hair, GDD "Faces and hair (Phase 17)") rides the same run: the first
  * character is made with hair omitted (hair.none), Kade with hair.buns, pilot
@@ -89,7 +100,7 @@ function client ({ bearer, addr = ip(0) } = {}) {
   const jar = new Map()
   return async (path, { method = 'GET', body, csrf = true } = {}) => {
     const headers = { 'Content-Type': 'application/json', 'CF-Connecting-IP': addr }
-    if (csrf && method === 'POST') headers['X-Requested-With'] = 't28'
+    if (csrf && method !== 'GET') headers['X-Requested-With'] = 't28'
     if (bearer) headers.Authorization = `Bearer ${bearer}`
     if (jar.size) headers.Cookie = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
     const r = await fetch(SITE + path, { method, headers, body: body ? JSON.stringify(body) : undefined })
@@ -353,6 +364,118 @@ await sleep(500)
 o3.leave(); o2.leave(); o1.leave()
 await sleep(1000)
 
+// --- 5b. Phase 18: edit and delete a character (C166–C168) -----------------
+const one = (token, body) => g(`/api/characters/${token}`, { method: 'PATCH', body })
+const list = async () => (await json(await g('/api/characters'))) ?? []
+const rowOf = (rows, token) => rows.find((c) => c.token === token)
+// C166: rename + re-hair, hair only, own name re-cased, the create rules.
+const kadence = `Kadence ${tag}`
+r = await one(k?.token, { name: kadence, hair: 'hair.long' })
+let kr = await json(r)
+check('C166 PATCH name + hair: 200 with the new values, same token and body', r.status === 200 && kr?.name === kadence &&
+  kr?.hair === 'hair.long' && kr?.token === k?.token && kr?.body === 'char.ubc.f',
+  `status ${r.status}, ${JSON.stringify(kr && [kr.name, kr.hair, kr.body, kr.token === k?.token])}`)
+chars = await list()
+check('C166 the list reflects the edit', chars.length === 5 && rowOf(chars, k?.token)?.name === kadence &&
+  rowOf(chars, k?.token)?.hair === 'hair.long', JSON.stringify(chars.map((c) => [c.name, c.hair])))
+r = await one(k?.token, { hair: 'hair.buzzed' })
+kr = await json(r)
+check('C166 PATCH hair only: the name is unchanged', r.status === 200 && kr?.name === kadence && kr?.hair === 'hair.buzzed',
+  `status ${r.status}, ${JSON.stringify(kr && [kr.name, kr.hair])}`)
+r = await one(k?.token, { name: kadence.toUpperCase() })
+kr = await json(r)
+check('C166 PATCH to her own name in another case: 200', r.status === 200 && kr?.name === kadence.toUpperCase(),
+  `status ${r.status}, ${JSON.stringify(kr?.name)}`)
+r = await one(k?.token, { name: kadence })
+check('C166 PATCH back to the mixed-case name', r.status === 200 && (await json(r))?.name === kadence, `status ${r.status}`)
+for (const [req, code, msg] of [[{ name: pilots[0]?.name }, 409, 'name taken'], [{ name: 'K' }, 400, 'bad name'],
+  [{ hair: 'hair.nope' }, 400, 'bad hair']]) {
+  r = await one(k?.token, req)
+  const t = await text(r)
+  check(`C166 PATCH ${JSON.stringify(req)} refused ${code} ${msg}`, r.status === code && t === msg, `status ${r.status} ${JSON.stringify(t)}`)
+}
+chars = await list()
+check('C166 refused PATCHes changed nothing', rowOf(chars, k?.token)?.name === kadence && rowOf(chars, k?.token)?.hair === 'hair.buzzed',
+  JSON.stringify(rowOf(chars, k?.token) && [rowOf(chars, k?.token).name, rowOf(chars, k?.token).hair]))
+// C166: PLAY joins under the new name wearing the new hair (the row's at join).
+{
+  const e1 = await openGame(k?.token ?? '', 'not-kadence')
+  check('C166 join as Kade: the self spawn carries the NEW name', e1.id > 0 && e1.data === `${kadence}\0char.ubc.f`,
+    `entity ${e1.id}, data ${JSON.stringify(e1.data)}, close ${e1.close}`)
+  const nx = await nextAfterSpawn(e1, e1.id)
+  check('C166 join as Kade: she wears hair.buzzed', isHair(nx, e1.id, 'hair.buzzed'), `next: ${desc(nx)}`)
+  // C166 live: a PATCH while connected is not undone by the session's save.
+  r = await one(k?.token, { hair: 'hair.buns' })
+  check('C166 PATCH hair while connected: 200', r.status === 200 && (await json(r))?.hair === 'hair.buns', `status ${r.status}`)
+  await sleep(600)
+  e1.leave()
+  await sleep(1500) // the disconnect save
+  chars = await list()
+  check('C166 after the live session leaves, the list still has hair.buns', rowOf(chars, k?.token)?.hair === 'hair.buns' &&
+    rowOf(chars, k?.token)?.name === kadence, JSON.stringify(rowOf(chars, k?.token) && [rowOf(chars, k?.token).name, rowOf(chars, k?.token).hair]))
+}
+// C168: another account's bearer, an unknown token, the wrong method.
+{
+  const ox = client({ addr: ip(4) })
+  const oemail = `t28-other-${run}@example.com`
+  const reg = await ox('/api/register', { method: 'POST', body: { email: oemail, password: 'orbital-insertion' } })
+  const ogl = await json(await ox('/api/game-login', { method: 'POST', body: { email: oemail, password: 'orbital-insertion' } }))
+  const og = client({ bearer: ogl?.session, addr: ip(4) })
+  check('C168 a second account signs in', reg.status === 200 && HEX32.test(ogl?.session ?? ''), `register ${reg.status}`)
+  const listBefore = JSON.stringify(await list())
+  r = await og(`/api/characters/${k?.token}`, { method: 'PATCH', body: { name: `Stolen ${tag}` } })
+  let t = await text(r)
+  check('C168 another account\'s PATCH on Kade: 404 no such character', r.status === 404 && t === 'no such character', `status ${r.status} ${JSON.stringify(t)}`)
+  r = await og(`/api/characters/${k?.token}`, { method: 'DELETE' })
+  t = await text(r)
+  check('C168 another account\'s DELETE on Kade: 404 no such character', r.status === 404 && t === 'no such character', `status ${r.status} ${JSON.stringify(t)}`)
+  check('C168 the list is unchanged', JSON.stringify(await list()) === listBefore)
+  const unknown = '0123456789abcdef0123456789abcdef'
+  r = await one(unknown, { name: `Ghost ${tag}` })
+  const pt = await text(r)
+  const d404 = await g(`/api/characters/${unknown}`, { method: 'DELETE' })
+  const dt = await text(d404)
+  check('C168 an unknown token: PATCH and DELETE 404, one body', r.status === 404 && d404.status === 404 && pt === 'no such character' && dt === pt,
+    `PATCH ${r.status} ${JSON.stringify(pt)}, DELETE ${d404.status} ${JSON.stringify(dt)}`)
+  r = await g(`/api/characters/${k?.token}`, { method: 'POST', body: { name: `Post ${tag}` } })
+  check('C168 POST on /api/characters/<token> is 405', r.status === 405, `status ${r.status}`)
+}
+// C167: delete pilot 5; then delete pilot 4 while it is connected.
+{
+  const p5 = pilots[2]?.token ?? ''
+  r = await g(`/api/characters/${p5}`, { method: 'DELETE' })
+  const dj = await json(r)
+  check('C167 DELETE pilot 5: 200 {ok:true}', r.status === 200 && dj?.ok === true, `status ${r.status}, ${JSON.stringify(dj)}`)
+  chars = await list()
+  check('C167 the list is one shorter; the others are untouched', chars.length === 4 && !rowOf(chars, p5) &&
+    [first?.token, k?.token, pilots[0]?.token, pilots[1]?.token].every((tk) => rowOf(chars, tk)),
+  JSON.stringify(chars.map((c) => c.name)))
+  r = await g(`/api/characters/${p5}`, { method: 'DELETE' })
+  check('C167 DELETE again: 404', r.status === 404, `status ${r.status}`)
+  if (STRICT) {
+    const d = await joinGame(p5, 'pilot-five')
+    check('C167 strict: the deleted character\'s token is closed 1008 before any spawn', d.id === 0 && d.close === 1008 && d.spawns === 0,
+      `entity ${d.id}, close ${d.close}, spawns ${d.spawns}`)
+  } else {
+    const d = await joinGame(p5, 'fresh-five')
+    check('C167 guests: the deleted character\'s token joins as a fresh guest', d.id > 0 && d.data === 'fresh-five',
+      `entity ${d.id}, data ${JSON.stringify(d.data)}, close ${d.close}`)
+  }
+  const p4 = pilots[1]?.token ?? ''
+  const live = await openGame(p4, 'pilot-four')
+  check('C167 pilot 4 is in the world', live.id > 0 && live.close === null, `entity ${live.id}, close ${live.close}`)
+  r = await g(`/api/characters/${p4}`, { method: 'DELETE' })
+  const st4 = r.status
+  for (let t = 0; t < 3000 && live.close === null; t += 50) await sleep(50)
+  check('C167 DELETE while connected: 200 and that socket is closed 1008', st4 === 200 && live.close === 1008,
+    `delete ${st4}, close ${live.close}`)
+  if (live.close === null) live.leave()
+  await sleep(1500) // a re-save, if one were to happen, would land by now
+  chars = await list()
+  check('C167 the kicked character stays deleted; three remain', chars.length === 3 && !rowOf(chars, p4) &&
+    [first?.token, k?.token, pilots[0]?.token].every((tk) => rowOf(chars, tk)), JSON.stringify(chars.map((c) => c.name)))
+}
+
 // --- 6. C156/C157: a password change kills the bearer, not the token -------
 const c = client({ addr: ip(3) })
 r = await c('/api/login', { method: 'POST', body: { email, password: 'orbital-insertion' } })
@@ -404,7 +527,7 @@ check('C157 delete with password', r.status === 200, `status ${r.status}`)
 r = await c('/api/me')
 check('C157 session gone after delete', r.status === 401, `status ${r.status}`)
 const after = await json(await fetch(SITE + '/api/stats'))
-check('C157 all five characters went with the account', after?.players === before?.players - 5,
+check('C157 the remaining three characters went with the account', after?.players === before?.players - 3,
   `players ${before?.players} -> ${after?.players}`)
 if (STRICT) {
   for (const [who, tok] of [['first', first?.token], ['second', k?.token]]) {

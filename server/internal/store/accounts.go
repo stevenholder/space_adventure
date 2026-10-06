@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Account is one row of `account`. PwHash is the argon2id encoded string —
@@ -210,6 +211,31 @@ func (s *Store) SetPlayerAccount(ctx context.Context, token, accountID string) e
 			return ErrNameTaken
 		}
 		return fmt.Errorf("store: setting player account: %w", err)
+	}
+	return nil
+}
+
+// EditCharacter sets a character's name and hair (Phase 18), nothing
+// else: a live session's save must not be raced by a whole-row write of a
+// copy read moments earlier. ErrNameTaken when the name index refuses.
+func (s *Store) EditCharacter(ctx context.Context, token, name, hair string) error {
+	if _, err := s.DB.ExecContext(ctx,
+		`UPDATE player SET name = $1, hair = $2, updated_ms = $3 WHERE token = $4`,
+		name, hair, time.Now().UnixMilli(), token); err != nil {
+		if isUnique(err) {
+			return ErrNameTaken
+		}
+		return fmt.Errorf("store: editing character: %w", err)
+	}
+	return nil
+}
+
+// DeletePlayer removes one character's row (Phase 18). The player row is
+// all DeleteAccount's cascade removes per character, so it is all this
+// removes. Absent is not an error: the caller sweeps twice.
+func (s *Store) DeletePlayer(ctx context.Context, token string) error {
+	if _, err := s.DB.ExecContext(ctx, `DELETE FROM player WHERE token = $1`, token); err != nil {
+		return fmt.Errorf("store: deleting player: %w", err)
 	}
 	return nil
 }

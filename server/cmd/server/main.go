@@ -166,6 +166,7 @@ func runServer(args []string) error {
 			},
 			Online: world.OnlineCount,
 			Kick:   world.Kick,
+			Retag:  world.Retag,
 		}
 		site.Mount(mux)
 		log.Printf("account site: enabled")

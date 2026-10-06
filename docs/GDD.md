@@ -1614,6 +1614,37 @@ same body, and gives every character a **hair** choice.
   `covers: hair` rule. Harness: `t28` creates a character with hair and
   sees the worn frame on both sockets.
 
+### Edit a character (Phase 18)
+
+A character's name and hair can change after creation; its body cannot
+(make a new one). A character can be deleted.
+
+- `PATCH /api/characters/<token>` `{name?, hair?}` — the bearer's own
+  row only (a token owned by another account, or none, is 404); the same
+  rules as create: 400 `bad name` / `bad hair`, 409 `name taken`
+  (case-insensitive, other characters; a character may be renamed to its
+  own name). Returns the row. The nametag follows on the next join (the
+  entity is named from the row at `hello`); a connected session keeps its
+  old name until then — accepted.
+- `DELETE /api/characters/<token>` — the bearer's own row only (else
+  404). The row goes; a connected session of that character is kicked as
+  an account delete kicks (`Server.Kick`, 1008, no final save). Deleting
+  the last character leaves an empty list: the select opens on the create
+  form. Nothing else is touched — the account's other characters stay.
+
+**The select** gains EDIT on the selected row (beside PLAY's row, small,
+steel): the create form opens in **edit mode** — NAME prefilled, the
+GENDER and MODEL rows hidden (the body is fixed), the HAIR row live on
+the stage, SAVE (primary, dark until something changed and the name
+passes) instead of CREATE, CANCEL, and a small Danger DELETE at the
+bottom. DELETE asks once, inline: `DELETE <NAME>? THIS CANNOT BE UNDONE`
+with CONFIRM (Danger) / KEEP. After SAVE the list shows the new name and
+the stage the new hair, that row selected; after CONFIRM the row is gone
+and the next row (or the create form) is selected.
+
+Rig: `-uiChars edit` (the form in edit mode on fake row 0),
+`-uiChars delete` (the confirm shown).
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the

@@ -182,6 +182,15 @@ func (id *identity) discard() {
 	id.saveMu.Unlock()
 }
 
+// retag sets the row's name and hair (a web edit, Phase 18) after waiting
+// out a save in flight, so every later save carries them; the live entity
+// keeps its old name and hair until the next join.
+func (id *identity) retag(name, hair string) {
+	id.saveMu.Lock()
+	defer id.saveMu.Unlock()
+	id.Mutate(func(p *store.Player) { p.Name, p.Hair = name, hair })
+}
+
 // Close stops the autosave loop and performs one final, synchronous save
 // (still off the tick loop — Close is called from connection teardown,
 // never from tick()) so a clean disconnect is not lost.

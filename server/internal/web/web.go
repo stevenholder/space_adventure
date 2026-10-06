@@ -70,6 +70,10 @@ type Handler struct {
 	// Kick drops live sessions of deleted characters so their saves cannot
 	// re-create the rows (server.Kick). Nil: no game server in-process.
 	Kick func(tokens []string)
+	// Retag points a live session of an edited character at its new name
+	// and hair so its saves do not write the old ones back (server.Retag).
+	// Nil: no game server in-process.
+	Retag func(token, name, hair string)
 
 	mu   sync.Mutex
 	rate map[string]*loginBucket
@@ -94,6 +98,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logout", h.mutating(h.withAccount(h.logout)))
 	mux.HandleFunc("/api/me", h.withAccount(h.me))
 	mux.HandleFunc("/api/characters", h.characters)
+	mux.HandleFunc("/api/characters/", h.character) // /api/characters/<token>
 	mux.HandleFunc("/api/password", h.mutating(h.withAccount(h.password)))
 	mux.HandleFunc("/api/delete", h.mutating(h.withAccount(h.deleteAccount)))
 }
@@ -111,6 +116,14 @@ func (h *Handler) mutating(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		csrf(next)(w, r)
+	}
+}
+
+// csrf is mutating's header rule without its POST rule, for the PATCH and
+// DELETE of /api/characters/<token> (the caller has checked the method).
+func csrf(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Requested-With") == "" {
 			http.Error(w, "missing X-Requested-With", http.StatusForbidden)
 			return
@@ -495,6 +508,128 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 		return
 	}
 	writeJSON(w, viewCharacter(p))
+}
+
+// character is PATCH (edit) and DELETE on /api/characters/<token>
+// (Phase 18), with every mutating route's CSRF header rule.
+func (h *Handler) character(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPatch:
+		csrf(h.withAccount(h.editCharacter))(w, r)
+	case http.MethodDelete:
+		csrf(h.withAccount(h.deleteCharacter))(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// ownCharacter reads the path's token and its row; nil after it has
+// written the error. Another account's token and an unknown one are the
+// same 404, so a token cannot be probed.
+func (h *Handler) ownCharacter(w http.ResponseWriter, r *http.Request, a accountCtx) *store.Player {
+	token := strings.TrimPrefix(r.URL.Path, "/api/characters/")
+	if token == "" || strings.Contains(token, "/") {
+		http.Error(w, "no such character", http.StatusNotFound)
+		return nil
+	}
+	row, err := h.Store.GetPlayer(r.Context(), token)
+	if err != nil {
+		http.Error(w, "character lookup failed", http.StatusInternalServerError)
+		return nil
+	}
+	if row == nil || row.AccountID != a.id {
+		http.Error(w, "no such character", http.StatusNotFound)
+		return nil
+	}
+	return row
+}
+
+// editCharacter changes name and/or hair with create's rules; an omitted
+// or empty field is unchanged, and a character may keep (or re-case) its
+// own name. The body never changes.
+func (h *Handler) editCharacter(w http.ResponseWriter, r *http.Request, a accountCtx) {
+	var req struct {
+		Name string `json:"name"`
+		Hair string `json:"hair"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	row := h.ownCharacter(w, r, a)
+	if row == nil {
+		return
+	}
+	ctx := r.Context()
+	name, hair := row.Name, row.Hair
+	if req.Name != "" {
+		name = server.SanitizeName(req.Name, 0)
+		if !nameOK(name) || (name == server.SanitizeName("", 0) && strings.TrimSpace(req.Name) != name) {
+			http.Error(w, "bad name", http.StatusBadRequest)
+			return
+		}
+	}
+	if req.Hair != "" {
+		if !hairs[req.Hair] {
+			http.Error(w, "bad hair", http.StatusBadRequest)
+			return
+		}
+		hair = req.Hair
+	}
+	if !strings.EqualFold(name, row.Name) {
+		taken, err := h.Store.CharacterNameTaken(ctx, name)
+		if err != nil {
+			http.Error(w, "name check failed", http.StatusInternalServerError)
+			return
+		}
+		if taken {
+			http.Error(w, "name taken", http.StatusConflict)
+			return
+		}
+	}
+	if err := h.Store.EditCharacter(ctx, row.Token, name, hair); err != nil {
+		if errors.Is(err, store.ErrNameTaken) { // the index caught a racing edit
+			http.Error(w, "name taken", http.StatusConflict)
+			return
+		}
+		http.Error(w, "edit failed", http.StatusInternalServerError)
+		return
+	}
+	if h.Retag != nil {
+		h.Retag(row.Token, name, hair)
+		// A live save that snapshotted the old row may have landed after
+		// the edit; Retag waited it out, so write the edit once more.
+		if err := h.Store.EditCharacter(ctx, row.Token, name, hair); err != nil {
+			log.Printf("web: edit sweep: %v", err)
+		}
+	}
+	got, err := h.Store.GetPlayer(ctx, row.Token)
+	if err != nil || got == nil {
+		http.Error(w, "character lookup failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, viewCharacter(*got))
+}
+
+// deleteCharacter removes one owned character and kicks a live session of
+// it the way an account delete does; the account's other characters stay.
+func (h *Handler) deleteCharacter(w http.ResponseWriter, r *http.Request, a accountCtx) {
+	row := h.ownCharacter(w, r, a)
+	if row == nil {
+		return
+	}
+	if err := h.Store.DeletePlayer(r.Context(), row.Token); err != nil {
+		http.Error(w, "delete failed", http.StatusInternalServerError)
+		return
+	}
+	if h.Kick != nil {
+		h.Kick([]string{row.Token})
+		// A save in flight when the delete committed can re-INSERT the
+		// row; Kick waited it out, so sweep once more.
+		if err := h.Store.DeletePlayer(r.Context(), row.Token); err != nil {
+			log.Printf("web: character delete sweep: %v", err)
+		}
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // nameOK is the character-name rule after SanitizeName: 3–16 runes of
