@@ -89,7 +89,7 @@ COLONIST_FACE_F = {
 # Head-weighted decimation (`lod` variants): the decimator's vertex-group
 # factor makes collapsing a head edge this much costlier than a torso one;
 # hands sit between (they fill the first-person view).
-HEAD_TRIS = 3450   # the face's share of BUDGET (head + neck, before eyeballs and brows)
+HEAD_TRIS = 4050   # the face's share of BUDGET (head + neck, before eyeballs); +600 since the brows are painted
 LOD_WEIGHT = {"feature": 0.05, "ear": 0.04, "head": 0.2, "hand": 0.6}   # lower = kept; 0 would lock a vertex outright
 BUDGET = 9000      # body + arms + head for a `lod` variant (the Vanguard's ceiling)
 
@@ -103,19 +103,20 @@ VARIANTS = {
     # The Colonist v2 (GDD "Faces and hair"): a slimmer, shorter build than
     # the Vanguard (eyes at 1.65), most of the 9000-tri budget spent on the
     # face (head-weighted decimation, `lod`), modest bone structure from
-    # MakeHuman's face targets, Quaternius eyebrows refitted to the brow.
+    # MakeHuman's face targets, eyebrows painted into the skin (skin.BROW_*).
     # Bald: hair is its own piece (tools/bpy/hair.py).
     "char.player": {
         "macro": {"muscle": 0.40, "weight": 0.45, "proportions": 0.75, "age": 0.5},
         "targets": dict(COLONIST_FACE, **{"torso/measure-shoulder-dist-decr": 0.45, "torso/torso-vshape-decr": 0.25}),
-        "eye": 1.65, "hair": False, "brows": "Eyebrows_Female", "brow_liner": False, "brow_thick": 1.4, "brow_lift": 0.005,
-        "brow_flat": 0.0015, "brow_tilt": 0.0, "brow_clamp": True, "lod": True,
+        "eye": 1.65, "hair": False, "lod": True,
+        "paint_brows": skinpaint.BROW_M,
         "materials": {"skin": (0.78, 0.58, 0.46), "eye": (0.44, 0.32, 0.21)},
     },
     "char.player.f": {                         # the player body, female (GDD "Bodies": COLONIST F)
         "macro": {"gender": 0.0, "muscle": 0.38, "weight": 0.42, "proportions": 0.8, "age": 0.5},
         "targets": dict(COLONIST_FACE_F, **{"torso/measure-shoulder-dist-decr": 0.25}),
-        "eye": 1.65, "hair": False, "brows": "Eyebrows_Female", "brow_liner": False, "brow_flat": 0.0015, "brow_clamp": True, "lod": True,
+        "eye": 1.65, "hair": False, "lod": True,
+        "paint_brows": skinpaint.BROW_F,
         "materials": {"skin": (0.80, 0.60, 0.48), "eye": (0.42, 0.46, 0.28)},
     },
     "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
@@ -248,8 +249,8 @@ def ubc_human():
         h.data.uv_layers.remove(h.data.uv_layers[name])
     h.data.uv_layers.active = h.data.uv_layers[keep]
     # The pack's eyebrows: greyscale strands the pack tints in its own
-    # shader (white when drawn raw). Same tinted `hair` material as the
-    # Colonist's brows and every hair piece, so a helmet hides them alike.
+    # shader (white when drawn raw). Same tinted `hair` material as every
+    # hair piece, so a helmet hides them alike.
     for i, m in enumerate(h.data.materials):
         if m and m.name.startswith("MI_Hair"):
             tex = next(n.image for n in m.node_tree.nodes if n.type == "TEX_IMAGE" and n.image and "Normal" not in n.image.name)
@@ -311,7 +312,7 @@ def ubc_human():
     return h, rig, eyes
 
 
-# ---- refitting Quaternius head pieces (brows here, hair in hair.py) ------------
+# ---- refitting Quaternius head pieces (hair; used by hair.py) -----------------
 HAIR_DIR = os.path.join(UBC, "Hairstyles", "Rigged to Head Bone", "glTF (Godot -Unreal)")
 UBC_BODY = {"m": "Superhero_Male_FullBody", "f": "Superhero_Female_FullBody"}
 HAIR_TINT = (0.60, 0.45, 0.32)      # display colour multiplied into the pack's greyscale strand texture
@@ -465,139 +466,6 @@ def refit(obj, src_bvh, dst_bvh, place, k, reach=None, gap=0.0008, smooth=6):
     me.update()
 
 
-BROW_SCALE = 0.92      # the pack's brows are heavy for a MakeHuman face
-BROW_LIFT = 0.006      # m: a MakeHuman eye is smaller than UBC's; on the eye line the brows scowled
-BROW_ARCH = 0.06       # extra lift per metre inside 5 cm of the nose line
-BROW_THIN = 0.85       # and tall: squash them toward the brow line
-BROW_TILT = 0.04       # m per m outward: the outer ends lowered, so the brows sit level
-BROW_TAIL = 0.35       # the outer tails thinned by this much at the tip
-
-
-def brow_width(pts, mid):
-    """Half-width of the forehead 2-4 cm above the eyes, front half."""
-    band = [p for p in pts if 0.02 < p.z - mid.z < 0.04 and p.y > mid.y - 0.03]
-    return max(abs(p.x - mid.x) for p in band)
-
-
-def brow_tris():
-    name = ACTIVE.get("brows")
-    if not name:
-        return 0
-    n = {"Eyebrows_Regular": 984, "Eyebrows_Female": 1480}[name]
-    if ACTIVE.get("brow_liner") is False:
-        n = 640                     # Eyebrows_Female less its eyeliner parts (measured)
-    return int(n * BROW_RATIO) + 8
-
-
-def fit_brows(head, eyes):
-    """Quaternius eyebrows on a MakeHuman brow: scaled by the eyes' spacing
-    and moved onto the eyes' midpoint, then every vertex keeps the height it
-    had above the UBC skin, measured now above THIS skin (nearest point and
-    normal), so the strips lie on the brow ridge whatever its shape. Joined
-    into `head` (the local player's hidden mesh) on the head bone, material
-    `hair` so a helmet's `covers: head/hair` hides them."""
-    name = ACTIVE["brows"]
-    src_bvh, src_eyes, src_pts = ubc_source("f" if "Female" in name else "m")
-    dst_bvh, dst_eyes, dst_pts = head_target(head, eyes)
-    brow, tex = import_piece(name)
-    bpy.context.view_layer.objects.active = brow
-    dc = brow.modifiers.new("dec", "DECIMATE")
-    dc.ratio = BROW_RATIO
-    bpy.ops.object.modifier_apply(modifier=dc.name)
-    ms, md = (src_eyes[0] + src_eyes[1]) / 2, (dst_eyes[0] + dst_eyes[1]) / 2
-    k = (dst_eyes[1] - dst_eyes[0]).length / (src_eyes[1] - src_eyes[0]).length
-    # Across, by the brow's own width on each face (the forehead at brow
-    # height, front half): eye spacing alone left the tails past a
-    # MakeHuman temple, and the lift then stood them up off the skull.
-    kx = brow_width(dst_pts, md) / brow_width(src_pts, ms) * BROW_SCALE
-    S = Vector((kx, k * BROW_SCALE, k * BROW_SCALE * BROW_THIN * ACTIVE.get("brow_thick", 1.0)))
-    if ACTIVE.get("brow_liner") is False:
-        # Eyebrows_Female carries eyeliner wings as loose parts on the eye
-        # line: drop every part that does not reach above the eyes.
-        bm = bmesh.new()
-        bm.from_mesh(brow.data)
-        seen, doomed = set(), []
-        for v0 in bm.verts:
-            if v0 in seen:
-                continue
-            part, stack = [], [v0]
-            seen.add(v0)
-            while stack:
-                v = stack.pop()
-                part.append(v)
-                for e in v.link_edges:
-                    o = e.other_vert(v)
-                    if o not in seen:
-                        seen.add(o)
-                        stack.append(o)
-            if max(v.co.z for v in part) < ms.z + 0.012:
-                doomed += part
-        bmesh.ops.delete(bm, geom=doomed, context="VERTS")
-        bm.to_mesh(brow.data)
-        bm.free()
-        print(f"brows: dropped {len(doomed)} liner vertices")
-    def place0(co):
-        p = Vector(a * b for a, b in zip(co - ms, S)) + md
-        # Up, and the inner ends a little more: on a MakeHuman eye the pack's
-        # brows sat on the eye line and scowled.
-        p.z += ACTIVE.get("brow_lift", BROW_LIFT) + BROW_ARCH * max(0.0, 0.05 - abs(p.x - md.x))
-        return p
-    # Level them (the pack's brows slope down to the nose: stern) and thin
-    # the outer tails toward each brow's midline.
-    placed = [place0(v.co) for v in brow.data.vertices]
-    ax = [abs(p.x - md.x) for p in placed]
-    inner, outer = min(ax), max(ax)
-    bins = {}
-    for a, p in zip(ax, placed):
-        bins.setdefault(int(a / 0.003), []).append(p.z)
-    mid_z = {k: sum(v) / len(v) for k, v in bins.items()}
-    top_z = {k: max(v) for k, v in bins.items()}
-    half = sorted((max(v) - min(v)) / 2 for v in bins.values())[len(bins) // 2]   # median half-thickness
-    def place(co):
-        p = place0(co)
-        a = abs(p.x - md.x)
-        t = max(0.0, min(1.0, (a - inner) / (outer - inner)))
-        zm = mid_z.get(int(a / 0.003), p.z)
-        p.z = zm + (p.z - zm) * (1 - ACTIVE.get("brow_tail", BROW_TAIL) * t ** 1.5)
-        p.z -= ACTIVE.get("brow_tilt", BROW_TILT) * (a - inner)
-        p.z += ACTIVE.get("brow_flat", 0.0) * (1 - t) ** 2      # straighten the arch: inner end up
-        if ACTIVE.get("brow_clamp"):
-            # The inner end hooks down toward the nose: hold every vertex
-            # within the brow's median thickness under its top edge.
-            top = top_z.get(int(a / 0.003), p.z) + ACTIVE.get("brow_flat", 0.0) * (1 - t) ** 2 \
-                - ACTIVE.get("brow_tilt", BROW_TILT) * (a - inner)
-            p.z = max(p.z, top - 1.8 * half * (1 - 0.5 * ACTIVE.get("brow_tail", BROW_TAIL) * t ** 1.5))
-        return p
-    cut = ACTIVE.get("brow_cut")
-    if cut:
-        # The male pack brow ends in an upturned clump at the temple: trim it.
-        bm = bmesh.new()
-        bm.from_mesh(brow.data)
-        bmesh.ops.delete(bm, geom=[v for v, a in zip(bm.verts, ax) if a > inner + cut * (outer - inner)], context="VERTS")
-        bm.to_mesh(brow.data)
-        bm.free()
-    refit(brow, src_bvh, dst_bvh, place, k, gap=0.0015)   # 0.8 mm let the skin show through in patches
-    pts = [v.co.copy() for v in brow.data.vertices]
-    print("brow tris", sum(len(p.vertices) - 2 for p in brow.data.polygons))
-    brow.data.materials.clear()
-    brow.data.materials.append(hair_material(tex))
-    g = brow.vertex_groups.new(name="head")
-    g.add([v.index for v in brow.data.vertices], 1.0, "REPLACE")
-    # Join: the head's slot "hair" (unused on a bald head) becomes the brows'.
-    for i, m in enumerate(head.data.materials):
-        if m and m.name.startswith("hair") and m is not brow.data.materials[0]:
-            head.data.materials[i] = brow.data.materials[0]
-    if "UVMap" not in head.data.uv_layers:
-        head.data.uv_layers.active.name = "UVMap"
-    bpy.ops.object.select_all(action="DESELECT")
-    brow.select_set(True)
-    head.select_set(True)
-    bpy.context.view_layer.objects.active = head
-    bpy.ops.object.join()
-    bpy.ops.object.shade_smooth()
-    return pts
-
-
 def make_human(decimate=True):
     if ACTIVE.get("ubc"):
         return ubc_human()      # ponytail: no decimation, ~14k tris; decimate if the budget holds after the look is judged
@@ -723,11 +591,11 @@ def paint_skin(h, eyes, rig):
             for j, r in (("01", 0.012), ("02", 0.008), ("03", 0.006)):
                 knuckles.append((tuple(pb(rig, f"{f}_{j}_{side}").matrix.translation), tuple(dorsal), r))
     skinpaint.paint(h, eyes, eye_r(), base, female, skin_faces(h, eyes), ACTIVE["_eyeball"],
-                    glove, ACTIVE.get("materials", {}).get("glove", MATERIALS["glove"][0]), knuckles)
+                    glove, ACTIVE.get("materials", {}).get("glove", MATERIALS["glove"][0]), knuckles,
+                    brow=ACTIVE.get("paint_brows"))
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres
-BROW_RATIO = 1.0                               # the pack's brows are dense strips; this keeps their shape
 
 
 def lod_decimate(h, eyes):
@@ -736,7 +604,7 @@ def lod_decimate(h, eyes):
     distance took eyelid faces with them at head resolution), then one
     collapse pass where a vertex group makes head edges LOD_FACTOR times
     costlier to collapse than torso ones, hands in between. The total lands
-    on BUDGET less what the eyeballs and brows will add."""
+    on BUDGET less what the eyeballs will add."""
     bm = bmesh.new()
     bm.from_mesh(h.data)
     doomed = [f for f in bm.faces if min((f.calc_center_median() - e).length for e in eyes) < eye_r() + 0.001]
@@ -756,8 +624,7 @@ def lod_decimate(h, eyes):
         elif part == "head" and any(x.group == ears and x.weight > 0.3 for x in v.groups):
             part = "ear"
         g.add([v.index], LOD_WEIGHT.get(part, 1.0), "REPLACE")
-    brows = brow_tris()
-    want = BUDGET - EYEBALL_TRIS - brows - 40
+    want = BUDGET - EYEBALL_TRIS - 40
     tris = sum(len(p.vertices) - 2 for p in h.data.polygons)
 
     def collapse(obj, factor):
@@ -793,7 +660,7 @@ def lod_decimate(h, eyes):
         if name in h.vertex_groups:
             h.vertex_groups.remove(h.vertex_groups[name])
     collar(h, eyes[0])
-    print(f"LOD {tris} -> {sum(len(p.vertices) - 2 for p in h.data.polygons)} tris (want {want}, brows {brows}), head {head_tris(h)}")
+    print(f"LOD {tris} -> {sum(len(p.vertices) - 2 for p in h.data.polygons)} tris (want {want}), head {head_tris(h)}")
 
 
 def smooth_ears(h):
@@ -1712,10 +1579,6 @@ def build():
     h, rig, (eye_l, eye_r) = make_human()
     dress(h, eye_l, eye_r)
     parts = split(h)
-    if ACTIVE.get("brows"):
-        brow_pts = fit_brows(parts["head"], (eye_l, eye_r))
-        if ACTIVE.get("lod"):
-            skinpaint.brow_shadow(parts["head"], brow_pts, material("skin"))
     if ACTIVE.get("lod"):
         skinpaint.finish_glove(material("glove"), TEX_DIR, ACTIVE["_id"])
         skinpaint.finish(parts["head"], material("skin"), TEX_DIR, ACTIVE["_id"])
