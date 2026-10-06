@@ -64,7 +64,7 @@ stage_art() {
 import json, os, shutil, sys
 out = sys.argv[1]
 d = json.load(open("manifest.json"))
-files = [a["file"] for a in d["assets"]]
+files = [a["file"] for a in d["assets"] if a.get("file")]  # a fileless row (hair.none) stages nothing
 missing = [f for f in files if not os.path.exists(f)]
 for f in files:
     if os.path.exists(f):

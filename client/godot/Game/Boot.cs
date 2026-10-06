@@ -667,7 +667,7 @@ namespace SpaceAdventure.Game
         private CharactersView _charsView;
         private CanvasLayer _charsLayer;
         private CharacterStage _stage;
-        private string _stageBody;
+        private string _stageBody, _stageHair;
         private bool _selectUp;
         private bool _createBusy;
         /// <summary>The session came from the select: a 1008 before the first snapshot returns there.</summary>
@@ -693,7 +693,7 @@ namespace SpaceAdventure.Game
             root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             _charsLayer.AddChild(root);
             // Positional, in the contract's order: play, new, create, cancel,
-            // sign out, retry, select, name, female, vanguard.
+            // sign out, retry, select, name, female, vanguard, hair prev, hair next.
             _charsView = new CharactersView(root,
                 PlaySelected,
                 () => _chars.NewCharacter(),
@@ -704,24 +704,28 @@ namespace SpaceAdventure.Game
                 i => _chars.Select(i),
                 n => _chars.SetName(n),
                 f => _chars.SetFemale(f),
-                v => _chars.SetVanguard(v));
+                v => _chars.SetVanguard(v),
+                () => _chars.PrevHair(),
+                () => _chars.NextHair());
             _charsView.Show(true);
             _stage = new CharacterStage(this, _assets);
-            _stageBody = null;
+            _stageBody = _stageHair = null;
             _selectUp = true;
             GD.Print("select: open");
             if (!fake) _ = LoadCharacters();
         }
 
-        /// <summary>The select's frame: the model onto the view, the stage turning, its body following the model.</summary>
+        /// <summary>The select's frame: the model onto the view, the stage turning, its body and hair following the model.</summary>
         private void SelectFrame(double dt)
         {
             _charsView.Set(_chars);
             string body = _chars.StageBody ?? "";   // "" = the empty stage (Loading, Failed)
-            if (body != _stageBody)
+            string hair = _chars.StageHair ?? "";
+            if (body != _stageBody || hair != _stageHair)
             {
                 _stageBody = body;
-                _stage.Show(body == "" ? null : StageAsset(body));
+                _stageHair = hair;
+                _stage.Show(body == "" ? null : StageAsset(body), hair == "" ? null : hair);
             }
             _stage.Frame(dt);
             // Rig: -uiSelectPlay <s> presses PLAY in the select once a row is
@@ -826,11 +830,12 @@ namespace SpaceAdventure.Game
             Token = (string)r["token"] ?? "",
             Name = (string)r["name"] ?? "",
             Body = string.IsNullOrEmpty((string)r["body"]) ? "char.player" : (string)r["body"],
+            Hair = string.IsNullOrEmpty((string)r["hair"]) ? "hair.none" : (string)r["hair"],   // an old server sends none
             Credits = (long?)r["credits"] ?? 0,
             LastSeenMs = (long?)r["last_seen_ms"] ?? 0,
         };
 
-        /// <summary>CREATE: POST /api/characters {name, body}; 200 lists and selects it, 400/409 show the server's reason.</summary>
+        /// <summary>CREATE: POST /api/characters {name, body, hair}; 200 lists and selects it, 400/409 show the server's reason.</summary>
         private async System.Threading.Tasks.Task CreateCharacter()
         {
             if (_createBusy || !_chars.CanCreate) return;
@@ -843,6 +848,7 @@ namespace SpaceAdventure.Game
                 {
                     ["name"] = chars.Name,
                     ["body"] = Characters.BodyId(chars.Female, chars.Vanguard),
+                    ["hair"] = chars.Hair,
                 }.ToString(Newtonsoft.Json.Formatting.None);
                 using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
                 using HttpRequestMessage req = AccountRequest(HttpMethod.Post, site + "/api/characters", json, Identity("session"));
@@ -858,7 +864,7 @@ namespace SpaceAdventure.Game
                 }
                 CharacterRow row = ParseRow(Newtonsoft.Json.Linq.JObject.Parse(text));
                 chars.Created(row);
-                GD.Print($"select: created {row.Name} ({row.Body})");
+                GD.Print($"select: created {row.Name} ({row.Body}, {row.Hair})");
             }
             catch (Exception e)
             {
@@ -913,9 +919,9 @@ namespace SpaceAdventure.Game
             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var rows = new List<CharacterRow>
             {
-                new CharacterRow { Token = "fake-kade", Name = "Kade", Body = "char.ubc.f", Credits = 1240, LastSeenMs = now - 2 * 3_600_000L },
-                new CharacterRow { Token = "fake-tam", Name = "Tam", Body = "char.player", Credits = 300, LastSeenMs = now - 3 * 86_400_000L },
-                new CharacterRow { Token = "fake-vex", Name = "Vex", Body = "char.player.f", Credits = 5, LastSeenMs = now },
+                new CharacterRow { Token = "fake-kade", Name = "Kade", Body = "char.ubc.f", Hair = "hair.long", Credits = 1240, LastSeenMs = now - 2 * 3_600_000L },
+                new CharacterRow { Token = "fake-tam", Name = "Tam", Body = "char.player", Hair = "hair.buzzed", Credits = 300, LastSeenMs = now - 3 * 86_400_000L },
+                new CharacterRow { Token = "fake-vex", Name = "Vex", Body = "char.player.f", Hair = "hair.buns", Credits = 5, LastSeenMs = now },
             };
             switch (state)
             {
@@ -926,6 +932,7 @@ namespace SpaceAdventure.Game
                     _chars.SetName("Ka");
                     _chars.SetFemale(true);
                     _chars.SetVanguard(true);
+                    _chars.SetHair(Arg("-uiHair") ?? "hair.buns");   // -uiHair <id>: the form's hair for a shot
                     break;
                 case "empty": _chars.Loaded(new List<CharacterRow>()); break;
                 case "loading": break;
@@ -1828,7 +1835,7 @@ namespace SpaceAdventure.Game
                             {
                                 string slot = data.Substring(0, eq), item = data.Substring(eq + 1);
                                 _views.OnWorn(ev.EntityId, slot, item);
-                                if (ev.EntityId == _net.EntityId) _viewModel.Wear(slot, string.IsNullOrEmpty(item) ? "" : _views.Defs.ItemAsset(item));
+                                if (ev.EntityId == _net.EntityId) _viewModel.Wear(slot, string.IsNullOrEmpty(item) ? "" : EntityViews.WornAsset(_views.Defs, item));
                             }
                             break;
                         }
@@ -2649,6 +2656,38 @@ namespace SpaceAdventure.Game
             Check("chars: Fail is Failed, PLAY dark", cf.Now == Characters.State.Failed && !cf.CanPlay && cf.Reason == "COULD NOT LOAD CHARACTERS · retry");
             foreach (var (female, vanguard, id) in new[] { (false, false, "char.player"), (true, false, "char.player.f"), (false, true, "char.ubc"), (true, true, "char.ubc.f") })
                 Check($"chars: BodyId/ParseBody round-trip {id}", Characters.BodyId(female, vanguard) == id && Characters.ParseBody(id) == (female, vanguard));
+            // Phase 17: the HAIR row (GDD "Faces and hair").
+            var hr = new Characters();
+            hr.Loaded(new List<CharacterRow>
+            {
+                new CharacterRow { Token = "t-k", Name = "Kade", Body = "char.ubc.f", Hair = "hair.long" },
+                new CharacterRow { Token = "t-t", Name = "Tam", Body = "char.player", Hair = "hair.none" },
+            });
+            Check("chars: StageHair in List is the selected row's", hr.StageHair == "hair.long");
+            hr.Select(1);
+            Check("chars: StageHair follows Select", hr.StageHair == "hair.none");
+            hr.NewCharacter();
+            Check("chars: NewCharacter's hair is the first real style, staged",
+                hr.Hair == Characters.HairStyles[1].id && hr.Hair == "hair.buzzed" && hr.StageHair == "hair.buzzed");
+            hr.NextHair();
+            Check("chars: NextHair steps BUZZED → BUZZED F", hr.Hair == "hair.buzzed_female" && Characters.HairLabel(hr.Hair) == "BUZZED F");
+            hr.PrevHair(); hr.PrevHair();
+            Check("chars: PrevHair steps back to NONE", hr.Hair == "hair.none" && Characters.HairLabel(hr.Hair) == "NONE");
+            hr.PrevHair();
+            Check("chars: PrevHair wraps NONE → BEARD", hr.Hair == "hair.beard");
+            hr.NextHair();
+            Check("chars: NextHair wraps BEARD → NONE", hr.Hair == "hair.none");
+            for (int i = 0; i < Characters.HairStyles.Length; i++) hr.NextHair();
+            Check("chars: a full lap of NextHair comes home", hr.Hair == "hair.none");
+            hr.SetHair("hair.long");
+            hr.Cancel();
+            Check("chars: Cancel stages the row's hair again", hr.StageHair == "hair.none");
+            hr.NewCharacter();
+            Check("chars: NewCharacter resets the hair", hr.Hair == "hair.buzzed");
+            hr.CreateFailed(400, "bad hair");
+            Check("chars: CreateFailed(400, bad hair) is BAD HAIR, still Create", hr.Reason == "BAD HAIR" && hr.Now == Characters.State.Create);
+            Check("chars: a hair slot's item is its own asset, armor goes through items.json",
+                EntityViews.WornAsset(Defs.Empty, "hair.buns") == "hair.buns" && EntityViews.WornAsset(Defs.Empty, "armor.helmet.scout") == "");
             Check("chars: a player spawn's data splits on the first NUL",
                 EntityViews.SplitPlayerData("Kade\0char.ubc.f") == ("Kade", "char.ubc.f") && EntityViews.SplitPlayerData("Tam") == ("Tam", null));
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));

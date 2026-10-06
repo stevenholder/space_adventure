@@ -1788,9 +1788,15 @@ one-player rule. Those rows stay in QA-STATUS as history.
 
 # Phase 17 — faces and hair (2026-10-06)
 
-### Where Phase 17 stands (2026-10-06)
+### Where Phase 17 stands (2026-10-06, built)
 
-Drafted; the art loop is running on `art/human-v2`. The user's call
+Built on `art/human-v2`: Colonist v2 (8915 / 8887 tris, eye 1.65,
+Quaternius brows), armor rebuilt for both, six hair styles × four heads
+worn as slot `hair`, migration 006, the HAIR row. C161–C165 recorded
+(docs/QA-STATUS.md "Phase 17"); t28 51 strict / 50 guests. Owed: eyes on
+the Windows install, a helmet over hair on a second client. Known: the
+Colonist's skin is a flat colour beside the UBC's painted face (a texture
+pass is the next art loop), the brows read stern. The user's call
 (2026-10-06): the Colonist bodies look a class below the Vanguard ones;
 make them higher quality but still different — less muscular, a little
 shorter, more face (brow, bone structure, eyebrows) — and make the

@@ -727,3 +727,19 @@ and a second client seeing both bodies.
 Pre-existing, not this phase: `-selftest` logs a `NullReferenceException` from
 `RunFrame` after `Quit` (`_hudView.SetBanner` with no HUD built); rc stays 0;
 reproduced on main before any Phase 16 change.
+
+# Phase 17 — faces and hair (2026-10-06)
+
+The art loop (Blender/MPFB2, render sheets each round) then one wave of
+server + client + harness. Headless proofs against a strict bare server
+(SQLite, `SA_STRICT=1`) and kind (`SA_GUESTS=1`, migration 006 applied),
+sheets and in-game shots looked at. Owed to the Windows install: the
+Colonist seen up close in play, a helmet over hair on a second client.
+
+| # | Result | Evidence |
+|---|---|---|
+| C161 | PASS (sheets; eyes owed) | `char.player` 8915 tris (head 4960, face skin ~3400), `char.player.f` 8887 (head 5442) — under the Vanguard's 9000; eyes at 1.65 (the UBC bodies stay 1.70); macros muscle 0.40/0.38, weight 0.45/0.42, shoulders narrowed, brow/cheek/chin/nose targets; Quaternius eyebrow meshes merged into `head`. Sheets beside the Vanguard at one scale: `tmp/v2/r7_mf.png` (both Colonists), `r3_m.png`, `r6_f.png`, face close-ups `r3_face.png`; `verify.mjs` 278/278 with every clip, mount and mesh contract; `-rigArmed` first-person shot (`tmp/p17-fp-armed.png`) frames the weapon as before with the 5 cm lower eye; Bulwark on both (`r8_bulwark_{m,f}.png`), no new FITS rule needed. **Known:** flat single-colour skin beside the UBC's painted face; brows read stern; the look-down view's torso shards are inherited (A/B with main's glb identical) |
+| C162 | PASS (sheets + code path; helmet live owed) | `hair.py`: 6 styles × 5 fits (`@char.player`, `@char.player.f`, `@char.ubc`, `@char.ubc.f`, base), one mesh `hair`, material `hair`, head-bone weights only, ≤ 1490 tris, ≥ 2 mm off the skin, fitted to each finished head; sheets `tmp/v2/h3_{player,player_f,ubc,ubc_f}.png`; `hair.none` = fileless manifest row. The UBC bodies no longer carry built-in hair. Helmets `covers: hair/hair` + body `surfaces.hair` → `Cover()` hides the piece (code + manifest read; `h4_helmet.png` shows what it must remove). Live on kind: a Colonist F with `hair.long` on the stage (`tmp/p17-live-select-colonist-hair.png`), hair turning with the turntable (`test/out/ui/p17-chars-create-hair-long-t8.png`) |
+| C163 | PASS | `TestCharacterHair`, `TestHairsMatchManifest` (the Go table equals the manifest's `hair.*` ids), `TestSpawn_HairWornFrame` (the very next frame after the spawn on own, peer and later-joiner sockets; none for `hair.none` or a guest), `TestHairIsNotAnEquipSlot`; `t28` **51 strict / 50 guests** (+10 C163 checks: omitted → `hair.none`, reply + list carry it, `hair.nope` 400, `hair.long` on a Colonist 200, the worn frame right after the spawn on all three sockets, exactly once each, none for the bald character or the guest); 50/50 on kind |
+| C164 | PASS | `test/out/ui/p17-chars-create-hair-{long,buns,none}.png`: the HAIR row `◀ LONG ▶` under MODEL, the stage following (none = bald, brows only); `p17-chars-select-hair.png`: Kade with long hair, the list row still `VANGUARD · F`; `-selftest` +13 `chars:` checks (Next/Prev wrap, default, StageHair, BAD HAIR); kind: create with `hair.long` → `-uiPlayReal 3 -uiSelectPlay 6` → `select: play Hair 1189 (char.player.f)` → `world ready` |
+| C165 | PASS | Go vet/test (+ `-race`), `make test-pg`, `npm --prefix art test` 278/278, `dotnet build` 0 warnings, gate/test/codec/conformance, t13, t35, `-selftest`, export 261 MB (the staging script now skips a fileless manifest row) + packaged join; kind t28 50/50; the local body hides `hair` with `head` (`Dress` local rule) and the first-person arms never hang it; C153–C160 re-walked by the same t28 run |

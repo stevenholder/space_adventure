@@ -776,6 +776,22 @@ func playerSpawnData(e *entity) []byte {
 	return []byte(e.Name + "\x00" + e.Body)
 }
 
+// slotHair is the `worn` slot a character's hair rides (GDD "Faces and
+// hair (Phase 17)"). It is not an equipment slot: not in wornSlots, not in
+// items.json equip_slots, so no equip cmd can set or clear it, and nothing
+// that walks the armor slots ever touches it.
+const slotHair = "hair"
+
+// hairFrame is the `worn` event for e's hair, nil for a guest or a bald
+// (hair.none) character. Sent right after every spawn row of e, the way an
+// NPC's worn pieces follow its spawn.
+func hairFrame(e *entity) []byte {
+	if e.Hair == "" || e.Hair == store.DefaultHair {
+		return nil
+	}
+	return wornFrame(e.ID, slotHair, e.Hair)
+}
+
 // join registers c as a new player: allocates the entity and identity,
 // enqueues the join handshake (hello_ack, terrain, defs, colliders, spawn
 // for every existing entity, spawn for self), then publishes c to the world
@@ -851,11 +867,11 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	s.nextID++
 	id := s.nextID
 	c.id = id
-	name, body := SanitizeName(h.Name, id), ""
+	name, body, hair := SanitizeName(h.Name, id), "", ""
 	if owned {
 		// A character is named by its row; hello.name is a guest's say.
 		// Sanitized at creation already — again here, the row is input too.
-		name, body = SanitizeName(row.Name, id), row.Body
+		name, body, hair = SanitizeName(row.Name, id), row.Body, row.Hair
 	}
 	spawnState := s.clearSpawn(0)
 	c.entity = &entity{
@@ -864,6 +880,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		State:  spawnState,
 		Health: s.reg.Entities["player"].MaxHealth,
 		Body:   body,
+		Hair:   hair,
 	}
 	c.entity.PrevLook = c.entity.State.Facing
 	// Vitals must start at full health. Zero-valued Vitals means Health 0, and
@@ -904,6 +921,9 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 			EntityType: protocol.EntityTypePlayer,
 			Data:       playerSpawnData(oc.entity),
 		})})
+		if f := hairFrame(oc.entity); f != nil {
+			others = append(others, msg{data: f})
+		}
 	}
 	s.mu.Unlock()
 
@@ -912,6 +932,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		EntityType: protocol.EntityTypePlayer,
 		Data:       playerSpawnData(c.entity),
 	})
+	selfHair := hairFrame(c.entity) // nil: no hair, nothing follows the spawn
 	c.send(msg{data: protocol.EncodeHelloAck(protocol.HelloAck{
 		ServerVer: protocol.VersionPhase2,
 		TickHz:    s.tickHz,
@@ -926,6 +947,9 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		c.send(m)
 	}
 	c.send(msg{data: self})
+	if selfHair != nil {
+		c.send(msg{data: selfHair})
+	}
 
 	// Publish, then tell the existing clients a body appeared.
 	s.mu.Lock()
@@ -942,6 +966,9 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	for _, oc := range s.clients {
 		if oc != c {
 			oc.send(msg{data: self})
+			if selfHair != nil {
+				oc.send(msg{data: selfHair})
+			}
 		}
 	}
 	s.mu.Unlock()

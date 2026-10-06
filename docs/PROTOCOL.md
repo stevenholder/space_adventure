@@ -217,6 +217,12 @@ Constants:
   cleared). Broadcast per changed slot, and replayed per worn slot when a
   client joins, exactly like `equipped`. The client resolves the model from
   the item's `asset` in `defs` and hangs it on the wearer's skeleton.
+  Slot `hair` (Phase 17) rides the same event with `item` a `hair.<style>`
+  id (not an item in `defs`; the client takes the id as the asset): sent
+  once, immediately after a character's `spawn` row — on its own socket,
+  to every peer, and after the join-time row a later joiner receives —
+  and never as a change; a character with `hair.none` sends none. It is
+  not an equip slot: an `equip` cmd naming it is `wrong_slot`.
   And `0x0010` `attack` (mob library, 2026-10-03) — `entity_id` is an NPC
   that has just begun an attack and `data` is `u32 target_id`; or (melee) a
   player whose swing the server accepted, with `target_id` 0. Sent once per

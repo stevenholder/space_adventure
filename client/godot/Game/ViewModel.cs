@@ -15,8 +15,9 @@
 //
 // THE BODY is the opposite: a real object at the player's feet on the normal
 // layer, so looking down shows your chest and legs where they are and other
-// players see exactly the same model. Its head, its arms, the armor on them
-// and its held weapon are shadows-only: the eye is inside the head and the
+// players see exactly the same model. Its head and the hair on it (the
+// `hair` worn slot, EntityViews.Dress), its arms, the armor on them and its
+// held weapon are shadows-only: the eye is inside the head and the
 // arms it should see are the first-person ones -- but the ground shadow
 // keeps all of them, so it holds the gun the way everyone else's does.
 

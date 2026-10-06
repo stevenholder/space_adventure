@@ -261,6 +261,7 @@ type charRow struct {
 	Token    string `json:"token"`
 	Name     string `json:"name"`
 	Body     string `json:"body"`
+	Hair     string `json:"hair"`
 	Credits  int64  `json:"credits"`
 	LastSeen int64  `json:"last_seen_ms"`
 }

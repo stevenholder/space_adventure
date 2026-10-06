@@ -1600,7 +1600,9 @@ same body, and gives every character a **hair** choice.
   else the pack's glTF folder holds), each fitted to each of the four
   heads and weighted to its head bone, built by `art/tools/bpy/hair.py`
   the way armor.py builds `<piece>@<body>`. Plus `hair.none`.
-- A character row carries `hair` (default `hair.none`; migration 006).
+- A character row carries `hair` (`hair.none` when omitted; migration 006;
+  the create form itself starts on `hair.buzzed` so a player who ignores
+  the row is not bald).
   `POST /api/characters {name, body, hair}`; `GET` returns it; 400 `bad
   hair` for an id not in the table. The create form gets a HAIR row that
   cycles the styles valid for the body (the stage swaps live); the list
