@@ -4,7 +4,8 @@
 //
 // Security posture, all enforced here:
 //   - sessions are HttpOnly SameSite=Strict cookies backed by web_session
-//     rows (revocable, restart-proof);
+//     rows (revocable, restart-proof); the game client gets the same row
+//     from game-login and sends it as a bearer (Phase 16);
 //   - every mutating route requires the X-Requested-With header, which a
 //     cross-site form cannot set (CSRF);
 //   - login and register ride a per-IP token bucket (its own small copy —
@@ -15,16 +16,21 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
+	"space-adventure/server/internal/server"
 	"space-adventure/server/internal/store"
 )
 
@@ -34,18 +40,27 @@ var siteFS embed.FS
 const (
 	sessionCookie  = "sa_session"
 	sessionTTL     = 30 * 24 * time.Hour
-	linkCodeTTL    = 10 * time.Minute
 	minPasswordLen = 8
+	maxCharacters  = 5
 )
 
+// bodies are the four model + gender ids a character may wear (GDD
+// "Characters").
+var bodies = map[string]bool{
+	store.DefaultBody: true, "char.player.f": true, "char.ubc": true, "char.ubc.f": true,
+}
+
 // Handler is the account site. Store is required; NewPlayer builds the
-// default player row for a freshly minted account token (the server owns
+// default player row for a freshly minted character (the server owns
 // what a new player starts with); Online reports live connections for the
 // landing page.
 type Handler struct {
 	Store     *store.Store
 	NewPlayer func(token, name string) store.Player
 	Online    func() int
+	// Kick drops live sessions of deleted characters so their saves cannot
+	// re-create the rows (server.Kick). Nil: no game server in-process.
+	Kick func(tokens []string)
 
 	mu   sync.Mutex
 	rate map[string]*loginBucket
@@ -66,13 +81,12 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats", h.stats)
 	mux.HandleFunc("/api/register", h.mutating(h.limited(h.register)))
 	mux.HandleFunc("/api/login", h.mutating(h.limited(h.login)))
+	mux.HandleFunc("/api/game-login", h.mutating(h.limited(h.gameLogin))) // the launcher
 	mux.HandleFunc("/api/logout", h.mutating(h.withAccount(h.logout)))
 	mux.HandleFunc("/api/me", h.withAccount(h.me))
-	mux.HandleFunc("/api/link-code", h.mutating(h.withAccount(h.linkCode)))
-	mux.HandleFunc("/api/import-token", h.mutating(h.withAccount(h.importToken)))
+	mux.HandleFunc("/api/characters", h.characters)
 	mux.HandleFunc("/api/password", h.mutating(h.withAccount(h.password)))
 	mux.HandleFunc("/api/delete", h.mutating(h.withAccount(h.deleteAccount)))
-	mux.HandleFunc("/api/redeem", h.mutating(h.redeem)) // the game client; no session
 }
 
 // ---- middleware ------------------------------------------------------------
@@ -127,12 +141,17 @@ func (h *Handler) limited(next http.HandlerFunc) http.HandlerFunc {
 
 func (h *Handler) withAccount(next func(http.ResponseWriter, *http.Request, accountCtx)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie(sessionCookie)
-		if err != nil || c.Value == "" {
+		sid := bearer(r)
+		if sid == "" {
+			if c, err := r.Cookie(sessionCookie); err == nil {
+				sid = c.Value
+			}
+		}
+		if sid == "" {
 			http.Error(w, "not logged in", http.StatusUnauthorized)
 			return
 		}
-		accountID, err := h.Store.GetSession(r.Context(), c.Value, time.Now().UnixMilli())
+		accountID, err := h.Store.GetSession(r.Context(), sid, time.Now().UnixMilli())
 		if err != nil {
 			http.Error(w, "session lookup failed", http.StatusInternalServerError)
 			return
@@ -141,8 +160,19 @@ func (h *Handler) withAccount(next func(http.ResponseWriter, *http.Request, acco
 			http.Error(w, "not logged in", http.StatusUnauthorized)
 			return
 		}
-		next(w, r, accountCtx{id: accountID, session: c.Value})
+		next(w, r, accountCtx{id: accountID, session: sid})
 	}
+}
+
+// bearer is the game client's session: "Authorization: Bearer <id>". It
+// wins over a cookie — a client that sends one meant it.
+func bearer(r *http.Request) string {
+	const prefix = "bearer "
+	a := r.Header.Get("Authorization")
+	if len(a) > len(prefix) && strings.EqualFold(a[:len(prefix)], prefix) {
+		return strings.TrimSpace(a[len(prefix):])
+	}
+	return ""
 }
 
 // webClientIP mirrors the gatekeeper's rule: CF-Connecting-IP, else the
@@ -217,38 +247,108 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
+	if acc := h.verifyLogin(w, r); acc != nil {
+		h.startSession(w, r, acc.ID)
+	}
+}
+
+// verifyLogin is the shared check behind login and game-login: the account
+// on success, nil after it has written the error.
+func (h *Handler) verifyLogin(w http.ResponseWriter, r *http.Request) *store.Account {
 	var req credsReq
 	if !readJSON(w, r, &req) {
-		return
+		return nil
 	}
 	acc, err := h.Store.GetAccountByEmail(r.Context(), strings.ToLower(strings.TrimSpace(req.Email)))
 	if err != nil {
 		http.Error(w, "login failed", http.StatusInternalServerError)
-		return
+		return nil
 	}
 	// One code path for wrong email and wrong password: verify against a
 	// dummy hash when the account is absent, so timing does not say which.
-	hash := "$argon2id$v=19$m=65536,t=1,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	hash := dummyHash
 	if acc != nil {
 		hash = acc.PwHash
 	}
 	if !verifyPassword(req.Password, hash) || acc == nil {
 		http.Error(w, "wrong email or password", http.StatusUnauthorized)
+		return nil
+	}
+	return acc
+}
+
+// gameLogin is the launcher's sign-in: the site's session row, returned in
+// the body for an Authorization header instead of set as a cookie.
+func (h *Handler) gameLogin(w http.ResponseWriter, r *http.Request) {
+	acc := h.verifyLogin(w, r)
+	if acc == nil {
 		return
 	}
-	h.startSession(w, r, acc.ID)
+	// PR A alone has no character select: the account plays its oldest
+	// character, so make sure there is one to play.
+	token, err := h.Store.AccountPlayerToken(r.Context(), acc.ID)
+	if err != nil {
+		http.Error(w, "lookup failed", http.StatusInternalServerError)
+		return
+	}
+	if token == "" {
+		if _, err := h.mintFirstCharacter(r.Context(), acc); err != nil {
+			http.Error(w, "character mint failed", http.StatusInternalServerError)
+			return
+		}
+	}
+	sid, ok := h.newSession(w, r, acc.ID)
+	if !ok {
+		return
+	}
+	writeJSON(w, map[string]any{"session": sid, "name": acc.Email})
+}
+
+// mintFirstCharacter names the account's first character after the email's
+// local part, as Phase 7's redeem did. Names are unique among characters
+// now, so "steve@a" and "steve@b" cannot both be "steve": later ones get a
+// number, and past that a token-ish suffix.
+func (h *Handler) mintFirstCharacter(ctx context.Context, acc *store.Account) (store.Player, error) {
+	base := server.SanitizeName(strings.SplitN(acc.Email, "@", 2)[0], 0)
+	for i := 1; ; i++ {
+		name := base
+		switch {
+		case i > 9:
+			suffix, err := randomHex()
+			if err != nil {
+				return store.Player{}, err
+			}
+			name = base + " " + suffix[:4]
+		case i > 1:
+			name = base + " " + string(rune('0'+i))
+		}
+		p, err := h.mintCharacter(ctx, acc, name, store.DefaultBody)
+		if !errors.Is(err, store.ErrNameTaken) || i > 12 {
+			return p, err
+		}
+	}
+}
+
+// mintCharacter makes a character the way a guest starts (NewPlayer), owned
+// from its first INSERT: one PutPlayer with AccountID set, so a name the
+// index refuses leaves no orphan row. store.ErrNameTaken passes through.
+func (h *Handler) mintCharacter(ctx context.Context, acc *store.Account, name, body string) (store.Player, error) {
+	token, err := randomHex()
+	if err != nil {
+		return store.Player{}, err
+	}
+	p := h.NewPlayer(token, name)
+	p.Body = body
+	p.AccountID = acc.ID
+	if err := h.Store.PutPlayer(ctx, &p); err != nil {
+		return store.Player{}, err
+	}
+	return p, nil
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, accountID string) {
-	sid, err := randomHex()
-	if err != nil {
-		http.Error(w, "session failed", http.StatusInternalServerError)
-		return
-	}
-	now := time.Now()
-	if err := h.Store.CreateSession(r.Context(), sid, accountID,
-		now.UnixMilli(), now.Add(sessionTTL).UnixMilli()); err != nil {
-		http.Error(w, "session failed", http.StatusInternalServerError)
+	sid, ok := h.newSession(w, r, accountID)
+	if !ok {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -263,6 +363,23 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, accountID
 		Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 	})
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// newSession writes the web_session row; false after it has written the
+// error.
+func (h *Handler) newSession(w http.ResponseWriter, r *http.Request, accountID string) (string, bool) {
+	sid, err := randomHex()
+	if err != nil {
+		http.Error(w, "session failed", http.StatusInternalServerError)
+		return "", false
+	}
+	now := time.Now()
+	if err := h.Store.CreateSession(r.Context(), sid, accountID,
+		now.UnixMilli(), now.Add(sessionTTL).UnixMilli()); err != nil {
+		http.Error(w, "session failed", http.StatusInternalServerError)
+		return "", false
+	}
+	return sid, true
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request, a accountCtx) {
@@ -287,95 +404,130 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request, a accountCtx) {
 	}
 	type playerView struct {
 		Name      string        `json:"name"`
+		Body      string        `json:"body"`
 		Credits   int64         `json:"credits"`
 		Inventory []store.Stack `json:"inventory"`
 		LastSeen  int64         `json:"last_seen_ms"`
 	}
 	views := make([]playerView, 0, len(players))
 	for _, p := range players {
-		views = append(views, playerView{Name: p.Name, Credits: p.Credits,
+		views = append(views, playerView{Name: p.Name, Body: p.Body, Credits: p.Credits,
 			Inventory: p.Inventory, LastSeen: p.UpdatedMs})
 	}
 	writeJSON(w, map[string]any{"email": acc.Email, "players": views})
 }
 
-func (h *Handler) linkCode(w http.ResponseWriter, r *http.Request, a accountCtx) {
-	code, err := randomCode()
-	if err != nil {
-		http.Error(w, "code failed", http.StatusInternalServerError)
-		return
-	}
-	now := time.Now()
-	if err := h.Store.PutLinkCode(r.Context(), code, a.id,
-		now.UnixMilli(), now.Add(linkCodeTTL).UnixMilli()); err != nil {
-		http.Error(w, "code failed", http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, map[string]any{"code": code, "expires_in_s": int(linkCodeTTL.Seconds())})
+// characterView is one row of GET and POST /api/characters.
+type characterView struct {
+	Token    string `json:"token"`
+	Name     string `json:"name"`
+	Body     string `json:"body"`
+	Credits  int64  `json:"credits"`
+	LastSeen int64  `json:"last_seen_ms"`
 }
 
-// redeem is the GAME CLIENT's exchange: code in, game token out. The
-// account's existing player wins; otherwise a fresh player row is minted
-// already owned. No session — the code is the credential.
-func (h *Handler) redeem(w http.ResponseWriter, r *http.Request) {
+func viewCharacter(p store.Player) characterView {
+	return characterView{Token: p.Token, Name: p.Name, Body: p.Body,
+		Credits: p.Credits, LastSeen: p.UpdatedMs}
+}
+
+// characters is GET (list) and POST (create) on one path; POST keeps the
+// CSRF header rule every mutating route has.
+func (h *Handler) characters(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.withAccount(h.listCharacters)(w, r)
+	case http.MethodPost:
+		h.mutating(h.withAccount(h.createCharacter))(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) listCharacters(w http.ResponseWriter, r *http.Request, a accountCtx) {
+	players, err := h.Store.AccountPlayers(r.Context(), a.id) // oldest first
+	if err != nil {
+		http.Error(w, "character lookup failed", http.StatusInternalServerError)
+		return
+	}
+	out := make([]characterView, 0, len(players))
+	for _, p := range players {
+		out = append(out, viewCharacter(p))
+	}
+	writeJSON(w, out)
+}
+
+func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a accountCtx) {
 	var req struct {
-		Code string `json:"code"`
+		Name string `json:"name"`
+		Body string `json:"body"`
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
-	code := strings.ToUpper(strings.TrimSpace(req.Code))
-	accountID, err := h.Store.RedeemLinkCode(r.Context(), code, time.Now().UnixMilli())
+	// SanitizeName turns an empty name into "Player 0"; that is not a pick.
+	name := server.SanitizeName(req.Name, 0)
+	if !nameOK(name) || (name == server.SanitizeName("", 0) && strings.TrimSpace(req.Name) != name) {
+		http.Error(w, "bad name", http.StatusBadRequest)
+		return
+	}
+	if !bodies[req.Body] {
+		http.Error(w, "bad body", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	taken, err := h.Store.CharacterNameTaken(ctx, name)
 	if err != nil {
-		http.Error(w, "redeem failed", http.StatusInternalServerError)
+		http.Error(w, "name check failed", http.StatusInternalServerError)
 		return
 	}
-	if accountID == "" {
-		http.Error(w, "unknown or expired code", http.StatusUnauthorized)
+	if taken {
+		http.Error(w, "name taken", http.StatusConflict)
 		return
 	}
-	token, err := h.Store.AccountPlayerToken(r.Context(), accountID)
+	// Count-then-insert can race to six under two simultaneous creates;
+	// harmless, and the next create is refused again.
+	n, err := h.Store.CountAccountPlayers(ctx, a.id)
 	if err != nil {
-		http.Error(w, "lookup failed", http.StatusInternalServerError)
+		http.Error(w, "count failed", http.StatusInternalServerError)
 		return
 	}
-	if token == "" {
-		token, err = randomHex()
-		if err != nil {
-			http.Error(w, "token failed", http.StatusInternalServerError)
-			return
-		}
-		acc, err := h.Store.GetAccount(r.Context(), accountID)
-		if err != nil || acc == nil {
-			http.Error(w, "account lookup failed", http.StatusInternalServerError)
-			return
-		}
-		name := strings.SplitN(acc.Email, "@", 2)[0]
-		p := h.NewPlayer(token, name)
-		if err := h.Store.PutPlayer(r.Context(), &p); err != nil {
-			http.Error(w, "player mint failed", http.StatusInternalServerError)
-			return
-		}
-		if err := h.Store.SetPlayerAccount(r.Context(), token, accountID); err != nil {
-			http.Error(w, "player bind failed", http.StatusInternalServerError)
-			return
-		}
+	if n >= maxCharacters {
+		http.Error(w, "character limit", http.StatusConflict)
+		return
 	}
-	writeJSON(w, map[string]any{"token": token})
+	acc, err := h.Store.GetAccount(ctx, a.id)
+	if err != nil || acc == nil {
+		http.Error(w, "account lookup failed", http.StatusInternalServerError)
+		return
+	}
+	p, err := h.mintCharacter(ctx, acc, name, req.Body)
+	if errors.Is(err, store.ErrNameTaken) { // the index caught a racing create
+		http.Error(w, "name taken", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		http.Error(w, "character mint failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, viewCharacter(p))
 }
 
-func (h *Handler) importToken(w http.ResponseWriter, r *http.Request, a accountCtx) {
-	var req struct {
-		Token string `json:"token"`
+// nameOK is the character-name rule after SanitizeName: 3–16 runes of
+// letters, digits, space, hyphen and apostrophe; no edge or double spaces.
+func nameOK(name string) bool {
+	if n := utf8.RuneCountInString(name); n < 3 || n > 16 {
+		return false
 	}
-	if !readJSON(w, r, &req) {
-		return
+	if strings.TrimSpace(name) != name || strings.Contains(name, "  ") {
+		return false
 	}
-	if err := h.Store.AdoptPlayer(r.Context(), a.id, strings.TrimSpace(req.Token)); err != nil {
-		http.Error(w, "import refused: "+err.Error(), http.StatusConflict)
-		return
+	for _, c := range name {
+		if !unicode.IsLetter(c) && !unicode.IsDigit(c) && c != ' ' && c != '-' && c != '\'' {
+			return false
+		}
 	}
-	writeJSON(w, map[string]any{"ok": true})
+	return true
 }
 
 func (h *Handler) password(w http.ResponseWriter, r *http.Request, a accountCtx) {
@@ -419,9 +571,19 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request, a accoun
 		http.Error(w, "wrong password", http.StatusUnauthorized)
 		return
 	}
-	if _, err := h.Store.DeleteAccount(r.Context(), a.id); err != nil {
+	tokens, err := h.Store.DeleteAccount(r.Context(), a.id)
+	if err != nil {
 		http.Error(w, "delete failed", http.StatusInternalServerError)
 		return
+	}
+	if h.Kick != nil && len(tokens) > 0 {
+		h.Kick(tokens)
+		// A save already in flight when the delete committed can still
+		// land after it; Kick waited it out, so sweep once more (the
+		// cascade is idempotent and the zombie keeps its account_id).
+		if _, err := h.Store.DeleteAccount(r.Context(), a.id); err != nil {
+			log.Printf("web: delete sweep: %v", err)
+		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, map[string]any{"ok": true})

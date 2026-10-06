@@ -45,14 +45,14 @@ func TestIdentity_TokenRoundTrip(t *testing.T) {
 	reg := testRegistry()
 	spawn := [3]float64{1, 2, 3}
 
-	id := joinIdentity(ctx, st, reg, "tok-1", "Steve", spawn)
+	id := joinIdentity(ctx, st, reg, "tok-1", "Steve", spawn, loadPlayer(ctx, st, "tok-1"))
 	if got := id.Snapshot().Credits; got != 500 {
 		t.Fatalf("initial credits = %d, want 500 (StartCredits)", got)
 	}
 	id.Mutate(func(p *store.Player) { p.Credits = 750 })
 	id.Close(ctx) // stops autosave + final save
 
-	again := joinIdentity(ctx, st, reg, "tok-1", "Steve", spawn)
+	again := joinIdentity(ctx, st, reg, "tok-1", "Steve", spawn, loadPlayer(ctx, st, "tok-1"))
 	defer again.Close(ctx)
 	if got := again.Snapshot().Credits; got != 750 {
 		t.Fatalf("rejoin credits = %d, want 750", got)
@@ -67,7 +67,7 @@ func TestIdentity_EmptyTokenNeverPersists(t *testing.T) {
 	st := openTestStore(t)
 	reg := testRegistry()
 
-	id := joinIdentity(ctx, st, reg, "", "Ghost", [3]float64{0, 0, 0})
+	id := joinIdentity(ctx, st, reg, "", "Ghost", [3]float64{0, 0, 0}, loadPlayer(ctx, st, ""))
 	id.Mutate(func(p *store.Player) { p.Credits = 999999 })
 	id.Close(ctx)
 
@@ -89,7 +89,7 @@ func TestIdentity_FailingStoreDoesNotAbortSession(t *testing.T) {
 	reg := testRegistry()
 	st.Close() // every subsequent call now fails
 
-	id := joinIdentity(ctx, st, reg, "tok-2", "Steve", [3]float64{0, 0, 0})
+	id := joinIdentity(ctx, st, reg, "tok-2", "Steve", [3]float64{0, 0, 0}, loadPlayer(ctx, st, "tok-2"))
 	if got := id.Snapshot().Credits; got != 500 {
 		t.Fatalf("credits after failed load = %d, want default 500", got)
 	}

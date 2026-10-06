@@ -145,3 +145,50 @@ func TestPlayerRoundTripPostgres(t *testing.T) {
 		t.Errorf("postgres round-trip mismatch: %+v", got)
 	}
 }
+
+// Body round-trips; account_id is set on insert and never cleared or moved
+// by a later save (SetPlayerAccount owns it).
+func TestPlayerBodyAndAccount(t *testing.T) {
+	s := openMigrated(t)
+	ctx := context.Background()
+
+	guest := sample()
+	if err := s.PutPlayer(ctx, guest); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetPlayer(ctx, guest.Token)
+	if got.Body != DefaultBody || got.AccountID != "" {
+		t.Fatalf("guest Body/AccountID = %q/%q, want %q/\"\"", got.Body, got.AccountID, DefaultBody)
+	}
+
+	if err := s.SetPlayerAccount(ctx, guest.Token, "acct"); err != nil {
+		t.Fatal(err)
+	}
+	// A save from a copy that never saw the account (AccountID "") and one
+	// that names another account both leave the owner alone.
+	for _, acct := range []string{"", "other"} {
+		guest.AccountID = acct
+		guest.Body = "char.player.f"
+		if err := s.PutPlayer(ctx, guest); err != nil {
+			t.Fatal(err)
+		}
+		got, _ = s.GetPlayer(ctx, guest.Token)
+		if got.AccountID != "acct" {
+			t.Fatalf("save with AccountID %q: owner = %q, want acct", acct, got.AccountID)
+		}
+		if got.Body != "char.player.f" {
+			t.Fatalf("Body = %q, want char.player.f", got.Body)
+		}
+	}
+
+	// An insert carries its owner.
+	c := sample()
+	c.Token, c.Name, c.AccountID, c.Body = "char-2", "Kade", "acct", "char.ubc.f"
+	if err := s.PutPlayer(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetPlayer(ctx, c.Token)
+	if got.AccountID != "acct" || got.Body != "char.ubc.f" {
+		t.Fatalf("new character = %q/%q", got.AccountID, got.Body)
+	}
+}

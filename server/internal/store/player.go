@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -36,6 +37,11 @@ type Player struct {
 	// Skills is Phase 11's sheet: XP per skill id, and the POIs this
 	// player has permanently discovered (Recon pays each exactly once).
 	Skills SkillsState
+	// AccountID owns the row, "" for a guest (NULL). Read-only to
+	// PutPlayer on an existing row: SetPlayerAccount owns it.
+	AccountID string
+	// Body is the character's model + gender id; "" saves as char.player.
+	Body      string
 	CreatedMs int64
 	UpdatedMs int64
 }
@@ -74,22 +80,42 @@ type MissionState struct {
 	Done   int  `json:"done"`
 }
 
-const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms`
+// DefaultBody is every player's body until they pick another (Phase 16).
+const DefaultBody = "char.player"
+
+// ErrNameTaken is the player_character_name index refusing a character name
+// another account-owned row already has (case-insensitive).
+var ErrNameTaken = errors.New("store: character name taken")
+
+const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms, body`
+
+// playerSelect reads account_id last; NULL (a guest) scans as "".
+const playerSelect = `SELECT ` + playerColumns + `, COALESCE(account_id, '') FROM player`
 
 // GetPlayer returns the row for token, or (nil, nil) when there is none.
 // Absence is not an error: a first-time token is the normal case, and making
 // the caller distinguish sql.ErrNoRows from a real failure is how a database
 // outage gets silently treated as "new player" and wipes someone's progress.
 func (s *Store) GetPlayer(ctx context.Context, token string) (*Player, error) {
-	row := s.DB.QueryRowContext(ctx,
-		`SELECT `+playerColumns+` FROM player WHERE token = $1`, token)
+	p, err := scanPlayer(s.DB.QueryRowContext(ctx, playerSelect+` WHERE token = $1`, token))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return p, err
+}
 
+// scanner is *sql.Row or *sql.Rows.
+type scanner interface{ Scan(dest ...any) error }
+
+// scanPlayer reads one playerSelect row. sql.ErrNoRows comes back unwrapped
+// so GetPlayer can tell absence from failure.
+func scanPlayer(row scanner) (*Player, error) {
 	var p Player
 	var inventory, equipped, missions, skillsCol string
 	err := row.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions, &skillsCol,
-		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs)
+		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs, &p.Body, &p.AccountID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, err
 	}
 	if err != nil {
 		return nil, fmt.Errorf("store: selecting player: %w", err)
@@ -99,16 +125,16 @@ func (s *Store) GetPlayer(ctx context.Context, token string) (*Player, error) {
 	// error keeps the session ephemeral instead of handing the player a blank
 	// inventory and then overwriting the real one on the next save.
 	if err := json.Unmarshal([]byte(inventory), &p.Inventory); err != nil {
-		return nil, fmt.Errorf("store: player %q has unreadable inventory: %w", token, err)
+		return nil, fmt.Errorf("store: player %q has unreadable inventory: %w", p.Token, err)
 	}
 	if err := json.Unmarshal([]byte(equipped), &p.Equipped); err != nil {
-		return nil, fmt.Errorf("store: player %q has unreadable equipped: %w", token, err)
+		return nil, fmt.Errorf("store: player %q has unreadable equipped: %w", p.Token, err)
 	}
 	if err := json.Unmarshal([]byte(missions), &p.Missions); err != nil {
-		return nil, fmt.Errorf("store: player %q has unreadable missions: %w", token, err)
+		return nil, fmt.Errorf("store: player %q has unreadable missions: %w", p.Token, err)
 	}
 	if err := json.Unmarshal([]byte(skillsCol), &p.Skills); err != nil {
-		return nil, fmt.Errorf("store: player %q has unreadable skills: %w", token, err)
+		return nil, fmt.Errorf("store: player %q has unreadable skills: %w", p.Token, err)
 	}
 	if p.Inventory == nil {
 		p.Inventory = []Stack{}
@@ -156,17 +182,34 @@ func (s *Store) PutPlayer(ctx context.Context, p *Player) error {
 		p.CreatedMs = now
 	}
 	p.UpdatedMs = now
+	if p.Body == "" {
+		p.Body = DefaultBody
+	}
 
+	// account_id is written on INSERT only, so a new character is created
+	// owned in one statement (the name index checks it there); the update
+	// arm leaves it alone, so a game save never orphans or re-homes a row.
 	_, err = s.DB.ExecContext(ctx,
-		`INSERT INTO player (`+playerColumns+`)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		`INSERT INTO player (`+playerColumns+`, account_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''))
 		 ON CONFLICT (token) DO UPDATE SET
 		   name = $2, credits = $3, inventory = $4, equipped = $5,
-		   missions = $6, skills = $7, pos_x = $8, pos_y = $9, pos_z = $10, updated_ms = $12`,
+		   missions = $6, skills = $7, pos_x = $8, pos_y = $9, pos_z = $10, updated_ms = $12,
+		   body = $13`,
 		p.Token, p.Name, p.Credits, string(inventory), string(equipped), string(missions), string(skillsCol),
-		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs)
+		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs, p.Body, p.AccountID)
 	if err != nil {
+		if isUnique(err) {
+			return ErrNameTaken
+		}
 		return fmt.Errorf("store: upserting player: %w", err)
 	}
 	return nil
+}
+
+// isUnique reports a unique-constraint violation. Both engines say "unique"
+// somewhere in the message; matching the text beats importing two driver
+// error types.
+func isUnique(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "unique")
 }

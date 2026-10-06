@@ -12,29 +12,10 @@
   <nav><span class="dim" id="who"></span> <a href="#" id="logout">sign out</a></nav>
 
   <div class="panel">
-    <h2 style="margin-top:0">Play as this account</h2>
-    <p class="dim">Mint a code, then in the game press <b>F1</b> and type it
-    in. The code lives ten minutes and works once.</p>
-    <button id="mint">Mint link code</button>
-    <code class="big" id="code" hidden></code>
-    <div class="error" id="mint-err"></div>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin-top:0">Your pilots</h2>
+    <h2 style="margin-top:0">Your characters</h2>
     <table id="players"><tbody></tbody></table>
-    <p class="dim" id="no-players" hidden>No pilot yet — mint a code and
-    enter the world, or import an existing game token below.</p>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin-top:0">Import an existing game token</h2>
-    <p class="dim">Played before registering? Paste the token from the old
-    client (PlayerPrefs <code>sa.token</code>) to adopt that progress.</p>
-    <label for="imp-token">Game token</label>
-    <input id="imp-token" autocomplete="off">
-    <button id="imp-go" class="quiet">Import</button>
-    <div class="error" id="imp-err"></div>
+    <p class="dim" id="no-players" hidden>No character yet — sign in to the
+    game with this email and password to make one.</p>
   </div>
 
   <div class="panel">
@@ -49,7 +30,7 @@
 
   <div class="panel">
     <h2 style="margin-top:0">Delete account</h2>
-    <p class="dim">Removes the account and every pilot it owns — credits,
+    <p class="dim">Removes the account and every character it owns — credits,
     inventory, ships. There is no undo.</p>
     <label for="del-pw">Password to confirm</label>
     <input id="del-pw" type="password" autocomplete="current-password">
@@ -73,7 +54,7 @@ function refresh () {
       const items = (p.inventory || []).map((s) => s.qty > 1 ? `${s.item}×${s.qty}` : s.item).join(', ')
       const seen = p.last_seen_ms ? new Date(p.last_seen_ms).toLocaleString() : '—'
       const tr = document.createElement('tr')
-      for (const text of [p.name, p.credits + ' cr', items || '—', seen]) {
+      for (const text of [p.name, bodyLabel(p.body), p.credits + ' cr', items || '—', seen]) {
         const td = document.createElement('td')
         td.textContent = text
         tr.appendChild(td)
@@ -84,16 +65,13 @@ function refresh () {
 }
 refresh()
 
-wire('mint', 'mint-err', () => api('/api/link-code').then((r) => {
-  const el = document.getElementById('code')
-  el.textContent = r.code
-  el.hidden = false
-}))
-wire('imp-go', 'imp-err', () => api('/api/import-token', { token: val('imp-token') }).then(() => {
-  document.getElementById('imp-err').classList.add('ok')
-  document.getElementById('imp-err').textContent = 'imported'
-  refresh()
-}))
+// The game's picker names: model + gender.
+function bodyLabel (id) {
+  return {
+    'char.player': 'Colonist · M', 'char.player.f': 'Colonist · F',
+    'char.ubc': 'Vanguard · M', 'char.ubc.f': 'Vanguard · F',
+  }[id] || id || '—'
+}
 wire('pw-go', 'pw-err', () => api('/api/password', { old: val('pw-old'), new: val('pw-new') }).then(() => {
   const el = document.getElementById('pw-err')
   el.classList.add('ok'); el.textContent = 'changed — other sessions signed out'

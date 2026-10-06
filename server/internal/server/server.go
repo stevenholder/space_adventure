@@ -114,6 +114,12 @@ type Server struct {
 	// session is therefore ephemeral for now, per PROTOCOL "Identity token"
 	// ("An empty or malformed token is treated as absent").
 	store *store.Store
+	// guests seats tokens that own no account character (SetGuests).
+	guests bool
+	// kicked holds tokens Kick removed, for a minute: a join that read its
+	// row before the delete but publishes after Kick is refused at publish.
+	// Guarded by mu.
+	kicked map[string]time.Time
 
 	upgrader websocket.Upgrader
 	gate     *gatekeeper
@@ -141,6 +147,14 @@ type Server struct {
 // every session is ephemeral, which is exactly what an empty token already
 // means (docs/PROTOCOL.md, "Identity token"). Call before serving.
 func (s *Server) SetStore(st *store.Store) { s.store = st }
+
+// SetGuests lets a server WITH a store seat any token, as before Phase 16
+// (SA_GUESTS=1: the kind fleet joins with made-up tokens). A storeless
+// server always does — there is nothing to log into. Call before serving.
+func (s *Server) SetGuests(on bool) { s.guests = on }
+
+// Guests reports whether join seats tokens that own no character.
+func (s *Server) Guests() bool { return s.guests || s.store == nil }
 
 func New(t *terrain.Field, seed uint64) (*Server, error) {
 	reg, err := defs.Load()
@@ -801,6 +815,22 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		c.fail() // wrong protocol version (PROTOCOL.md "Versioning"): close 1002
 		return
 	}
+	token := h.Token
+	if s.store == nil {
+		token = "" // no store attached: sessions are ephemeral by design (SetStore)
+	}
+	// One read serves both the strict check and the identity. Outside s.mu:
+	// a store round trip must not stall the tick.
+	row := loadPlayer(ctx, s.store, token)
+	owned := row != nil && row.AccountID != ""
+	if !owned && !s.Guests() {
+		// Phase 16: only an account character is seated. No token in the
+		// log — it is the player's whole credential.
+		joinRefused.Inc()
+		log.Printf("join: refused (has_token=%v row=%v)", token != "", row != nil)
+		c.refuse()
+		return
+	}
 	s.mu.Lock()
 	if c.entity != nil || s.closing {
 		s.mu.Unlock()
@@ -810,13 +840,19 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	s.nextID++
 	id := s.nextID
 	c.id = id
-	name := SanitizeName(h.Name, id)
+	name, body := SanitizeName(h.Name, id), ""
+	if owned {
+		// A character is named by its row; hello.name is a guest's say.
+		// Sanitized at creation already — again here, the row is input too.
+		name, body = SanitizeName(row.Name, id), row.Body
+	}
 	spawnState := s.clearSpawn(0)
 	c.entity = &entity{
 		ID:     id,
 		Name:   name,
 		State:  spawnState,
 		Health: s.reg.Entities["player"].MaxHealth,
+		Body:   body,
 	}
 	c.entity.PrevLook = c.entity.State.Facing
 	// Vitals must start at full health. Zero-valued Vitals means Health 0, and
@@ -825,11 +861,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	// why. Seed it from the same def the entity's health came from.
 	c.vitals = sim.Vitals{Health: c.entity.Health}
 	c.rate = newCmdRate(time.Now())
-	token := h.Token
-	if s.store == nil {
-		token = "" // no store attached: sessions are ephemeral by design (SetStore)
-	}
-	c.ident = joinIdentity(ctx, s.store, s.reg, token, name, [3]float64(spawnState.Pos))
+	c.ident = joinIdentity(ctx, s.store, s.reg, token, name, [3]float64(spawnState.Pos), row)
 
 	// Collect the world's entities and the existing players' spawn rows before
 	// publishing self. World entities exist from server start and never
@@ -886,6 +918,15 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 
 	// Publish, then tell the existing clients a body appeared.
 	s.mu.Lock()
+	// Only a row that was still OWNED when read is stale here: a guest-mode
+	// rejoin of a deleted character's token is a fresh guest, not a zombie.
+	if _, gone := s.kicked[token]; gone && owned {
+		s.mu.Unlock()
+		c.ident.discard()
+		log.Printf("join: refused entity %d (account deleted mid-join)", id)
+		c.refuse()
+		return
+	}
 	s.clients[id] = c
 	for _, oc := range s.clients {
 		if oc != c {
@@ -921,6 +962,46 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 }
 
 // leave removes c's entity from the world and tells the remaining clients.
+// Kick disconnects (1008) every session whose token is in tokens and
+// discards its identity, so neither autosave nor the disconnect save
+// writes the row again. The web site calls it after DeleteAccount: a
+// save landing after the delete would re-INSERT the character (Phase 16).
+// Blocks while an in-flight save finishes (≤ storeTimeout).
+func (s *Server) Kick(tokens []string) {
+	if len(tokens) == 0 {
+		return
+	}
+	now := time.Now()
+	var hit []*client
+	s.mu.Lock()
+	if s.kicked == nil {
+		s.kicked = map[string]time.Time{}
+	}
+	for t, at := range s.kicked {
+		if now.Sub(at) > time.Minute {
+			delete(s.kicked, t) // longer than any join takes
+		}
+	}
+	want := make(map[string]bool, len(tokens))
+	for _, t := range tokens {
+		if t != "" {
+			want[t] = true
+			s.kicked[t] = now
+		}
+	}
+	for _, c := range s.clients {
+		if c.ident != nil && want[c.ident.token] {
+			hit = append(hit, c)
+		}
+	}
+	s.mu.Unlock()
+	for _, c := range hit {
+		c.ident.discard()
+		log.Printf("kick: entity %d (account deleted)", c.id)
+		c.refuse()
+	}
+}
+
 func (s *Server) leave(c *client) {
 	s.mu.Lock()
 	if c.entity == nil {

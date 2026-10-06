@@ -29,6 +29,19 @@ const (
 	argonSaltLen = 16
 )
 
+// dummyHash is verified when the email is unknown, so timing does not say
+// which half of "wrong email or password" it was. Built from the SAME
+// parameters as a real hash: a literal with m=65536 cost 64 MiB per unknown
+// email and OOM-killed the 128Mi pod the first time a harness tried one
+// (2026-10-06), the way the first registration did in Phase 7.
+var dummyHash = func() string {
+	h, err := hashPassword("not a password anyone has")
+	if err != nil {
+		panic(err) // crypto/rand failing at startup is not something to limp past
+	}
+	return h
+}()
+
 func hashPassword(pw string) (string, error) {
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
@@ -71,19 +84,4 @@ func randomHex() (string, error) {
 		return "", fmt.Errorf("web: random: %w", err)
 	}
 	return hex.EncodeToString(b), nil
-}
-
-// randomCode is a link code: 8 chars from an alphabet with no 0/O or 1/I,
-// because a human reads it off one screen and types it into another.
-func randomCode() (string, error) {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("web: random: %w", err)
-	}
-	out := make([]byte, 8)
-	for i, c := range b {
-		out[i] = alphabet[int(c)%len(alphabet)]
-	}
-	return string(out), nil
 }

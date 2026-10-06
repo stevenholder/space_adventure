@@ -1686,7 +1686,7 @@ one-player rule. Those rows stay in QA-STATUS as history.
   bearer session too. `withAccount`: cookie or `Authorization: Bearer`.
 - Join: with a store and `SA_GUESTS` unset, `srv.join` loads the token's
   row; none or `account_id` NULL → `closeCode(1008)`, no entity, a
-  `join.refused` counter on `/metrics`. A character token's entity takes
+  `space_adventure_join_refused_total` on `/metrics`. A character token's entity takes
   the row's name and body; `hello.name` is ignored for it. Storeless or
   `SA_GUESTS=1` → today's path.
 - Wire: player spawn `data` = `name` | `name\0body`. `test/lib/wire.mjs`
@@ -1713,10 +1713,10 @@ one-player rule. Those rows stay in QA-STATUS as history.
 |---|---|---|---|---|
 | 1 | A1 | `game-login` (login's verify, `startSession` returning the id in the body); `withAccount` reads bearer; `logout` on bearer; link-code / redeem / import-token routes and handlers gone | `server/internal/web/web.go` | `web_test.go`: right password → session that `me` accepts as bearer; wrong / unknown → 401 same body; tenth rapid → 429; logout → 401 after; old routes 404 |
 | 2 | A1 | Migration 005 (drop `link_code`, `player.body`, the name index); store: `AccountPlayers` carries body, `PutLinkCode`/`RedeemLinkCode`/`AdoptPlayer` gone, `CountAccountPlayers`, `CharacterNameTaken` | `server/internal/store/` | store suite both engines; the index refuses a case-variant duplicate and allows two guests with one name |
-| 3 | A1 | Strict join: refuse unowned tokens unless storeless or `SA_GUESTS=1`; entity name from the row for a character; `join.refused` metric | `server/internal/server/server.go`, `client.go`, `cmd/server/main.go` | Go test: strict closes a guest hello 1008, seats a character under the row's name whatever `hello.name` says; `SA_GUESTS=1` seats both |
+| 3 | A1 | Strict join: refuse unowned tokens unless storeless or `SA_GUESTS=1`; entity name from the row for a character; `space_adventure_join_refused_total` metric | `server/internal/server/server.go`, `client.go`, `cmd/server/main.go` | Go test: strict closes a guest hello 1008, seats a character under the row's name whatever `hello.name` says; `SA_GUESTS=1` seats both |
 | 4 | A1 | Site: account page loses mint + import, lists characters with body; landing/login copy says the client signs you in | `server/internal/web/site/` | `t28` |
 | 5 | A1 | Deploy: `SA_GUESTS=1` in the kind server env; prod untouched; RUNBOOK notes it | `deploy/manifests/10-server.yaml`, `docs/RUNBOOK.md` | `make up` + fleet |
-| 6 | A1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → Busy; Ok → SignedIn; Fail 401/409/400/429/other → the reasons; SignOut and Refused → SignedOut; PlayAllowed only in SignedIn) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
+| 6 | A1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → Busy; Ok → SignedIn; Fail 401/409/400/429/other → the reasons; SignOut → SignedOut, Refused → Failed `SIGNED OUT · sign in again`; PlayAllowed only in SignedIn) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
 | 7 | A1 | Account column in `LauncherView`: fields, SIGN IN / CREATE ACCOUNT / SIGN OUT, reason line; Enter submits; PLAY wired to both gates | `UI/Launcher.cs` | shots |
 | 8 | A1 | Boot: load `[identity] email` at launcher open; `SignIn` / `CreateAccount` with the 5 s budget → save session + email → `Ok`; `SignOut` = logout + clear; PLAY → `GET /api/characters` → (A alone) connect with the single row's token, 401 → launcher `SIGNED OUT`; `AccountView`, `RedeemLinkCode`, F1 and the menu row removed; `ResolveToken` never mints; rig `-uiLogin <state>`, shots `test/out/ui/p16-login-*.png` | `Boot.cs`, `UI/Panels.cs` | shots; `-uiPlayAfter 4 -quitAfter 11` → `world ready` |
 | 9 | A2 | `t28` rewritten: register → `game-login` → `characters` (the Phase 7 player is there) → JOIN with its token under the row's name → account page shows it → wrong password 401 → password change kills the session (bearer 401; the token still joins) → logout → delete → token refused (`SA_STRICT=1`) or joins fresh (kind); old routes 404; a guest hello still joins on kind | `test/t28-accounts.mjs` | kind; `SA_STRICT=1` against a strict bare server with a store |

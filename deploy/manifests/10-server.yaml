@@ -29,6 +29,11 @@ spec:
               value: http://alloy:4317
             - name: DEPLOY_ENV
               value: kind
+            # Phase 16: the harness fleet joins with made-up tokens. A server
+            # with a store seats only account characters unless this is set;
+            # production never sets it (deploy/prod/20-server.yaml).
+            - name: SA_GUESTS
+              value: "1"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

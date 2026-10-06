@@ -31,8 +31,11 @@ const rttSmoothing = 5
 // entity — a lookup, not an identity: in M1 it is the player's own body,
 // and from M2 a player in a pilot seat drives the vehicle instead.
 type entity struct {
-	ID       uint32
-	Name     string
+	ID   uint32
+	Name string
+	// Body is a character's model + gender id from its row ("" for a
+	// guest). Not on the wire yet (Phase 16 PR B).
+	Body     string
 	State    sim.State
 	PrevLook sim.Vec
 
@@ -590,6 +593,13 @@ func (c *client) teardown() {
 		c.srv.leave(c)
 		c.conn.Close()
 	})
+}
+
+// refuse closes 1008 (policy violation) and tears down: a hello whose
+// token owns no character on a strict server (Phase 16).
+func (c *client) refuse() {
+	c.closeCode(websocket.ClosePolicyViolation)
+	c.teardown()
 }
 
 // fail tears the connection down after a protocol violation.
