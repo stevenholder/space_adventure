@@ -229,6 +229,11 @@ bodies on one spot push apart on the next tick, which is the spawn spread.
 
 ### First-person body
 
+*Superseded in part by "First-person body, in the world (Phase 19)" below:
+the local player draws torso and legs through the near-cut material; the
+rest of this section's rules (head hidden, eye node, upright body, the
+first-person arms) stand.*
+
 The local player renders the same character model as everyone else, seen from
 inside. That is cheap to say and has four consequences that are not:
 
@@ -1648,6 +1653,66 @@ and the next row (or the create form) is selected.
 
 Rig: `-uiChars edit` (the form in edit mode on fake row 0),
 `-uiChars delete` (the confirm shown).
+
+### First-person body, in the world (Phase 19)
+
+Three attempts at the look-down view (#74, #82, #83) each hid a symptom:
+pull the body back, cap the collar, draw legs only through an open hip
+ring. The last one let the player look through their own hip ring at the
+inside of their thigh plates. This phase settles it the way shooters do:
+a **third-person model (3PM)** for everyone else and for shadows, and a
+**first-person body (1PM)** drawn for the local camera — but, unlike a
+viewmodel, drawn **in the world**: real depth, real sun, occluded by a
+crate, standing on the ground at your real feet. What the 1PM changes is
+only how it is *cut*: per pixel, by distance from the eye, never by the
+near plane.
+
+**Meshes.** The body glb splits into five: `head`, `arms`, `chest`
+(shoulders, upper chest, neck ring — from the mid-chest line up),
+`torso` (mid-chest down to the hips, **capped at the top** with a suit
+face), `legs` (hips to feet). Remote players draw all five; cut edges are
+shared boundaries, so nothing shows. The mid-chest line sits about 0.40 m
+below the eye (roughly the sternum's lower third), so that even leaning
+down the cap stays outside the near cut below.
+
+**The local player draws** `torso`, `legs`, and the worn pieces on the
+`chest`, `back`, `legs` and `feet` slots; `head`, `arms`, `chest`, hair
+and `hands`/arm-covering pieces are shadows-only (the ground shadow is the
+whole figure; the first-person arms are the separate instance as today).
+Everything the local player draws uses the **near-cut material**: the
+first-person PBR shader without the depth squeeze, plus a per-fragment
+discard of anything within `NearCut` (0.30 m) of the eye, dithered over
+0.05 m so the edge dissolves rather than slicing. It receives shadows
+(the hidden head's shadow on your chest is yours) and casts none.
+
+**Why both the cap and the cut.** The cut alone would open a window into
+the hollow torso; the cap alone would clip at the near plane when you
+lean. Together: the cap is the solid thing you see when you look down,
+and the cut dissolves a chest plate's collar or a pauldron before it
+reaches the near plane.
+
+**Camera.** The pitch lean stays (`Fps.PlaceCamera`): from 20° down to
+straight down the eye moves up to 0.30 m forward and 0.16 m up (inside
+the body's 0.35 m radius). From behind the cap the cap hides the legs;
+from in front of it you see the plate's top edge and the boots at −70,
+and the cap or plate with a knee and both feet at −89. Thighs show only
+near straight down — the belly is wider than the eye is forward.
+
+**Two things the build taught.** The torso and legs cast no shadow (their
+dither would punch holes in it), so each drawn mesh gets a shadows-only
+twin on the same skeleton: the ground shadow is still the whole figure.
+And the shadows-only `chest` sits right over the cap, so the cap's
+up-facing fragments floor their shadow term at `CapShadowFloor` 0.65 —
+a world shadow darkens the cap less than the legs beside it; accepted.
+
+**What you see.** At −45: nothing of you, as before. At −70: your chest
+plate and thighs below it, feet on the ground, the ground shadow of the
+whole figure, a rock's shadow across your shins if you stand in one.
+Straight down: the cap, the thighs, the feet. Never a ring, a hole, a
+shard or a body drawn over the world.
+
+Rig: `-uiPitch <deg>` as today; `-rigWorn slot=asset,…` dresses the guest
+body for the armored case (asset ids).
 
 ### Character panel and backpack (Phase 11.7)
 

@@ -186,13 +186,16 @@ namespace SpaceAdventure.Game
             Vector3 pos = Frame.ToGodot(simPos);
             Vector3 up = pos.Normalized();
             Vector3 eye = pos + up * EyeHeight;
-            // Looking down puts the eye inside the collar, and the shoulders,
-            // a chest plate or pauldrons cross the near plane as dark shards.
-            // Past DipStartDeg the camera rises and steps back a little --
-            // DipLift up, DipBack behind the facing at DipFullDeg -- so the
-            // collar is never within the near plane while the body stays
-            // under you and the legs stay in view. The server's shot origin
-            // stays at the eye; the few centimetres do not matter to a hit.
+            // Looking down, the camera leans out over the body (Phase 19,
+            // GDD "First-person body, in the world"): from DipStartDeg it
+            // rises (DipLift) and moves out along the facing (DipBack is
+            // negative = forward), fully at DipFullDeg. The near-cut body
+            // under you is a 0.35 m-wide torso cap; from the axis it hides
+            // the legs and a chest plate sits in the 0.30 m cut band, so
+            // straight down the eye stands 30 cm ahead (inside the 0.35 m
+            // body radius) and 16 cm up: cap or plate at the bottom of the
+            // view, knees and feet ahead. The server's shot origin stays at
+            // the eye; the few centimetres do not matter to a hit.
             // ponytail: linear in pitch; a curve if a body still clips.
             float downDeg = -_pitch * 180f / Mathf.Pi;
             float t = Mathf.Clamp((downDeg - DipStartDeg) / (DipFullDeg - DipStartDeg), 0f, 1f);
@@ -205,7 +208,7 @@ namespace SpaceAdventure.Game
             _camera.GlobalPosition = eye;
         }
 
-        private const float DipStartDeg = 20f, DipFullDeg = 70f, DipLift = 0.04f, DipBack = -0.18f;
+        private const float DipStartDeg = 20f, DipFullDeg = 89f, DipLift = 0.16f, DipBack = -0.30f;
 
         /// <summary>
         /// Pins the sign rules: mouse-right turns toward the movement frame's

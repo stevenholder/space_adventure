@@ -95,29 +95,33 @@ const NODE_CONTRACTS = {
   // The MakeHuman body (tools/bpy/human.py): game-engine bone names, both
   // hand mounts (grip in the right, barrel toward the left).
   "char.player": {
-    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
     legsCut: true,
+    chestCut: true,
   },
   "npc.shopkeeper": {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "char.player.f": {
-    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
     legsCut: true,
+    chestCut: true,
   },
   // Quaternius UBC bodies (human.py variants char.ubc, char.ubc.f): same rig names after their import.
   "char.ubc.f": {
-    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
     legsCut: true,
+    chestCut: true,
   },
   "char.ubc": {
-    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
     legsCut: true,
+    chestCut: true,
   },
   "npc.dispatcher": {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
@@ -395,6 +399,23 @@ for (const asset of selected) {
         if (lb.max.y > eyeY * 0.62) problems.push(`legs: reach ${lb.max.y.toFixed(2)}, above the hips (${(eyeY * 0.62).toFixed(2)})`);
         if (tb.min.y < kneeY) problems.push(`torso: reaches ${tb.min.y.toFixed(2)}, below the knee (${kneeY.toFixed(2)})`);
       } else problems.push("legsCut: needs meshes legs, torso, bone calf_l and node eye");
+    }
+    // `chestCut` (Phase 19): `chest` and `torso` meet on one level ring
+    // (human.py bisects the trunk there) about 0.40 m under the eye. The
+    // local player draws the torso, capped at that ring, and hides the
+    // chest, so looking down meets a solid suit face, never the near plane.
+    if (contract.chestCut) {
+      const chest = findByName(gltf.scene, "chest")[0], torso = findByName(gltf.scene, "torso")[0];
+      const eye = findByName(gltf.scene, "eye")[0];
+      if (chest && torso && eye) {
+        gltf.scene.updateMatrixWorld(true);
+        const cb = new Box3().setFromObject(chest), tb = new Box3().setFromObject(torso);
+        const eyeY = eye.getWorldPosition(new Vector3()).y;
+        if (Math.abs(cb.min.y - tb.max.y) > 0.005)
+          problems.push(`chestCut: chest bottom ${cb.min.y.toFixed(3)} != torso top ${tb.max.y.toFixed(3)}`);
+        if (tb.max.y < eyeY - 0.45 || tb.max.y > eyeY - 0.35)
+          problems.push(`chestCut: torso top ${tb.max.y.toFixed(3)} outside eye-0.45..eye-0.35 (eye ${eyeY.toFixed(2)})`);
+      } else problems.push("chestCut: needs meshes chest, torso and node eye");
     }
   }
 

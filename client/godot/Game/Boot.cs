@@ -39,6 +39,9 @@ namespace SpaceAdventure.Game
             return null;
         }
 
+        /// <summary>-rigWorn pieces waiting for the local body to attach.</summary>
+        private readonly List<(string slot, string asset)> _rigWorn = new List<(string, string)>();
+
         private static bool Flag(string name) => Array.IndexOf(OS.GetCmdlineUserArgs(), name) >= 0;
 
         /// <summary>
@@ -1459,6 +1462,15 @@ namespace SpaceAdventure.Game
             // -rigArmed: show the rig without a purchase (screenshot rig).
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
+            if (_rigWorn.Count > 0 && _viewModel.BodyReady)
+            {
+                foreach (var (slot, asset) in _rigWorn)
+                {
+                    _viewModel.Wear(slot, asset);
+                    GD.Print($"rig: wearing {slot}={asset}");
+                }
+                _rigWorn.Clear();
+            }
             _viewModel.ArmsVisible = CanShoot;
             string held = _character.Held;
             bool holding = CanShoot && !string.IsNullOrEmpty(held);
@@ -2045,6 +2057,11 @@ namespace SpaceAdventure.Game
             _rocks.Build(_terrain, _net.WorldSeed);
             _worldBuilt = true;
             _rigArmed = Flag("-rigArmed");
+            // -rigWorn slot=asset,...: dress the local body for a shot (asset
+            // ids, not items). Applied by the frame loop once the body is on.
+            if (Arg("-rigWorn") is string worn)
+                foreach (string pair in worn.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    if (pair.Split('=') is { Length: 2 } kv) _rigWorn.Add((kv[0].Trim(), kv[1].Trim()));
             _rigAim = Flag("-uiAim");
             _rigLowered = Flag("-uiLowered");
             // The sheet up front, so the first drip and the K panel already
@@ -2638,6 +2655,7 @@ namespace SpaceAdventure.Game
                 FirstPersonAnim.Pick(9f, false, true, true) == "fp_unarmed" && FirstPersonAnim.Pick(9f, true, true, true) == "fp_lower"
                 && FirstPersonAnim.Pick(9f, true, true, false) == "fp_ads" && FirstPersonAnim.Pick(9f, true, false, false) == "fp_sprint"
                 && FirstPersonAnim.Pick(1f, true, false, false) == "fp_walk" && FirstPersonAnim.Pick(0f, true, false, false) == "fp_idle");
+            Check("near cut: all eight variants compile with NearCut/NearCutBand", ViewModel.NearCutShadersParse());
             var wall = new[] { new Sim.Collider { Kind = Sim.ColliderKind.Box, Center = new Vec3(0, 151, -0.8), Half = new Vec3(1, 1, 0.1), Rot = new Quat(0, 0, 0, 1) } };
             var ball = new[] { new Sim.Collider { Kind = Sim.ColliderKind.Sphere, Center = new Vec3(2, 151, -0.8), Half = new Vec3(0.5, 0, 0), Rot = new Quat(0, 0, 0, 1) } };
             var eyeAt = new Vector3(0, 151, 0);

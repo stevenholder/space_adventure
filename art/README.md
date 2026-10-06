@@ -77,37 +77,51 @@ real materials, about 18k triangles dressed.
 - **Body** (`tools/bpy/human.py`): a MakeHuman human from MPFB2's sliders
   (`MACRO`), MPFB's 53-bone `game_engine` rig with its weights, turned to +Y
   front and scaled so the eyes are at 1.70 m, helpers removed, decimated to
-  6k triangles, split into `torso`/`legs`/`arms`/`head`. Undersuit, gloves and boots
+  6k triangles, split into `head`/`arms`/`chest`/`torso`/`legs`. Undersuit, gloves and boots
   are materials on the body. Clips are posed by world-space swings and an
   analytic two-bone IK toward WRIST targets (shoulders at ±0.20, 0.02, 1.45;
   wrist reach 0.54 m), and both hands carry mounts (`hand.r`, `hand.l`): the
   client runs a two-handed weapon's barrel from the right hand toward the
   left, every frame.
-- **Why `legs` is its own mesh, open, and the torso capped** (2026-10-06):
-  in first person the client hides the local player's `head`, draws its
-  `torso` and `arms` shadows-only (the first-person arms are a separate
-  copy) and draws `legs`: looking down shows thighs, shins and boots, no
-  torso. `split()` cuts by dominant bone (`head`/`neck_01` -> head,
-  arm and finger bones -> arms) and cuts torso from legs LEVEL at the hip
-  joints (the `thigh_l`/`thigh_r` heads, z 0.93-0.97): the pelvis/thigh
-  weight border runs down the groin crease, two rings that left the
-  buttocks on the torso. It hands the cut's teeth (faces that mostly border
-  another part, or own a corner alone) from the torso to the head and arms
-  and from the legs to the torso, then `cap()` closes the torso's open
-  rings -- neck, shoulders and waist -- with undersuit (`suit`) triangles
-  made of the ring's own vertices (so they carry its weights), wound
-  outward, sharp at the rim (smooth across it, the cap shaded black).
-  `lod` decimation reserves `CAP_TRIS` (110; 74-84 measured) for them;
-  UBC bodies are simplified to budget by the import anyway.
-  **`legs` is open at the waist on purpose.** A waist cap on the legs
-  filled the view looking down (even with the camera leaned 18 cm forward)
-  and hid the feet; open, the inside of the legs is back-face culled, so
-  the local player sees through the hollow thighs to the boots and the
-  ground, with the legs' rim as an outline (its ragged teeth are still
-  tidied). Remote players draw the torso, whose waist cap closes the ring,
-  so they never see it open. The npc.* bodies are still the older
-  `body`/`arms`/`head` build until they are next rebuilt (boots cover both
-  `legs/boot` and `body/boot`).
+- **Five meshes: why the chest cut and the torso cap** (Phase 19,
+  2026-10-06; GDD "First-person body, in the world"). `split()` cuts by
+  dominant bone (`head`/`neck_01` -> head, arm and finger bones -> arms),
+  then makes two LEVEL cuts through the trunk. The waist cut sits at the
+  hip joints (the `thigh_l`/`thigh_r` heads, z 0.93-0.97; the pelvis/thigh
+  weight border runs down the groin crease and left the buttocks on the
+  torso): below it is `legs`, hips to feet. The **chest line** sits
+  `CHEST_DROP` (0.40 m) under the eye -- z 1.25 on the Colonists (eye
+  1.65), 1.30 on the UBC bodies (eye 1.70), below the armpit (lowest
+  1.31-1.39; split() stops the build if an armpit reaches it) and above
+  the lowest rib: above it is `chest` (shoulders, upper chest and back,
+  the neck ring), below it `torso`. The chest line is a true plane cut:
+  the trunk faces crossing it are bisected first (weights and UVs
+  interpolated, pentagons triangulated; ~100-140 tris), so `chest`
+  bottom and `torso` top are one ring at one height (verify.mjs
+  `chestCut`, within 5 mm and between eye-0.45 and eye-0.35) and there
+  are no teeth to tidy there; the hip cut and the head/arms borders still
+  hand their teeth (faces that mostly border another part, or own a
+  corner alone) to the head and arms and from the legs to the torso.
+  `cap()` then closes rings with undersuit (`suit`) triangles made of the
+  ring's own vertices (so they carry its weights), wound outward, sharp
+  at the rim (smooth across it, a cap shaded black): `chest` gets its
+  neck and shoulder caps and stays OPEN at the chest line; `torso` gets a
+  flat cap on TOP (normal up) and stays OPEN at the hips; `legs` is open
+  at the waist. Remote players draw all five, so each open ring is
+  covered by the mesh above it and the shared boundaries show nothing.
+  The local player hides `head`, `arms` and `chest` (shadows-only; the
+  first-person arms are a separate copy) and draws `torso` and `legs`
+  through the client's near-cut material: looking down meets the
+  torso's cap -- a solid suit face, not the hollow inside of a collar or
+  a hip ring -- with the thighs and boots below it on the ground, and the
+  0.40 m drop keeps that cap outside the 0.30 m near cut even leaning.
+  `lod` decimation reserves `CAP_TRIS` (230: the bisect ~110 plus the
+  caps ~100) for all of this; UBC bodies are simplified to budget by the
+  import anyway. The npc.* bodies are still the older
+  `body`/`arms`/`head` build until they are next rebuilt (a rebuild gives
+  them the five meshes too; boots cover both `legs/boot` and
+  `body/boot`). hair.py reads `head`, `chest` and `torso` of the shipped
+  body for the scalp and shoulders it fits to.
 - **Armor** (`tools/bpy/armor.py`): hard plates are clean grids laid on a
   cylinder around their bone, masked to a rounded rectangle, projected
   inward along their normals onto a SMOOTHED copy of the body with a gap,
@@ -401,7 +415,7 @@ authored at bulk 1.0, so an orc would clip through them.
 
 ### First person
 
-Every humanoid has `torso` and `legs` (`body` on npc.* bodies built
+Every humanoid has `chest`, `torso` and `legs` (`body` on npc.* bodies built
 before 2026-10-06), `arms` (both arms and hands, split along the sleeve
 seam) and `head`. The client hangs a
 second `char.player` under the camera and draws only its `arms`, so worn

@@ -14,12 +14,13 @@
 // A wall closer than the rifle lowers it (fp_lower) instead of clipping it.
 //
 // THE BODY is the opposite: a real object at the player's feet on the normal
-// layer, so looking down shows your chest and legs where they are and other
-// players see exactly the same model. Its head and the hair on it (the
-// `hair` worn slot, EntityViews.Dress), its arms, the armor on them and its
-// held weapon are shadows-only: the eye is inside the head and the
-// arms it should see are the first-person ones -- but the ground shadow
-// keeps all of them, so it holds the gun the way everyone else's does.
+// layer, so looking down shows your torso and legs where they are and other
+// players see exactly the same model. Its capped `torso`, its `legs` and the
+// armor worn on chest/back/legs/feet draw with the NEAR-CUT material (real
+// depth and sun, dissolved within NearCut of the eye) and cast nothing;
+// shadows-only twins of them, plus the shadows-only head, hair, arms,
+// `chest`, gloves and held weapon, cast the whole-figure ground shadow
+// (GDD "First-person body, in the world").
 
 using System;
 using System.Collections.Generic;
@@ -148,6 +149,172 @@ void fragment() {
             }
         }
 
+        /// <summary>
+        /// The near cut (GDD "First-person body, in the world"): what the
+        /// local body draws with. The first-person shading WITHOUT the depth
+        /// squeeze -- real depth, so a crate hides your shins, and it
+        /// receives the sun's shadows -- plus a per-pixel discard of anything
+        /// within NearCut of the eye, dithered over NearCutBand by a screen
+        /// hash so a collar or a pauldron dissolves instead of slicing at the
+        /// near plane. Wearers cast no shadow (the discard would punch holes
+        /// in it); the shadows-only parts and the 3PM pieces cast the figure.
+        /// </summary>
+        public const float NearCut = 0.30f, NearCutBand = 0.05f;
+
+        private const string NearCutCode = @"
+uniform float NearCut = 0.30;
+uniform float NearCutBand = 0.05;
+float near_hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void near_cut(vec3 v, vec2 frag) {
+    float d = length(v);
+    float t = clamp((d - NearCut) / NearCutBand, 0.0, 1.0);
+    if (t < near_hash(frag)) discard;
+}
+";
+
+        /// <summary>
+        /// The torso's cap is a stand-in for the chest above it -- and that
+        /// chest is a shadows-only caster sitting right on top of it, so
+        /// from any sun the cap was black. On up-facing torso fragments
+        /// (model-space normal, the cap) the shadow term is floored at
+        /// CapShadowFloor; everything else, and a world shadow's darkening
+        /// down to the floor, is plain Lambert.
+        /// </summary>
+        public const float CapShadowFloor = 0.65f;
+
+        private const string CapLightCode = @"
+uniform float CapShadowFloor = 0.65;
+varying float v_cap;
+void vertex() { v_cap = smoothstep(0.6, 0.9, NORMAL.y); }
+void light() {
+    float a = mix(ATTENUATION, max(ATTENUATION, CapShadowFloor), v_cap);
+    DIFFUSE_LIGHT += clamp(dot(NORMAL, LIGHT), 0.0, 1.0) * a * LIGHT_COLOR / PI;
+}
+";
+
+        private const string PbrFragment = @"
+uniform vec4 albedo : source_color = vec4(1.0);
+uniform float roughness = 0.6;
+uniform float metallic = 0.0;
+uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform float normal_scale = 0.0;
+uniform float alpha_cut = -1.0;
+void fragment() {
+    near_cut(VERTEX, FRAGCOORD.xy);
+    vec4 tex = texture(albedo_tex, UV);
+    if (albedo.a * tex.a < alpha_cut) discard;
+    ALBEDO = albedo.rgb * tex.rgb;
+    NORMAL_MAP = texture(normal_tex, UV).rgb;
+    NORMAL_MAP_DEPTH = normal_scale;
+    ROUGHNESS = roughness;
+    METALLIC = metallic;
+}";
+
+        private const string VcFragment = @"
+void fragment() {
+    near_cut(VERTEX, FRAGCOORD.xy);
+    ALBEDO = COLOR.rgb;
+    ROUGHNESS = 1.0;
+    METALLIC = 0.0;
+}";
+
+        /// <summary>Variant index: bit 0 pbr, bit 1 cull disabled, bit 2 the cap light.</summary>
+        private static Shader NearCutShader(int v) => new Shader
+        {
+            Code = "shader_type spatial;\nrender_mode " + ((v & 2) == 0 ? "cull_back" : "cull_disabled") +
+                   ((v & 1) == 0 ? ", specular_disabled" : "") + ";\n" + NearCutCode +
+                   ((v & 4) != 0 ? CapLightCode : "") + ((v & 1) != 0 ? PbrFragment : VcFragment),
+        };
+
+        private static readonly Shader[] NearCutShaders =
+        {
+            NearCutShader(0), NearCutShader(1), NearCutShader(2), NearCutShader(3),
+            NearCutShader(4), NearCutShader(5), NearCutShader(6), NearCutShader(7),
+        };
+
+        /// <summary>
+        /// -selftest: every near-cut variant parses (a shader that fails to
+        /// compile lists no uniforms) and carries NearCut/NearCutBand.
+        /// </summary>
+        public static bool NearCutShadersParse() => Array.TrueForAll(NearCutShaders, sh =>
+        {
+            var names = new HashSet<string>();
+            foreach (Godot.Collections.Dictionary u in sh.GetShaderUniformList()) names.Add((string)u["name"]);
+            return names.Contains("NearCut") && names.Contains("NearCutBand");
+        });
+
+        private static readonly Dictionary<(Material, bool), Material> NearCopies = new Dictionary<(Material, bool), Material>();
+        private static readonly Material NoSource = new StandardMaterial3D { VertexColorUseAsAlbedo = true };
+
+        /// <summary>
+        /// The near-cut twin of `source`, cached per (source, cap): the
+        /// vertex-colour variant for the shared shading, a pbr copy (albedo
+        /// and its texture, normal map, roughness, metallic) for real
+        /// materials, culling as the source does. `cap` adds the cap light
+        /// (the torso). Null for anything that is not a BaseMaterial3D.
+        /// </summary>
+        public static Material NearCutFor(Material source, bool cap = false)
+        {
+            source ??= NoSource;
+            if (NearCopies.TryGetValue((source, cap), out Material m)) return m;
+            if (source is not BaseMaterial3D bm) return null;
+            bool pbr = !bm.VertexColorUseAsAlbedo;
+            int v = (pbr ? 1 : 0) | (bm.CullMode == BaseMaterial3D.CullModeEnum.Back ? 0 : 2) | (cap ? 4 : 0);
+            var sm = new ShaderMaterial { Shader = NearCutShaders[v] };
+            if (pbr)
+            {
+                sm.SetShaderParameter("albedo", bm.AlbedoColor);
+                sm.SetShaderParameter("roughness", bm.Roughness);
+                sm.SetShaderParameter("metallic", bm.Metallic);
+                if (bm.AlbedoTexture != null) sm.SetShaderParameter("albedo_tex", bm.AlbedoTexture);
+                if (bm.NormalEnabled && bm.NormalTexture != null)
+                {
+                    sm.SetShaderParameter("normal_tex", bm.NormalTexture);
+                    sm.SetShaderParameter("normal_scale", bm.NormalScale);
+                }
+                // A blended surface (an armor decal) becomes a cut-out: the
+                // near cut is an opaque pass, and a blended quad drawn
+                // opaque was a cream slab over the plate.
+                if (bm.Transparency == BaseMaterial3D.TransparencyEnum.AlphaScissor)
+                    sm.SetShaderParameter("alpha_cut", bm.AlphaScissorThreshold);
+                else if (bm.Transparency != BaseMaterial3D.TransparencyEnum.Disabled)
+                    sm.SetShaderParameter("alpha_cut", 0.5f);
+            }
+            NearCopies[(source, cap)] = sm;
+            return sm;
+        }
+
+        /// <summary>
+        /// Every surface under `root` draws near-cut and casts no shadow
+        /// (the local body's drawn parts and the pieces worn on them). Each
+        /// mesh gets a shadows-only twin on the same skeleton with its own
+        /// material: that twin is the 3PM's share of the whole-figure ground
+        /// shadow, never punched by the discard. `cap`: the torso.
+        /// </summary>
+        public static void NearCutOverride(Node root, bool cap = false)
+        {
+            foreach (MeshInstance3D mi in new List<MeshInstance3D>(AssetRegistry.Descendants<MeshInstance3D>(root)))
+            {
+                if (mi.HasMeta("sa_shadow_twin")) continue;
+                if (mi.GetParent() is Node parent)
+                {
+                    var twin = (MeshInstance3D)mi.Duplicate();
+                    twin.Name = mi.Name + "_shadow";
+                    twin.SetMeta("sa_shadow_twin", true);
+                    twin.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+                    parent.AddChild(twin);
+                }
+                mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                if (mi.Mesh == null) continue;
+                for (int i = 0; i < mi.Mesh.GetSurfaceCount(); i++)
+                {
+                    Material nc = NearCutFor(mi.GetActiveMaterial(i), cap);
+                    if (nc != null) mi.SetSurfaceOverrideMaterial(i, nc);
+                }
+            }
+        }
+
         private readonly Camera3D _eye;
         private readonly Node3D _fp;           // first-person arms holder, under the camera
         private readonly Node3D _muzzle;       // proxy, copied from the held weapon's muzzle
@@ -240,7 +407,7 @@ void fragment() {
             {
                 _fpModel = model;
                 foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
-                    if (mi.Name == "torso" || mi.Name == "legs" || mi.Name == "head") mi.Visible = false;
+                    if (mi.Name == "chest" || mi.Name == "torso" || mi.Name == "legs" || mi.Name == "head") mi.Visible = false;
                 AssetRegistry.SetLayers(model, _layers);
                 FpOverride(model);
                 foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(model))
@@ -257,17 +424,19 @@ void fragment() {
             _assets.Attach(bodyId, _body, model =>
             {
                 _bodyModel = model;
-                // Legs only: looking down shows where you stand, not a torso
-                // (GDD "First-person body"). The rest still casts, so the
-                // ground shadow is the whole figure.
-                foreach (string part in new[] { "head", "arms", "torso" })
+                // The 1PM (GDD "First-person body, in the world"): the
+                // capped torso and the legs draw near-cut, in the world,
+                // casting nothing; head, arms and the chest above the cap
+                // are shadows-only, so the ground shadow is the whole figure.
+                foreach (string part in new[] { "head", "arms", "chest" })
                 {
                     Node3D n = AssetRegistry.FindNode(model, part);
                     if (n != null)
                         foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(n))
                             g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
                 }
-                if (AssetRegistry.FindNode(model, "legs") is Node3D legs) EntityViews.NoSelfShadow(legs);
+                if (AssetRegistry.FindNode(model, "torso") is Node3D torso) NearCutOverride(torso, cap: true);
+                if (AssetRegistry.FindNode(model, "legs") is Node3D legs) NearCutOverride(legs);
                 _bodyAnim = CharacterAnim.For(model);
                 if (_bodyAnim != null) _bodyAnim.Class = _cls;
                 EntityViews.Dress(_assets, a => a, _bodyModel, _worn, _wornDrawn, _wornNodes, local: true);
@@ -276,6 +445,9 @@ void fragment() {
                     if (n.Name == "model" || n.Name == "head-shadow") n.Visible = false;
             });
         }
+
+        /// <summary>The local body's model is attached (Wear lands on it now).</summary>
+        public bool BodyReady => _bodyModel != null;
 
         /// <summary>Armor on our own body, and the arm pieces of it on the first-person arms. Takes the ASSET id.</summary>
         public void Wear(string slot, string asset)

@@ -756,3 +756,19 @@ strict bare server and in guest mode; shots at the game canvas.
 | C167 | PASS | DELETE → 200, list −1, the others untouched, DELETE again → 404; strict: the token is closed 1008 before any spawn; guests: joins as a fresh guest; DELETE while connected → that socket closes 1008 and the row stays gone (`TestDeleteCharacter_KicksLive`); the account delete at the end takes the remaining three |
 | C168 | PASS | a second account's PATCH and DELETE on the token → 404 `no such character`, the list byte-identical after; unknown token → 404 with the same body; POST on the token path → 405; no session 401; no CSRF header 403 |
 | C169 | PASS (form headless; SAVE/DELETE live owed) | `test/out/ui/p18-chars-{select,edit,delete}.png`: EDIT beside NEW CHARACTER; edit mode = NAME prefilled, HAIR row, no GENDER/MODEL, SAVE dark until a valid change, CANCEL + Danger DELETE; the inline `DELETE KADE? THIS CANNOT BE UNDONE` with CONFIRM/KEEP. `-selftest` +17 `chars:` checks (prefill, Dirty/CanSave, 404 reason, Saved, Deleted → next/previous/empty, AskDelete/KeepIt, Cancel). Sweep: Go vet/test (+`-race`), store + web on Postgres, gate/test/codec/conformance, t13, t35. **Owed:** SAVE and DELETE pressed on the Windows install against prod |
+
+# Phase 19 — the first-person body, in the world (2026-10-06)
+
+Art (five-mesh split, chest cap) and client (near-cut material, local
+visibility, `-rigWorn`, camera) in one wave; shots on kind as a guest and
+in the full Bulwark set, sun ahead (`-uiYaw 300`) and behind (`120`).
+Owed: eyes on the Windows install; a crate-occlusion shot was not taken
+(no prop sits where the guest spawns) — C170's occlusion is by
+construction (real depth) and still to be seen.
+
+| # | Result | Evidence |
+|---|---|---|
+| C170 | PASS (occlusion by construction; shot owed) | the local torso/legs/armor draw through `NearCutMaterial`: normal projection and depth, no squeeze (`-uiYaw 120`: the body is backlit and dark, the figure's shadow ahead — the sun lights it); they cast no shadow themselves, and the ground shadow is the whole figure via shadows-only twins (`p19-bare-70-y120.png`); remote players whole across five meshes with no seam (`p19-remote-player.png`), the shopkeeper whole (`p19-armed-npc.png`) |
+| C171 | PASS | bare −45/−70/−89 and Bulwark −70/−89, both yaws (`tmp/p19-{bare,bulwark}-*.png`; the Bulwark −70/−89 at y300 are `test/out/ui/p17-fp-lookdown{,-89}.png`): no sawtooth, no hole, no interior, nothing drawn over the world; a pauldron's near edge dissolves over the 5 cm band; `NearCut 0.30` / `NearCutBand 0.05` never showed the interior |
+| C172 | PASS | the cap, the chest plate (emblem decal as a cut-out), a knee and both feet appear where the body stands; the 3PM's shadow and the drawn feet agree on the ground; the shared skeleton animates the drawn legs (same `Dress`/attach path as remote) |
+| C173 | PASS | `npm --prefix art test` 278/278 (24 hair pieces refit to the re-decimated heads), Go vet/test, `dotnet build` 0 warnings, `-selftest` (+ "near cut: all eight variants compile"), gate/test/codec/conformance, export + packaged join; fp arms unchanged (`-rigArmed`); C153–C169 untouched (no server or API change) |
