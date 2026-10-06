@@ -1691,9 +1691,19 @@ lean. Together: the cap is the solid thing you see when you look down,
 and the cut dissolves a chest plate's collar or a pauldron before it
 reaches the near plane.
 
-**Camera.** The pitch lean stays (`Fps.PlaceCamera`): forward and a
-little up as the view passes 20° down. Tuned so the cap sits below the
-view axis at 70° and the thighs and feet are in frame at 89°.
+**Camera.** The pitch lean stays (`Fps.PlaceCamera`): from 20° down to
+straight down the eye moves up to 0.30 m forward and 0.16 m up (inside
+the body's 0.35 m radius). From behind the cap the cap hides the legs;
+from in front of it you see the plate's top edge and the boots at −70,
+and the cap or plate with a knee and both feet at −89. Thighs show only
+near straight down — the belly is wider than the eye is forward.
+
+**Two things the build taught.** The torso and legs cast no shadow (their
+dither would punch holes in it), so each drawn mesh gets a shadows-only
+twin on the same skeleton: the ground shadow is still the whole figure.
+And the shadows-only `chest` sits right over the cap, so the cap's
+up-facing fragments floor their shadow term at `CapShadowFloor` 0.65 —
+a world shadow darkens the cap less than the legs beside it; accepted.
 
 **What you see.** At −45: nothing of you, as before. At −70: your chest
 plate and thighs below it, feet on the ground, the ground shadow of the

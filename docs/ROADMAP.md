@@ -1880,9 +1880,13 @@ DELETE, CONFIRM — the row is gone; with none left the create form opens.
 
 # Phase 19 — the first-person body, in the world (2026-10-06)
 
-### Where Phase 19 stands (2026-10-06)
+### Where Phase 19 stands (2026-10-06, built)
 
-Drafted. #74 (pull-back), #82 (collar caps + camera lean) and #83 (legs
+Built: C170–C173 recorded (docs/QA-STATUS.md "Phase 19"). Five meshes,
+the torso capped at eye − 0.40, the near-cut material (0.30 m, 5 cm
+band), shadows-only twins for the ground shadow, the cap's shadow floor,
+the camera 0.30 m forward / 0.16 m up at straight down. Owed: eyes on the
+install, a crate-occlusion shot. #74 (pull-back), #82 (collar caps + camera lean) and #83 (legs
 only through an open hip ring) each hid the look-down symptom; the user's
 screenshot after #83 shows the inside of their own thigh plates through
 the ring. The user asked for research; the answer is the shooter pattern

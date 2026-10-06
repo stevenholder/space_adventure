@@ -15,10 +15,11 @@ What it builds, in order:
   3. helpers, tongue, teeth and lashes removed, eyeballs kept, decimated to
      BODY_TRIS, smooth-shaded;
   4. regions by dominant bone: `head` (skin, hair cap, eyes), `arms`
-     (undersuit sleeves, bare hands), then `torso` (undersuit) and `legs`
-     (undersuit, boots) cut level at the hip joints -- four meshes (torso
-     capped, legs open at the waist), as the client's first-person split
-     needs (art/README.md);
+     (undersuit sleeves, bare hands), then the trunk cut level twice:
+     `chest` above the mid-chest line (EYE - CHEST_DROP), `torso` down to
+     the hip joints, `legs` below -- five meshes (chest capped at neck and
+     shoulders, torso capped on top, legs open), as the client's
+     first-person body needs (art/README.md);
   5. `hand.r` / `hand.l` empties riding the hand bones at the palm: the
      weapon's grip goes in the right, its barrel points at the left;
   6. clips: idle/walk/sprint (+_armed), die, and the fp_* set, posed by
@@ -598,7 +599,7 @@ def paint_skin(h, eyes, rig):
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres
-CAP_TRIS = 110                                # cap(): neck, shoulders and waist on `torso` (74-84 measured on `lod` bodies)
+CAP_TRIS = 230                                # split()+cap(): the chest line's bisect (~110) and the caps -- neck and shoulders on `chest`, the chest line on `torso` (~100) -- measured on `lod` bodies
 
 
 def lod_decimate(h, eyes):
@@ -760,7 +761,7 @@ LEG_BONES = ("thigh", "calf", "foot", "ball")
 
 
 def part_of(bone):
-    """By dominant bone; split() then re-cuts torso/legs level at the hips."""
+    """By dominant bone; split() then re-cuts the trunk level into chest/torso/legs."""
     if bone is None:
         return "torso"
     if bone in ("head", "neck_01"):
@@ -827,11 +828,50 @@ def dress(h, eye_l, eye_r):
 TEX_DIR = os.path.join(ART, "build", "tex")     # the baked maps (the glb embeds its own copy)
 
 
+CHEST_DROP = 0.40     # the mid-chest cut: this far below the eye (GDD "First-person body, in the world")
+
+
+def chest_line(h):
+    """z (h's local frame) of the flat mid-chest cut. Every face crossing it
+    is bisected first, so `chest` and `torso` meet on one exactly level
+    ring: no teeth to tidy, a flat cap, chest bottom == torso top."""
+    return (h.matrix_world.inverted() @ Vector((0, 0, ACTIVE.get("eye", EYE) - CHEST_DROP))).z
+
+
+def bisect_chest(h, z):
+    """Split the trunk's faces (not the arms' or head's: their ring sits
+    above the line, and an arm hanging at the side must not gain a seam)
+    on the plane z. Weights and UVs are interpolated on the new vertices."""
+    dom = dominant_bones(h)
+    bm = bmesh.new()
+    bm.from_mesh(h.data)
+    bm.verts.ensure_lookup_table()
+    trunk = [f for f in bm.faces
+             if all(part_of(dom[v.index]) in ("torso", "legs") for v in f.verts)
+             and min(v.co.z for v in f.verts) < z < max(v.co.z for v in f.verts)]
+    geom = list({e for f in trunk for e in f.edges}) + trunk + list({v for f in trunk for v in f.verts})
+    before = sum(len(f.verts) - 2 for f in bm.faces)
+    bmesh.ops.bisect_plane(bm, geom=geom, plane_co=(0, 0, z), plane_no=(0, 0, 1), dist=1e-5)
+    # A quad cut across two neighbouring edges leaves a pentagon: tangents
+    # (the normal map) want tris and quads only.
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4],
+                          quad_method="BEAUTY", ngon_method="BEAUTY")
+    bm.to_mesh(h.data)
+    after = sum(len(f.verts) - 2 for f in bm.faces)
+    bm.free()
+    print(f"split: chest line bisects {len(trunk)} faces, +{after - before} tris")
+
+
 def split(h, rig):
-    """`head`, `arms` and `legs` off into their own meshes; the rest is
-    `torso`. The local player draws only `legs` of these (head hidden,
-    torso and arms shadows-only, the first-person arms drawn apart), so
-    looking down shows thighs, shins and boots standing on the ground."""
+    """`head`, `arms`, `chest` and `legs` off into their own meshes; the
+    rest is `torso`. Phase 19 (GDD "First-person body, in the world"):
+    remote players draw all five; the local player draws `torso` and
+    `legs` through the near-cut material, so looking down shows the
+    capped mid-chest, the thighs and the feet."""
+    # The chest line is a true plane cut, made before the bone weights are
+    # read (the new vertices carry interpolated weights).
+    chest = chest_line(h)
+    bisect_chest(h, chest)
     dom = dominant_bones(h)
     # The waist cut is LEVEL, at the hip joints (the thighs' heads), not
     # the pelvis/thigh weight border: that border runs down the groin
@@ -845,15 +885,16 @@ def split(h, rig):
         bones = [dom[v] for v in p.vertices]
         part = part_of(max(set(bones), key=bones.count))
         if part in ("torso", "legs"):
-            part = "legs" if p.center.z < cut else "torso"
+            part = "legs" if p.center.z < cut else "chest" if p.center.z > chest else "torso"
         label.append(part)
     # A face with most of its edges on a part it hands teeth to, or a corner
     # no other face of its own part holds, is a tooth of the ragged cut: it
-    # goes to that part. The drawn side gives: the torso to the head and arms
+    # goes to that part. The drawn side gives: the chest to the head and arms
     # (third person sees the neck and shoulders), the legs to the torso (the
-    # local player looks down at the waist). Two passes: more would start
-    # eating along a diagonal cut.
-    gives = {"torso": ("head", "arms"), "legs": ("torso",)}
+    # local player looks down at the waist). The chest line needs none: it
+    # was bisected flat, and moving a face across it would only make teeth.
+    # Two passes: more would start eating along a diagonal cut.
+    gives = {"chest": ("head", "arms"), "torso": ("head", "arms"), "legs": ("torso",)}
     faces_of = {}
     for p in h.data.polygons:
         for k in p.edge_keys:
@@ -886,12 +927,19 @@ def split(h, rig):
         for i, part in moved.items():
             label[i] = part
         print(f"split: {len(moved)} teeth moved")
-    print(f"split: waist cut at z {cut:.3f} (hip joints)")
-    ids = ("torso", "legs", "head", "arms")
+    # The arms' ring must sit wholly above the chest line, or the torso's
+    # top ring would run into an armpit hole and cap as one.
+    pit = min((min(h.data.vertices[v].co.z for v in p.vertices) for p in h.data.polygons
+               if label[p.index] == "arms" and any(label[q] in ("chest", "torso")
+                                                   for k in p.edge_keys for q in faces_of[k])), default=chest + 1)
+    print(f"split: waist cut at z {cut:.3f} (hip joints), chest line at z {chest:.3f}, lowest armpit z {pit:.3f}")
+    if pit < chest + 0.005:
+        raise SystemExit(f"split: the armpit (z {pit:.3f}) reaches the chest line (z {chest:.3f})")
+    ids = ("torso", "legs", "head", "arms", "chest")
     tag = h.data.attributes.new("_part", "INT", "FACE")      # survives separate(), unlike indices
     tag.data.foreach_set("value", [ids.index(x) for x in label])
     parts = {}
-    for name in ("head", "arms", "legs"):
+    for name in ("head", "arms", "legs", "chest"):
         bpy.ops.object.select_all(action="DESELECT")
         h.select_set(True)
         bpy.context.view_layer.objects.active = h
@@ -916,21 +964,25 @@ def split(h, rig):
         o.data.attributes.remove(o.data.attributes["_part"])
         bpy.context.view_layer.objects.active = o
         bpy.ops.object.shade_smooth()
-    # Only the torso is capped. `legs` stays open at the waist on purpose:
-    # looking down, its inside is back-face culled, so the local player sees
-    # through the hollow thighs to the boots and the ground (a waist cap hid
-    # the feet). Remote players draw the torso, whose waist cap covers it.
-    print("caps", cap(parts["torso"]), "tris on torso")
+    # `chest` closes its neck and shoulders and stays OPEN at the chest
+    # line (remote players see the torso beneath it; the local player hides
+    # the chest). `torso` is capped at the chest line -- the solid suit face
+    # the local player looks down at -- and OPEN at the hips (the legs are
+    # drawn beneath it). `legs` is open at the waist, as before.
+    print("caps", cap(parts["chest"], open_at=(chest,)), "tris on chest,",
+          cap(parts["torso"], open_at=(cut,)), "on torso")
     return parts
 
 
-def cap(obj):
-    """Close `torso`'s open rings -- the neck, shoulders and waist, where
-    split() cut the other parts off -- with undersuit faces, so no view of
-    a body drawn whole looks into a hollow cut. (`legs` is left open.) The cap's vertices
-    are the ring's own, so it carries the ring's weights. Returns the tris
-    added. (Coincident boundary vertices are welded first: UBC's imported
-    mesh is split at its UV seams, which breaks each ring into pieces.)"""
+def cap(obj, open_at=()):
+    """Close a part's open rings -- where split() cut the other parts off --
+    with undersuit faces, so no view of a body drawn whole looks into a
+    hollow cut. A ring that runs round the body (spans x = 0) within 6 cm
+    of a height in `open_at` is left open: the part beneath or above it is
+    drawn there. The cap's vertices are the ring's own, so it carries the
+    ring's weights. Returns the tris added. (Coincident boundary vertices
+    are welded first: UBC's imported mesh is split at its UV seams, which
+    breaks each ring into pieces.)"""
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     ring = list({v for e in bm.edges if e.is_boundary for v in e.verts})
@@ -940,13 +992,20 @@ def cap(obj):
     rim = [e for e in bm.edges if e.is_boundary]
     todo = {e.link_loops[0] for e in rim}
     new = []
+    kept = set()
 
     def fill(cycle):
         # The hole runs against its faces' winding: reversed, the cap's normal
         # points out of the part like theirs. (A 3-vertex hole can be the
         # back of a lone torso triangle: no cap.)
-        if len(cycle) >= 3 and not bm.faces.get(cycle):
-            new.append(bm.faces.new(list(reversed(cycle))))
+        if len(cycle) < 3 or bm.faces.get(cycle):
+            return
+        xs = [v.co.x for v in cycle]
+        mz = sum(v.co.z for v in cycle) / len(cycle)
+        if min(xs) < 0 < max(xs) and any(abs(mz - z) < 0.06 for z in open_at):
+            kept.update(cycle)
+            return
+        new.append(bm.faces.new(list(reversed(cycle))))
 
     while todo:
         start = lp = todo.pop()
@@ -981,7 +1040,8 @@ def cap(obj):
     # A sharp rim: smooth across it, the cap took the torso's sideways
     # vertex normals and shaded near-black from above.
     for e in rim:
-        e.smooth = False
+        if not (set(e.verts) & kept):
+            e.smooth = False
     bm.to_mesh(obj.data)
     bm.free()
     return len(new)
