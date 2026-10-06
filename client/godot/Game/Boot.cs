@@ -385,6 +385,7 @@ namespace SpaceAdventure.Game
         // Phase 16: the account column (GDD "Accounts, launcher login and characters").
         private readonly Login _login = new Login();
         private bool _playBusy;
+        private ColorRect _curtain;
         /// <summary>Sign in, register, characters, logout; each call carries its own 5 s budget.</summary>
         private static readonly System.Net.Http.HttpClient AccountHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         private const int AccountBudgetMs = 5000;
@@ -439,10 +440,15 @@ namespace SpaceAdventure.Game
             // CLI --resolution (rig shots) is bigger than both and is kept.
             if (w.Size.X <= LauncherView.Width)
             {
-                Vector2I screen = DisplayServer.ScreenGetUsableRect(w.CurrentScreen).Size;
-                w.Size = new Vector2I(Math.Min(w.ContentScaleSize.X, screen.X), Math.Min(w.ContentScaleSize.Y, screen.Y));
+                Rect2I usable = DisplayServer.ScreenGetUsableRect(w.CurrentScreen);
+                var size = new Vector2I(Math.Min(w.ContentScaleSize.X, usable.Size.X), Math.Min(w.ContentScaleSize.Y, usable.Size.Y));
+                // Position first, for where the grown window will sit, then
+                // grow: the window expands in place instead of growing from
+                // the launcher's corner and jumping to the centre afterwards.
+                w.Position = usable.Position + (usable.Size - size) / 2;
+                w.Size = size;
             }
-            w.MoveToCenter();
+            else w.MoveToCenter();
             GD.Print($"window: game {w.Size.X}x{w.Size.Y} at {w.Position.X},{w.Position.Y}");
         }
 
@@ -459,6 +465,15 @@ namespace SpaceAdventure.Game
                 (email, pw) => _ = SignIn(email, pw, true),
                 SignOut);
             _launcherView.SetServer("SERVER · …");
+            // The curtain: a black full-rect over everything while the window
+            // changes shape between the launcher and the select. Without it the
+            // launcher's canvas is seen rescaled into the half-grown window for
+            // a frame or two, top-left, before the select appears.
+            var curtainLayer = new CanvasLayer { Name = "Curtain", Layer = 200 };
+            AddChild(curtainLayer);
+            _curtain = new ColorRect { Name = "curtain", Color = Styles.Ink, Visible = false, MouseFilter = Control.MouseFilterEnum.Stop };
+            _curtain.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            curtainLayer.AddChild(_curtain);
             string savedEmail = Identity("email");
             if (savedEmail != "" && Identity("session") != "") _login.Remembered(savedEmail);
             _launcherUp = true;
@@ -595,8 +610,28 @@ namespace SpaceAdventure.Game
             if (!_launcherUp || _playBusy || !_launch.PlayEnabled) return;
             if (Arg("-token") != null || Arg("-uiPlayAfter") != null) { EnterGame(RigToken()); return; }
             if (!_login.PlayAllowed) return;
+            _ = PlayToSelect();
+        }
+
+        /// <summary>
+        /// PLAY → select behind the curtain: the launcher hides and the curtain
+        /// draws for one frame BEFORE the window changes shape, the select is
+        /// built and given two frames to lay out and draw its stage, then the
+        /// curtain lifts. Nothing in between is ever seen.
+        /// </summary>
+        private async System.Threading.Tasks.Task PlayToSelect()
+        {
+            _playBusy = true;
+            _curtain.Visible = true;
+            _launcherUp = false;
+            _launcherView.Show(false);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             OpenGame();
             OpenSelect(fake: false);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            _curtain.Visible = false;
+            _playBusy = false;
         }
 
         /// <summary>
@@ -718,13 +753,23 @@ namespace SpaceAdventure.Game
         /// <summary>The select gone, the launcher window back (a dead session, SIGN OUT).</summary>
         private void BackToLauncher()
         {
+            if (_launcherView == null) { CloseSelect(); GetTree().Quit(0); return; } // a rig select has no launcher to return to
+            _ = BackToLauncherCurtained();
+        }
+
+        private async System.Threading.Tasks.Task BackToLauncherCurtained()
+        {
+            _curtain.Visible = true;
             CloseSelect();
-            if (_launcherView == null) { GetTree().Quit(0); return; } // a rig select has no launcher to return to
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             OpenLauncherWindow();
             _launcherView.Show(true);
             _launcherUp = true;
             _ui.Root.Visible = false;
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            _curtain.Visible = false;
         }
 
         /// <summary>A 401 anywhere in the select: both keys cleared, `SIGNED OUT · sign in again`.</summary>
