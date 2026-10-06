@@ -240,7 +240,7 @@ void fragment() {
             {
                 _fpModel = model;
                 foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
-                    if (mi.Name == "body" || mi.Name == "head") mi.Visible = false;
+                    if (mi.Name == "torso" || mi.Name == "legs" || mi.Name == "head") mi.Visible = false;
                 AssetRegistry.SetLayers(model, _layers);
                 FpOverride(model);
                 foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(model))
@@ -257,13 +257,17 @@ void fragment() {
             _assets.Attach(bodyId, _body, model =>
             {
                 _bodyModel = model;
-                foreach (string part in new[] { "head", "arms" })
+                // Legs only: looking down shows where you stand, not a torso
+                // (GDD "First-person body"). The rest still casts, so the
+                // ground shadow is the whole figure.
+                foreach (string part in new[] { "head", "arms", "torso" })
                 {
                     Node3D n = AssetRegistry.FindNode(model, part);
                     if (n != null)
                         foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(n))
                             g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
                 }
+                if (AssetRegistry.FindNode(model, "legs") is Node3D legs) EntityViews.NoSelfShadow(legs);
                 _bodyAnim = CharacterAnim.For(model);
                 if (_bodyAnim != null) _bodyAnim.Class = _cls;
                 EntityViews.Dress(_assets, a => a, _bodyModel, _worn, _wornDrawn, _wornNodes, local: true);

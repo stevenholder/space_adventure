@@ -1,5 +1,5 @@
 {
-  "$comment": "Bulwark boots: armored foot shells and tall shafts. Built by tools/bpy/armor.py for every body in BODIES.",
+  "$comment": "Bulwark boots: armored foot shells and tall shafts. Built by tools/bpy/armor.py for every body in BODIES. Covers `legs/boot` (the player bodies are split torso/legs since 2026-10-06) and `body/boot` (the npc.* bodies, built before the split).",
   "id": "armor.boots.bulwark",
   "src": "build/armor.boots.bulwark.raw.glb",
   "out": "armor/boots_bulwark.glb",
@@ -7,6 +7,7 @@
   "budget": 5000,
   "pbr": true,
   "covers": [
+    "legs/boot",
     "body/boot"
   ],
   "license": "CC0",

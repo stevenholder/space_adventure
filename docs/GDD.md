@@ -234,32 +234,36 @@ inside. That is cheap to say and has four consequences that are not:
 
 - **Hide the head, not the body.** The camera sits at the `eye` node, which is
   inside the skull — so the model carries a separate `head` node that is hidden
-  for the local player only. Everything else renders. Relying on the near clip
+  for the local player only. Relying on the near clip
   plane to slice the head away instead produces a visible cross-section
   whenever you look down or a wall gets close.
 - **Near clip plane at 0.05 m** (far plane 500 m — nothing is visible past the
   23 m horizon but the sky and the tall landmarks). A default 0.1 m near plane
   slices through your own chest when you look straight down.
-- **The body is seen from above and inside**, which is the same problem
-  vehicle interiors have: a shell modelled only for outside viewing looks
-  hollow and wrong from the eye point. Torso and legs need to read from a
-  steep angle at half a metre.
+- **Looking down shows legs and feet, no torso** (2026-10-06). The local body
+  draws only its `legs` mesh and what is worn in the `legs` and `feet` slots,
+  so you can tell where you are standing; `torso`, `head`, `arms`, hair and
+  every piece worn above the waist cast shadows only, so the ground shadow is
+  still the whole figure. The drawn legs receive no shadows (the unseen
+  torso's shadow lands right on the hips). A torso seen from half a metre above and inside
+  read as a hollow shell, never as a chest. The arms you see are the separate
+  first-person instance below.
 - **The body stays upright when you look down.** Only the camera pitches;
   pitch is not applied to the body. This is already why remote head pitch is
   not transmitted, and it is what makes looking at your own feet work.
 
 **Animation: skinned, clip-driven (since 2026-09-30).** The character is one
-skinned body on an armature built by `art/tools/bpy/body.py`, in three meshes
-(`body`, `arms`, `head`) with clips for the gaits, the armed gaits, death and
+skinned body on an armature built by `art/tools/bpy/body.py`, in four meshes
+(`torso`, `legs`, `arms`, `head`) with clips for the gaits, the armed gaits, death and
 first person. Armor dresses the same skeleton (art/README.md).
 
 **First-person arms.** What the eye sees of its own arms and weapon is a
 SECOND instance of the same `char.player`, hung under the camera with its eye
-on the camera, drawing only its `arms` mesh and the armor that covers it,
+on the camera, drawing only its `arms` mesh (its `torso`, `legs` and `head` are hidden) and the armor that covers it,
 playing the `fp_*` clips, holding the real weapon in its own `hand.r` -- the
 same model other players see. It draws with a depth-squeezed material so it is
 never cut by the world or your own chest, and casts no shadow. The local
-body's head, arms, arm armor and held weapon are shadows-only: the ground
+body's torso, head, arms, their armor and the held weapon are shadows-only: the ground
 shadow holds the gun, the eye never sees two pairs of arms.
 
 - Hold: the client frames the rifle by its rear sight (lower right of the

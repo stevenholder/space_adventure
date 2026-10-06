@@ -205,7 +205,7 @@ namespace SpaceAdventure.Game
             _camera.GlobalPosition = eye;
         }
 
-        private const float DipStartDeg = 20f, DipFullDeg = 70f, DipLift = 0.12f, DipBack = 0.10f;
+        private const float DipStartDeg = 20f, DipFullDeg = 70f, DipLift = 0.04f, DipBack = -0.18f;
 
         /// <summary>
         /// Pins the sign rules: mouse-right turns toward the movement frame's

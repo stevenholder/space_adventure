@@ -15,8 +15,10 @@ What it builds, in order:
   3. helpers, tongue, teeth and lashes removed, eyeballs kept, decimated to
      BODY_TRIS, smooth-shaded;
   4. regions by dominant bone: `head` (skin, hair cap, eyes), `arms`
-     (undersuit sleeves, bare hands), `body` (undersuit, boots) -- three
-     meshes, as the client's first-person split needs (art/README.md);
+     (undersuit sleeves, bare hands), then `torso` (undersuit) and `legs`
+     (undersuit, boots) cut level at the hip joints -- four meshes (torso
+     capped, legs open at the waist), as the client's first-person split
+     needs (art/README.md);
   5. `hand.r` / `hand.l` empties riding the hand bones at the palm: the
      weapon's grip goes in the right, its barrel points at the left;
   6. clips: idle/walk/sprint (+_armed), die, and the fp_* set, posed by
@@ -596,7 +598,7 @@ def paint_skin(h, eyes, rig):
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres
-CAP_TRIS = 100                                # cap(): the neck and shoulder caps on `body` (44-52 measured on `lod` bodies)
+CAP_TRIS = 110                                # cap(): neck, shoulders and waist on `torso` (74-84 measured on `lod` bodies)
 
 
 def lod_decimate(h, eyes):
@@ -754,16 +756,20 @@ def dominant_bones(obj):
 
 
 ARM_BONES = ("upperarm", "lowerarm", "hand", "thumb", "index", "middle", "ring", "pinky")
+LEG_BONES = ("thigh", "calf", "foot", "ball")
 
 
 def part_of(bone):
+    """By dominant bone; split() then re-cuts torso/legs level at the hips."""
     if bone is None:
-        return "body"
+        return "torso"
     if bone in ("head", "neck_01"):
         return "head"
     if bone.startswith(ARM_BONES):
         return "arms"
-    return "body"
+    if bone.startswith(LEG_BONES):
+        return "legs"
+    return "torso"
 
 
 def dress(h, eye_l, eye_r):
@@ -821,18 +827,33 @@ def dress(h, eye_l, eye_r):
 TEX_DIR = os.path.join(ART, "build", "tex")     # the baked maps (the glb embeds its own copy)
 
 
-def split(h):
-    """`head` and `arms` off into their own meshes; the rest is `body`."""
+def split(h, rig):
+    """`head`, `arms` and `legs` off into their own meshes; the rest is
+    `torso`. The local player draws only `legs` of these (head hidden,
+    torso and arms shadows-only, the first-person arms drawn apart), so
+    looking down shows thighs, shins and boots standing on the ground."""
     dom = dominant_bones(h)
+    # The waist cut is LEVEL, at the hip joints (the thighs' heads), not
+    # the pelvis/thigh weight border: that border runs down the groin
+    # crease, two rings that leave the buttocks on the torso. Level, it is
+    # one ring round the hips, one flat cap, and looking down sees the
+    # thighs from the top.
+    inv = h.matrix_world.inverted()
+    cut = sum((inv @ (rig.matrix_world @ rig.data.bones[b].head_local)).z for b in ("thigh_l", "thigh_r")) / 2
     label = []
     for p in h.data.polygons:
         bones = [dom[v] for v in p.vertices]
-        label.append(part_of(max(set(bones), key=bones.count)))
-    # A torso face with most of its edges on the head or an arm, or a
-    # corner no other torso face holds, is a tooth of the ragged cut: it goes
-    # with that part, so the local player (head hidden, arms shadows-only)
-    # does not see a sawtooth collar. Two passes: more would start eating
-    # along a diagonal cut.
+        part = part_of(max(set(bones), key=bones.count))
+        if part in ("torso", "legs"):
+            part = "legs" if p.center.z < cut else "torso"
+        label.append(part)
+    # A face with most of its edges on a part it hands teeth to, or a corner
+    # no other face of its own part holds, is a tooth of the ragged cut: it
+    # goes to that part. The drawn side gives: the torso to the head and arms
+    # (third person sees the neck and shoulders), the legs to the torso (the
+    # local player looks down at the waist). Two passes: more would start
+    # eating along a diagonal cut.
+    gives = {"torso": ("head", "arms"), "legs": ("torso",)}
     faces_of = {}
     for p in h.data.polygons:
         for k in p.edge_keys:
@@ -844,12 +865,13 @@ def split(h):
     for _ in range(2):
         moved = {}
         for p in h.data.polygons:
-            if label[p.index] != "body":
+            own = label[p.index]
+            if own not in gives:
                 continue
             n = {}
             for k in p.edge_keys:
                 for q in faces_of[k]:
-                    if q != p.index and label[q] != "body":
+                    if q != p.index and label[q] in gives[own]:
                         n[label[q]] = n.get(label[q], 0) + 1
             for part, c in n.items():
                 if c * 2 > len(p.vertices):
@@ -857,16 +879,19 @@ def split(h):
             # A spike: a decimation sliver reaching out along the shoulder.
             for v in p.vertices:
                 others = [label[q] for q in fan[v] if q != p.index]
-                if others and "body" not in others:
-                    moved[p.index] = max(set(others), key=others.count)
+                if others and own not in others:
+                    best = max(set(others), key=others.count)
+                    if best in gives[own]:
+                        moved[p.index] = best
         for i, part in moved.items():
             label[i] = part
-        print(f"split: {len(moved)} torso teeth moved")
-    ids = ("body", "head", "arms")
+        print(f"split: {len(moved)} teeth moved")
+    print(f"split: waist cut at z {cut:.3f} (hip joints)")
+    ids = ("torso", "legs", "head", "arms")
     tag = h.data.attributes.new("_part", "INT", "FACE")      # survives separate(), unlike indices
     tag.data.foreach_set("value", [ids.index(x) for x in label])
     parts = {}
-    for name in ("head", "arms"):
+    for name in ("head", "arms", "legs"):
         bpy.ops.object.select_all(action="DESELECT")
         h.select_set(True)
         bpy.context.view_layer.objects.active = h
@@ -884,22 +909,25 @@ def split(h):
         new.name = name
         new.data.name = name
         parts[name] = new
-    h.name = "body"
-    h.data.name = "body"
-    parts["body"] = h
+    h.name = "torso"
+    h.data.name = "torso"
+    parts["torso"] = h
     for o in parts.values():
         o.data.attributes.remove(o.data.attributes["_part"])
         bpy.context.view_layer.objects.active = o
         bpy.ops.object.shade_smooth()
-    print("caps", cap(parts["body"]), "tris on body")
+    # Only the torso is capped. `legs` stays open at the waist on purpose:
+    # looking down, its inside is back-face culled, so the local player sees
+    # through the hollow thighs to the boots and the ground (a waist cap hid
+    # the feet). Remote players draw the torso, whose waist cap covers it.
+    print("caps", cap(parts["torso"]), "tris on torso")
     return parts
 
 
 def cap(obj):
-    """Close `body`'s open rings -- the neck and both shoulders, where
-    split() cut `head` and `arms` off -- with undersuit faces. The local
-    player's own head is hidden and its arms draw shadows only, so looking
-    down sees straight into the hollow torso otherwise. The cap's vertices
+    """Close `torso`'s open rings -- the neck, shoulders and waist, where
+    split() cut the other parts off -- with undersuit faces, so no view of
+    a body drawn whole looks into a hollow cut. (`legs` is left open.) The cap's vertices
     are the ring's own, so it carries the ring's weights. Returns the tris
     added. (Coincident boundary vertices are welded first: UBC's imported
     mesh is split at its UV seams, which breaks each ring into pieces.)"""
@@ -915,7 +943,7 @@ def cap(obj):
 
     def fill(cycle):
         # The hole runs against its faces' winding: reversed, the cap's normal
-        # points out of the torso like theirs. (A 3-vertex hole can be the
+        # points out of the part like theirs. (A 3-vertex hole can be the
         # back of a lone torso triangle: no cap.)
         if len(cycle) >= 3 and not bm.faces.get(cycle):
             new.append(bm.faces.new(list(reversed(cycle))))
@@ -1685,7 +1713,7 @@ def head_parts(kind, head, eye_l, eye_r):
 def build():
     h, rig, (eye_l, eye_r) = make_human()
     dress(h, eye_l, eye_r)
-    parts = split(h)
+    parts = split(h, rig)
     if ACTIVE.get("lod"):
         skinpaint.finish_glove(material("glove"), TEX_DIR, ACTIVE["_id"])
         skinpaint.finish(parts["head"], material("skin"), TEX_DIR, ACTIVE["_id"])
