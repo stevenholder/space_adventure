@@ -156,25 +156,29 @@ same 9000-tri ceiling.
   eyelids and lips 0.05, head 0.2, hands 0.6, everything else 1.0. Blender's
   collapse decimator collapses LOWER weights later and never collapses a
   weight of exactly 0; the group factor grades it, so human.py bisects the
-  factor until the head lands on `HEAD_TRIS` (3300). Result: head ~3400 of
+  factor until the head lands on `HEAD_TRIS` (4050). Result: head ~4100 of
   ~8900, the suited torso and legs coarse.
 - **Collar**: the neck is cut along a plane (`collar()`, bmesh bisect) so the
   undersuit's edge is a clean line.
-- **Eyebrows**: Quaternius `Eyebrows_Female` on BOTH Colonists, less its
-  eyeliner wings (loose parts that never reach 12 mm above the eyes; the
-  male `Eyebrows_Regular` ended in an upturned clump at the temple and read
-  stern, and `Eyebrows_Female` with its liner read made-up). Refitted by
-  `refit()`: scaled by the eyes' spacing (across, by the forehead's width;
-  the male 1.4x thicker), lifted (`brow_lift`, 6 mm F / 5 mm M), the inner
-  ends raised a little (`brow_flat`), the outer tails thinned toward the
-  brow's midline (`brow_tail`), and every vertex held within 1.8x the
-  brow's median half-thickness under its top edge (`brow_clamp`: the inner
-  end hooked down toward the nose). Then every vertex keeps the height it
-  had above the UBC skin, measured above THIS skin along its normal, at
-  least 1.5 mm off it (0.8 mm let the skin show through in patches).
-  Joined into `head` on the head bone, material `hair`, so the local player
-  never sees them and a helmet's `covers: head/hair` hides them. The UBC
-  bodies' own brows wear the same tinted `hair` material.
+- **Eyebrows** are painted into the skin albedo (`skin.paint_brows`), not
+  meshes. (Until 2026-10-06 both Colonists wore the Quaternius
+  `Eyebrows_Female` mesh refitted to the brow, the male's 1.4x: at the
+  character select the male's read as thick dark clumps and the female's
+  were heavy at the inner end.) The bake writes each texel's surface
+  POSITION (a third EMIT layer) so the painter works in metres above the
+  eye: per side a stroke from `inner` to `outer` (offsets from the eye
+  centre's distance to the midline), its centre line `lift` above the eye
+  centre plus a parabolic `arch` peaking at `peak`, a `tilt` slope;
+  half-thickness `th_in` -> `th_out`, thinned to `tip` over the last `taper`
+  of its length, a rounded, feathered inner head (`head`), a ragged soft
+  edge (`soft`), streaky strand noise along the hairs' growth (`strand`
+  angle, steep at the inner end; at least 2 texels across -- finer aliased
+  into a comb at ~3 texels/mm) and a faint `shadow` under it. `BROW_M`:
+  straight (arch 1.2 mm), 8 / 6 mm thick, dark brown. `BROW_F`: 5 mm even,
+  arch 3.5 mm peaking at 65 %, tapering only in the last fifth, the same
+  brown a shade lighter. The freed ~650 tris went to the face (`HEAD_TRIS`
+  4050). Mesh brows remain on the UBC bodies only (their own, in the
+  tinted `hair` material).
 - **Eyes**: MPFB `eyes/*-eye-height2-incr` (0.45 M / 0.4 F) and
   `*-eye-scale-incr` 0.15 open the lids; the eyeball sphere's radius is the
   helper's mean radius x `EYEBALL_FIT` (0.926: the helper includes a cornea
@@ -199,8 +203,7 @@ same 9000-tri ceiling.
   baked with Cycles (EMIT) into a 2048 px atlas, an ambient-occlusion bake
   (10 cm reach: nostrils, sockets, ear folds) multiplied in (not across the
   lips: their seam read as an open mouth), plus low-frequency blotches and
-  fine pores. After the brows are fitted their footprint is splatted in as
-  a soft shadow. A tangent-space normal map is baked from the dense skin
+  fine pores, then the painted eyebrows (above). A tangent-space normal map is baked from the dense skin
   onto the decimated head (selected-to-active, 2 mm cage), flattened on the
   lip seam and the ears (rays there hit the wrong fold). Both maps are JPEG
   (q90) in `build/tex/` and packed into the glb; the export writes tangents
@@ -465,3 +468,19 @@ pack); `mobs/CATALOG.md` is the generated, browsable list with thumbnails.
 - **Licences**: all CC0 except the Bestiary (Quaternius Asset License v1.0:
   use in games, no redistribution of the assets themselves), committed at the
   owner's decision.
+
+## Blender on the GPU (WSL2)
+
+Cycles bakes (skin.py) run on the GPU when Blender can see one:
+`tools/bpy/cycles_gpu.py` picks OptiX → CUDA → HIP → Metal and falls back to
+the CPU with a line saying so. Under WSL2 the NVIDIA user-space libraries
+live in `/usr/lib/wsl/lib`, and Blender only finds them with that directory
+on `LD_LIBRARY_PATH` — the `package.json` scripts set it; a hand-run build
+wants the same:
+
+```sh
+LD_LIBRARY_PATH=/usr/lib/wsl/lib $BLENDER -b --python tools/bpy/human.py -- char.player
+```
+
+OptiX is not exposed through WSL (discovery returns nothing); CUDA is.
+EEVEE (the render sheets) draws through WSLg's GL and needs nothing extra.

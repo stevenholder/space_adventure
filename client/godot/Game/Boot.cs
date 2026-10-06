@@ -929,7 +929,11 @@ namespace SpaceAdventure.Game
             };
             switch (state)
             {
-                case "select": _chars.Loaded(rows); _chars.Select(0); break;
+                case "select":
+                    _chars.Loaded(rows);
+                    // -uiCharsSelect <n>: pre-select fake row n (0 Kade, 1 Tam, 2 Vex)
+                    _chars.Select(int.Parse(Arg("-uiCharsSelect") ?? "0", CultureInfo.InvariantCulture));
+                    break;
                 case "create":
                     _chars.Loaded(rows);
                     _chars.NewCharacter();

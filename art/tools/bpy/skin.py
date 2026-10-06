@@ -14,9 +14,11 @@ itself (nothing from MPFB's GPL masks):
      (male) -- mixed into a colour attribute and baked (Cycles EMIT) into
      SKIN_TEX px, with an ambient-occlusion bake (nostrils, sockets, ear
      folds, lip line) multiplied in;
-  3. after the brows are fitted (fit_brows), a soft shadow under them is
-     splatted into the same texture, then it is written as a JPEG and
-     linked as the `skin` material's base colour (keep_uv: uv_box leaves
+  3. eyebrows painted per texel (paint_brows): the surface POSITION is baked
+     too, so each texel knows where it sits above the eye, and a soft-edged
+     stroke (thickness, arch, taper per body: BROW_M / BROW_F) with strand
+     noise is mixed in, a faint shadow under it. Then it is written as a JPEG
+     and linked as the `skin` material's base colour (keep_uv: uv_box leaves
      these UVs alone). Decimation carries the packed UVs through.
 
 Eyes: the clean eyeball spheres (human.new_eyeballs) get an azimuthal UV
@@ -30,6 +32,7 @@ import os
 
 import bpy
 import bmesh
+import cycles_gpu  # noqa: E402 -- beside this file; human.py puts tools/bpy on sys.path
 import numpy as np
 from mathutils import Vector, geometry
 from mathutils.bvhtree import BVHTree
@@ -202,7 +205,7 @@ def bake(h, skin, layers, size=None):
     scene = bpy.context.scene
     prev_engine = scene.render.engine
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    cycles_gpu.cycles_device(scene)
     if scene.world is None:
         scene.world = bpy.data.worlds.new("bake")
     scene.world.light_settings.distance = AO_DIST
@@ -298,7 +301,7 @@ def _noise(rng, size, cells):
     return rows[:, i] * (1 - f)[None, :] + rows[:, i + 1] * f[None, :]
 
 
-def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuckles=()):
+def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuckles=(), brow=None):
     """Steps 1-2: pack the UVs, bake, compose. Leaves the albedo in STATE.
     With `glove` (faces) the gloved hands get their own GLOVE_TEX map."""
     pack_skin_uvs(h, skin)
@@ -307,7 +310,11 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
         paint_glove(h, glove, glove_col, knuckles)
     m = masks(h, eyes, R, female, np.array(ball, dtype=bool))
     aux = np.stack([m["lips"], m["lash"], m["ears"]], -1)
-    res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux})
+    co = np.empty(len(h.data.vertices) * 3)
+    h.data.vertices.foreach_get("co", co)
+    mid = (np.array(eyes[0]) + np.array(eyes[1])) / 2
+    pos = co.reshape(-1, 3) - mid + 0.5               # positive: an emission colour
+    res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux, "pos": pos})
     emit, ao, aux = res["paint"], res["AO"], res["aux"]
     STATE["hi"] = res["_target"]          # the dense skin: normal_map()'s source
     # Crevices: darker and a little warmer (light scattering in the skin);
@@ -320,10 +327,100 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
     blotch = sum(_noise(rng, S, c) * w for c, w in ((6, 0.5), (24, 0.3), (96, 0.2))) - 0.5
     pores = _noise(rng, S, 512) - 0.5
     alb = alb * (1 + 0.10 * blotch[..., None] * np.array([1.0, 1.15, 1.2])) * (1 + 0.05 * pores[..., None])
+    if brow:
+        alb = paint_brows(alb, res["pos"] + mid - 0.5, eyes, R, brow)
     STATE.update(alb=alb, ao=ao, lips=aux[..., 0], ears=aux[..., 2])
 
 
 GLOVE_TEX = 1024
+
+
+# ---- painted eyebrows ----------------------------------------------------------------
+# One stroke per side, in the frame of that eye: `u` runs 0 (inner end) .. 1
+# (outer end) across `ax` (distance from the face's midline, m). Lengths in m.
+#   inner, outer  ax of the two ends, as offsets from the eye centre's ax
+#   lift          the stroke's centre line above the eye centre at the inner end
+#   arch, peak    extra lift (parabola, 0 at both ends) and where along u it peaks
+#   tilt          drop of the outer end below the inner (a straight-line slope)
+#   th_in, th_out half-thickness at the inner and outer end (linear between)
+#   taper         the last fraction of u where it thins to `tip` x and fades
+#   head          round-off length of the inner end
+#   soft          edge feather; `col` sRGB; `density` opacity at the core
+#   strand        the hairs' angle (deg, up from the outward line) inner .. outer
+#   shadow        darkening of the skin just under the stroke
+BROW_M = {
+    "inner": -0.019, "outer": 0.024, "lift": 0.0160, "arch": 0.0012, "peak": 0.45, "tilt": -0.0005,
+    "th_in": 0.0040, "th_out": 0.0031, "taper": 0.18, "tip": 0.45, "head": 0.0040,
+    "soft": 0.0009, "col": (0.13, 0.09, 0.065), "density": 0.92, "strand": (60.0, 12.0), "shadow": 0.10,
+}
+BROW_F = {
+    "inner": -0.017, "outer": 0.025, "lift": 0.0175, "arch": 0.0035, "peak": 0.65, "tilt": 0.0010,
+    "th_in": 0.0025, "th_out": 0.0025, "taper": 0.20, "tip": 0.35, "head": 0.0030,
+    "soft": 0.0007, "col": (0.14, 0.095, 0.07), "density": 0.92, "strand": (55.0, 10.0), "shadow": 0.08,
+}
+
+
+def _vnoise(x, y, seed):
+    """Value noise on the unit lattice, smooth-interpolated, 0..1."""
+    xi, yi = np.floor(x), np.floor(y)
+    fx, fy = x - xi, y - yi
+    fx, fy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+    h = lambda i, j: np.modf(np.abs(np.sin(i * 127.1 + j * 311.7 + seed * 74.7) * 43758.5453))[0]
+    a, b = h(xi, yi), h(xi + 1, yi)
+    c, d = h(xi, yi + 1), h(xi + 1, yi + 1)
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
+
+
+def paint_brows(alb, P, eyes, R, b):
+    """Mix a brow stroke into the albedo; P is each texel's surface position
+    (S, S, 3, the build frame: front +Y, Z up)."""
+    el, er = np.array(eyes[0]), np.array(eyes[1])
+    mid = (el + er) / 2
+    rel = P - mid
+    w = np.zeros(P.shape[:2])
+    shadow = np.zeros(P.shape[:2])
+    noise = np.zeros(P.shape[:2])
+    for e in (el, er):
+        side = np.sign(e[0] - mid[0])
+        ex = abs(e[0] - mid[0])
+        ax = rel[..., 0] * side
+        a0, a1 = ex + b["inner"], ex + b["outer"]
+        u = (ax - a0) / (a1 - a0)
+        cand = (ax > a0 - 0.006) & (ax < a1 + 0.004) & (rel[..., 1] > e[1] - mid[1] - 0.04) \
+            & (np.abs(rel[..., 2] - (e[2] - mid[2]) - b["lift"]) < 0.02)
+        if not cand.any():
+            continue
+        uc, rc, ac = u[cand], rel[cand], ax[cand]
+        pk = b["peak"]
+        bump = 1 - ((uc - pk) / np.where(uc < pk, pk, 1 - pk)) ** 2
+        zc = (e[2] - mid[2]) + b["lift"] + b["arch"] * np.clip(bump, 0, 1) - b["tilt"] * np.clip(uc, 0, 1)
+        v = rc[:, 2] - zc
+        ue = np.clip(uc, 0, 1)
+        s_ = ac - a0
+        th = (b["th_in"] + (b["th_out"] - b["th_in"]) * ue) * (1 - (1 - b["tip"]) * smoothstep(1 - b["taper"], 1, ue))
+        th = th * np.sqrt(np.clip((s_ + b["head"]) / (2.5 * b["head"]), 0.05, 1))   # a rounded inner head, not a square end
+        # hairs: fine streaks along the growth direction, steep at the inner end
+        ang = np.radians(b["strand"][0] + (b["strand"][1] - b["strand"][0]) * smoothstep(0.0, 0.35, ue))
+        along = s_ * np.cos(ang) + v * np.sin(ang)
+        perp = -s_ * np.sin(ang) + v * np.cos(ang)
+        n1 = _vnoise(perp / 0.0006, along / 0.0035, 1)       # >= 2 texels across: finer aliased into a comb
+        n2 = _vnoise(perp / 0.0011, along / 0.004, 2)
+        ragged = th * (0.85 + 0.3 * n2)                      # an uneven edge, not a ruled one
+        core = smoothstep(ragged + b["soft"], ragged - b["soft"], np.abs(v))
+        ends = smoothstep(-b["head"], 1.5 * b["head"], s_) * smoothstep(1.0, 1 - 0.5 * b["taper"], uc)
+        a = core * ends
+        sh = smoothstep(-th - 0.0045, -th - 0.0005, v) * smoothstep(-th + 0.001, -th - 0.0005, v) * ends
+        idx = np.nonzero(cand)
+        w[idx] = np.maximum(w[idx], a)
+        shadow[idx] = np.maximum(shadow[idx], sh)
+        noise[idx] = n1
+    dens = b["density"] * np.clip(0.8 + 0.3 * noise, 0, 1)
+    k = (w * dens)[..., None]
+    sk = (b["shadow"] * shadow * (1 - w))[..., None]
+    alb = alb * (1 - sk * np.array([0.9, 1.0, 1.05]))     # a touch warm, as skin shades
+    col = srgb_to_lin(np.array(b["col"])) * (0.85 + 0.25 * noise[..., None])
+    print(f"brows: {int((w > 0.5).sum())} texels")
+    return alb * (1 - k) + col * k
 
 
 def paint_glove(h, glove, col, knuckles):
@@ -364,39 +461,6 @@ def paint_glove(h, glove, col, knuckles):
     STATE["glove"] = alb
 
 
-def brow_shadow(head, brow_pts, skin_mat):
-    """Splat the fitted brows' footprint (nudged 1.5 mm down) into the skin
-    texture as a soft brown shadow."""
-    S = SKIN_TEX
-    me = head.data
-    uvl = me.uv_layers.active.data
-    polys = [p for p in me.polygons if head.material_slots[p.material_index].material == skin_mat]
-    verts = [v.co for v in me.vertices]
-    tris = []
-    for p in polys:
-        li = list(p.loop_indices)
-        for k in range(1, len(li) - 1):
-            tris.append((li[0], li[k], li[k + 1]))
-    bvh = BVHTree.FromPolygons(verts, [[me.loops[l].vertex_index for l in t] for t in tris])
-    acc = np.zeros((S, S))
-    for p in brow_pts:
-        loc, nrm, ti, dist = bvh.find_nearest(p)
-        if ti is None or dist > 0.01:
-            continue
-        a, b, c = (me.vertices[me.loops[l].vertex_index].co for l in tris[ti])
-        ua, ub, uc = (Vector((*uvl[l].uv, 0)) for l in tris[ti])
-        uv = geometry.barycentric_transform(loc, a, b, c, ua, ub, uc)
-        x, y = int(uv.x * S), int(uv.y * S)
-        if 0 <= x < S and 0 <= y < S:
-            acc[y, x] += 1
-    acc = blur(acc, S // 300)
-    if acc.max() > 0:
-        acc = np.clip(acc / np.percentile(acc[acc > 0], 60), 0, 1)
-    w = 0.35 * acc
-    tint = srgb_to_lin(np.array([0.30, 0.22, 0.17]))
-    STATE["alb"] = STATE["alb"] * (1 - w[..., None]) + tint * w[..., None]
-
-
 def normal_map(head, skin_mat):
     """Bake the full-resolution skin's normals onto the decimated head's skin
     faces (tangent space, OpenGL / glTF convention): the decimated ears,
@@ -404,6 +468,7 @@ def normal_map(head, skin_mat):
     scene = bpy.context.scene
     prev_engine = scene.render.engine
     scene.render.engine = "CYCLES"
+    cycles_gpu.cycles_device(scene)
     hi = STATE["hi"]
     scene.collection.objects.link(hi)
     lo = head.copy()
