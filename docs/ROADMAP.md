@@ -1878,6 +1878,53 @@ DELETE, CONFIRM — the row is gone; with none left the create form opens.
   rows; SAVE is dark until a valid change; DELETE asks once inline; the
   shots and `-selftest` transitions hold; C153–C165 still hold.
 
+# Phase 19 — the first-person body, in the world (2026-10-06)
+
+### Where Phase 19 stands (2026-10-06)
+
+Drafted. #74 (pull-back), #82 (collar caps + camera lean) and #83 (legs
+only through an open hip ring) each hid the look-down symptom; the user's
+screenshot after #83 shows the inside of their own thigh plates through
+the ring. The user asked for research; the answer is the shooter pattern
+— a 3PM for shadows and others, a 1PM for the camera — with the twist
+that the 1PM is drawn in the world (real depth, sun, occlusion) and cut
+per pixel by distance from the eye instead of by the near plane.
+Contract: GDD "First-person body, in the world (Phase 19)".
+
+**Playable proof.** Stand in a Bulwark set. Look down at a slant: chest
+plate, thighs, boots on the ground, the whole-figure shadow ahead. Look
+straight down: the capped chest, the thighs, the feet. Walk up to a crate
+and look down: the crate hides your shins. Turn a pauldron toward the
+eye: it dissolves softly instead of slicing. A second client sees you
+whole.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | art | Five-way split: `chest` / `torso` / `legs` (mid-chest cut ~0.40 m below the eye; cap the torso's top; hips open; teeth tidied); all four bodies; boots cover `legs/boot`; verify.mjs nodes + a cut-height check | `art/tools/bpy/human.py`, `verify.mjs`, manifest | `npm --prefix art test`; a Blender sheet with head/arms/chest hidden at −70/−89 from 18 cm forward |
+| 2 | 1 | Near-cut material: the fp PBR shader minus the squeeze, plus `discard` within `NearCut` with a 5 cm dithered band; vertex-colour variant too; receives shadows | `client/godot/Game/ViewModel.cs` (beside `FpMaterial`) | `-selftest` compiles the shader; shot |
+| 3 | 1 | Local visibility: `torso`+`legs` + chest/back/legs/feet pieces draw with the near-cut material; `head`/`arms`/`chest`/hair/hands pieces shadows-only; drop `NoSelfShadow`; fp arms hide chest/torso/legs/head | `ViewModel.cs`, `Entities.cs` | shots bare and `-rigWorn` Bulwark at −45/−70/−89; remote unchanged (`-rigArmed` NPC) |
+| 4 | 1 | `-rigWorn slot=asset,…` rig that actually dresses (apply after the body attaches; take asset ids) | `Boot.cs` | the armored shots |
+| 5 | 1 | Camera lean tuned to the new cap (forward/up constants) | `Fps.cs` | the shots; `-uiPitch -45` unchanged |
+| 6 | 2 | Record: QA-STATUS "Phase 19"; GDD "First-person body" numbers; Deferred row for "lighting the 1PM from the sun vs rig light" closed | `docs/` | — |
+
+### Acceptance criteria (C170–C173)
+
+- **C170 In the world.** The local body is drawn with real depth: a crate
+  between the eye and your shins hides them (shot); the sun lights it and
+  a world shadow falls on it; it casts no shadow itself while the 3PM's
+  whole-figure shadow is on the ground.
+- **C171 No clipping, ever.** At −45/−70/−89, bare and in the Bulwark set
+  with the camera leaned: no near-plane slice, no sawtooth, no hole, no
+  interior; what comes within 0.30 m of the eye dissolves over ~5 cm.
+- **C172 Accurate.** Chest cap, thighs and feet appear where the body is
+  (the 3PM's shadow and the 1PM's feet agree on the ground); the
+  animation is the shared one (walk/sprint move the drawn legs).
+- **C173 Nothing else moved.** Remote players whole (five meshes drawn,
+  armor and hair on); first-person arms unchanged; sweep green; C153–C169
+  hold.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
