@@ -855,7 +855,7 @@ deliberately absent: password reset email (no SMTP exists; a locked-out
 account is admin-fixable via the store) and strict accounts-only join
 (coexistence rule stands).
 **2026-10-05:** Phase 16 ends the coexistence rule — accounts-only join,
-link codes and import removed; C55/C59 are history there.
+link codes, import and the one-player rule removed; C55/C59 are history there.
 
 **Playable proof.** Visit `https://game.stevenholder.info/`: a landing page
 with live stats and how to get the client. Register with email + password.
@@ -1619,7 +1619,7 @@ installed build anyway.
 - **C152 Nothing else moved.** Sweep green; the account column is empty
   and the layout leaves it room.
 
-# Phase 16 — launcher login, accounts only (2026-10-05)
+# Phase 16 — accounts only, launcher login, characters (2026-10-05)
 
 ### Where Phase 16 stands (2026-10-05)
 
@@ -1630,105 +1630,146 @@ identity too.
 
 Phase 7 built accounts that issue game identity and kept every other
 door open: anonymous tokens join as guests, the site mints link codes,
-the game's F1 panel redeems them, a guest's progress can be imported.
-That was the right call for a harness-driven build; it is the wrong
-shape for a game people sign up for. This phase puts sign-up and sign-in
-in the launcher's left column and **closes the other doors**: the only
-way into the world is an account, and a hello whose token belongs to no
-account is refused. Contract: GDD "Launcher login (Phase 16)".
+the game's F1 panel redeems them, one player per account. Right for a
+harness-driven build; wrong for a game people sign up for. This phase
+puts sign-up and sign-in in the launcher, **closes the other doors**, and
+gives an account **characters**: PLAY opens a character select, a new
+character picks a name, a gender and a model, and the world is joined as
+that character. Contract: GDD "Accounts, launcher login and characters
+(Phase 16)". Two PRs: **A, the door** (tasks 1–9) and **B, the
+characters** (10–20); B is not playable without A, A is playable alone
+with the account's existing player auto-selected.
 
 **Playable proof.** Launch the installed client. Left column: `EMAIL`,
 `PASSWORD`, `SIGN IN`, `CREATE ACCOUNT`, `Sign in to play`; PLAY is dark.
-Create an account: `SIGNED IN · steve`, PLAY lights. PLAY — you are that
-account's player, credits and bags as the account page on the site shows
-them. Quit, relaunch: still signed in, no prompt. `SIGN OUT`: PLAY goes
-dark again. A wrong password says so; the site being down says so. Delete
-the account on the site, PLAY: the launcher comes back `SIGNED OUT · sign
-in again`.
+Create an account: `SIGNED IN · steve@…`, PLAY lights. PLAY: the game
+window opens on a dark stage and an empty character list with the create
+form up. Type `Kade`, toggle `F`, toggle `VANGUARD` — the body on the
+stage swaps each time — CREATE. The list shows Kade; PLAY — you are Kade,
+the nametag says so, your hands are hers, and the account page on the
+site lists her with her credits. Quit, relaunch: still signed in; PLAY
+shows Kade pre-selected. Make a second character; `Kade` again is `NAME
+TAKEN`. `SIGN OUT`: PLAY goes dark. Change the password on the site,
+relaunch, PLAY: `SIGNED OUT · sign in again`.
 
-**Shape.** One new HTTP route and no wire change: `POST /api/game-login`
-`{email, password}` → `{token, name}` — the site login's password check
-fused with the old `redeem`'s player mint, no web session. `hello` still
-carries the token; the server seats it only when `player.account_id` is
-set, else closes `1008`. Removed: `/api/link-code`, `/api/redeem`,
-`/api/import-token`, the `link_code` table, the site's mint/import
-section, the client's `AccountView`, `RedeemLinkCode`, the F1 binding and
-the menu row, and `ResolveToken`'s guest mint. Kept for the machines: a
-server without a store seats anyone (there is nothing to log into), and
-`SA_GUESTS=1` does the same on kind — the 26 harness tests that join with
-a made-up token, every rig flow and `make godot-run` are untouched, and
-the login bucket never sees a fleet. Production sets neither; a Go test
-and a strict-mode `t28` check prove the refusal.
+**Shape.** Two new HTTP routes, one new column, one spawn-row extension:
 
-**Supersedes** Phase 7's coexistence rule (C59) and C55's link codes.
-Those rows stay in QA-STATUS as history; C156 below is the new truth.
+- `POST /api/game-login {email,password} → {session,name}` — the site
+  login's check, the site's 30-day session returned in the body;
+  `withAccount` accepts it as a bearer token. `GET`/`POST
+  /api/characters` on it. No player token on disk, ever.
+- `player.body` (default `char.player`), a partial unique index on
+  character names, five per account. Removed: `/api/link-code`,
+  `/api/redeem`, `/api/import-token`, the `link_code` table, the site's
+  mint/import section, the client's `AccountView`, `RedeemLinkCode`, the
+  F1 binding and the menu row, `ResolveToken`'s guest mint,
+  `AccountPlayerToken`'s one-player rule.
+- Player spawn `data` = name, plus `\0` + body id when the body is not
+  `char.player` — byte-identical for every player the harness makes.
+- Two new bodies, `char.player.f` and `char.ubc.f`, each with the full
+  armor set (`armor.py` `BODIES` grows by two: 61 → ~91 pieces). This is
+  the phase's one real art cost; the UBC spike's notes (smoothed wrap
+  needs 4 passes, not 12) apply to both UBC bodies.
+- Kept for the machines: a storeless server seats anyone, `SA_GUESTS=1`
+  does on kind. Production sets neither; a Go test and a strict-mode
+  `t28` check prove the refusal.
+
+**Supersedes** Phase 7's coexistence rule (C59), C55's link codes and its
+one-player rule. Those rows stay in QA-STATUS as history.
 
 ### Wave 0 — contracts
 
-- Route: `POST /api/game-login`, body `{email, password}`,
-  `X-Requested-With` required, the login bucket (burst 5, 1 per 5 s per
-  IP). 200 `{token, name}`; 401 `wrong email or password` (one code path,
-  dummy-hash timing as `login`); 429 from the bucket. The token is
-  `AccountPlayerToken` or a freshly minted owned player — `redeem`'s
-  tail, lifted into `accountToken(ctx, accountID)`.
-- Join: `server.join` with a store and `SA_GUESTS` unset looks the token
-  up; a missing row or a NULL `account_id` → `closeCode(1008)`, no entity,
-  a `join.refused` counter on `/metrics`. Store absent or `SA_GUESTS=1` →
-  today's path. Nothing else about `hello` changes.
-- Schema: migration `005_drop_link_code.sql` (`DROP TABLE IF EXISTS
-  link_code`), both engines. `player.account_id` stays nullable: old guest
-  rows remain on disk, unreachable, until someone wants them gone.
-- Client config: `[identity] email` beside `[identity] token`. Sign-out
-  and a `1008` on PLAY delete both. `-token` still overrides for rigs and
-  puts the model in `SignedIn("rig", "")`.
-- `Login` model (pure, `UI/Launcher.cs`): `SignedOut`, `Busy(what)`,
-  `SignedIn(name, email)`, `Failed(reason)`; events `Remembered(name,
-  email)`, `Submit(what)`, `Ok(name, email)`, `Fail(status)`, `SignOut`,
-  `Refused`; column text and `PlayAllowed` out. `Launcher.PlayEnabled`
-  becomes `PlayEnabled && login.PlayAllowed` at the view.
-- No wire ids, no harness wire change (`t28` is the HTTP harness and is
-  rewritten around the new door).
+- Routes: `POST /api/game-login` (login bucket; 200 `{session, name}`,
+  401 one body, 429); `GET /api/characters` → `[{token, name, body,
+  credits, last_seen_ms}]`; `POST /api/characters {name, body}` → one row
+  (400 bad name/body, 409 taken or full); `POST /api/logout` ends a
+  bearer session too. `withAccount`: cookie or `Authorization: Bearer`.
+- Join: with a store and `SA_GUESTS` unset, `srv.join` loads the token's
+  row; none or `account_id` NULL → `closeCode(1008)`, no entity, a
+  `join.refused` counter on `/metrics`. A character token's entity takes
+  the row's name and body; `hello.name` is ignored for it. Storeless or
+  `SA_GUESTS=1` → today's path.
+- Wire: player spawn `data` = `name` | `name\0body`. `test/lib/wire.mjs`
+  `decodeSpawn` exposes `name` (up to the NUL) and `body` (default
+  `char.player`); `data` stays the raw string for the tests that read it.
+- Schema, migration `005_characters.sql`, both engines: `DROP TABLE IF
+  EXISTS link_code`; `ALTER TABLE player ADD COLUMN body TEXT NOT NULL
+  DEFAULT 'char.player'`; `CREATE UNIQUE INDEX player_character_name ON
+  player (lower(name)) WHERE account_id IS NOT NULL`.
+- Bodies: ids and sources per the GDD table; manifest entries; armor
+  variants `<piece>@char.player.f`, `@char.ubc.f`; the client's wearer
+  lookup (`Entities.cs` `"@" + wearer`) already picks them.
+- Client config: `[identity] session`, `[identity] email`. `-token`
+  still overrides for rigs and skips the character select.
+- Models (pure, `-selftest`): `Login` (`SignedOut`, `Busy`, `SignedIn`,
+  `Failed`; `PlayAllowed`); `Characters` (`Loading`, `List(rows,
+  selected)`, `Create(name, gender, model)`, `Failed(reason)`; `BodyId
+  (gender, model)`, `NameOk(name)` = the length-and-charset rule,
+  `CanCreate`, `CanPlay`).
 
 ### Task list
 
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
-| 1 | 1 | `accountToken` lifted from `redeem`; `game-login` handler on it with `login`'s verify path; route under `mutating(limited(…))`; `/api/link-code`, `/api/redeem`, `/api/import-token` and their handlers gone; migration 005 | `server/internal/web/web.go`, `store/accounts.go`, `store/migrations/` | `web_test.go`: right password → token, twice → same token; wrong / unknown → 401 same body; tenth rapid → 429; the three old routes 404; store suite both engines |
-| 2 | 1 | Strict join: `srv.join` refuses a token with no owned row unless storeless or `SA_GUESTS=1`; `join.refused` metric | `server/internal/server/server.go`, `client.go`, `main.go` | Go test: strict server closes a guest hello with 1008 and seats an account token; `SA_GUESTS=1` seats both |
-| 3 | 1 | Site: account page loses mint + import; landing/login copy says the client signs you in | `server/internal/web/site/` | `t28` |
-| 4 | 1 | Deploy: `SA_GUESTS=1` in the kind server env; prod untouched (strict by default); RUNBOOK notes it | `deploy/manifests/10-server.yaml`, `docs/RUNBOOK.md` | `make up` + fleet |
-| 5 | 1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → Busy; Ok → SignedIn; Fail 401/409/400/429/other → the five reasons; SignOut and Refused → SignedOut with both keys cleared; PlayAllowed only in SignedIn) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
-| 6 | 1 | Account column in `LauncherView`: fields, SIGN IN / CREATE ACCOUNT / SIGN OUT, reason line; Enter submits; PLAY wired to both gates | `UI/Launcher.cs` | shots |
-| 7 | 1 | Boot: load `[identity] email` at launcher open; `SignIn` / `CreateAccount` with the 5 s budget → `SaveToken` + email → `Ok`; `SignOut` clears; a `1008` close before the first snapshot returns to the launcher in `Failed(SIGNED OUT …)` with keys cleared; `AccountView`, `RedeemLinkCode`, F1 and the menu row removed; `ResolveToken` never mints; rig `-uiLogin <state>`, shots `test/out/ui/p16-login-*.png` | `Boot.cs`, `UI/Panels.cs` | shots; `-uiPlayAfter 4 -quitAfter 11` → `world ready` |
-| 8 | 2 | `t28` rewritten: register → `game-login` → JOIN with the token → account page shows that player → `game-login` again = same token → wrong password 401 → password change (web session dies, token still joins) → delete → token refused (`SA_STRICT=1`) or joins fresh (kind); old routes 404 | `test/t28-accounts.mjs` | `node test/t28-accounts.mjs` on kind; `SA_STRICT=1` against a strict bare server with a store |
-| 9 | 2 | Live on the Windows install against prod: create account, PLAY, site shows the player; relaunch signed in; sign out → dark PLAY; delete on the site → `SIGNED OUT` on PLAY | manual | the record |
-| 10 | 2 | Record: QA-STATUS "Phase 16"; ROADMAP Phase 7 status notes the supersession; README client instructions | `docs/`, `README.md` | — |
+| 1 | A1 | `game-login` (login's verify, `startSession` returning the id in the body); `withAccount` reads bearer; `logout` on bearer; link-code / redeem / import-token routes and handlers gone | `server/internal/web/web.go` | `web_test.go`: right password → session that `me` accepts as bearer; wrong / unknown → 401 same body; tenth rapid → 429; logout → 401 after; old routes 404 |
+| 2 | A1 | Migration 005 (drop `link_code`, `player.body`, the name index); store: `AccountPlayers` carries body, `PutLinkCode`/`RedeemLinkCode`/`AdoptPlayer` gone, `CountAccountPlayers`, `CharacterNameTaken` | `server/internal/store/` | store suite both engines; the index refuses a case-variant duplicate and allows two guests with one name |
+| 3 | A1 | Strict join: refuse unowned tokens unless storeless or `SA_GUESTS=1`; entity name from the row for a character; `join.refused` metric | `server/internal/server/server.go`, `client.go`, `cmd/server/main.go` | Go test: strict closes a guest hello 1008, seats a character under the row's name whatever `hello.name` says; `SA_GUESTS=1` seats both |
+| 4 | A1 | Site: account page loses mint + import, lists characters with body; landing/login copy says the client signs you in | `server/internal/web/site/` | `t28` |
+| 5 | A1 | Deploy: `SA_GUESTS=1` in the kind server env; prod untouched; RUNBOOK notes it | `deploy/manifests/10-server.yaml`, `docs/RUNBOOK.md` | `make up` + fleet |
+| 6 | A1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → Busy; Ok → SignedIn; Fail 401/409/400/429/other → the reasons; SignOut and Refused → SignedOut; PlayAllowed only in SignedIn) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
+| 7 | A1 | Account column in `LauncherView`: fields, SIGN IN / CREATE ACCOUNT / SIGN OUT, reason line; Enter submits; PLAY wired to both gates | `UI/Launcher.cs` | shots |
+| 8 | A1 | Boot: load `[identity] email` at launcher open; `SignIn` / `CreateAccount` with the 5 s budget → save session + email → `Ok`; `SignOut` = logout + clear; PLAY → `GET /api/characters` → (A alone) connect with the single row's token, 401 → launcher `SIGNED OUT`; `AccountView`, `RedeemLinkCode`, F1 and the menu row removed; `ResolveToken` never mints; rig `-uiLogin <state>`, shots `test/out/ui/p16-login-*.png` | `Boot.cs`, `UI/Panels.cs` | shots; `-uiPlayAfter 4 -quitAfter 11` → `world ready` |
+| 9 | A2 | `t28` rewritten: register → `game-login` → `characters` (the Phase 7 player is there) → JOIN with its token under the row's name → account page shows it → wrong password 401 → password change kills the session (bearer 401; the token still joins) → logout → delete → token refused (`SA_STRICT=1`) or joins fresh (kind); old routes 404; a guest hello still joins on kind | `test/t28-accounts.mjs` | kind; `SA_STRICT=1` against a strict bare server with a store |
+| 10 | B1 | Bodies: `char.player.f` (human.py variant, gender 0.0), `char.ubc.f` (the Female gltf through the `char.ubc` recipe); manifest, icons, `verify.mjs` budgets | `art/tools/bpy/human.py`, `art/recipes/`, `art/manifest.json` | `npm run gen:bpy`, `verify.mjs`; `-uiShot` of each body beside Recruit Tam |
+| 11 | B1 | Armor for both: `BODIES` += `char.player.f`, `char.ubc.f`; the UBC wrap settings carried to the female body | `art/tools/bpy/armor.py` | all 15 pieces × 2 build; `-uiShot` in the full Bulwark set on each |
+| 12 | B1 | Characters API: `GET`/`POST /api/characters`, name rule, five max, mint at a guest's start with the body | `server/internal/web/web.go` | `web_test.go`: create → list → same token twice; bad name 400, bad body 400, taken (case-variant) 409, sixth 409; a guest's name never collides |
+| 13 | B1 | Spawn row body: `name\0body` for a non-default body on self and others' spawns; PROTOCOL "spawn" | `server/internal/server/server.go`, `docs/PROTOCOL.md` | Go test: default body = bytes as before; `char.ubc.f` appends |
+| 14 | B1 | Harness wire: `decodeSpawn` exposes `name`/`body`; nothing else moves | `test/lib/wire.mjs` | the three lib tests unchanged |
+| 15 | B1 | `Characters` model + `-selftest` (BodyId table, NameOk edges, Loading → List pre-selects one, none → Create, CanCreate/CanPlay) | `client/godot/Game/UI/Characters.cs` | `-selftest` |
+| 16 | B1 | Character select view: list, create form, stage with the body under one light turning, toggles swap the stage; `-uiChars <state>` shots at 1920×1080 `test/out/ui/p16-chars-*.png` | `UI/Characters.cs`, `Boot.cs` | shots |
+| 17 | B1 | Boot: PLAY → character select → PLAY frees the stage, builds, connects with the row's token; SIGN OUT from the screen; 401 → launcher; 1008 → reload the list; rigs skip it | `Boot.cs` | `-uiPlayAfter` still `world ready`; `make godot-play` by hand |
+| 18 | B1 | Bodies on the wire: `Entities.cs` attaches the spawn's body; `ViewModel` attaches the self body and its fp arms from the ack'd self spawn; armor wearer lookup unchanged | `Entities.cs`, `ViewModel.cs` | two clients, one `char.ubc.f`: each sees the other's body; own arms match |
+| 19 | B2 | `t28` grows: create `Kade`/`char.ubc.f` → list → JOIN → own spawn `name` = `Kade`, `body` = `char.ubc.f` → a second client sees the same → name taken 409 → sixth 409 | `test/t28-accounts.mjs` | kind |
+| 20 | B2 | Live on the Windows install against prod: the proof above end to end, two characters, both bodies seen by a second client; QA-STATUS "Phase 16"; ROADMAP Phase 7 status; README | manual, `docs/`, `README.md` | the record |
 
-### Acceptance criteria (C153–C157)
+### Acceptance criteria (C153–C160)
 
 - **C153 One door.** `POST /api/game-login` with a registered email and
-  password returns the account's player token and name; twice returns
-  the same token (one player per account). A wrong password or unknown
-  email is 401 with one body; the login bucket applies. `/api/link-code`,
-  `/api/redeem` and `/api/import-token` are 404 and `link_code` is gone
-  from both engines.
+  password returns a session the account routes accept as a bearer; a
+  wrong password or unknown email is 401 with one body; the login bucket
+  applies; logout ends it. `/api/link-code`, `/api/redeem` and
+  `/api/import-token` are 404 and `link_code` is gone from both engines.
 - **C154 Strict join.** On a server with a store and `SA_GUESTS` unset, a
-  hello whose token owns no account player is closed `1008` before any
-  spawn and counted; an account token joins as its player. Storeless or
-  `SA_GUESTS=1`: today's behaviour, and the full harness fleet passes
-  unchanged on kind.
-- **C155 The column.** The four states render per the GDD table (shots);
-  transitions hold in `-selftest`; Enter submits; a request over 5 s or
-  thrown is `Failed(SITE UNREACHABLE)`; PLAY is enabled only when signed
-  in and the update state allows it.
+  hello whose token owns no character is closed `1008` before any spawn
+  and counted; a character token joins under the row's name and body
+  whatever `hello.name` says. Storeless or `SA_GUESTS=1`: today's
+  behaviour, and the full harness fleet passes unchanged on kind.
+- **C155 The column.** The four launcher states render per the GDD table
+  (shots); transitions hold in `-selftest`; Enter submits; a request over
+  5 s or thrown is `Failed(SITE UNREACHABLE)`; PLAY is enabled only when
+  signed in and the update state allows it.
 - **C156 Remembered, and revocable.** Sign in, quit, relaunch: `SIGNED
-  IN · name` with no request; PLAY joins as that player. Sign out: PLAY
-  dark. Delete the account, PLAY: back to the launcher as `SIGNED OUT ·
-  sign in again`, both keys cleared. The password is nowhere on disk.
-- **C157 Nothing else moved.** Sweep green; C148–C152 still hold; the
-  launcher is still 560×360 and the status column did not shift; F1 does
-  nothing; the game menu has no ACCOUNT row; the site's account page has
-  no code or import.
+  IN · email` with no request; PLAY lists the characters. Sign out: PLAY
+  dark. Change the password on the site, PLAY: back to the launcher as
+  `SIGNED OUT · sign in again`, both keys cleared. No password and no
+  player token on disk.
+- **C157 Characters.** `POST /api/characters` makes a row owned by the
+  account at a guest's start with the given name and body; `GET` lists
+  it with its token; a case-variant of a taken name is 409, a bad name or
+  body 400, a sixth character 409; the account page shows the same rows.
+- **C158 The select.** PLAY opens the character select, not the world;
+  the five states render (shots); one character is pre-selected, none
+  opens the create form; the toggles swap the stage body through all
+  four ids; CREATE with a bad name shows the server's reason; PLAY joins
+  as the chosen character and the nametag is its name.
+- **C159 Bodies.** Two clients, one `char.ubc.f` and one `char.player`:
+  each sees the other's body and armor built for it, and each sees its
+  own arms as its own body; the spawn row is byte-identical to Phase 15's
+  for `char.player` and appends `\0` + id otherwise (`t28`).
+- **C160 Nothing else moved.** Sweep green; C148–C152 still hold; the
+  launcher is still 560×360; F1 does nothing; the game menu has no
+  ACCOUNT row; the site's account page has no code or import; `verify.mjs`
+  budgets hold with the two new bodies and their armor.
 
 ## Deferred — and what would earn each one a place
 
@@ -1738,7 +1779,8 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 |---|---|
 | Sharding, delta snapshots, multiple server processes | one process actually saturates — measure first |
 | OAuth / password reset email | Phase 16 made accounts the only door; reset needs SMTP that does not exist |
-| Player-token rotation on password change (sign every launcher out) | someone's password leaks; the token is the player row's key, so rotation is a store change |
+| Character delete and rename | a playtester asks; delete is the account-delete cascade scoped to one row, rename is the name index plus a nametag refresh |
+| More bodies, hair, skin and suit colours | the four Phase 16 bodies feel samey; UBC's hairstyles pack is already vendored and rigs to the head bone |
 | Managed/hosted Postgres, replicas, backups | deploying somewhere real — the DSN is already the only thing that changes |
 | Redis (cache, pub/sub, shared sessions) | a second server process needs to see the first one's state; until then the in-memory world is the cache and a function call is the bus |
 | Multiple planets / star systems | one planet has enough content to leave |
