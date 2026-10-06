@@ -83,6 +83,17 @@ real materials, about 18k triangles dressed.
   wrist reach 0.54 m), and both hands carry mounts (`hand.r`, `hand.l`): the
   client runs a two-handed weapon's barrel from the right hand toward the
   left, every frame.
+- **Why `body` is capped**: the client hides the local player's `head` and
+  draws its `arms` shadows-only, so the `body` it does draw is open at the
+  neck and both shoulders; looking down, you saw the ragged cut and the
+  hollow torso inside. `split()` hands the cut's teeth (torso faces that
+  mostly border the head or an arm, or own a corner alone) to that part,
+  then `cap()` closes every open ring with undersuit (`suit`) triangles made
+  of the ring's own vertices (so they carry its weights), wound outward,
+  sharp at the rim (smooth across it, the cap shaded black). `lod`
+  decimation reserves `CAP_TRIS` for them; UBC bodies are simplified to
+  budget by the import anyway. Remote players never see a cap: it sits
+  under their head and arms.
 - **Armor** (`tools/bpy/armor.py`): hard plates are clean grids laid on a
   cylinder around their bone, masked to a rounded rectangle, projected
   inward along their normals onto a SMOOTHED copy of the body with a gap,

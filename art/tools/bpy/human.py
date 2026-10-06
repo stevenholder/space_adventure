@@ -596,6 +596,7 @@ def paint_skin(h, eyes, rig):
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres
+CAP_TRIS = 100                                # cap(): the neck and shoulder caps on `body` (44-52 measured on `lod` bodies)
 
 
 def lod_decimate(h, eyes):
@@ -624,7 +625,7 @@ def lod_decimate(h, eyes):
         elif part == "head" and any(x.group == ears and x.weight > 0.3 for x in v.groups):
             part = "ear"
         g.add([v.index], LOD_WEIGHT.get(part, 1.0), "REPLACE")
-    want = BUDGET - EYEBALL_TRIS - 40
+    want = BUDGET - EYEBALL_TRIS - CAP_TRIS - 40
     tris = sum(len(p.vertices) - 2 for p in h.data.polygons)
 
     def collapse(obj, factor):
@@ -823,6 +824,47 @@ TEX_DIR = os.path.join(ART, "build", "tex")     # the baked maps (the glb embeds
 def split(h):
     """`head` and `arms` off into their own meshes; the rest is `body`."""
     dom = dominant_bones(h)
+    label = []
+    for p in h.data.polygons:
+        bones = [dom[v] for v in p.vertices]
+        label.append(part_of(max(set(bones), key=bones.count)))
+    # A torso face with most of its edges on the head or an arm, or a
+    # corner no other torso face holds, is a tooth of the ragged cut: it goes
+    # with that part, so the local player (head hidden, arms shadows-only)
+    # does not see a sawtooth collar. Two passes: more would start eating
+    # along a diagonal cut.
+    faces_of = {}
+    for p in h.data.polygons:
+        for k in p.edge_keys:
+            faces_of.setdefault(k, []).append(p.index)
+    fan = {}
+    for p in h.data.polygons:
+        for v in p.vertices:
+            fan.setdefault(v, []).append(p.index)
+    for _ in range(2):
+        moved = {}
+        for p in h.data.polygons:
+            if label[p.index] != "body":
+                continue
+            n = {}
+            for k in p.edge_keys:
+                for q in faces_of[k]:
+                    if q != p.index and label[q] != "body":
+                        n[label[q]] = n.get(label[q], 0) + 1
+            for part, c in n.items():
+                if c * 2 > len(p.vertices):
+                    moved[p.index] = part
+            # A spike: a decimation sliver reaching out along the shoulder.
+            for v in p.vertices:
+                others = [label[q] for q in fan[v] if q != p.index]
+                if others and "body" not in others:
+                    moved[p.index] = max(set(others), key=others.count)
+        for i, part in moved.items():
+            label[i] = part
+        print(f"split: {len(moved)} torso teeth moved")
+    ids = ("body", "head", "arms")
+    tag = h.data.attributes.new("_part", "INT", "FACE")      # survives separate(), unlike indices
+    tag.data.foreach_set("value", [ids.index(x) for x in label])
     parts = {}
     for name in ("head", "arms"):
         bpy.ops.object.select_all(action="DESELECT")
@@ -832,10 +874,9 @@ def split(h):
         bpy.ops.mesh.select_mode(type="FACE")
         bpy.ops.mesh.select_all(action="DESELECT")
         bpy.ops.object.mode_set(mode="OBJECT")
-        dom = dominant_bones(h)
+        tag = h.data.attributes["_part"].data
         for p in h.data.polygons:
-            bones = [dom[v] for v in p.vertices]
-            p.select = part_of(max(set(bones), key=bones.count)) == name
+            p.select = tag[p.index].value == ids.index(name)
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.separate(type="SELECTED")
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -847,9 +888,75 @@ def split(h):
     h.data.name = "body"
     parts["body"] = h
     for o in parts.values():
+        o.data.attributes.remove(o.data.attributes["_part"])
         bpy.context.view_layer.objects.active = o
         bpy.ops.object.shade_smooth()
+    print("caps", cap(parts["body"]), "tris on body")
     return parts
+
+
+def cap(obj):
+    """Close `body`'s open rings -- the neck and both shoulders, where
+    split() cut `head` and `arms` off -- with undersuit faces. The local
+    player's own head is hidden and its arms draw shadows only, so looking
+    down sees straight into the hollow torso otherwise. The cap's vertices
+    are the ring's own, so it carries the ring's weights. Returns the tris
+    added. (Coincident boundary vertices are welded first: UBC's imported
+    mesh is split at its UV seams, which breaks each ring into pieces.)"""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    ring = list({v for e in bm.edges if e.is_boundary for v in e.verts})
+    bmesh.ops.remove_doubles(bm, verts=ring, dist=1e-5)
+    # Walk each hole by its faces' half-edges (rotating round the vertex to
+    # the next open edge), so two rings that touch at a vertex stay two.
+    rim = [e for e in bm.edges if e.is_boundary]
+    todo = {e.link_loops[0] for e in rim}
+    new = []
+
+    def fill(cycle):
+        # The hole runs against its faces' winding: reversed, the cap's normal
+        # points out of the torso like theirs. (A 3-vertex hole can be the
+        # back of a lone torso triangle: no cap.)
+        if len(cycle) >= 3 and not bm.faces.get(cycle):
+            new.append(bm.faces.new(list(reversed(cycle))))
+
+    while todo:
+        start = lp = todo.pop()
+        ring = []
+        while True:
+            ring.append(lp.vert)
+            nxt = lp.link_loop_next
+            for _ in range(64):
+                if nxt.edge.is_boundary:
+                    break
+                nxt = nxt.link_loop_radial_next.link_loop_next
+            else:
+                raise SystemExit(f"cap: no open edge round vertex {lp.link_loop_next.vert.index}")
+            if nxt is start or len(ring) > len(bm.verts):
+                break
+            todo.discard(nxt)
+            lp = nxt
+        # A ring that touches itself is several holes: one face per simple cycle.
+        path = []
+        for v in ring:
+            if v in path:
+                i = path.index(v)
+                fill(path[i:])
+                path = path[:i]
+            path.append(v)
+        fill(path)
+    new = bmesh.ops.triangulate(bm, faces=new, quad_method="BEAUTY", ngon_method="BEAUTY")["faces"]
+    suit = next(i for i, m in enumerate(obj.data.materials) if m and m.name == "suit")
+    for f in new:
+        f.material_index = suit
+        f.smooth = True
+    # A sharp rim: smooth across it, the cap took the torso's sideways
+    # vertex normals and shaded near-black from above.
+    for e in rim:
+        e.smooth = False
+    bm.to_mesh(obj.data)
+    bm.free()
+    return len(new)
 
 
 def bind(obj, rig):
