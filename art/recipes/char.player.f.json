@@ -9,12 +9,17 @@
   "mounts": {
     "eye": [
       0,
-      1.7,
+      1.65,
       0
     ]
   },
   "license": "CC0",
   "author": "Space Adventure (MakeHuman base mesh, CC0)",
   "source_url": "tools/bpy/human.py",
-  "rig": "animated"
+  "rig": "animated",
+  "worn_surfaces": {
+    "hair": [
+      "hair"
+    ]
+  }
 }

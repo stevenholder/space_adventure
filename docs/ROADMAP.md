@@ -1786,6 +1786,58 @@ one-player rule. Those rows stay in QA-STATUS as history.
   ACCOUNT row; the site's account page has no code or import; `verify.mjs`
   budgets hold with the two new bodies and their armor.
 
+# Phase 17 — faces and hair (2026-10-06)
+
+### Where Phase 17 stands (2026-10-06, built)
+
+Built on `art/human-v2`: Colonist v2 (8915 / 8887 tris, eye 1.65,
+Quaternius brows), armor rebuilt for both, six hair styles × four heads
+worn as slot `hair`, migration 006, the HAIR row. C161–C165 recorded
+(docs/QA-STATUS.md "Phase 17"); t28 51 strict / 50 guests. Owed: eyes on
+the Windows install, a helmet over hair on a second client. Known: the
+Colonist's skin is a flat colour beside the UBC's painted face (a texture
+pass is the next art loop), the brows read stern. The user's call
+(2026-10-06): the Colonist bodies look a class below the Vanguard ones;
+make them higher quality but still different — less muscular, a little
+shorter, more face (brow, bone structure, eyebrows) — and make the
+Quaternius hair and eyebrows work on both models, with hair a player
+choice at character creation. Contract: GDD "Faces and hair (Phase 17)".
+
+**Playable proof.** Create a Colonist: the stage shows a slimmer, shorter
+figure with a face that has a brow and cheekbones, not a smooth egg; the
+HAIR row cycles buzzed → buns → long and the stage follows; PLAY, and a
+Vanguard standing next to you wears the same long hair you picked,
+fitted to its own head. Put a helmet on: the hair is gone.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | art | Colonist v2: MPFB macros (muscle/weight/shoulders), EYE 1.65, head-weighted decimation ≤ 9000, eyebrow meshes refitted into `head`; both genders; renders beside the Vanguard | `art/tools/bpy/human.py`, `art/recipes/char.player*.json` | `npm --prefix art test`; render sheets (naked, Bulwark, Scout) |
+| 2 | art | Armor rebuilt for the new shapes (`@char.player`, `@char.player.f`), fit rules in `FITS` | `art/tools/bpy/armor.py` | sheets: no poke-through worse than the Vanguard's |
+| 3 | art | `hair.py`: every pack style × four heads → `hair.<style>@<body>` glbs + `hair.none`; manifest; verify contracts (one mesh, head-bone weights, named `hair`) | `art/tools/bpy/hair.py`, `art/manifest.json`, `art/tools/verify.mjs` | sheets: each style on each head, and under a helmet |
+| 4 | 1 | Migration 006 `player.hair` default `hair.none`; store read/write; `hair` in the characters API (400 `bad hair`); the worn frame at spawn (slot `hair`) | `server/internal/store/`, `web/web.go`, `server/server.go` | Go tests; `t28` |
+| 5 | 1 | Harness: `t28` creates with hair, sees the `worn` frame (slot `hair`) on own and other socket; bad hair 400 | `test/t28-accounts.mjs` | kind |
+| 6 | 1 | Client: HAIR row on the create form (cycle), `Characters.Hair`, stage shows it, `CreateCharacter` sends it; `Entities` attaches slot `hair` like armor; `ViewModel` ignores it (first person) | `UI/Characters.cs`, `Boot.cs`, `Entities.cs` | shots `p17-chars-create-hair-*.png`; two clients |
+| 7 | 2 | Record: QA-STATUS "Phase 17"; GDD numbers (final tris, eye) | `docs/` | — |
+
+### Acceptance criteria (C161–C165)
+
+- **C161 The Colonist reads as a Colonist.** Side by side with the
+  Vanguard (sheets + an in-game shot): shorter (eye 1.65), slimmer, a
+  face with brow, cheekbones, eyebrows; ≤ 9000 tris; every contract
+  verify.mjs checks still holds; armor fits.
+- **C162 Hair fits every head.** Each style builds for all four bodies;
+  worn, it sits on the scalp with no gap or poke-through worse than the
+  Vanguard's today; a helmet hides it.
+- **C163 Hair is the character's.** `POST /api/characters` stores it,
+  `GET` returns it, a bad id is 400; at spawn every client receives the
+  `worn` frame for slot `hair` (`t28`, both sockets).
+- **C164 The form.** HAIR row cycles the styles; the stage follows; PLAY
+  joins wearing it; the list row unchanged.
+- **C165 Nothing else moved.** Sweep green; C153–C160 hold; the
+  first-person view is unchanged (hair never draws for the local player).
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.

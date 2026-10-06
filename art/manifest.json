@@ -4,10 +4,10 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 6075,
+      "tris": 8915,
       "license": "CC0",
       "source": "recipes/char.player.json",
-      "description": "Player character, our own: tools/bpy/body.py builds it headless in Blender at final scale on the README 'Humanoid skeleton' -- one continuous skinned mesh (Blender skin modifier over the joint table) plus a separate head mesh on the same armature, bones named to the node contract, clips authored in bpy. A person in a jumpsuit: bare head with eyes and hair, skin hands; armor items dress over it. Faces -Z. eye is at 1.7 m because GDD eye_height is 1.7. 0.60 m across at the shoulders, inside the server capsule.",
+      "description": "Player body, the COLONIST (GDD 'Faces and hair'): tools/bpy/human.py variant char.player -- a MakeHuman build (MPFB2, CC0 output) slimmer and shorter than the Vanguard (muscle 0.40, weight 0.45, narrower shoulders), eyes at 1.65 m, decimated with the budget on the face (head ~3400 tris: brow ridge, cheekbones, jaw, eyelids, lips), Quaternius Eyebrows_Regular refitted to the brow inside `head` (material hair), bald (hair is a worn hair.* piece). Undersuit, game-engine bone names, clips, hand mounts, head/arms/body split. Faces -Z.",
       "source_url": "tools/bpy/human.py",
       "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
@@ -26,6 +26,9 @@
           "hair",
           "eye",
           "sclera"
+        ],
+        "hair": [
+          "hair"
         ]
       },
       "pbr": true
@@ -33,10 +36,10 @@
     {
       "id": "char.player.f",
       "file": "chars/player_f.glb",
-      "tris": 6161,
+      "tris": 8887,
       "license": "CC0",
       "source": "recipes/char.player.f.json",
-      "description": "Player body, female (GDD 'Bodies': COLONIST F): tools/bpy/human.py variant char.player.f -- char.player's MakeHuman build with the gender macro at 0.0, same undersuit, painted short hair, game-engine bone names, clips, hand mounts and head/arms/body split. Faces -Z, eye at 1.7 m (scaled there, as char.player).",
+      "description": "Player body, female (GDD 'Bodies': COLONIST F): tools/bpy/human.py variant char.player.f -- the Colonist v2 build with gender 0.0 (muscle 0.38, weight 0.42), eyes at 1.65 m, head-weighted decimation (~3400-tri face), Quaternius Eyebrows_Female refitted into `head` (material hair), bald; same undersuit, bone names, clips, hand mounts and head/arms/body split. Faces -Z.",
       "source_url": "tools/bpy/human.py",
       "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
@@ -56,13 +59,16 @@
           "hair",
           "eye",
           "sclera"
+        ],
+        "hair": [
+          "hair"
         ]
       }
     },
     {
       "id": "char.ubc",
       "file": "chars/ubc.glb",
-      "tris": 8992,
+      "tris": 8995,
       "license": "CC0",
       "source": "recipes/char.ubc.json",
       "description": "Spike body: Quaternius Universal Base Characters Superhero male (CC0), imported and dressed by tools/bpy/human.py variant char.ubc on the same game-engine bone names, clips and hand mounts as char.player. Worn by npc.veteran at spawn for review. Faces -Z, eye at 1.7 m.",
@@ -81,17 +87,19 @@
         ],
         "head": [
           "MI_Superhero_Male",
-          "MI_Hair_1",
+          "hair",
           "MI_Eyes",
-          "MI_Hair_1.001",
           "suit"
+        ],
+        "hair": [
+          "hair"
         ]
       }
     },
     {
       "id": "char.ubc.f",
       "file": "chars/ubc_f.glb",
-      "tris": 8994,
+      "tris": 8992,
       "license": "CC0",
       "source": "recipes/char.ubc.f.json",
       "description": "Body, female (GDD 'Bodies': VANGUARD F): Quaternius Universal Base Characters Superhero female (CC0) with the pack's Hair_Buns, imported and dressed by tools/bpy/human.py variant char.ubc.f exactly as char.ubc, on the same game-engine bone names, clips and hand mounts as char.player. Faces -Z, eye at 1.7 m.",
@@ -110,10 +118,12 @@
         ],
         "head": [
           "MI_Superhero_Female",
-          "MI_Hair_2",
-          "MI_Eyes",
           "hair",
+          "MI_Eyes",
           "suit"
+        ],
+        "hair": [
+          "hair"
         ]
       }
     },
@@ -676,7 +686,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -701,7 +712,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -726,7 +738,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -751,7 +764,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -776,7 +790,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -801,7 +816,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -826,7 +842,34 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.scout@char.player",
+      "file": "armor/helmet_scout.char.player.glb",
+      "tris": 1116,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.scout.json",
+      "description": "Wearable armor.helmet.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__visor": [
+          "armor_visor",
+          "armor_metal"
+        ]
+      },
+      "covers": [
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -1181,6 +1224,56 @@
       "arms": true
     },
     {
+      "id": "armor.suit.scout@char.player",
+      "file": "armor/suit_scout.char.player.glb",
+      "tris": 2520,
+      "license": "CC0",
+      "source": "recipes/armor.suit.scout.json",
+      "description": "Wearable armor.suit.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__bracer_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "lowerarm_r__bracer_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_01__abs_lo": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_02__abs_hi": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "spine_03__back": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_l": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_r": [
+          "armor_plate",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
       "id": "armor.plate.iron",
       "file": "armor/plate_iron.glb",
       "tris": 1130,
@@ -1316,6 +1409,28 @@
       "id": "armor.plate.iron@char.ubc.f",
       "file": "armor/plate_iron.char.ubc.f.glb",
       "tris": 1170,
+      "license": "CC0",
+      "source": "recipes/armor.plate.iron.json",
+      "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__iron_back": [
+          "armor_iron",
+          "armor_trim"
+        ],
+        "spine_03__iron_front": [
+          "armor_iron",
+          "armor_trim",
+          "armor_decal"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.plate.iron@char.player",
+      "file": "armor/plate_iron.char.player.glb",
+      "tris": 1130,
       "license": "CC0",
       "source": "recipes/armor.plate.iron.json",
       "description": "Wearable armor.plate.iron: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -1706,6 +1821,59 @@
       "pbr": true
     },
     {
+      "id": "armor.legs.scout@char.player",
+      "file": "armor/legs_scout.char.player.glb",
+      "tris": 2412,
+      "license": "CC0",
+      "source": "recipes/armor.legs.scout.json",
+      "description": "Wearable armor.legs.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_l__shin_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "calf_r__knee_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__shin_r": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "pelvis__belt": [
+          "armor_strap",
+          "armor_metal"
+        ],
+        "pelvis__pouch": [
+          "armor_strap"
+        ],
+        "pelvis__pouch.001": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side": [
+          "armor_strap"
+        ],
+        "pelvis__pouch_side.001": [
+          "armor_strap"
+        ],
+        "thigh_l__thigh_l": [
+          "armor_plate",
+          "armor_trim"
+        ],
+        "thigh_r__thigh_r": [
+          "armor_plate",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
       "id": "armor.gloves.scout",
       "file": "armor/gloves_scout.glb",
       "tris": 824,
@@ -1916,6 +2084,36 @@
       "arms": true
     },
     {
+      "id": "armor.gloves.scout@char.player",
+      "file": "armor/gloves_scout.char.player.glb",
+      "tris": 824,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.scout.json",
+      "description": "Wearable armor.gloves.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_l__cuff_l": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "lowerarm_r__cuff_r": [
+          "armor_trim",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
       "id": "armor.boots.scout",
       "file": "armor/boots_scout.glb",
       "tris": 1392,
@@ -2078,7 +2276,7 @@
     {
       "id": "armor.boots.scout@char.player.f",
       "file": "armor/boots_scout.char.player.f.glb",
-      "tris": 1440,
+      "tris": 1416,
       "license": "CC0",
       "source": "recipes/armor.boots.scout.json",
       "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
@@ -2110,6 +2308,38 @@
     {
       "id": "armor.boots.scout@char.ubc.f",
       "file": "armor/boots_scout.char.ubc.f.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.scout.json",
+      "description": "Wearable armor.boots.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_l__boot_l": [
+          "armor_boot",
+          "armor_trim"
+        ],
+        "foot_r__boot_r": [
+          "armor_boot",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.boots.scout@char.player",
+      "file": "armor/boots_scout.char.player.glb",
       "tris": 1392,
       "license": "CC0",
       "source": "recipes/armor.boots.scout.json",
@@ -2294,6 +2524,28 @@
       "pbr": true
     },
     {
+      "id": "pack.scout@char.player",
+      "file": "armor/pack_scout.char.player.glb",
+      "tris": 324,
+      "license": "CC0",
+      "source": "recipes/pack.scout.json",
+      "description": "Wearable pack.scout: skinned over the shared humanoid skeleton, authored at bulk 1.0 (tools/bpy/body.py ARMOR). Bind pose, no clips; follows whatever the wearer plays.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_03__pack": [
+          "armor_plate"
+        ],
+        "spine_03__pack_cell": [
+          "armor_metal"
+        ],
+        "spine_03__pack_lid": [
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
       "id": "armor.helmet.bulwark",
       "file": "armor/helmet_bulwark.glb",
       "tris": 1260,
@@ -2322,7 +2574,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2355,7 +2608,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2388,7 +2642,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2421,7 +2676,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2454,14 +2710,15 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
     {
       "id": "armor.helmet.bulwark@char.player.f",
       "file": "armor/helmet_bulwark.char.player.f.glb",
-      "tris": 1280,
+      "tris": 1260,
       "license": "CC0",
       "source": "recipes/armor.helmet.bulwark.json",
       "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -2487,7 +2744,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2520,7 +2778,42 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.bulwark@char.player",
+      "file": "armor/helmet_bulwark.char.player.glb",
+      "tris": 1260,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.bulwark.json",
+      "description": "Bulwark helmet: thick gunmetal shell with a slit visor, a crest and cheek guards. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__cheek_l": [
+          "armor_heavy"
+        ],
+        "head__cheek_r": [
+          "armor_heavy"
+        ],
+        "head__crest": [
+          "armor_trim"
+        ],
+        "head__helmet_bulwark": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "head__slit": [
+          "armor_visor"
+        ]
+      },
+      "covers": [
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2931,6 +3224,64 @@
       "arms": true
     },
     {
+      "id": "armor.suit.bulwark@char.player",
+      "file": "armor/suit_bulwark.char.player.glb",
+      "tris": 3008,
+      "license": "CC0",
+      "source": "recipes/armor.suit.bulwark.json",
+      "description": "Bulwark suit: wide chest and back plates, a gorget, layered pauldrons, long vambraces. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "lowerarm_l__vambrace_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "lowerarm_r__vambrace_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_02__abs": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "spine_03__back.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__chest.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "spine_03__gorget": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "upperarm_l__pauldron_l.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__pauldron_top_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "upperarm_r__pauldron_r.001": [
+          "armor_heavy",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_r__pauldron_top_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
       "id": "armor.legs.bulwark",
       "file": "armor/legs_bulwark.glb",
       "tris": 2328,
@@ -3178,7 +3529,7 @@
     {
       "id": "armor.legs.bulwark@char.player.f",
       "file": "armor/legs_bulwark.char.player.f.glb",
-      "tris": 2344,
+      "tris": 2324,
       "license": "CC0",
       "source": "recipes/armor.legs.bulwark.json",
       "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -3228,6 +3579,55 @@
       "id": "armor.legs.bulwark@char.ubc.f",
       "file": "armor/legs_bulwark.char.ubc.f.glb",
       "tris": 2472,
+      "license": "CC0",
+      "source": "recipes/armor.legs.bulwark.json",
+      "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__greave_l": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_l__knee_l.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "calf_r__greave_r": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__knee_r.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "pelvis__belt.001": [
+          "armor_trim",
+          "armor_metal"
+        ],
+        "thigh_l__tasset_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_l__thigh_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "thigh_r__tasset_r": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "thigh_r__thigh_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.bulwark@char.player",
+      "file": "armor/legs_bulwark.char.player.glb",
+      "tris": 2340,
       "license": "CC0",
       "source": "recipes/armor.legs.bulwark.json",
       "description": "Bulwark legs: belt, hip tassets, full-wrap thigh plates and greaves, big knee caps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -3484,6 +3884,36 @@
       "arms": true
     },
     {
+      "id": "armor.gloves.bulwark@char.player",
+      "file": "armor/gloves_bulwark.char.player.glb",
+      "tris": 824,
+      "license": "CC0",
+      "source": "recipes/armor.gloves.bulwark.json",
+      "description": "Bulwark gauntlets: long cuffs and broad knuckle plates. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "hand_l__knuckle_l.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "hand_r__knuckle_r.001": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_l__gauntlet_l": [
+          "armor_heavy",
+          "armor_metal"
+        ],
+        "lowerarm_r__gauntlet_r": [
+          "armor_heavy",
+          "armor_metal"
+        ]
+      },
+      "pbr": true,
+      "arms": true
+    },
+    {
       "id": "armor.boots.bulwark",
       "file": "armor/boots_bulwark.glb",
       "tris": 1392,
@@ -3708,6 +4138,38 @@
       "pbr": true
     },
     {
+      "id": "armor.boots.bulwark@char.player",
+      "file": "armor/boots_bulwark.char.player.glb",
+      "tris": 1392,
+      "license": "CC0",
+      "source": "recipes/armor.boots.bulwark.json",
+      "description": "Bulwark boots: armored foot shells and tall shafts. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__shaft_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "calf_r__shaft_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_l__boot_l.001": [
+          "armor_heavy",
+          "armor_trim"
+        ],
+        "foot_r__boot_r.001": [
+          "armor_heavy",
+          "armor_trim"
+        ]
+      },
+      "covers": [
+        "body/boot"
+      ],
+      "pbr": true
+    },
+    {
       "id": "armor.helmet.raider",
       "file": "armor/helmet_raider.glb",
       "tris": 648,
@@ -3729,7 +4191,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -3755,7 +4218,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -3781,7 +4245,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -3807,7 +4272,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -3833,7 +4299,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -3859,7 +4326,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -3885,7 +4353,35 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
+      ],
+      "pbr": true
+    },
+    {
+      "id": "armor.helmet.raider@char.player",
+      "file": "armor/helmet_raider.char.player.glb",
+      "tris": 648,
+      "license": "CC0",
+      "source": "recipes/armor.helmet.raider.json",
+      "description": "Raider skull cap: open-faced, rusting, with two bone horns. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "head__helmet_raider": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "head__horn_l": [
+          "armor_bone"
+        ],
+        "head__horn_r": [
+          "armor_bone"
+        ]
+      },
+      "covers": [
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4142,6 +4638,42 @@
       "pbr": true
     },
     {
+      "id": "armor.suit.raider@char.player",
+      "file": "armor/suit_raider.char.player.glb",
+      "tris": 1334,
+      "license": "CC0",
+      "source": "recipes/armor.suit.raider.json",
+      "description": "Raider harness: a lopsided chest plate, one spiked pauldron, crossed straps. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "spine_02__strap_1": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "spine_03__chest.002": [
+          "armor_rust",
+          "armor_trim"
+        ],
+        "spine_03__strap_0": [
+          "armor_strap",
+          "armor_strap"
+        ],
+        "upperarm_l__pauldron_l.002": [
+          "armor_rust",
+          "armor_trim",
+          "armor_decal"
+        ],
+        "upperarm_l__spike_0": [
+          "armor_bone"
+        ],
+        "upperarm_l__spike_1": [
+          "armor_bone"
+        ]
+      },
+      "pbr": true
+    },
+    {
       "id": "armor.legs.raider",
       "file": "armor/legs_raider.glb",
       "tris": 1192,
@@ -4304,7 +4836,7 @@
     {
       "id": "armor.legs.raider@char.player.f",
       "file": "armor/legs_raider.char.player.f.glb",
-      "tris": 1184,
+      "tris": 1188,
       "license": "CC0",
       "source": "recipes/armor.legs.raider.json",
       "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -4337,6 +4869,38 @@
       "id": "armor.legs.raider@char.ubc.f",
       "file": "armor/legs_raider.char.ubc.f.glb",
       "tris": 1248,
+      "license": "CC0",
+      "source": "recipes/armor.legs.raider.json",
+      "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
+      "source_url": "tools/bpy/armor.py",
+      "author": "Space Adventure",
+      "surfaces": {
+        "calf_l__knee_l.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "calf_r__knee_r.002": [
+          "armor_rust",
+          "armor_metal"
+        ],
+        "pelvis__belt.002": [
+          "armor_strap",
+          "armor_rust"
+        ],
+        "pelvis__pouch.002": [
+          "armor_strap"
+        ],
+        "thigh_r__thigh_r.002": [
+          "armor_rust",
+          "armor_trim"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "armor.legs.raider@char.player",
+      "file": "armor/legs_raider.char.player.glb",
+      "tris": 1204,
       "license": "CC0",
       "source": "recipes/armor.legs.raider.json",
       "description": "Raider legs: a strap belt with a pouch, one thigh plate, knee pads. Rigid plates on the shared humanoid skeleton (tools/bpy/armor.py), real materials with generated textures.",
@@ -6204,6 +6768,495 @@
       "source_url": "tools/bpy/rpg_items.py",
       "author": "Space Adventure",
       "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "hair.buzzed",
+      "file": "hair/buzzed.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.player",
+      "file": "hair/buzzed.char.player.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.player.f",
+      "file": "hair/buzzed.char.player.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.ubc",
+      "file": "hair/buzzed.char.ubc.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.ubc.f",
+      "file": "hair/buzzed.char.ubc.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female",
+      "file": "hair/buzzed_female.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.player",
+      "file": "hair/buzzed_female.char.player.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.player.f",
+      "file": "hair/buzzed_female.char.player.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.ubc",
+      "file": "hair/buzzed_female.char.ubc.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.ubc.f",
+      "file": "hair/buzzed_female.char.ubc.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted",
+      "file": "hair/simple_parted.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.player",
+      "file": "hair/simple_parted.char.player.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.player.f",
+      "file": "hair/simple_parted.char.player.f.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.ubc",
+      "file": "hair/simple_parted.char.ubc.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.ubc.f",
+      "file": "hair/simple_parted.char.ubc.f.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long",
+      "file": "hair/long.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.player",
+      "file": "hair/long.char.player.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.player.f",
+      "file": "hair/long.char.player.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.ubc",
+      "file": "hair/long.char.ubc.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.ubc.f",
+      "file": "hair/long.char.ubc.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns",
+      "file": "hair/buns.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.player",
+      "file": "hair/buns.char.player.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.player.f",
+      "file": "hair/buns.char.player.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.ubc",
+      "file": "hair/buns.char.ubc.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.ubc.f",
+      "file": "hair/buns.char.ubc.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard",
+      "file": "hair/beard.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.player",
+      "file": "hair/beard.char.player.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.player.f",
+      "file": "hair/beard.char.player.f.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.ubc",
+      "file": "hair/beard.char.ubc.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.ubc.f",
+      "file": "hair/beard.char.ubc.f.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.none",
+      "file": null,
+      "tris": 0,
+      "license": "CC0",
+      "description": "No hair (bald): the default hair slot value. No file -- nothing is worn; the client's registry skips rows without a file.",
+      "source_url": "tools/bpy/hair.py",
+      "author": "Space Adventure"
     }
   ]
 }

@@ -35,7 +35,10 @@ type entity struct {
 	Name string
 	// Body is a character's model + gender id from its row ("" for a
 	// guest). Not on the wire yet (Phase 16 PR B).
-	Body     string
+	Body string
+	// Hair is a character's hair piece id from its row ("" for a guest);
+	// it goes out as a `worn` event, slot hair, after each spawn (hairFrame).
+	Hair     string
 	State    sim.State
 	PrevLook sim.Vec
 

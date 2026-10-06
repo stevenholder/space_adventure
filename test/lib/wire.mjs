@@ -160,6 +160,23 @@ export function decodeSpawn(p) {
   return { entityId, entityType, data, name, body }
 }
 
+// event (0x0007): u32 entity_id | u16 event_id | u32 data_len | bytes data.
+export const EVENT = { EQUIPPED: 0x0006, WORN: 0x000f }
+export function decodeEvent(p) {
+  if (p.length < 10) throw new Error(`event: bad size ${p.length}`)
+  const entityId = p.readUInt32LE(0)
+  const eventId = p.readUInt16LE(4)
+  const dataLen = p.readUInt32LE(6)
+  return { entityId, eventId, data: p.slice(10, 10 + dataLen) }
+}
+// A `worn` event's data is `slot=item` (item empty when the slot cleared);
+// slot `hair` since Phase 17.
+export function decodeWorn(data) {
+  const s = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
+  const i = s.indexOf('=')
+  return i < 0 ? { slot: s, item: '' } : { slot: s.slice(0, i), item: s.slice(i + 1) }
+}
+
 export function decodeDespawn(p) {
   if (p.length !== 4) throw new Error(`despawn: bad size ${p.length}`)
   return { entityId: p.readUInt32LE(0) }

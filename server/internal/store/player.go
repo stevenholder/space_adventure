@@ -41,7 +41,9 @@ type Player struct {
 	// PutPlayer on an existing row: SetPlayerAccount owns it.
 	AccountID string
 	// Body is the character's model + gender id; "" saves as char.player.
-	Body      string
+	Body string
+	// Hair is the character's hair piece id (Phase 17); "" saves as hair.none.
+	Hair      string
 	CreatedMs int64
 	UpdatedMs int64
 }
@@ -83,11 +85,14 @@ type MissionState struct {
 // DefaultBody is every player's body until they pick another (Phase 16).
 const DefaultBody = "char.player"
 
+// DefaultHair is no hair (Phase 17, migration 006's column default).
+const DefaultHair = "hair.none"
+
 // ErrNameTaken is the player_character_name index refusing a character name
 // another account-owned row already has (case-insensitive).
 var ErrNameTaken = errors.New("store: character name taken")
 
-const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms, body`
+const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms, body, hair`
 
 // playerSelect reads account_id last; NULL (a guest) scans as "".
 const playerSelect = `SELECT ` + playerColumns + `, COALESCE(account_id, '') FROM player`
@@ -113,7 +118,7 @@ func scanPlayer(row scanner) (*Player, error) {
 	var p Player
 	var inventory, equipped, missions, skillsCol string
 	err := row.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions, &skillsCol,
-		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs, &p.Body, &p.AccountID)
+		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs, &p.Body, &p.Hair, &p.AccountID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -185,19 +190,22 @@ func (s *Store) PutPlayer(ctx context.Context, p *Player) error {
 	if p.Body == "" {
 		p.Body = DefaultBody
 	}
+	if p.Hair == "" {
+		p.Hair = DefaultHair
+	}
 
 	// account_id is written on INSERT only, so a new character is created
 	// owned in one statement (the name index checks it there); the update
 	// arm leaves it alone, so a game save never orphans or re-homes a row.
 	_, err = s.DB.ExecContext(ctx,
 		`INSERT INTO player (`+playerColumns+`, account_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14, ''))
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NULLIF($15, ''))
 		 ON CONFLICT (token) DO UPDATE SET
 		   name = $2, credits = $3, inventory = $4, equipped = $5,
 		   missions = $6, skills = $7, pos_x = $8, pos_y = $9, pos_z = $10, updated_ms = $12,
-		   body = $13`,
+		   body = $13, hair = $14`,
 		p.Token, p.Name, p.Credits, string(inventory), string(equipped), string(missions), string(skillsCol),
-		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs, p.Body, p.AccountID)
+		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs, p.Body, p.Hair, p.AccountID)
 	if err != nil {
 		if isUnique(err) {
 			return ErrNameTaken

@@ -126,16 +126,92 @@ parts; rig, clips, mounts and grips are shared. `blender -b --python
 tools/bpy/human.py -- npc.grunt` rebuilds one.
 
 The four player bodies (GDD "Bodies"): `char.player` and `char.player.f`
-(the same MakeHuman build, `gender` 1.0 / 0.0), `char.ubc` and `char.ubc.f`
-(Quaternius UBC Superhero male / female, Hair_Buzzed / Hair_Buns; the
-hairstyle's material is renamed `hair` so a helmet's `covers: head/hair`
-hides it). armor.py builds every piece for all of them (`BODIES`); per-body
+(the Colonist v2 MakeHuman build, `gender` 1.0 / 0.0, below), `char.ubc`
+and `char.ubc.f` (Quaternius UBC Superhero male / female; since Phase 17
+their hair is a separate worn piece, `tools/bpy/hair.py`, and they ship
+bald with their own eyebrows). armor.py builds every piece for all of them (`BODIES`); per-body
 fit lives in its `FITS`: UBC wraps onto a body smoothed 4 passes, not 12,
 and the UBC female's torso plates `drape` (each vertex clears the torso
 within 8 cm along the spine) so the chest plate rides over the bust
 instead of being cut by it. `blender -b --python tools/bpy/armor.py --
-char.ubc.f` rebuilds one body's set. body.py now only builds the
+char.ubc.f` rebuilds one body's set (`base` = the unsuffixed pieces, the
+original MakeHuman build the gunner and shopkeeper wear; the Colonist v2
+has its own `@char.player` set). body.py now only builds the
 retired 11-bone skeleton and is kept for its older docs.
+
+## Colonist v2, faces and hair (Phase 17, 2026-10-06)
+
+GDD "Faces and hair". The Colonist (`char.player`, `char.player.f`) is a
+deliberately different body from the Vanguard (UBC): slimmer and shorter,
+eyes at **1.65 m** (`eye` per VARIANT in human.py; UBC stays 1.70), the
+same 9000-tri ceiling.
+
+- **Build**: MakeHuman macros muscle 0.40 / 0.38, weight 0.45 / 0.42,
+  proportions 0.75 / 0.8, plus detail targets (`targets` in the variant,
+  loaded before the rig is fitted): `torso/measure-shoulder-dist-decr`,
+  `eyebrows-trans-forward` (brow ridge), `cheek/*-cheek-bones-incr`,
+  `chin-bones-incr`, `chin-prominent-incr`, small `nose-hump-incr`.
+- **Head-weighted decimation** (`lod`): the eyeballs come off first (they
+  return as clean spheres), then one collapse pass with a vertex group:
+  eyelids and lips 0.05, head 0.2, hands 0.6, everything else 1.0. Blender's
+  collapse decimator collapses LOWER weights later and never collapses a
+  weight of exactly 0; the group factor grades it, so human.py bisects the
+  factor until the head lands on `HEAD_TRIS` (3300). Result: head ~3400 of
+  ~8900, the suited torso and legs coarse.
+- **Collar**: the neck is cut along a plane (`collar()`, bmesh bisect) so the
+  undersuit's edge is a clean line.
+- **Eyebrows**: Quaternius `Eyebrows_Regular` / `Eyebrows_Female`, refitted
+  by `refit()`: scaled by the eyes' spacing (across, by the forehead's
+  width), lifted 4 mm (more at the inner ends), then every vertex keeps the
+  height it had above the UBC skin, measured above THIS skin along its
+  normal, with the corrections smoothed over the mesh. Joined into `head`
+  on the head bone, material `hair`, so the local player never sees them
+  and a helmet's `covers: head/hair` hides them. The UBC bodies' own brows
+  wear the same tinted `hair` material.
+- **Hair material**: the pack's strand textures are greyscale (the pack
+  tints them in its own shader; raw they draw white). `hair_material()`
+  multiplies the texture (256 px) by `HAIR_TINT`, exported as
+  baseColorTexture x baseColorFactor.
+
+### Hair (`tools/bpy/hair.py`)
+
+Hair is a worn piece, never part of a body (`hair.none` = bald). Every
+glTF in the vendored "Rigged to Head Bone" folder except the eyebrows is a
+style: `hair.buzzed`, `hair.buzzed_female`, `hair.simple_parted`,
+`hair.long`, `hair.buns`, `hair.beard`. For each body (`BODIES`: the base
+MakeHuman build -> the unsuffixed `hair.<style>`, then `@char.player`,
+`@char.player.f`, `@char.ubc`, `@char.ubc.f`) hair.py:
+
+1. builds the body's rig (human.py) and takes the head + shoulders of the
+   SHIPPED body glb as the target surface (the decimated / simplified head
+   the hair will sit on);
+2. picks the UBC head the style was authored on (the one fewest of its
+   vertices sink into: `long`, `buns`, `buzzed_female` are female);
+3. decimates under 1500 tris, maps the source skull's box onto the
+   target's per axis, then `refit()` (reach 4 cm: buns and ponytails keep
+   their shape, the inner surface follows the scalp), nothing closer than
+   2 mm to the skin;
+4. one mesh `hair`, material `hair`, 100 % on `head`, exported with the
+   body's rig to `build/hair.<style>[@<body>].raw.glb`.
+
+Recipes `recipes/hair.<style>.json` (`bodies`) finish them to
+`hair/<style>[.<body>].glb`. The client wears hair exactly like armor:
+the server's `worn` event for slot `hair` names `hair.<style>`, and
+`Entities.Dress` takes `hair.<style>@<wearer>` when the manifest has it
+(the unsuffixed piece otherwise). `hair.none` is a manifest row with
+`file: null` and `tris: 0`; the client's registry skips rows without a
+file, so wearing it hangs nothing. verify.mjs holds every `hair.*` glb to
+one mesh named `hair`, every primitive in material `hair`, weights on the
+`head` bone only, 1500 tris.
+
+    blender -b --python tools/bpy/hair.py [-- char.player ...|base]
+    for r in recipes/hair.*.json; do node tools/import_pack.mjs $r; done
+
+Contact sheets for any of this: `blender -b --python tools/render_sheet.py
+-- out.png body.glb,piece.glb[,…] [another group …]` (EEVEE, key/fill/rim,
+every group a row at the same scale with four head close-ups). Rebuilding
+one body's armor without re-finishing the others:
+`ONLY=<id>@<body>,… node tools/import_pack.mjs recipes/<id>.json`.
 
 ## Surface textures and decals (2026-10-01)
 

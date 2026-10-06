@@ -31,6 +31,7 @@
  *     "arms":   true,                        // optional: first-person arms wear it
  *     "rig":    "animated",                  // optional manifest flag
  *     "bodies": ["npc.grunt"],               // optional: also "<id>@<body>" per wearer build
+ *     "worn_surfaces": {"hair": ["hair"]},   // optional (bodies): a worn piece's mesh, coverable
  *     "license": "CC0", "author": "Space Adventure", "source_url": "tools/bpy/armor.py"
  *   }
  */
@@ -217,7 +218,12 @@ export function updateManifest(result, recipe) {
 
   row.file = recipe.out;
   row.tris = result.tris;
-  if (result.surfaces && Object.keys(result.surfaces).length) row.surfaces = result.surfaces;
+  // `worn_surfaces` (bodies): meshes a worn piece brings onto this body,
+  // recorded as if the body had them, so a helmet's `covers: hair/hair`
+  // finds the hair piece's surface by the wearer's row (EntityViews.Cover
+  // looks names up on the wearer).
+  const surfaces = { ...(result.surfaces ?? {}), ...(recipe.worn_surfaces ?? {}) };
+  if (Object.keys(surfaces).length) row.surfaces = surfaces;
   else delete row.surfaces;
   if (recipe.covers) row.covers = recipe.covers;
   else delete row.covers;
@@ -313,7 +319,11 @@ async function main() {
     src: base.src.replace(".raw.glb", `@${b}.raw.glb`),
     out: base.out.replace(/\.glb$/, `.${b.replace("npc.", "")}.glb`),
   }))];
+  // ONLY=<id>,<id>: finish just these ids (e.g. one body's variants), so a
+  // rebuild for one wearer does not re-finish every other body's piece.
+  const only = process.env.ONLY ? process.env.ONLY.split(",") : null;
   for (const recipe of variants) {
+    if (only && !only.includes(recipe.id)) continue;
     const result = await importPack(recipe);
     updateManifest(result, recipe);
     console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);

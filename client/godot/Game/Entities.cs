@@ -256,7 +256,15 @@ namespace SpaceAdventure.Game
         /// whatever that slot showed before. Called from the worn event and
         /// from the model load, because either can arrive first.
         /// </summary>
-        private void Dress(EntityView view) => Dress(_assets, Defs.ItemAsset, view.Model, view.Worn, view.WornDrawn, view.WornNodes);
+        private void Dress(EntityView view) => Dress(_assets, item => WornAsset(Defs, item), view.Model, view.Worn, view.WornDrawn, view.WornNodes);
+
+        /// <summary>
+        /// A worn item's model id. Armor is an item (items.json names its
+        /// asset); hair is not -- the `hair` slot's `hair.<style>` IS the
+        /// manifest id (GDD "Faces and hair"), and `hair.none` has no file.
+        /// </summary>
+        public static string WornAsset(Defs defs, string item) =>
+            item != null && item.StartsWith("hair.", StringComparison.Ordinal) ? item : defs.ItemAsset(item);
 
         /// <summary>
         /// The one dressing rule, shared with the local body (ViewModel).
@@ -293,7 +301,8 @@ namespace SpaceAdventure.Game
                 // the eye should see are the first-person ones. A helmet or a
                 // sleeve drawn here is a box over the view or a second pair of
                 // arms -- shadows-only, exactly like the head and arms.
-                if (local && (kv.Key == "head" || CoversArms(assets, id)))
+                // Hair rides the head, so it is shadows-only with it (C165).
+                if (local && (kv.Key == "head" || kv.Key == "hair" || CoversArms(assets, id)))
                     foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(piece))
                         g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
                 if (material != null) ViewModel.FpOverride(piece);

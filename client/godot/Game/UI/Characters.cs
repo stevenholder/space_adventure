@@ -19,7 +19,7 @@ namespace SpaceAdventure.Game.UI
     /// <summary>One row of `GET /api/characters`.</summary>
     public sealed class CharacterRow
     {
-        public string Token, Name, Body;
+        public string Token, Name, Body, Hair;
         public long Credits, LastSeenMs;
     }
 
@@ -43,6 +43,7 @@ namespace SpaceAdventure.Game.UI
         public string Name { get; private set; } = "";
         public bool Female { get; private set; }
         public bool Vanguard { get; private set; }
+        public string Hair { get; private set; } = DefaultHair;
 
         /// <summary>The list arrived: one or more pre-selects the first, none opens the form.</summary>
         public void Loaded(IReadOnlyList<CharacterRow> rows)
@@ -78,6 +79,7 @@ namespace SpaceAdventure.Game.UI
             Name = "";
             Female = false;
             Vanguard = false;
+            Hair = DefaultHair;
             Reason = "";
             Now = State.Create;
         }
@@ -85,6 +87,10 @@ namespace SpaceAdventure.Game.UI
         public void SetName(string s) => Name = s ?? "";
         public void SetFemale(bool f) => Female = f;
         public void SetVanguard(bool v) => Vanguard = v;
+        /// <summary>Any id; an unknown one shows as itself and the server answers `bad hair`.</summary>
+        public void SetHair(string id) => Hair = string.IsNullOrEmpty(id) ? DefaultHair : id;
+        public void NextHair() => Hair = HairStyles[(HairIndex(Hair) + 1) % HairStyles.Length].id;
+        public void PrevHair() => Hair = HairStyles[(HairIndex(Hair) + HairStyles.Length - 1) % HairStyles.Length].id;
 
         /// <summary>Back to the list; with no rows PLAY simply stays dark.</summary>
         public void Cancel()
@@ -114,6 +120,7 @@ namespace SpaceAdventure.Game.UI
                 409 when b.Contains("character limit") => "CHARACTER LIMIT",
                 400 when b.Contains("bad name") => "BAD NAME",
                 400 when b.Contains("bad body") => "BAD BODY",
+                400 when b.Contains("bad hair") => "BAD HAIR",
                 401 => "SIGNED OUT",
                 _ => "COULD NOT CREATE",
             };
@@ -134,6 +141,39 @@ namespace SpaceAdventure.Game.UI
             "char.ubc.f" => (true, true),
             _ => (false, false),
         };
+
+        // ---- hair (GDD "Faces and hair") -----------------------------------
+
+        /// <summary>The HAIR row's order. Every style is built for every body (hair.py BODIES).</summary>
+        public static readonly (string id, string label)[] HairStyles =
+        {
+            ("hair.none", "NONE"),
+            ("hair.buzzed", "BUZZED"),
+            ("hair.buzzed_female", "BUZZED F"),
+            ("hair.simple_parted", "PARTED"),
+            ("hair.long", "LONG"),
+            ("hair.buns", "BUNS"),
+            ("hair.beard", "BEARD"),
+        };
+
+        /// <summary>A new character's hair: the first real style, so the stage looks finished.</summary>
+        public static readonly string DefaultHair = HairStyles[1].id;
+
+        /// <summary>The style's index; an unknown id cycles as if it were NONE.</summary>
+        public static int HairIndex(string id)
+        {
+            for (int i = 0; i < HairStyles.Length; i++)
+                if (HairStyles[i].id == id) return i;
+            return 0;
+        }
+
+        /// <summary>"LONG" for hair.long; an unknown id as itself.</summary>
+        public static string HairLabel(string id)
+        {
+            foreach (var (hid, label) in HairStyles)
+                if (hid == id) return label;
+            return id ?? "";
+        }
 
         public static string ModelName(bool vanguard) => vanguard ? "VANGUARD" : "COLONIST";
 
@@ -177,6 +217,14 @@ namespace SpaceAdventure.Game.UI
             _ => null,
         };
 
+        /// <summary>The hair the stage shows with StageBody, or null.</summary>
+        public string StageHair => Now switch
+        {
+            State.Create => Hair,
+            State.List when Selected >= 0 && Selected < _rows.Count => _rows[Selected].Hair,
+            _ => null,
+        };
+
         /// <summary>"just now", "N min ago", "N h ago", "N d ago"; "never" for no time.</summary>
         public static string Relative(long lastSeenMs, long nowMs)
         {
@@ -202,7 +250,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Button _new, _play, _signOut;
         private readonly LineEdit _name;
         private readonly Button _male, _female, _colonist, _vanguard, _createBtn;
-        private readonly Label _createReason, _failReason;
+        private readonly Label _createReason, _failReason, _hair;
         private readonly Action _onCreate;
         private Characters _model;
 
@@ -212,7 +260,8 @@ namespace SpaceAdventure.Game.UI
 
         public CharactersView(Control parent,
             Action onPlay, Action onNew, Action onCreate, Action onCancel, Action onSignOut, Action onRetry,
-            Action<int> onSelect, Action<string> onName, Action<bool> onFemale, Action<bool> onVanguard)
+            Action<int> onSelect, Action<string> onName, Action<bool> onFemale, Action<bool> onVanguard,
+            Action onHairPrev, Action onHairNext)
         {
             _onSelect = onSelect;
             _onCreate = onCreate;
@@ -318,6 +367,24 @@ namespace SpaceAdventure.Game.UI
             models.AddChild(Styles.Grow(_vanguard));
             _colonist.CustomMinimumSize = _vanguard.CustomMinimumSize = new Vector2(0, 56);
             create.AddChild(models);
+            create.AddChild(Styles.Gap(8));
+
+            // HAIR: ◀  LONG  ▶ -- the toggles' buttons, the style between them.
+            create.AddChild(FieldLabel("HAIR"));
+            var hairs = Styles.Row(10);
+            Button prev = Toggle("◀", () => onHairPrev?.Invoke());
+            Button next = Toggle("▶", () => onHairNext?.Invoke());
+            prev.CustomMinimumSize = next.CustomMinimumSize = new Vector2(72, 56);
+            Face(prev, false);
+            Face(next, false);
+            _hair = Styles.Display_("", 26, Styles.Cream);
+            _hair.HorizontalAlignment = HorizontalAlignment.Center;
+            _hair.VerticalAlignment = VerticalAlignment.Center;
+            _hair.CustomMinimumSize = new Vector2(0, 56);
+            hairs.AddChild(prev);
+            hairs.AddChild(Styles.Grow(_hair));
+            hairs.AddChild(next);
+            create.AddChild(hairs);
 
             create.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
             _createBtn = Primary("CREATE", 34, 84, onCreate);
@@ -383,6 +450,7 @@ namespace SpaceAdventure.Game.UI
                     Face(_female, model.Female);
                     Face(_colonist, !model.Vanguard);
                     Face(_vanguard, model.Vanguard);
+                    Txt(_hair, Characters.HairLabel(model.Hair));
                     Dis(_createBtn, !model.CanCreate);
                     Txt(_createReason, model.Reason);
                     break;
@@ -550,8 +618,11 @@ namespace SpaceAdventure.Game.UI
         private readonly Node3D _root, _turntable;
         private readonly Camera3D _camera;
         private Node3D _body;
-        private string _bodyId;
+        private string _bodyId, _hairId;
         private int _generation;
+        // The hair, worn exactly as a body in the world wears it (EntityViews.Dress).
+        private readonly Dictionary<string, string> _worn = new(), _wornDrawn = new();
+        private readonly Dictionary<string, Node3D> _wornNodes = new();
 
         public CharacterStage(Node parent, AssetRegistry assets)
         {
@@ -620,15 +691,26 @@ namespace SpaceAdventure.Game.UI
             _root.Visible = false;
         }
 
-        /// <summary>Shows the stage with `bodyId` on it (null = empty) and takes the camera.</summary>
-        public void Show(string bodyId)
+        /// <summary>
+        /// Shows the stage with `bodyId` on it (null = empty) wearing `hairId`
+        /// (null or hair.none = bald) and takes the camera.
+        /// </summary>
+        public void Show(string bodyId, string hairId)
         {
             _root.Visible = true;
             if (!_camera.Current) _camera.Current = true;
+            if (hairId != _hairId)
+            {
+                _hairId = hairId;
+                _worn["hair"] = hairId ?? "";
+                Dress();   // the body stays; only the piece is swapped
+            }
             if (bodyId == _bodyId) return;   // an unknown or failed id is tried once, not every frame
             _bodyId = bodyId;
             _body?.QueueFree();
             _body = null;
+            _wornDrawn.Clear();   // the pieces went with the body
+            _wornNodes.Clear();
             _turntable.Rotation = Vector3.Zero;   // a new body faces the camera
             if (string.IsNullOrEmpty(bodyId)) return;
             int gen = ++_generation;
@@ -637,7 +719,14 @@ namespace SpaceAdventure.Game.UI
                 if (gen != _generation) { holder.QueueFree(); return; }
                 _body = holder;
                 Idle(holder);
+                Dress();
             });
+        }
+
+        /// <summary>The `hair` slot on the body: `hair.<style>@<body>` when built, the bare piece otherwise.</summary>
+        private void Dress()
+        {
+            if (_body != null) EntityViews.Dress(_assets, a => a, _body, _worn, _wornDrawn, _wornNodes);
         }
 
         private static void Idle(Node model)
@@ -673,7 +762,9 @@ namespace SpaceAdventure.Game.UI
             _generation++;
             if (GodotObject.IsInstanceValid(_root)) _root.QueueFree();
             _body = null;
-            _bodyId = null;
+            _bodyId = _hairId = null;
+            _wornDrawn.Clear();
+            _wornNodes.Clear();
         }
     }
 }

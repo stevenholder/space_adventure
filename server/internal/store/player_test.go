@@ -192,3 +192,26 @@ func TestPlayerBodyAndAccount(t *testing.T) {
 		t.Fatalf("new character = %q/%q", got.AccountID, got.Body)
 	}
 }
+
+// Hair round-trips; "" saves as hair.none, and a later save can change it.
+func TestPlayerHair(t *testing.T) {
+	s := openMigrated(t)
+	ctx := context.Background()
+
+	p := sample()
+	if err := s.PutPlayer(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetPlayer(ctx, p.Token)
+	if got.Hair != DefaultHair {
+		t.Fatalf("default Hair = %q, want %q", got.Hair, DefaultHair)
+	}
+	p.Hair = "hair.buns"
+	if err := s.PutPlayer(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetPlayer(ctx, p.Token)
+	if got.Hair != "hair.buns" {
+		t.Fatalf("Hair = %q, want hair.buns", got.Hair)
+	}
+}

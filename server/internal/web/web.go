@@ -50,6 +50,15 @@ var bodies = map[string]bool{
 	store.DefaultBody: true, "char.player.f": true, "char.ubc": true, "char.ubc.f": true,
 }
 
+// hairs are the hair piece ids a character may pick (GDD "Faces and hair
+// (Phase 17)"): store.DefaultHair plus the `hair.<style>` rows of
+// art/manifest.json. The server never reads the manifest at runtime;
+// TestHairsMatchManifest fails when the two drift apart.
+var hairs = map[string]bool{
+	store.DefaultHair: true, "hair.beard": true, "hair.buns": true, "hair.buzzed": true,
+	"hair.buzzed_female": true, "hair.long": true, "hair.simple_parted": true,
+}
+
 // Handler is the account site. Store is required; NewPlayer builds the
 // default player row for a freshly minted character (the server owns
 // what a new player starts with); Online reports live connections for the
@@ -296,13 +305,14 @@ func (h *Handler) gameLogin(w http.ResponseWriter, r *http.Request) {
 // mintCharacter makes a character the way a guest starts (NewPlayer), owned
 // from its first INSERT: one PutPlayer with AccountID set, so a name the
 // index refuses leaves no orphan row. store.ErrNameTaken passes through.
-func (h *Handler) mintCharacter(ctx context.Context, acc *store.Account, name, body string) (store.Player, error) {
+func (h *Handler) mintCharacter(ctx context.Context, acc *store.Account, name, body, hair string) (store.Player, error) {
 	token, err := randomHex()
 	if err != nil {
 		return store.Player{}, err
 	}
 	p := h.NewPlayer(token, name)
 	p.Body = body
+	p.Hair = hair
 	p.AccountID = acc.ID
 	if err := h.Store.PutPlayer(ctx, &p); err != nil {
 		return store.Player{}, err
@@ -369,13 +379,14 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request, a accountCtx) {
 	type playerView struct {
 		Name      string        `json:"name"`
 		Body      string        `json:"body"`
+		Hair      string        `json:"hair"`
 		Credits   int64         `json:"credits"`
 		Inventory []store.Stack `json:"inventory"`
 		LastSeen  int64         `json:"last_seen_ms"`
 	}
 	views := make([]playerView, 0, len(players))
 	for _, p := range players {
-		views = append(views, playerView{Name: p.Name, Body: p.Body, Credits: p.Credits,
+		views = append(views, playerView{Name: p.Name, Body: p.Body, Hair: p.Hair, Credits: p.Credits,
 			Inventory: p.Inventory, LastSeen: p.UpdatedMs})
 	}
 	writeJSON(w, map[string]any{"email": acc.Email, "players": views})
@@ -386,12 +397,13 @@ type characterView struct {
 	Token    string `json:"token"`
 	Name     string `json:"name"`
 	Body     string `json:"body"`
+	Hair     string `json:"hair"`
 	Credits  int64  `json:"credits"`
 	LastSeen int64  `json:"last_seen_ms"`
 }
 
 func viewCharacter(p store.Player) characterView {
-	return characterView{Token: p.Token, Name: p.Name, Body: p.Body,
+	return characterView{Token: p.Token, Name: p.Name, Body: p.Body, Hair: p.Hair,
 		Credits: p.Credits, LastSeen: p.UpdatedMs}
 }
 
@@ -425,6 +437,7 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 	var req struct {
 		Name string `json:"name"`
 		Body string `json:"body"`
+		Hair string `json:"hair"` // optional: "" is hair.none
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -437,6 +450,13 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 	}
 	if !bodies[req.Body] {
 		http.Error(w, "bad body", http.StatusBadRequest)
+		return
+	}
+	if req.Hair == "" {
+		req.Hair = store.DefaultHair
+	}
+	if !hairs[req.Hair] {
+		http.Error(w, "bad hair", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
@@ -465,7 +485,7 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 		http.Error(w, "account lookup failed", http.StatusInternalServerError)
 		return
 	}
-	p, err := h.mintCharacter(ctx, acc, name, req.Body)
+	p, err := h.mintCharacter(ctx, acc, name, req.Body, req.Hair)
 	if errors.Is(err, store.ErrNameTaken) { // the index caught a racing create
 		http.Error(w, "name taken", http.StatusConflict)
 		return

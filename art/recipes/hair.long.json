@@ -1,0 +1,18 @@
+{
+  "$comment": "Long hair to the shoulders. Quaternius UBC Hairstyles Hair_Long (CC0), refitted to each body's head by tools/bpy/hair.py; the unsuffixed piece fits the base MakeHuman build, bodies get <id>@<body>.",
+  "id": "hair.long",
+  "src": "build/hair.long.raw.glb",
+  "out": "hair/long.glb",
+  "fit": false,
+  "budget": 1500,
+  "pbr": true,
+  "license": "CC0",
+  "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+  "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+  "bodies": [
+    "char.player",
+    "char.player.f",
+    "char.ubc",
+    "char.ubc.f"
+  ]
+}

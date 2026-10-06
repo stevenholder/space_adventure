@@ -1566,6 +1566,54 @@ harness fleet (26 of 29 tests join with a made-up token) and the rigs
 keep joining as before and the login bucket never meets a fleet.
 Production sets neither.
 
+### Faces and hair (Phase 17)
+
+Phase 16's COLONIST bodies (MakeHuman via MPFB2, 5600 tris, a painted
+hair cap) read a class below the VANGUARD bodies (Quaternius UBC, 9000
+tris, real hair). This phase closes the gap without making the two the
+same body, and gives every character a **hair** choice.
+
+**The Colonist, v2** (`char.player`, `char.player.f`):
+
+- Same ceiling as the Vanguard: ≤ 9000 tris for body + arms + head, the
+  face taking most of the new budget — a modelled brow ridge, cheekbones,
+  jaw and nose, eyelids, lips; MPFB's higher-resolution head where the
+  decimator is told to spend there and save on the torso.
+- A different build, deliberately: eyes at **1.65 m** (the Vanguard's at
+  1.70), slimmer and less muscular (MakeHuman `muscle` ~0.35–0.45,
+  `weight` ~0.45), narrower shoulders. The camera rides the model's `eye`
+  node, so the player sees from 1.65; the server's shot origin stays the
+  shared 1.70 — a 5 cm offset, accepted and noted here, not a per-body
+  server table.
+- **Eyebrows** are the Quaternius `Eyebrows_Regular` / `Eyebrows_Female`
+  meshes, refitted to the MakeHuman brow and weighted to the head bone,
+  shipped inside the body glb as part of `head` (the client hides `head`
+  for the local player; helmets cover `head`/`hair` as before).
+- Everything the client and armor.py rely on is unchanged: bone names,
+  the three meshes, the clips, `eye` and `hand.*` mounts, the `@body`
+  armor variants (rebuilt for the new shape).
+
+**Hair** is its own asset family, worn like armor:
+
+- `hair.<style>@<body>` glbs — the Quaternius styles (`buzzed`,
+  `buzzed_female`, `buns`, `long`, `simple_parted`, `beard`, and whatever
+  else the pack's glTF folder holds), each fitted to each of the four
+  heads and weighted to its head bone, built by `art/tools/bpy/hair.py`
+  the way armor.py builds `<piece>@<body>`. Plus `hair.none`.
+- A character row carries `hair` (`hair.none` when omitted; migration 006;
+  the create form itself starts on `hair.buzzed` so a player who ignores
+  the row is not bald).
+  `POST /api/characters {name, body, hair}`; `GET` returns it; 400 `bad
+  hair` for an id not in the table. The create form gets a HAIR row that
+  cycles the styles valid for the body (the stage swaps live); the list
+  row's line stays `COLONIST · F`.
+- On the wire hair is a **worn slot**: at spawn the server sends the same
+  `worn` event armor uses, slot `hair`, item `hair.<style>` — no spawn-row
+  change. The client attaches it like a worn piece (`@wearer` variant
+  lookup already exists) and helmets hide it through the existing
+  `covers: hair` rule. Harness: `t28` creates a character with hair and
+  sees the worn frame on both sockets.
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
