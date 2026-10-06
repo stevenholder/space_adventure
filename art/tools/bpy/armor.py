@@ -833,7 +833,7 @@ def pieces(body):
 # the robot gunner); the rest are races whose MakeHuman macro or eye height
 # differs, and get their own copy of every piece, exported as
 # "<asset>@<body>" -- the client picks it by the wearer's asset id.
-BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher", "char.ubc", "char.player.f", "char.ubc.f")
+BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher", "char.ubc", "char.player.f", "char.ubc.f", "char.player")
 
 # Per-body fit: `smooth` = passes on the body plates wrap onto (a muscular
 # UBC body shrinks under 12 and its plates sink into the skin); `drape` =
@@ -850,7 +850,7 @@ TORSO_MASK = []     # per smoothed-body vertex: on the torso (drape's obstacles)
 def main():
     only = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     for body_id in BODIES:
-        if only and (body_id or "char.player") not in only:
+        if only and (body_id or "base") not in only:
             continue
         build_for(body_id)
 
@@ -861,7 +861,7 @@ def build_for(body_id):
     human.ACTIVE.clear()
     if body_id:                                   # the shape only, not the colours
         v = human.VARIANTS[body_id]
-        human.ACTIVE.update({k: v[k] for k in ("macro", "eye", "ubc") if k in v})
+        human.ACTIVE.update({k: v[k] for k in ("macro", "targets", "eye", "ubc") if k in v})
     EYE = human.ACTIVE.get("eye", human.EYE)
     FIT.clear()
     FIT.update(FITS.get(body_id, {}))

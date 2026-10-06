@@ -15,6 +15,7 @@
     "npc.dispatcher",
     "char.ubc",
     "char.player.f",
-    "char.ubc.f"
+    "char.ubc.f",
+    "char.player"
   ]
 }

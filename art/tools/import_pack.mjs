@@ -313,7 +313,11 @@ async function main() {
     src: base.src.replace(".raw.glb", `@${b}.raw.glb`),
     out: base.out.replace(/\.glb$/, `.${b.replace("npc.", "")}.glb`),
   }))];
+  // ONLY=<id>,<id>: finish just these ids (e.g. one body's variants), so a
+  // rebuild for one wearer does not re-finish every other body's piece.
+  const only = process.env.ONLY ? process.env.ONLY.split(",") : null;
   for (const recipe of variants) {
+    if (only && !only.includes(recipe.id)) continue;
     const result = await importPack(recipe);
     updateManifest(result, recipe);
     console.log(`${result.id}: ${result.out}  ${result.tris} tris  mounts ${result.mounted}`);
