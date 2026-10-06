@@ -1,4 +1,5 @@
-// Phase 7 — accounts, sessions and link codes (docs/ROADMAP.md Phase 7).
+// Phase 7 — accounts and sessions (docs/ROADMAP.md Phase 7); Phase 16
+// removed link codes and gave accounts characters.
 // Same portable-SQL rules as player.go: $N placeholders, no dialect
 // branches, absence is (nil, nil) not an error.
 
@@ -7,10 +8,8 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 )
 
 // Account is one row of `account`. PwHash is the argon2id encoded string —
@@ -31,9 +30,7 @@ func (s *Store) CreateAccount(ctx context.Context, a *Account) error {
 		`INSERT INTO account (id, email, pw_hash, created_ms) VALUES ($1, $2, $3, $4)`,
 		a.ID, a.Email, a.PwHash, a.CreatedMs)
 	if err != nil {
-		// Both engines say "unique" somewhere in a unique-violation message;
-		// matching the text beats importing two driver error types.
-		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+		if isUnique(err) {
 			return ErrEmailTaken
 		}
 		return fmt.Errorf("store: creating account: %w", err)
@@ -83,7 +80,7 @@ func (s *Store) SetPassword(ctx context.Context, accountID, pwHash, keepSession 
 }
 
 // DeleteAccount is the whole cascade, one transaction: account, sessions,
-// codes, and every player the account owns (C57). It returns the tokens of
+// and every player the account owns (C57). It returns the tokens of
 // the deleted players so the caller can kick live connections.
 func (s *Store) DeleteAccount(ctx context.Context, accountID string) ([]string, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -111,7 +108,6 @@ func (s *Store) DeleteAccount(ctx context.Context, accountID string) ([]string, 
 	for _, q := range []string{
 		`DELETE FROM player WHERE account_id = $1`,
 		`DELETE FROM web_session WHERE account_id = $1`,
-		`DELETE FROM link_code WHERE account_id = $1`,
 		`DELETE FROM account WHERE id = $1`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, accountID); err != nil {
@@ -161,70 +157,15 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// ---- link codes ------------------------------------------------------------
-
-// PutLinkCode mints a code, replacing any existing codes for the account —
-// the newest code is the only live one, so a mis-typed code can simply be
-// re-minted.
-func (s *Store) PutLinkCode(ctx context.Context, code, accountID string, createdMs, expiresMs int64) error {
-	tx, err := s.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("store: begin: %w", err)
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM link_code WHERE account_id = $1`, accountID); err != nil {
-		return fmt.Errorf("store: clearing codes: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO link_code (code, account_id, created_ms, expires_ms) VALUES ($1, $2, $3, $4)`,
-		code, accountID, createdMs, expiresMs); err != nil {
-		return fmt.Errorf("store: inserting code: %w", err)
-	}
-	return tx.Commit()
-}
-
-// RedeemLinkCode consumes a live code (single-use: the row is deleted in
-// the same transaction) and returns its account id, "" when the code is
-// unknown or expired.
-func (s *Store) RedeemLinkCode(ctx context.Context, code string, nowMs int64) (string, error) {
-	tx, err := s.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return "", fmt.Errorf("store: begin: %w", err)
-	}
-	defer tx.Rollback()
-
-	var accountID string
-	var expires int64
-	err = tx.QueryRowContext(ctx,
-		`SELECT account_id, expires_ms FROM link_code WHERE code = $1`, code).
-		Scan(&accountID, &expires)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("store: selecting code: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM link_code WHERE code = $1`, code); err != nil {
-		return "", fmt.Errorf("store: consuming code: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return "", err
-	}
-	if nowMs >= expires {
-		return "", nil
-	}
-	return accountID, nil
-}
-
 // ---- account ↔ player ------------------------------------------------------
 
-// AccountPlayerToken returns the token of the account's player, "" when it
-// has none yet (one player per account per world).
+// AccountPlayerToken returns the token of the account's oldest character,
+// "" when it has none yet.
 func (s *Store) AccountPlayerToken(ctx context.Context, accountID string) (string, error) {
 	var token string
 	err := s.DB.QueryRowContext(ctx,
-		`SELECT token FROM player WHERE account_id = $1`, accountID).Scan(&token)
+		`SELECT token FROM player WHERE account_id = $1 ORDER BY created_ms, token LIMIT 1`,
+		accountID).Scan(&token)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -234,41 +175,17 @@ func (s *Store) AccountPlayerToken(ctx context.Context, accountID string) (strin
 	return token, nil
 }
 
-// AdoptPlayer attaches an existing (guest) player row to an account — the
-// legacy-import path (C59). Refused when the player is already owned or
-// the account already has a player.
-func (s *Store) AdoptPlayer(ctx context.Context, accountID, token string) error {
-	existing, err := s.AccountPlayerToken(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	if existing != "" {
-		return errors.New("store: account already has a player")
-	}
-	res, err := s.DB.ExecContext(ctx,
-		`UPDATE player SET account_id = $1 WHERE token = $2 AND account_id IS NULL`,
-		accountID, token)
-	if err != nil {
-		return fmt.Errorf("store: adopting player: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return errors.New("store: no such unowned player")
-	}
-	return nil
-}
-
-// AccountPlayers lists the account's players for the profile page.
+// AccountPlayers lists the account's characters, oldest first.
 func (s *Store) AccountPlayers(ctx context.Context, accountID string) ([]Player, error) {
 	rows, err := s.DB.QueryContext(ctx,
-		`SELECT `+playerColumns+` FROM player WHERE account_id = $1`, accountID)
+		playerSelect+` WHERE account_id = $1 ORDER BY created_ms, token`, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("store: listing players: %w", err)
 	}
 	defer rows.Close()
 	var out []Player
 	for rows.Next() {
-		p, err := scanPlayerRow(rows)
+		p, err := scanPlayer(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -277,39 +194,37 @@ func (s *Store) AccountPlayers(ctx context.Context, accountID string) ([]Player,
 	return out, rows.Err()
 }
 
-// scanPlayerRow is GetPlayer's scan over a *sql.Rows, same JSON rules.
-func scanPlayerRow(rows *sql.Rows) (*Player, error) {
-	var p Player
-	var inventory, equipped, missions, skillsCol string
-	if err := rows.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions, &skillsCol,
-		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs); err != nil {
-		return nil, fmt.Errorf("store: scanning player: %w", err)
+// CountAccountPlayers is the five-per-account check's count.
+func (s *Store) CountAccountPlayers(ctx context.Context, accountID string) (int, error) {
+	var n int
+	if err := s.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM player WHERE account_id = $1`, accountID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: counting account players: %w", err)
 	}
-	if err := json.Unmarshal([]byte(skillsCol), &p.Skills); err != nil {
-		return nil, fmt.Errorf("store: corrupt skills JSON: %w", err)
+	return n, nil
+}
+
+// CharacterNameTaken asks the player_character_name index's question ahead
+// of the insert, for a clean 409: is name used by any account-owned row,
+// case-insensitively? Guests do not count. The index stays the real guard.
+func (s *Store) CharacterNameTaken(ctx context.Context, name string) (bool, error) {
+	var n int
+	if err := s.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM player WHERE account_id IS NOT NULL AND lower(name) = lower($1)`,
+		name).Scan(&n); err != nil {
+		return false, fmt.Errorf("store: checking character name: %w", err)
 	}
-	if p.Skills.XP == nil {
-		p.Skills.XP = map[string]int64{}
-	}
-	if err := json.Unmarshal([]byte(missions), &p.Missions); err != nil {
-		return nil, fmt.Errorf("store: corrupt missions JSON: %w", err)
-	}
-	if p.Missions == nil {
-		p.Missions = map[string]*MissionState{}
-	}
-	if err := json.Unmarshal([]byte(inventory), &p.Inventory); err != nil {
-		return nil, fmt.Errorf("store: corrupt inventory JSON: %w", err)
-	}
-	if err := json.Unmarshal([]byte(equipped), &p.Equipped); err != nil {
-		return nil, fmt.Errorf("store: corrupt equipped JSON: %w", err)
-	}
-	return &p, nil
+	return n > 0, nil
 }
 
 // SetPlayerAccount stamps ownership on a freshly minted account player.
+// ErrNameTaken when another account-owned row already has the name.
 func (s *Store) SetPlayerAccount(ctx context.Context, token, accountID string) error {
 	if _, err := s.DB.ExecContext(ctx,
 		`UPDATE player SET account_id = $1 WHERE token = $2`, accountID, token); err != nil {
+		if isUnique(err) {
+			return ErrNameTaken
+		}
 		return fmt.Errorf("store: setting player account: %w", err)
 	}
 	return nil

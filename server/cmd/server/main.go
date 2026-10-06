@@ -139,6 +139,18 @@ func runServer(args []string) error {
 		log.Printf("persistence: disabled (DATABASE_URL unset) — sessions are ephemeral")
 	}
 
+	// Phase 16: a server with a store seats only account characters.
+	// SA_GUESTS=1 is the kind fleet's way back in (RUNBOOK "Who may join").
+	world.SetGuests(os.Getenv("SA_GUESTS") == "1")
+	switch {
+	case st == nil:
+		log.Printf("join: guests allowed (no store)")
+	case world.Guests():
+		log.Printf("join: guests allowed (SA_GUESTS)")
+	default:
+		log.Printf("join: accounts only")
+	}
+
 	mux := http.NewServeMux()
 
 	// Phase 7: the account site lives in this binary. It needs the store —
@@ -153,6 +165,7 @@ func runServer(args []string) error {
 				return server.NewDefaultPlayer(reg, token, name, spawn)
 			},
 			Online: world.OnlineCount,
+			Kick:   world.Kick,
 		}
 		site.Mount(mux)
 		log.Printf("account site: enabled")

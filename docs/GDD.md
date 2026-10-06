@@ -1389,7 +1389,7 @@ on Windows: the corner during a hook-shaped run shows only the desktop.
 | Region | Content |
 |---|---|
 | Header | `SPACE ADVENTURE`, the build label (`v1.0.41 · 3cbd797` / `dev · 3cbd797`) right-aligned |
-| Account column (left, ~40 %) | **reserved, empty** — the login (email + password against the site's `/api/login`) lands here in a later phase; nothing is drawn now beyond the panel frame |
+| Account column (left, ~40 %) | reserved and empty in Phase 15; the sign-in column of "Accounts, launcher login and characters (Phase 16)" below |
 | Status column (right) | the update line and its progress bar; the server line; `PLAY` (wide, primary) and `QUIT` (small) underneath |
 
 **Update line, binding states** (the launcher model is a pure state
@@ -1429,6 +1429,142 @@ new `-play` flag for a human who wants straight in. `make godot-run` /
 photographs: `-uiShot … -uiLauncher <state>` forces the launcher into
 one of the states above (with a fake version and a fake server line) so
 each one has a shot in `test/out/ui/`.
+
+### Accounts, launcher login and characters (Phase 16)
+
+Phase 15 reserved the launcher's left column. This fills it, closes the
+side doors, and puts characters between PLAY and the world. **The only
+way into the world is an account, and an account plays one of its
+characters.** Sign up and sign in happen in the launcher; PLAY is dark
+until signed in; PLAY opens the game window on a character select, and
+the world is joined as the chosen character. Phase 7's coexistence rule
+(anonymous tokens join as guests), its link codes, the site's mint/import
+page and the game's F1 link panel are removed — one identity, one door.
+
+#### The door
+
+`POST /api/game-login` `{email, password}` → `{session, name}`: verify
+the password (the site login's argon2id path and dummy-hash timing, the
+same per-IP bucket), then mint a session in `web_session` — the site's
+30-day session, returned in the body instead of a cookie. Every account
+route (`withAccount`) accepts it as `Authorization: Bearer <session>`
+beside the cookie. `POST /api/register` is unchanged; the launcher's
+CREATE ACCOUNT calls it, then `game-login` with the same fields. `POST
+/api/logout` ends it. The client remembers `[identity] session` and
+`[identity] email` and never the password; a player token is never
+stored on disk — it is fetched per PLAY from the character list. A
+password change on the site kills the session as it kills every other
+(C57): the next PLAY on a remembered launcher is a 401, which is
+`SIGNED OUT · sign in again`. `X-Requested-With` required on every
+mutating route, as before.
+
+#### Characters
+
+A character is a `player` row owned by an account (`account_id` set),
+with a **body** beside the name. Up to five per account. The row's token
+is the character's credential on the wire — `hello` carries it unchanged
+— and the server seats a token only when it owns such a row; any other
+hello is closed `1008` (policy violation) before a spawn. A character
+token's `hello.name` is ignored: the character's name and body are the
+row's, not the client's. Phase 7's "one player per account" rule is gone
+with its link codes; the player each account already has is its first
+character (body `char.player`, name as it was).
+
+- `GET /api/characters` → `[{token, name, body, credits, last_seen_ms}]`
+  (newest last).
+- `POST /api/characters` `{name, body}` → the same row shape. `name`:
+  `SanitizeName`, then 3–16 characters of letters, digits, space, `-`,
+  `'`; unique among characters, case-insensitive (a partial unique index
+  on `lower(name)` where `account_id` is set). `body`: one of the four
+  ids below. The new row is minted at a guest's start, as today. 400 bad
+  name/body, 409 name taken or five characters already.
+- Delete and rename: Deferred table.
+
+**Bodies** — two models, each in two genders; a body id is a model plus
+a gender, and armor is built for every one of them (`armor.py`
+`BODIES`), so a suit fits whichever you wear:
+
+| Model (picker) | Gender | id | source |
+|---|---|---|---|
+| `COLONIST` | M | `char.player` | human.py, as today |
+| `COLONIST` | F | `char.player.f` | human.py variant, `gender` macro 0.0 |
+| `VANGUARD` | M | `char.ubc` | Quaternius UBC Superhero_Male, as today |
+| `VANGUARD` | F | `char.ubc.f` | Quaternius UBC Superhero_Female, the same recipe |
+
+The player **spawn row** carries the body: `data` is the name, and a
+player whose body is not `char.player` appends `\0` + the body id. A
+reader that stops at the first NUL (or that never sees a non-default
+body — every harness player) reads the name exactly as before; the Godot
+client and `test/lib/wire.mjs` split it. The local body, its
+first-person arms and every remote player attach the body the row names
+instead of `char.player`.
+
+#### Character select
+
+PLAY opens the game window (saved display mode, canvas stretch) on the
+**character select**, not the world: the world is neither built nor
+joined until a character is chosen. It is the game's canvas (1920×1080
+UI base, Scrapyard Comic), not the launcher's.
+
+| Region | Content |
+|---|---|
+| Stage (right ~60 %) | the selected character's body on a plain dark floor under one key light, idle clip, turning slowly — drawn in the main viewport by the asset registry, no SubViewport (gl_compat draws those unlit) |
+| List (left) | `CHARACTERS`; one row per character: name, model + gender, credits, `last played`; the selected row framed; `NEW CHARACTER` (dark when five exist); `PLAY` (primary, dark with nothing selected); `SIGN OUT` (small) |
+| Create (replaces the list) | `NAME` field; `GENDER` toggle `M / F`; `MODEL` toggle `COLONIST / VANGUARD` — the stage swaps as you toggle; `CREATE` (primary, dark until the name passes the client-side length rule), `CANCEL`; the server's reason under the buttons on 400/409 |
+
+Rules:
+
+- Entering the screen is `GET /api/characters` with the session; 401 →
+  back to the launcher window in `Failed(SIGNED OUT · sign in again)`
+  with both keys cleared; any other failure → `COULD NOT LOAD CHARACTERS
+  · retry` with a RETRY button. One character: it is pre-selected. None:
+  the create form opens at once.
+- PLAY frees the stage, builds the world and connects with the row's
+  token, exactly today's `Connect` from there on. SIGN OUT is the
+  launcher's: `POST /api/logout`, keys cleared, launcher window back.
+- `SignedIn` in the launcher shows `SIGNED IN · name@host` (there is no
+  character yet to name); the character's name is the nametag.
+- Rig runs (`-token`, `-uiPlayAfter`) skip the screen and connect as
+  today — the server they talk to seats them (storeless or `SA_GUESTS=1`).
+  `-uiChars <select|create|empty|loading|failed>` photographs it with
+  fake rows.
+- A `1008` close before the first snapshot (the character was deleted
+  under you — only the site's account delete can, today) returns to the
+  character select, reloaded.
+
+#### Account column in the launcher
+
+(Left, ~40 %), a pure `Login` model beside the update model, testable in
+`-selftest`:
+
+| State | Column | PLAY |
+|---|---|---|
+| `SignedOut` | `ACCOUNT`; `EMAIL`, `PASSWORD` (masked); `SIGN IN` (primary), `CREATE ACCOUNT` (small); `Sign in to play` | **disabled** |
+| `Busy(what)` | fields disabled, `SIGNING IN…` / `CREATING ACCOUNT…` | disabled |
+| `SignedIn(email)` | `SIGNED IN · name@host` (shortened with `…` past the column); `SIGN OUT` | per the update state |
+| `Failed(reason)` | the `SignedOut` column with the reason under the buttons: `WRONG EMAIL OR PASSWORD` (401), `EMAIL ALREADY REGISTERED` (409), `PASSWORD TOO SHORT` (400), `TOO MANY TRIES · wait a moment` (429), `SIGNED OUT · sign in again` (a 401 on PLAY), `SITE UNREACHABLE` (anything else, detail in the log) | disabled |
+
+- **PLAY = signed in AND the update state allows it.** Both gates.
+- **Remembered.** A successful sign-in or sign-up writes the session and
+  the email; the next launch opens in `SignedIn` with no request. The
+  session is checked by the character list on PLAY, not at launch.
+- **Enter** in either field submits SIGN IN. Each request has the update
+  check's 5 s; longer is `Failed(SITE UNREACHABLE)`.
+- **Site URL** is the derived one (`Launcher.SiteUrl`).
+- **In the game** F1 no longer opens anything; the game menu loses its
+  ACCOUNT row; the HUD, reconnect and in-session banner are untouched.
+
+For photographs: `-uiLogin <signedout|busy|signedin|failed>` beside
+`-uiLauncher` forces the column into a state with a fake email.
+
+#### The machines
+
+A server **without a store** (`DATABASE_URL` unset — the bare dev server,
+every session ephemeral) has no accounts to check and seats anyone, and a
+server started with `SA_GUESTS=1` (the kind overlay) does too, so the
+harness fleet (26 of 29 tests join with a made-up token) and the rigs
+keep joining as before and the login bucket never meets a fleet.
+Production sets neither.
 
 ### Character panel and backpack (Phase 11.7)
 

@@ -23,6 +23,21 @@ docker push ghcr.io/stevenholder/space_adventure/server:$(git rev-parse --short 
 kubectl --context default apply -k deploy/prod   # pin the tag in kustomization.yaml first
 ```
 
+## Who may join
+
+Since Phase 16 a server **with a store** seats only tokens that belong to
+an account character; any other `hello` is closed `1008` and counted as
+`space_adventure_join_refused_total` on `/metrics`. Two exceptions, for the machines:
+
+- no `DATABASE_URL` (the bare dev server): nothing to log into, anyone
+  is seated, every session ephemeral;
+- `SA_GUESTS=1`: the kind overlay sets it so the harness fleet (which
+  joins with made-up tokens) and `make godot-run` keep working.
+
+Production sets neither. If prod ever needs a guest for a test, port-
+forward and run the test against kind instead; do not set `SA_GUESTS`
+in `deploy/prod`.
+
 ## Verify what is running
 
 ```sh

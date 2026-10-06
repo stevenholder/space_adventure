@@ -388,52 +388,17 @@ namespace SpaceAdventure.Game.UI
     }
 
     /// <summary>
-    /// The F1 account panel: redeem a link code minted on the account site.
-    /// The redeem request stays in Boot (it owns the network); this view
-    /// only collects the code and shows status.
-    /// </summary>
-    public sealed class AccountView : ModalView
-    {
-        private readonly LineEdit _code;
-        private readonly Label _status;
-
-        public AccountView(Control root, Action<string> onLink, Action onClose)
-            : base(root, "Account link", 360)
-        {
-            VBoxContainer stack = Styles.Body(Box);
-            stack.AddChild(Styles.Display_("Mint a code on the account site, type it here.", 13, Styles.Dust));
-            _code = new LineEdit { MaxLength = 8 };
-            _code.AddThemeFontSizeOverride("font_size", 16);
-            stack.AddChild(_code);
-            stack.AddChild(Styles.Gap(4));
-            var row = Styles.Row(6);
-            row.AddChild(Styles.Button("LINK", false, () => onLink(_code.Text.ToUpperInvariant())));
-            row.AddChild(Styles.Button("CLOSE", true, onClose));
-            stack.AddChild(row);
-            _status = Styles.Display_("", 13, Styles.Dust);
-            stack.AddChild(Styles.Gap(4));
-            stack.AddChild(_status);
-        }
-
-        public void SetStatus(string text) => _status.Text = text;
-
-        protected override void Fill(VBoxContainer body) { }
-    }
-
-    /// <summary>
-    /// Escape with nothing open: the game menu (WoW's). Return, the account
-    /// link, quit. Escape again returns.
+    /// Escape with nothing open: the game menu (WoW's). Return, settings,
+    /// quit. Escape again returns.
     /// </summary>
     public sealed class GameMenuView : ModalView
     {
-        private readonly System.Action _onAccount;
         private readonly System.Action _onQuit;
         private readonly System.Action _onSettings;
 
-        public GameMenuView(Control root, System.Action onAccount, System.Action onQuit, System.Action onSettings = null)
+        public GameMenuView(Control root, System.Action onQuit, System.Action onSettings = null)
             : base(root, "Menu", 260, 0.30f)
         {
-            _onAccount = onAccount;
             _onQuit = onQuit;
             _onSettings = onSettings;
         }
@@ -442,8 +407,6 @@ namespace SpaceAdventure.Game.UI
         {
             body.AddChild(Styles.Gap(2));
             body.AddChild(Styles.Button("RETURN TO GAME", false, () => Show(false)));
-            body.AddChild(Styles.Gap(4));
-            body.AddChild(Styles.Button("ACCOUNT", false, () => { Show(false); _onAccount(); }));
             body.AddChild(Styles.Gap(4));
             if (_onSettings != null)
             {

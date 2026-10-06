@@ -74,30 +74,43 @@ namespace SpaceAdventure.Game
         private const string ConfigPath = "user://sa.cfg";
 
         /// <summary>
-        /// The identity token. Persistence is keyed on it (C11), so it has to
-        /// survive a restart — a ConfigFile under user:// is the smallest
-        /// thing that does. -token overrides (the screenshot rig uses it).
+        /// The character token on disk (written at PLAY so Reconnect keeps
+        /// working); -token overrides (the rigs use it). Phase 16: never
+        /// minted here -- a token comes from the account's character list,
+        /// so a config without one is "".
         /// </summary>
         private static string ResolveToken()
         {
             string arg = Arg("-token");
             if (arg != null) return arg;
-            var cf = new ConfigFile();
-            cf.Load(ConfigPath); // a missing file is an empty config
-            string token = (string)cf.GetValue("identity", "token", "");
-            if (string.IsNullOrEmpty(token))
-            {
-                token = Guid.NewGuid().ToString("N");
-                SaveToken(token);
-            }
-            return token;
+            return Identity("token");
         }
 
-        private static void SaveToken(string token)
+        private static void SaveToken(string token) => SaveIdentity("token", token);
+
+        /// <summary>`[identity] session` / `email` / `token`; a missing file or key is "".</summary>
+        private static string Identity(string key)
+        {
+            var cf = new ConfigFile();
+            cf.Load(ConfigPath); // a missing file is an empty config
+            return (string)cf.GetValue("identity", key, "");
+        }
+
+        private static void SaveIdentity(string key, string value)
         {
             var cf = new ConfigFile();
             cf.Load(ConfigPath);
-            cf.SetValue("identity", "token", token);
+            cf.SetValue("identity", key, value);
+            cf.Save(ConfigPath);
+        }
+
+        /// <summary>Signed out (or the session died): session, email and token all go.</summary>
+        private static void ClearIdentity()
+        {
+            var cf = new ConfigFile();
+            if (cf.Load(ConfigPath) != Error.Ok) return;
+            foreach (string key in new[] { "session", "email", "token" })
+                if (cf.HasSectionKey("identity", key)) cf.EraseSectionKey("identity", key);
             cf.Save(ConfigPath);
         }
 
@@ -205,7 +218,6 @@ namespace SpaceAdventure.Game
         private CharacterView _sheetView;
         private Icons _icons;
         private PromptView _promptView;
-        private AccountView _accountView;
         private readonly MissionLog _missionLog = new MissionLog();
         private readonly PartyState _partyState = new PartyState();
         private JournalView _journalView;
@@ -219,7 +231,7 @@ namespace SpaceAdventure.Game
 
         private bool ModalOpen =>
             (_shopView?.Open ?? false) || (_bagsView?.Open ?? false) ||
-            (_sheetView?.Open ?? false) || (_accountView?.Open ?? false) ||
+            (_sheetView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
             (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
             (_benchView?.Open ?? false) || (_settingsView?.Open ?? false);
@@ -346,10 +358,21 @@ namespace SpaceAdventure.Game
         private async System.Threading.Tasks.Task UpdateThenConnect()
         {
             if (await UpdateStep()) return;
-            Connect();
+            Connect(RigToken());
         }
 
-        private void Connect() => _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", ResolveToken());
+        /// <summary>
+        /// The token a run that skips the login connects with: -token, else
+        /// the one on disk, else (a rig with no config -- the kind stack
+        /// seats any token) a fresh one, not saved.
+        /// </summary>
+        private static string RigToken()
+        {
+            string token = ResolveToken();
+            return token != "" ? token : Guid.NewGuid().ToString("N");
+        }
+
+        private void Connect(string token) => _net.Connect(_serverUrl, System.Environment.MachineName ?? "player", token);
 
         // ---- the launcher (GDD "Launcher (Phase 15)") ------------------------
 
@@ -359,6 +382,12 @@ namespace SpaceAdventure.Game
         private double _nextStats;
         private bool _statsBusy;
         private static readonly System.Net.Http.HttpClient StatsHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        // Phase 16: the account column (GDD "Accounts, launcher login and characters").
+        private readonly Login _login = new Login();
+        private bool _playBusy;
+        /// <summary>Sign in, register, characters, logout; each call carries its own 5 s budget.</summary>
+        private static readonly System.Net.Http.HttpClient AccountHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        private const int AccountBudgetMs = 5000;
         private Window.ContentScaleModeEnum _gameScaleMode;
         private Window.ContentScaleAspectEnum _gameScaleAspect;
         private Vector2I _gameScaleSize;
@@ -421,8 +450,13 @@ namespace SpaceAdventure.Game
             var root = new Control { Name = "root", MouseFilter = Control.MouseFilterEnum.Ignore };
             root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             layer.AddChild(root);
-            _launcherView = new LauncherView(root, Play, () => GetTree().Quit(0));
+            _launcherView = new LauncherView(root, Play, () => GetTree().Quit(0),
+                (email, pw) => _ = SignIn(email, pw, false),
+                (email, pw) => _ = SignIn(email, pw, true),
+                SignOut);
             _launcherView.SetServer("SERVER · …");
+            string savedEmail = Identity("email");
+            if (savedEmail != "" && Identity("session") != "") _login.Remembered(savedEmail);
             _launcherUp = true;
             _ui.Root.Visible = false;
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
@@ -432,6 +466,7 @@ namespace SpaceAdventure.Game
         private void LauncherFrame()
         {
             _launcherView.Set(_launch, BuildLabel);
+            _launcherView.SetLogin(_login);
             // Rig: -uiPlayAfter <s> presses PLAY, so the restore-and-connect
             // path runs headless (`world ready` under -quitAfter is the proof).
             string playAfter = Arg("-uiPlayAfter");
@@ -460,14 +495,148 @@ namespace SpaceAdventure.Game
             if (_launcherUp) _launcherView.SetServer(Launcher.ServerLine(online));
         }
 
+        /// <summary>A POST with the sa-client header (every mutating route wants it) and an optional bearer.</summary>
+        private static HttpRequestMessage AccountRequest(HttpMethod method, string url, string json, string session)
+        {
+            var req = new HttpRequestMessage(method, url);
+            if (json != null) req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            if (method != HttpMethod.Get) req.Headers.Add("X-Requested-With", "sa-client");
+            if (!string.IsNullOrEmpty(session)) req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session);
+            return req;
+        }
+
         /// <summary>
-        /// PLAY: the saved display mode and UI scale, the game's canvas
-        /// stretch back, the launcher gone, and the connect UpdateThenConnect
-        /// always made.
+        /// SIGN IN / CREATE ACCOUNT: (register, then) game-login inside one
+        /// 5 s budget; the session and email are kept, the password never --
+        /// it lives in this call's arguments and is neither stored nor logged.
+        /// </summary>
+        private async System.Threading.Tasks.Task SignIn(string email, string password, bool creating)
+        {
+            if (_login.Now == Login.State.Busy) return;
+            _login.Submit(creating);
+            using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
+            try
+            {
+                string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
+                string body = new Newtonsoft.Json.Linq.JObject { ["email"] = email, ["password"] = password }.ToString(Newtonsoft.Json.Formatting.None);
+                if (creating)
+                {
+                    using HttpRequestMessage reg = AccountRequest(HttpMethod.Post, site + "/api/register", body, null);
+                    using HttpResponseMessage regResp = await AccountHttp.SendAsync(reg, budget.Token);
+                    if (!regResp.IsSuccessStatusCode)
+                    {
+                        GD.Print($"launcher: register refused ({(int)regResp.StatusCode})");
+                        _login.Fail((int)regResp.StatusCode);
+                        return;
+                    }
+                }
+                using HttpRequestMessage req = AccountRequest(HttpMethod.Post, site + "/api/game-login", body, null);
+                using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    GD.Print($"launcher: sign-in refused ({(int)resp.StatusCode})");
+                    _login.Fail((int)resp.StatusCode);
+                    return;
+                }
+                string text = await resp.Content.ReadAsStringAsync(budget.Token);
+                string session = (string)Newtonsoft.Json.Linq.JObject.Parse(text)["session"];
+                if (string.IsNullOrEmpty(session)) throw new FormatException("no session in the game-login reply");
+                SaveIdentity("session", session);
+                SaveIdentity("email", email);
+                _login.Ok(email);
+                GD.Print("launcher: signed in");
+            }
+            catch (Exception e)
+            {
+                GD.Print($"launcher: sign-in unreachable ({e.GetType().Name})");
+                _login.Fail(0);
+            }
+        }
+
+        /// <summary>SIGN OUT: end the session on the server (best effort), forget it here.</summary>
+        private void SignOut()
+        {
+            string session = Identity("session");
+            string site = Launcher.SiteUrl(_serverUrl);
+            if (session != "" && site != null) _ = Logout(site, session);
+            ClearIdentity();
+            _login.SignOut();
+        }
+
+        private static async System.Threading.Tasks.Task Logout(string site, string session)
+        {
+            try
+            {
+                using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
+                using HttpRequestMessage req = AccountRequest(HttpMethod.Post, site + "/api/logout", null, session);
+                using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
+            }
+            catch (Exception)
+            {
+                // Best effort: the session is forgotten here either way.
+            }
+        }
+
+        /// <summary>
+        /// PLAY: (signed in) the account's character token, then the saved
+        /// display mode and UI scale, the game's canvas stretch back, the
+        /// launcher gone, and the connect UpdateThenConnect always made.
+        /// Rigs (-token, -uiPlayAfter) skip the login.
         /// </summary>
         private void Play()
         {
-            if (!_launcherUp || !_launch.PlayEnabled) return;
+            if (!_launcherUp || _playBusy || !_launch.PlayEnabled) return;
+            if (Arg("-token") != null || Arg("-uiPlayAfter") != null) { EnterGame(RigToken()); return; }
+            if (!_login.PlayAllowed) return;
+            _ = PlayAsCharacter();
+        }
+
+        /// <summary>
+        /// GET /api/characters with the session; PR A plays the first row.
+        /// 401 is a dead session (`SIGNED OUT · sign in again`); anything
+        /// else that fails keeps the launcher up as SITE UNREACHABLE.
+        /// </summary>
+        private async System.Threading.Tasks.Task PlayAsCharacter()
+        {
+            _playBusy = true;
+            string token = null;
+            try
+            {
+                string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
+                using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
+                using HttpRequestMessage req = AccountRequest(HttpMethod.Get, site + "/api/characters", null, Identity("session"));
+                using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
+                if ((int)resp.StatusCode == 401)
+                {
+                    GD.Print("launcher: session refused, signed out");
+                    ClearIdentity();
+                    _login.Refused();
+                }
+                else if (!resp.IsSuccessStatusCode)
+                {
+                    GD.Print($"launcher: characters failed ({(int)resp.StatusCode})");
+                    _login.Fail(0);
+                }
+                else
+                {
+                    var rows = Newtonsoft.Json.Linq.JArray.Parse(await resp.Content.ReadAsStringAsync(budget.Token));
+                    token = rows.Count > 0 ? (string)rows[0]["token"] : null;
+                    if (string.IsNullOrEmpty(token)) { GD.Print("launcher: no character"); _login.Fail(0); }
+                }
+            }
+            catch (Exception e)
+            {
+                GD.Print($"launcher: characters unreachable ({e.GetType().Name})");
+                _login.Fail(0);
+            }
+            _playBusy = false;
+            if (string.IsNullOrEmpty(token) || !_launcherUp) return;
+            SaveToken(token);
+            EnterGame(token);
+        }
+
+        private void EnterGame(string token)
+        {
             _launcherUp = false;
             _launcherView.Show(false);
             _ui.Root.Visible = true;
@@ -478,7 +647,7 @@ namespace SpaceAdventure.Game
             OpenGameWindow();
             ApplySettings();
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
-            Connect();
+            Connect(token);
         }
 
         /// <summary>
@@ -629,16 +798,13 @@ namespace SpaceAdventure.Game
             _settings = new Settings();
             _settings.Load();
             _settingsView = new SettingsView(_ui.Root, _settings, ApplySettings);
-            _gameMenu = new GameMenuView(_ui.Root, () => _accountView.Show(true), () => GetTree().Quit(0), () => _settingsView.Show(true));
+            _gameMenu = new GameMenuView(_ui.Root, () => GetTree().Quit(0), () => _settingsView.Show(true));
             // The rig fixes its own window (--resolution, headless shots), so
             // the saved display mode is for a player's session only.
             // The launcher holds them back until PLAY.
             if (launcher) _fps.Sensitivity = FpsController.BaseSensitivity * _settings.MouseSensitivity;
             else if (!Rigged) ApplySettings();
             else GetTree().Root.ContentScaleFactor = _settings.UiScale;
-            _accountView = new AccountView(_ui.Root,
-                code => { _accountView.SetStatus("redeeming…"); _ = RedeemLinkCode(code); },
-                () => _accountView.Show(false));
 
             // -dumpNodes <asset id>: print the imported node tree and clips,
             // then quit. Pins the node-name and animation import rules.
@@ -665,8 +831,10 @@ namespace SpaceAdventure.Game
             if (launcher)
             {
                 BuildLauncher();
+                string fakeLogin = Arg("-uiLogin");
                 if (fake != null) FakeLauncher(fake);
-                else _ = UpdateStep();
+                if (fakeLogin != null) FakeLogin(fakeLogin);
+                if (fake == null && fakeLogin == null) _ = UpdateStep(); // a faked state is never overwritten by the real check
             }
             else
             {
@@ -762,11 +930,6 @@ namespace SpaceAdventure.Game
                 else _gameMenu.Show(true);
             }
             if (_input.Pressed(Key.F3)) _hud.DebugOpen = !_hud.DebugOpen;
-            if (_input.Pressed(Key.F1))
-            {
-                _accountView.Show(!_accountView.Open);
-                _accountView.SetStatus("");
-            }
             if (_input.Pressed(Key.M)) _map.Toggle();
             // R reloads when a gun is worn; the server would refuse otherwise,
             // and a refusal for pressing R with empty hands is noise.
@@ -1502,7 +1665,6 @@ namespace SpaceAdventure.Game
                 case "journal": _journalView.Show(true); break;
                 case "party": _partyView.Show(true); break;
                 case "skills": ToggleSkills(); break;
-                case "account": _accountView.Show(true); break;
                 case "debug": _hud.DebugOpen = true; break;
                 case "menu": _gameMenu.Show(true); break;
                 case "bench": _benchView.Bench = 0; _benchView.Show(true); break;
@@ -1951,7 +2113,7 @@ namespace SpaceAdventure.Game
 
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _accountView, _gameMenu, _benchView, _settingsView })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();
@@ -1966,47 +2128,6 @@ namespace SpaceAdventure.Game
             bool open = !view.Open;
             view.Show(open);
             if (open) _net.Send(Character.RefreshCmd(NextCmdSeq()));
-        }
-
-        /// <summary>
-        /// POST /api/redeem on the server the game is already talking to
-        /// (ws→http on the same origin), store the token, reconnect.
-        /// </summary>
-        private async System.Threading.Tasks.Task RedeemLinkCode(string code)
-        {
-            string wsUrl = ResolveServerUrl();
-            string apiUrl = wsUrl.Replace("wss://", "https://").Replace("ws://", "http://");
-            int slash = apiUrl.LastIndexOf("/ws", StringComparison.Ordinal);
-            if (slash >= 0) apiUrl = apiUrl.Substring(0, slash);
-            apiUrl += "/api/redeem";
-
-            try
-            {
-                using var http = new System.Net.Http.HttpClient();
-                using var req = new HttpRequestMessage(HttpMethod.Post, apiUrl)
-                {
-                    Content = new StringContent("{\"code\":\"" + code + "\"}", Encoding.UTF8, "application/json"),
-                };
-                req.Headers.Add("X-Requested-With", "sa-client");
-                using HttpResponseMessage resp = await http.SendAsync(req);
-                string text = await resp.Content.ReadAsStringAsync();
-                if (!resp.IsSuccessStatusCode)
-                {
-                    _accountView.SetStatus((int)resp.StatusCode == 401 ? "unknown or expired code" : $"failed: {(int)resp.StatusCode}");
-                    return;
-                }
-                int i = text.IndexOf("\"token\":\"", StringComparison.Ordinal);
-                if (i < 0) { _accountView.SetStatus("bad response"); return; }
-                i += 9;
-                string token = text.Substring(i, text.IndexOf('"', i) - i);
-                SaveToken(token);
-                _accountView.SetStatus("linked — reconnecting…");
-                Reconnect(token);
-            }
-            catch (Exception e)
-            {
-                _accountView.SetStatus($"failed: {e.Message}");
-            }
         }
 
         /// <summary>
@@ -2043,6 +2164,22 @@ namespace SpaceAdventure.Game
             }
             _launcherView.SetServer(Launcher.ServerLine(3));
             GD.Print($"launcher: faked {_launch.Now}");
+        }
+
+        /// <summary>-uiLogin &lt;state&gt;: the account column in a named state, a fake email, no network.</summary>
+        private void FakeLogin(string state)
+        {
+            const string email = "pilot@example.com";
+            _login.SignOut(); // the model only: a remembered sign-in on this machine does not leak into the shot
+            switch (state)
+            {
+                case "signedout": break;
+                case "busy": _login.Submit(false); break;
+                case "signedin": _login.Remembered(email); break;
+                case "failed": _login.Submit(false); _login.Fail(401); break;
+                default: GD.PushError($"-uiLogin: unknown state {state}"); break;
+            }
+            GD.Print($"launcher: login faked {_login.Now}");
         }
 
         private async System.Threading.Tasks.Task SaveLauncherShot(string path)
@@ -2148,6 +2285,35 @@ namespace SpaceAdventure.Game
                 UI.Launcher.SiteUrl("wss://game.stevenholder.info/ws") == "https://game.stevenholder.info"
                 && UI.Launcher.SiteUrl("ws://127.0.0.1:18080/ws") == "http://127.0.0.1:18080");
             Check("launcher: server line", UI.Launcher.ServerLine(3) == "SERVER · ONLINE · 3 PLAYING" && UI.Launcher.ServerLine(null) == "SERVER · UNREACHABLE");
+            // Phase 16: the account column's model (GDD "Account column in the launcher").
+            var g = new UI.Login();
+            Check("login: starts SignedOut, PLAY not allowed", g.Now == UI.Login.State.SignedOut && !g.PlayAllowed && g.Line == "Sign in to play");
+            g.Remembered("pilot@example.com");
+            Check("login: Remembered is SignedIn, PLAY allowed", g.Now == UI.Login.State.SignedIn && g.PlayAllowed && g.Line == "SIGNED IN · pilot@example.com");
+            var gb = new UI.Login();
+            gb.Submit(false);
+            Check("login: Submit(sign in) is Busy", gb.Now == UI.Login.State.Busy && !gb.PlayAllowed && gb.Line == "SIGNING IN…");
+            var gc = new UI.Login();
+            gc.Submit(true);
+            Check("login: Submit(create) is Busy", gc.Now == UI.Login.State.Busy && gc.Creating && gc.Line == "CREATING ACCOUNT…");
+            gc.Ok("pilot@example.com");
+            Check("login: Ok is SignedIn", gc.Now == UI.Login.State.SignedIn && gc.PlayAllowed && gc.Email == "pilot@example.com");
+            foreach (var (status, reason) in new[] { (401, "WRONG EMAIL OR PASSWORD"), (409, "EMAIL ALREADY REGISTERED"), (400, "PASSWORD TOO SHORT"), (429, "TOO MANY TRIES · wait a moment"), (0, "SITE UNREACHABLE") })
+            {
+                var gf = new UI.Login();
+                gf.Submit(false);
+                gf.Fail(status);
+                Check($"login: Fail({status}) is Failed · {reason}", gf.Now == UI.Login.State.Failed && gf.Reason == reason && !gf.PlayAllowed);
+            }
+            var gr = new UI.Login();
+            gr.Remembered("pilot@example.com");
+            gr.Refused();
+            Check("login: Refused is SIGNED OUT · sign in again", gr.Now == UI.Login.State.Failed && gr.Reason == "SIGNED OUT · sign in again" && !gr.PlayAllowed);
+            g.SignOut();
+            Check("login: SignOut is SignedOut, email gone", g.Now == UI.Login.State.SignedOut && g.Email == "" && !g.PlayAllowed);
+            string longName = UI.Login.Shorten("averyveryverylongname@example.com");
+            Check("login: a long email is shortened with …", longName.Length <= 26 && longName.EndsWith("…", StringComparison.Ordinal));
+            Check("login: a short email is unchanged", UI.Login.Shorten("a@b.c") == "a@b.c");
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));
             Check("the same triangle reversed is inward", TerrainMesh.FacesInward(verts, new[] { 0, 2, 1 }));
 

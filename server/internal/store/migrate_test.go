@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,8 +40,8 @@ func TestMigrate_SQLite(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 4 {
-		t.Fatalf("schema_version row count = %d, want 4 (001..004)", count)
+	if count != 5 {
+		t.Fatalf("schema_version row count = %d, want 5 (001..005)", count)
 	}
 }
 
@@ -83,7 +84,77 @@ func TestMigrate_Postgres(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 4 {
-		t.Fatalf("schema_version row count = %d, want 4 (001..004)", count)
+	if count != 5 {
+		t.Fatalf("schema_version row count = %d, want 5 (001..005)", count)
+	}
+}
+
+// 005 lands on a database that already ran 001–004 with players in it:
+// every row gets the default body, guests keep clashing names, and
+// account-owned names that clash case-insensitively are made unique (oldest
+// keeps its name) before the index is built, instead of failing the boot.
+func TestMigrate005OnExistingData(t *testing.T) {
+	s, err := Open("sqlite://" + filepath.Join(t.TempDir(), "world.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+
+	if _, err := s.DB.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_version (
+  version INTEGER PRIMARY KEY, applied_ms BIGINT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	all, err := s.loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range all {
+		if m.version <= 4 {
+			if err := s.applyMigration(ctx, m); err != nil {
+				t.Fatalf("%s: %v", m.name, err)
+			}
+		}
+	}
+	insert := func(token, name, account string, created int64) {
+		t.Helper()
+		var acct any
+		if account != "" {
+			acct = account
+		}
+		if _, err := s.DB.ExecContext(ctx, `INSERT INTO player
+			(token, name, credits, inventory, equipped, pos_x, pos_y, pos_z, created_ms, updated_ms, account_id)
+			VALUES ($1, $2, 0, '[]', '{}', 0, 0, 0, $3, $3, $4)`, token, name, created, acct); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert("aaaa-old", "Kade", "a1", 100)
+	insert("bbbb-new", "kade", "a2", 200)
+	insert("bbbb-newer", "KADE", "a3", 300) // same token prefix as bbbb-new: the suffix must still differ
+	insert("g1", "Kade", "", 50)
+	insert("g2", "Kade", "", 60)
+	if _, err := s.DB.ExecContext(ctx, `INSERT INTO link_code VALUES ('C', 'a1', 1, 2)`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate onto 004: %v", err)
+	}
+
+	for tok, want := range map[string]string{"aaaa-old": "Kade", "bbbb-new": "kade bbbb-new", "bbbb-newer": "KADE bbbb-newer", "g1": "Kade", "g2": "Kade"} {
+		p, err := s.GetPlayer(ctx, tok)
+		if err != nil || p == nil {
+			t.Fatalf("GetPlayer(%s) = %v, %v", tok, p, err)
+		}
+		if p.Name != want || p.Body != DefaultBody {
+			t.Errorf("%s = %q/%q, want %q/%q", tok, p.Name, p.Body, want, DefaultBody)
+		}
+	}
+	if _, err := s.DB.ExecContext(ctx, `SELECT 1 FROM link_code`); err == nil {
+		t.Error("link_code survived 005")
+	}
+	// The index exists and bites.
+	if err := s.SetPlayerAccount(ctx, "g1", "a3"); !errors.Is(err, ErrNameTaken) {
+		t.Errorf("index missing after upgrade: err = %v", err)
 	}
 }

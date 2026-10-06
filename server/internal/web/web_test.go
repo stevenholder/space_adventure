@@ -3,10 +3,13 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -34,13 +37,24 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 
 func newTestSite(t *testing.T) (*httptest.Server, *store.Store) {
 	t.Helper()
-	s, err := store.Open("sqlite://" + filepath.Join(t.TempDir(), "w.db"))
+	// TEST_DATABASE_URL (make test-pg's) runs this suite on Postgres too;
+	// the tables are emptied per test since the database is shared.
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		url = "sqlite://" + filepath.Join(t.TempDir(), "w.db")
+	}
+	s, err := store.Open(url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
 	if err := s.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	for _, q := range []string{`DELETE FROM web_session`, `DELETE FROM player`, `DELETE FROM account`} {
+		if _, err := s.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
 	}
 	h := &Handler{
 		Store: s,
@@ -63,6 +77,7 @@ type site struct {
 	t  *testing.T
 	ts *httptest.Server
 	c  *http.Client
+	ip string // CF-Connecting-IP, so two clients get two login buckets
 }
 
 func newJar() (http.CookieJar, error) { return cookiejar.New(nil) }
@@ -75,7 +90,35 @@ func (s *site) post(path string, body any, csrf bool) *http.Response {
 	if csrf {
 		req.Header.Set("X-Requested-With", "test")
 	}
+	if s.ip != "" {
+		req.Header.Set("CF-Connecting-IP", s.ip)
+	}
 	resp, err := s.c.Do(req)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return resp
+}
+
+// bearerReq is the game client's shape: no cookie jar, the session as a
+// bearer.
+func (s *site) bearerReq(method, path, sid string, body any) *http.Response {
+	s.t.Helper()
+	var rd io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rd = strings.NewReader(string(b))
+	}
+	req, _ := http.NewRequest(method, s.ts.URL+path, rd)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "test")
+	if sid != "" {
+		req.Header.Set("Authorization", "Bearer "+sid)
+	}
+	if s.ip != "" {
+		req.Header.Set("CF-Connecting-IP", s.ip)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.t.Fatal(err)
 	}
@@ -137,43 +180,14 @@ func TestAccountFlow(t *testing.T) {
 		t.Fatalf("login = %d", r.StatusCode)
 	}
 
-	// Link code → redeem mints an owned player; redeem again (new code)
-	// returns the SAME token.
-	var mint struct {
-		Code string `json:"code"`
-	}
-	decode(t, c.post("/api/link-code", nil, true), &mint)
-	if len(mint.Code) != 8 {
-		t.Fatalf("code = %q", mint.Code)
-	}
-	var red struct {
-		Token string `json:"token"`
-	}
-	decode(t, c.post("/api/redeem", map[string]string{"code": mint.Code}, true), &red)
-	if red.Token == "" {
-		t.Fatal("no token from redeem")
-	}
-	// The code is single-use.
-	if r := c.post("/api/redeem", map[string]string{"code": mint.Code}, true); r.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("re-redeem = %d", r.StatusCode)
-	}
-	decode(t, c.post("/api/link-code", nil, true), &mint)
-	var red2 struct {
-		Token string `json:"token"`
-	}
-	decode(t, c.post("/api/redeem", map[string]string{"code": mint.Code}, true), &red2)
-	if red2.Token != red.Token {
-		t.Fatal("second redeem minted a different player")
-	}
-	if p, _ := st.GetPlayer(context.Background(), red.Token); p == nil || p.Credits != 1000 {
-		t.Fatalf("minted player = %+v", p)
-	}
-
-	// me now shows the pilot.
+	// The launcher's door: game-login mints the first character; me sees it.
+	sid := gameLogin(t, c, "a@x.com", "longenough")
 	decode(t, c.get("/api/me"), &me)
 	if len(me.Players) != 1 {
 		t.Fatalf("players = %d", len(me.Players))
 	}
+	rows := listChars(t, c, sid)
+	token := rows[0].Token
 
 	// Password change from session c invalidates c2's session.
 	if r := c.post("/api/password", map[string]string{"old": "longenough", "new": "evenlonger1"}, true); r.StatusCode != 200 {
@@ -187,7 +201,7 @@ func TestAccountFlow(t *testing.T) {
 	if r := c.post("/api/delete", map[string]string{"password": "evenlonger1"}, true); r.StatusCode != 200 {
 		t.Fatalf("delete = %d", r.StatusCode)
 	}
-	if p, _ := st.GetPlayer(context.Background(), red.Token); p != nil {
+	if p, _ := st.GetPlayer(context.Background(), token); p != nil {
 		t.Fatal("owned player survived delete")
 	}
 	if r := c.get("/api/me"); r.StatusCode != http.StatusUnauthorized {
@@ -230,5 +244,241 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 	if refused == 0 {
 		t.Fatal("ten rapid logins never rate-limited")
+	}
+}
+
+type charRow struct {
+	Token    string `json:"token"`
+	Name     string `json:"name"`
+	Body     string `json:"body"`
+	Credits  int64  `json:"credits"`
+	LastSeen int64  `json:"last_seen_ms"`
+}
+
+func gameLogin(t *testing.T, c *site, email, pw string) string {
+	t.Helper()
+	r := c.bearerReq("POST", "/api/game-login", "", credsReq{email, pw})
+	if r.StatusCode != 200 {
+		t.Fatalf("game-login = %d", r.StatusCode)
+	}
+	if len(r.Cookies()) != 0 {
+		t.Fatal("game-login set a cookie")
+	}
+	var out struct {
+		Session string `json:"session"`
+		Name    string `json:"name"`
+	}
+	decode(t, r, &out)
+	if out.Session == "" || out.Name != email {
+		t.Fatalf("game-login = %+v", out)
+	}
+	return out.Session
+}
+
+func listChars(t *testing.T, c *site, sid string) []charRow {
+	t.Helper()
+	r := c.bearerReq("GET", "/api/characters", sid, nil)
+	if r.StatusCode != 200 {
+		t.Fatalf("characters = %d", r.StatusCode)
+	}
+	var rows []charRow
+	decode(t, r, &rows)
+	return rows
+}
+
+func body(t *testing.T, r *http.Response) string {
+	t.Helper()
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	return strings.TrimSpace(string(b))
+}
+
+func TestGameLoginAndCharacters(t *testing.T) {
+	ts, st := newTestSite(t)
+	jar, _ := newJar()
+	c := &site{t: t, ts: ts, c: &http.Client{Jar: jar}}
+	if r := c.post("/api/register", credsReq{"pilot@x.com", "longenough"}, true); r.StatusCode != 200 {
+		t.Fatalf("register = %d", r.StatusCode)
+	}
+
+	// Right password → a session me accepts as a bearer, with one player.
+	sid := gameLogin(t, c, "pilot@x.com", "longenough")
+	var me struct {
+		Email   string `json:"email"`
+		Players []struct {
+			Name string `json:"name"`
+			Body string `json:"body"`
+		} `json:"players"`
+	}
+	r := c.bearerReq("GET", "/api/me", sid, nil)
+	if r.StatusCode != 200 {
+		t.Fatalf("bearer me = %d", r.StatusCode)
+	}
+	decode(t, r, &me)
+	if me.Email != "pilot@x.com" || len(me.Players) != 1 || me.Players[0].Name != "pilot" ||
+		me.Players[0].Body != store.DefaultBody {
+		t.Fatalf("me = %+v", me)
+	}
+	// Twice → still one player.
+	sid2 := gameLogin(t, c, "pilot@x.com", "longenough")
+	if rows := listChars(t, c, sid2); len(rows) != 1 {
+		t.Fatalf("second game-login: %d characters", len(rows))
+	}
+
+	// Wrong password and unknown email: 401, one body.
+	r1 := c.bearerReq("POST", "/api/game-login", "", credsReq{"pilot@x.com", "wrongwrong"})
+	r2 := c.bearerReq("POST", "/api/game-login", "", credsReq{"nobody@x.com", "longenough"})
+	b1, b2 := body(t, r1), body(t, r2)
+	if r1.StatusCode != 401 || r2.StatusCode != 401 || b1 != b2 || b1 != "wrong email or password" {
+		t.Fatalf("wrong pw %d %q, unknown %d %q", r1.StatusCode, b1, r2.StatusCode, b2)
+	}
+	// Bearer wins over a cookie: a garbage bearer is 401 even with a
+	// good cookie in the jar.
+	req, _ := http.NewRequest("GET", ts.URL+"/api/me", nil)
+	req.Header.Set("Authorization", "Bearer nope")
+	if r, _ := c.c.Do(req); r.StatusCode != 401 {
+		t.Fatalf("bad bearer + cookie = %d", r.StatusCode)
+	}
+
+	// The list: one row, the default body, a 32-hex token.
+	rows := listChars(t, c, sid)
+	hex32 := regexp.MustCompile(`^[0-9a-f]{32}$`)
+	if len(rows) != 1 || rows[0].Body != "char.player" || !hex32.MatchString(rows[0].Token) {
+		t.Fatalf("rows = %+v", rows)
+	}
+	first := rows[0].Token
+
+	create := func(name, bodyID string) (*http.Response, charRow) {
+		r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": name, "body": bodyID})
+		var row charRow
+		if r.StatusCode == 200 {
+			decode(t, r, &row)
+		}
+		return r, row
+	}
+	r, kade := create("Kade", "char.ubc.f")
+	if r.StatusCode != 200 || kade.Name != "Kade" || kade.Body != "char.ubc.f" || kade.Credits != 1000 {
+		t.Fatalf("create Kade = %d %+v", r.StatusCode, kade)
+	}
+	rows = listChars(t, c, sid)
+	if len(rows) != 2 || rows[0].Token != first || rows[1].Token != kade.Token || first == kade.Token {
+		t.Fatalf("rows after Kade = %+v", rows)
+	}
+	if p, _ := st.GetPlayer(context.Background(), kade.Token); p == nil || p.AccountID == "" {
+		t.Fatalf("Kade's row = %+v", p)
+	}
+
+	for _, tc := range []struct {
+		name, body string
+		code       int
+		msg        string
+	}{
+		{"kade", "char.player", 409, "name taken"},
+		{"K", "char.player", 400, "bad name"},
+		{"Kade!", "char.player", 400, "bad name"},
+		{"", "char.player", 400, "bad name"},
+		{"Two  Spaces", "char.player", 400, "bad name"},
+		{"Seventeen Letters", "char.player", 400, "bad name"},
+		{"Nova", "char.nope", 400, "bad body"},
+	} {
+		r, _ := create(tc.name, tc.body)
+		if got := body(t, r); r.StatusCode != tc.code || got != tc.msg {
+			t.Fatalf("create %q/%q = %d %q", tc.name, tc.body, r.StatusCode, got)
+		}
+	}
+	// Up to five; the sixth is refused.
+	for _, n := range []string{"O'Neil", "Jo-Ann", "Rex 2"} {
+		if r, _ := create(n, "char.player.f"); r.StatusCode != 200 {
+			t.Fatalf("create %q = %d %s", n, r.StatusCode, body(t, r))
+		}
+	}
+	if r, _ := create("Sixth", "char.ubc"); r.StatusCode != 409 || body(t, r) != "character limit" {
+		t.Fatalf("sixth = %d", r.StatusCode)
+	}
+	// Another account cannot take a name either, whatever its case.
+	jar2, _ := newJar()
+	c2 := &site{t: t, ts: ts, c: &http.Client{Jar: jar2}, ip: "10.0.0.2"}
+	c2.post("/api/register", credsReq{"other@x.com", "longenough"}, true)
+	sidB := gameLogin(t, c2, "other@x.com", "longenough")
+	r = c2.bearerReq("POST", "/api/characters", sidB, map[string]string{"name": "KADE", "body": "char.ubc"})
+	if r.StatusCode != 409 {
+		t.Fatalf("cross-account KADE = %d", r.StatusCode)
+	}
+	// A guest's name never collides.
+	guest := store.Player{Token: "guest-1", Name: "Wanderer", Equipped: map[string]string{}}
+	if err := st.PutPlayer(context.Background(), &guest); err != nil {
+		t.Fatal(err)
+	}
+	if r := c2.bearerReq("POST", "/api/characters", sidB,
+		map[string]string{"name": "Wanderer", "body": "char.ubc"}); r.StatusCode != 200 {
+		t.Fatalf("name a guest holds = %d", r.StatusCode)
+	}
+
+	// Logout with the bearer ends that session only.
+	if r := c.bearerReq("POST", "/api/logout", sid2, nil); r.StatusCode != 200 {
+		t.Fatalf("bearer logout = %d", r.StatusCode)
+	}
+	if r := c.bearerReq("GET", "/api/me", sid2, nil); r.StatusCode != 401 {
+		t.Fatalf("me after logout = %d", r.StatusCode)
+	}
+
+	// A password change from the site kills the game's session (C57).
+	if r := c.post("/api/password", map[string]string{"old": "longenough", "new": "evenlonger1"}, true); r.StatusCode != 200 {
+		t.Fatalf("password = %d", r.StatusCode)
+	}
+	if r := c.bearerReq("GET", "/api/characters", sid, nil); r.StatusCode != 401 {
+		t.Fatalf("bearer after pw change = %d", r.StatusCode)
+	}
+
+	// Delete takes every character with it.
+	if r := c.post("/api/delete", map[string]string{"password": "evenlonger1"}, true); r.StatusCode != 200 {
+		t.Fatalf("delete = %d", r.StatusCode)
+	}
+	for _, tok := range []string{first, kade.Token} {
+		if p, _ := st.GetPlayer(context.Background(), tok); p != nil {
+			t.Fatalf("character %s survived delete", tok)
+		}
+	}
+}
+
+// Two accounts whose emails share a local part both get a first character;
+// the second's name is numbered rather than refused by the name index.
+func TestGameLoginFirstNameClash(t *testing.T) {
+	ts, _ := newTestSite(t)
+	var names []string
+	for _, e := range []string{"sam@a.com", "sam@b.com"} {
+		jar, _ := newJar()
+		c := &site{t: t, ts: ts, c: &http.Client{Jar: jar}, ip: e}
+		c.post("/api/register", credsReq{e, "longenough"}, true)
+		rows := listChars(t, c, gameLogin(t, c, e, "longenough"))
+		if len(rows) != 1 {
+			t.Fatalf("%s: %d characters", e, len(rows))
+		}
+		names = append(names, rows[0].Name)
+	}
+	if names[0] != "sam" || names[1] != "sam 2" {
+		t.Fatalf("names = %q", names)
+	}
+}
+
+func TestGameLoginRateLimit(t *testing.T) {
+	ts, _ := newTestSite(t)
+	c := &site{t: t, ts: ts, c: http.DefaultClient}
+	var last int
+	for i := 0; i < 10; i++ {
+		last = c.bearerReq("POST", "/api/game-login", "", credsReq{"x@x.com", "whateverpw"}).StatusCode
+	}
+	if last != http.StatusTooManyRequests {
+		t.Fatalf("tenth rapid game-login = %d", last)
+	}
+}
+
+func TestOldRoutesGone(t *testing.T) {
+	ts, _ := newTestSite(t)
+	c := &site{t: t, ts: ts, c: http.DefaultClient}
+	for _, p := range []string{"/api/link-code", "/api/redeem", "/api/import-token"} {
+		if r := c.post(p, map[string]string{}, true); r.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s = %d", p, r.StatusCode)
+		}
 	}
 }

@@ -48,13 +48,38 @@ type identity struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 	wg       sync.WaitGroup
+
+	// saveMu is held across a whole save (snapshot + write) so discard can
+	// wait out one in flight; discarded (guarded by saveMu) stops every
+	// later one. A deleted account's character must never be written back:
+	// PutPlayer would re-INSERT it, owned by an account that is gone.
+	saveMu    sync.Mutex
+	discarded bool
 }
 
-// joinIdentity loads token's row, or builds the default loadout, and — for
-// a non-empty token — starts the autosave loop. An empty token is an
-// EPHEMERAL session: the server never mints a token, so an empty one means
-// no row is ever read or written for it (docs/PROTOCOL.md).
-func joinIdentity(ctx context.Context, st *store.Store, reg *defs.Registry, token, name string, spawn [3]float64) *identity {
+// loadPlayer reads token's row: nil for an empty token, a missing row, or
+// a failed read (logged). Separate from joinIdentity so join can judge the
+// row (strict join, Phase 16) from the same single read.
+func loadPlayer(ctx context.Context, st *store.Store, token string) *store.Player {
+	if token == "" || st == nil {
+		return nil
+	}
+	loaded, err := callStore(ctx, "store.get_player", func(ctx context.Context) (*store.Player, error) {
+		return st.GetPlayer(ctx, token)
+	})
+	if err != nil {
+		log.Printf("identity: load %q: %v", token, err)
+		return nil
+	}
+	return loaded
+}
+
+// joinIdentity adopts loaded (token's row, from loadPlayer), or builds the
+// default loadout, and — for a non-empty token — starts the autosave loop.
+// An empty token is an EPHEMERAL session: the server never mints a token,
+// so an empty one means no row is ever read or written for it
+// (docs/PROTOCOL.md).
+func joinIdentity(ctx context.Context, st *store.Store, reg *defs.Registry, token, name string, spawn [3]float64, loaded *store.Player) *identity {
 	id := &identity{token: token, stop: make(chan struct{}),
 		session: trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx))}
 	id.player = defaultPlayer(reg, token, name, spawn)
@@ -63,13 +88,7 @@ func joinIdentity(ctx context.Context, st *store.Store, reg *defs.Registry, toke
 		return id
 	}
 	id.st = st
-
-	loaded, err := callStore(ctx, "store.get_player", func(ctx context.Context) (*store.Player, error) {
-		return st.GetPlayer(ctx, token)
-	})
-	if err != nil {
-		log.Printf("identity: load %q: %v", token, err)
-	} else if loaded != nil {
+	if loaded != nil {
 		id.player = *loaded
 	}
 
@@ -143,12 +162,24 @@ func (id *identity) save(parent context.Context) {
 	if id.st == nil {
 		return // ephemeral session: never write a row
 	}
+	id.saveMu.Lock()
+	defer id.saveMu.Unlock()
+	if id.discarded {
+		return
+	}
 	p := id.Snapshot()
 	if _, err := callStore(parent, "store.put_player", func(ctx context.Context) (struct{}, error) {
 		return struct{}{}, id.st.PutPlayer(ctx, &p)
 	}); err != nil {
 		log.Printf("identity: save %q: %v", id.token, err)
 	}
+}
+
+// discard makes every later save a no-op, after waiting out one in flight.
+func (id *identity) discard() {
+	id.saveMu.Lock()
+	id.discarded = true
+	id.saveMu.Unlock()
 }
 
 // Close stops the autosave loop and performs one final, synchronous save

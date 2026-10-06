@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 )
 
@@ -75,39 +76,7 @@ func TestPasswordChangeDropsOtherSessions(t *testing.T) {
 	}
 }
 
-func TestLinkCodes(t *testing.T) {
-	s := openMigrated(t)
-	ctx := context.Background()
-	if err := s.PutLinkCode(ctx, "AAAA1111", "a", 1, 100); err != nil {
-		t.Fatal(err)
-	}
-	// Re-minting replaces: the old code dies.
-	if err := s.PutLinkCode(ctx, "BBBB2222", "a", 2, 100); err != nil {
-		t.Fatal(err)
-	}
-	if id, _ := s.RedeemLinkCode(ctx, "AAAA1111", 50); id != "" {
-		t.Fatal("replaced code still redeemable")
-	}
-	if id, _ := s.RedeemLinkCode(ctx, "BBBB2222", 50); id != "a" {
-		t.Fatal("live code refused")
-	}
-	// Single-use.
-	if id, _ := s.RedeemLinkCode(ctx, "BBBB2222", 50); id != "" {
-		t.Fatal("code redeemed twice")
-	}
-	// Expiry: consumed AND refused.
-	if err := s.PutLinkCode(ctx, "CCCC3333", "a", 1, 100); err != nil {
-		t.Fatal(err)
-	}
-	if id, _ := s.RedeemLinkCode(ctx, "CCCC3333", 200); id != "" {
-		t.Fatal("expired code accepted")
-	}
-	if id, _ := s.RedeemLinkCode(ctx, "CCCC3333", 50); id != "" {
-		t.Fatal("expired code survived its failed redeem")
-	}
-}
-
-func TestAdoptAndDeleteCascade(t *testing.T) {
+func TestOwnAndDeleteCascade(t *testing.T) {
 	s := openMigrated(t)
 	ctx := context.Background()
 	must := func(err error) {
@@ -120,11 +89,7 @@ func TestAdoptAndDeleteCascade(t *testing.T) {
 	guest := sample()
 	must(s.PutPlayer(ctx, guest))
 
-	// Adopt the guest; a second adopt (either direction) refuses.
-	must(s.AdoptPlayer(ctx, "a", guest.Token))
-	if err := s.AdoptPlayer(ctx, "a", guest.Token); err == nil {
-		t.Fatal("account adopted a second player")
-	}
+	must(s.SetPlayerAccount(ctx, guest.Token, "a"))
 	if tok, _ := s.AccountPlayerToken(ctx, "a"); tok != guest.Token {
 		t.Fatalf("AccountPlayerToken = %q", tok)
 	}
@@ -141,7 +106,6 @@ func TestAdoptAndDeleteCascade(t *testing.T) {
 	}
 
 	must(s.CreateSession(ctx, "sess", "a", 1, 1<<60))
-	must(s.PutLinkCode(ctx, "DDDD4444", "a", 1, 1<<60))
 	tokens, err := s.DeleteAccount(ctx, "a")
 	must(err)
 	if len(tokens) != 1 || tokens[0] != guest.Token {
@@ -159,4 +123,122 @@ func TestAdoptAndDeleteCascade(t *testing.T) {
 	if n, _ := s.CountPlayers(ctx); n != 0 {
 		t.Fatalf("CountPlayers = %d after cascade", n)
 	}
+}
+
+// eachEngine runs f on a migrated SQLite store and, under `make test-pg`,
+// on Postgres too: the character index is engine-specific SQL in a portable
+// file, so it is proven on both.
+func eachEngine(t *testing.T, f func(t *testing.T, s *Store)) {
+	t.Run("sqlite", func(t *testing.T) { f(t, openMigrated(t)) })
+	t.Run("postgres", func(t *testing.T) {
+		dsn := os.Getenv("TEST_DATABASE_URL")
+		if dsn == "" {
+			t.Skip("TEST_DATABASE_URL not set; run `make test-pg`")
+		}
+		s, err := Open(dsn)
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		drop := func() {
+			for _, tbl := range []string{"player", "account", "web_session", "link_code", "schema_version"} {
+				s.DB.Exec(`DROP TABLE IF EXISTS ` + tbl)
+			}
+		}
+		drop()
+		t.Cleanup(func() { drop(); s.Close() })
+		if err := s.Migrate(context.Background()); err != nil {
+			t.Fatalf("Migrate: %v", err)
+		}
+		f(t, s)
+	})
+}
+
+func character(token, name, accountID string) *Player {
+	p := sample()
+	p.Token, p.Name, p.AccountID = token, name, accountID
+	return p
+}
+
+func TestCharacterNamesUniqueAmongAccounts(t *testing.T) {
+	eachEngine(t, func(t *testing.T, s *Store) {
+		ctx := context.Background()
+		if err := s.PutPlayer(ctx, character("t1", "Kade", "a")); err != nil {
+			t.Fatal(err)
+		}
+		// A case variant on another account is refused, at the insert.
+		if err := s.PutPlayer(ctx, character("t2", "kADE", "b")); !errors.Is(err, ErrNameTaken) {
+			t.Fatalf("case-variant character: err = %v, want ErrNameTaken", err)
+		}
+		if p, _ := s.GetPlayer(ctx, "t2"); p != nil {
+			t.Fatal("refused character was stored")
+		}
+
+		// Guests sit outside the index: two of them share the name, and
+		// share it with the character.
+		for _, tok := range []string{"g1", "g2"} {
+			if err := s.PutPlayer(ctx, character(tok, "KADE", "")); err != nil {
+				t.Fatalf("guest %s: %v", tok, err)
+			}
+		}
+		// ...until one is claimed by an account.
+		if err := s.SetPlayerAccount(ctx, "g1", "b"); !errors.Is(err, ErrNameTaken) {
+			t.Fatalf("claiming a clashing guest: err = %v, want ErrNameTaken", err)
+		}
+		// Renaming a character onto a taken name is refused too.
+		if err := s.PutPlayer(ctx, character("t3", "Ash", "b")); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.PutPlayer(ctx, character("t3", "kade", "b")); !errors.Is(err, ErrNameTaken) {
+			t.Fatalf("rename onto a taken name: err = %v, want ErrNameTaken", err)
+		}
+
+		for name, want := range map[string]bool{"kade": true, "KaDe": true, "ash": true, "Nobody": false} {
+			if got, err := s.CharacterNameTaken(ctx, name); err != nil || got != want {
+				t.Errorf("CharacterNameTaken(%q) = %v, %v; want %v", name, got, err, want)
+			}
+		}
+		// A guest-only name is free.
+		if err := s.PutPlayer(ctx, character("g3", "Wren", "")); err != nil {
+			t.Fatal(err)
+		}
+		if taken, _ := s.CharacterNameTaken(ctx, "wren"); taken {
+			t.Error("a guest's name counts as a taken character name")
+		}
+	})
+}
+
+func TestCountAndListAccountPlayers(t *testing.T) {
+	eachEngine(t, func(t *testing.T, s *Store) {
+		ctx := context.Background()
+		if n, err := s.CountAccountPlayers(ctx, "a"); err != nil || n != 0 {
+			t.Fatalf("empty account count = %d, %v", n, err)
+		}
+		first := character("t1", "Kade", "a")
+		first.Body = "char.ubc.f"
+		for _, p := range []*Player{first, character("t2", "Ash", "a"), character("t3", "Wren", "b"), character("g", "Guest", "")} {
+			if err := s.PutPlayer(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if n, _ := s.CountAccountPlayers(ctx, "a"); n != 2 {
+			t.Fatalf("CountAccountPlayers(a) = %d, want 2", n)
+		}
+		players, err := s.AccountPlayers(ctx, "a")
+		if err != nil || len(players) != 2 {
+			t.Fatalf("AccountPlayers = %+v, %v", players, err)
+		}
+		bodies := map[string]string{}
+		for _, p := range players {
+			if p.AccountID != "a" {
+				t.Errorf("%s AccountID = %q", p.Name, p.AccountID)
+			}
+			bodies[p.Name] = p.Body
+		}
+		if bodies["Kade"] != "char.ubc.f" || bodies["Ash"] != DefaultBody {
+			t.Errorf("bodies = %v", bodies)
+		}
+		if tok, _ := s.AccountPlayerToken(ctx, "a"); tok == "" {
+			t.Error("AccountPlayerToken found none of two characters")
+		}
+	})
 }
