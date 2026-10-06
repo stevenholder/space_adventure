@@ -16,5 +16,10 @@
   "license": "CC0",
   "author": "Quaternius (Universal Base Characters), dressed by Space Adventure",
   "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
-  "rig": "animated"
+  "rig": "animated",
+  "worn_surfaces": {
+    "hair": [
+      "hair"
+    ]
+  }
 }

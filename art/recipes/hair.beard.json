@@ -1,0 +1,18 @@
+{
+  "$comment": "A full beard and moustache (facial hair; worn in the hair slot). Quaternius UBC Hairstyles Hair_Beard (CC0), refitted to each body's head by tools/bpy/hair.py; the unsuffixed piece fits the base MakeHuman build, bodies get <id>@<body>.",
+  "id": "hair.beard",
+  "src": "build/hair.beard.raw.glb",
+  "out": "hair/beard.glb",
+  "fit": false,
+  "budget": 1500,
+  "pbr": true,
+  "license": "CC0",
+  "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+  "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+  "bodies": [
+    "char.player",
+    "char.player.f",
+    "char.ubc",
+    "char.ubc.f"
+  ]
+}

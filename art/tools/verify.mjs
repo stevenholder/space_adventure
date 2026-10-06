@@ -63,7 +63,8 @@ const BUDGETS = [
   [/^mob\./, 20000],
   [/^melee\./, 2000],  // hand weapons (tools/bpy/rpg_items.py)
   [/^throw\./, 2000],  // thrown charges
-  [/^potion\./, 2000],    // the mob library (mobs/mobs.json): pack creatures, the Bestiary Imp is 15k
+  [/^potion\./, 2000],
+  [/^hair\./, 1500],   // worn hair pieces (tools/bpy/hair.py), per body    // the mob library (mobs/mobs.json): pack creatures, the Bestiary Imp is 15k
 ];
 
 // Node-name contracts: the client mounts things by these names, so a rename
@@ -196,6 +197,30 @@ function rawColorProblems(file) {
   return out;
 }
 
+function hairProblems(gltf) {
+  const out = [];
+  const json = gltf.parser.json;
+  if ((json.meshes ?? []).length !== 1 || json.meshes[0].name !== "hair")
+    out.push(`hair: want one mesh named "hair", got ${JSON.stringify((json.meshes ?? []).map((m) => m.name))}`);
+  for (const m of json.meshes ?? [])
+    for (const p of m.primitives)
+      if (json.materials?.[p.material]?.name !== "hair") out.push(`hair: primitive in material "${json.materials?.[p.material]?.name}", want "hair"`);
+  let skinned = 0;
+  gltf.scene.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    skinned++;
+    const idx = o.geometry.attributes.skinIndex, w = o.geometry.attributes.skinWeight;
+    const bones = o.skeleton.bones;
+    const off = new Set();
+    for (let i = 0; i < idx.count; i++)
+      for (let k = 0; k < 4; k++)
+        if (w.getComponent(i, k) > 1e-3 && bones[idx.getComponent(i, k)].name !== "head") off.add(bones[idx.getComponent(i, k)].name);
+    if (off.size) out.push(`hair: weighted to ${[...off].join(", ")} (head only)`);
+  });
+  if (!skinned) out.push("hair: not skinned (must ride the head bone)");
+  return out;
+}
+
 const loader = new GLTFLoader();
 // Textures are not checked here, and decoding an image wants a browser
 // (`self`, ImageBitmap): every texture loads as a blank one.
@@ -223,6 +248,14 @@ for (const asset of selected) {
   const budget = budgetFor(asset.id);
   if (budget === null) {
     failures.push(`${asset.id}: no budget rule for id class`);
+    continue;
+  }
+  // A row with no file is an id the game uses for "nothing to wear"
+  // (hair.none): nothing to load, and it must say so with tris 0.
+  if (asset.file === null) {
+    if (!asset.id.endsWith(".none") || asset.tris !== 0)
+      failures.push(`${asset.id}: no file, but not a ".none" id with tris 0`);
+    rows.push({ id: asset.id, file: "(none)", tris: 0, budget, ok: true });
     continue;
   }
   let gltf;
@@ -295,6 +328,12 @@ for (const asset of selected) {
         problems.push("eye is a child of head: hiding head would hide the camera");
     }
   }
+
+  // Hair (hair.*): the client hangs it like armor and a helmet hides it
+  // by surface name, so exactly one mesh `hair`, every primitive in
+  // material `hair`, and every skinned vertex on the `head` bone alone
+  // (a strand weighted to the neck would tear when the head turns).
+  if (asset.id.startsWith("hair.")) problems.push(...hairProblems(gltf));
 
   rows.push({ id: asset.id, file: asset.file, tris, budget, ok: problems.length === 0 });
   for (const p of problems) failures.push(`${asset.id}: ${p}`);

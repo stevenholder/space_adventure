@@ -26,6 +26,9 @@
           "hair",
           "eye",
           "sclera"
+        ],
+        "hair": [
+          "hair"
         ]
       },
       "pbr": true
@@ -56,13 +59,16 @@
           "hair",
           "eye",
           "sclera"
+        ],
+        "hair": [
+          "hair"
         ]
       }
     },
     {
       "id": "char.ubc",
       "file": "chars/ubc.glb",
-      "tris": 8992,
+      "tris": 8995,
       "license": "CC0",
       "source": "recipes/char.ubc.json",
       "description": "Spike body: Quaternius Universal Base Characters Superhero male (CC0), imported and dressed by tools/bpy/human.py variant char.ubc on the same game-engine bone names, clips and hand mounts as char.player. Worn by npc.veteran at spawn for review. Faces -Z, eye at 1.7 m.",
@@ -81,17 +87,19 @@
         ],
         "head": [
           "MI_Superhero_Male",
-          "MI_Hair_1",
+          "hair",
           "MI_Eyes",
-          "MI_Hair_1.001",
           "suit"
+        ],
+        "hair": [
+          "hair"
         ]
       }
     },
     {
       "id": "char.ubc.f",
       "file": "chars/ubc_f.glb",
-      "tris": 8994,
+      "tris": 8992,
       "license": "CC0",
       "source": "recipes/char.ubc.f.json",
       "description": "Body, female (GDD 'Bodies': VANGUARD F): Quaternius Universal Base Characters Superhero female (CC0) with the pack's Hair_Buns, imported and dressed by tools/bpy/human.py variant char.ubc.f exactly as char.ubc, on the same game-engine bone names, clips and hand mounts as char.player. Faces -Z, eye at 1.7 m.",
@@ -110,10 +118,12 @@
         ],
         "head": [
           "MI_Superhero_Female",
-          "MI_Hair_2",
-          "MI_Eyes",
           "hair",
+          "MI_Eyes",
           "suit"
+        ],
+        "hair": [
+          "hair"
         ]
       }
     },
@@ -317,7 +327,7 @@
       "height": 3.3,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE \u2014 the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to \u22120.3. Colony skin: one thing is always symmetric."
+      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE — the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to −0.3. Colony skin: one thing is always symmetric."
     },
     {
       "id": "struct.wall4.scrap",
@@ -330,7 +340,7 @@
       "height": 3.3,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE \u2014 the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to \u22120.3. Scrapyard skin: one thing is always crooked."
+      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE — the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to −0.3. Scrapyard skin: one thing is always crooked."
     },
     {
       "id": "struct.corner.colony",
@@ -395,7 +405,7 @@
       "height": 8.4,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit watchtower, 2\u00d72 cells, 8 m. Colony skin: one thing is always symmetric."
+      "description": "Phase 9 kit watchtower, 2×2 cells, 8 m. Colony skin: one thing is always symmetric."
     },
     {
       "id": "struct.tower.scrap",
@@ -408,7 +418,7 @@
       "height": 8.4,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit watchtower, 2\u00d72 cells, 8 m. Scrapyard skin: one thing is always crooked."
+      "description": "Phase 9 kit watchtower, 2×2 cells, 8 m. Scrapyard skin: one thing is always crooked."
     },
     {
       "id": "struct.mast.colony",
@@ -421,7 +431,7 @@
       "height": 12.6,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI \u2014 the skyline spike discovery runs on. Colony skin: one thing is always symmetric."
+      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI — the skyline spike discovery runs on. Colony skin: one thing is always symmetric."
     },
     {
       "id": "struct.mast.scrap",
@@ -434,7 +444,7 @@
       "height": 12.6,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI \u2014 the skyline spike discovery runs on. Scrapyard skin: one thing is always crooked."
+      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI — the skyline spike discovery runs on. Scrapyard skin: one thing is always crooked."
     },
     {
       "id": "struct.hab.colony",
@@ -447,7 +457,7 @@
       "height": 5.4,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit habitat, Colony only: 2\u00d72 cells, the closed hut. Colony skin: one thing is always symmetric."
+      "description": "Phase 9 kit habitat, Colony only: 2×2 cells, the closed hut. Colony skin: one thing is always symmetric."
     },
     {
       "id": "struct.shack.scrap",
@@ -460,7 +470,7 @@
       "height": 4.5,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit shack, Scrapyard only: 2\u00d72 cells, the leaning hut. Scrapyard skin: one thing is always crooked."
+      "description": "Phase 9 kit shack, Scrapyard only: 2×2 cells, the leaning hut. Scrapyard skin: one thing is always crooked."
     },
     {
       "id": "struct.cover4.scrap",
@@ -473,7 +483,7 @@
       "height": 2.5,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit barricade, 1 cell, 2.1 m \u2014 the cover-ring piece and the camp inner block. Scrapyard skin."
+      "description": "Phase 9 kit barricade, 1 cell, 2.1 m — the cover-ring piece and the camp inner block. Scrapyard skin."
     },
     {
       "id": "struct.cover4.colony",
@@ -486,7 +496,7 @@
       "height": 2.5,
       "license": "CC0",
       "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit barricade, 1 cell, 2.1 m \u2014 the cover-ring piece and the camp inner block. Colony skin."
+      "description": "Phase 9 kit barricade, 1 cell, 2.1 m — the cover-ring piece and the camp inner block. Colony skin."
     },
     {
       "id": "npc.grunt",
@@ -676,7 +686,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -701,7 +712,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -726,7 +738,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -751,7 +764,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -776,7 +790,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -801,7 +816,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -826,7 +842,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -851,7 +868,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2556,7 +2574,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2589,7 +2608,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2622,7 +2642,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2655,7 +2676,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2688,7 +2710,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2721,7 +2744,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2754,7 +2778,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -2787,7 +2812,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4165,7 +4191,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4191,7 +4218,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4217,7 +4245,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4243,7 +4272,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4269,7 +4299,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4295,7 +4326,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4321,7 +4353,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -4347,7 +4380,8 @@
         ]
       },
       "covers": [
-        "head/hair"
+        "head/hair",
+        "hair/hair"
       ],
       "pbr": true
     },
@@ -6734,6 +6768,495 @@
       "source_url": "tools/bpy/rpg_items.py",
       "author": "Space Adventure",
       "source": "tools/bpy/rpg_items.py"
+    },
+    {
+      "id": "hair.buzzed",
+      "file": "hair/buzzed.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.player",
+      "file": "hair/buzzed.char.player.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.player.f",
+      "file": "hair/buzzed.char.player.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.ubc",
+      "file": "hair/buzzed.char.ubc.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed@char.ubc.f",
+      "file": "hair/buzzed.char.ubc.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed.json",
+      "description": "Buzzed short hair. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buzzed.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female",
+      "file": "hair/buzzed_female.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.player",
+      "file": "hair/buzzed_female.char.player.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.player.f",
+      "file": "hair/buzzed_female.char.player.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.ubc",
+      "file": "hair/buzzed_female.char.ubc.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buzzed_female@char.ubc.f",
+      "file": "hair/buzzed_female.char.ubc.f.glb",
+      "tris": 830,
+      "license": "CC0",
+      "source": "recipes/hair.buzzed_female.json",
+      "description": "Buzzed short hair, the pack's female cut. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_BuzzedFemale.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted",
+      "file": "hair/simple_parted.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.player",
+      "file": "hair/simple_parted.char.player.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.player.f",
+      "file": "hair/simple_parted.char.player.f.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.ubc",
+      "file": "hair/simple_parted.char.ubc.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.simple_parted@char.ubc.f",
+      "file": "hair/simple_parted.char.ubc.f.glb",
+      "tris": 1301,
+      "license": "CC0",
+      "source": "recipes/hair.simple_parted.json",
+      "description": "Short hair parted at the side. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_SimpleParted.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long",
+      "file": "hair/long.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.player",
+      "file": "hair/long.char.player.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.player.f",
+      "file": "hair/long.char.player.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.ubc",
+      "file": "hair/long.char.ubc.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.long@char.ubc.f",
+      "file": "hair/long.char.ubc.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.long.json",
+      "description": "Long hair to the shoulders. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Long.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns",
+      "file": "hair/buns.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.player",
+      "file": "hair/buns.char.player.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.player.f",
+      "file": "hair/buns.char.player.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.ubc",
+      "file": "hair/buns.char.ubc.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.buns@char.ubc.f",
+      "file": "hair/buns.char.ubc.f.glb",
+      "tris": 1490,
+      "license": "CC0",
+      "source": "recipes/hair.buns.json",
+      "description": "Two buns with a fringe. Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Buns.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard",
+      "file": "hair/beard.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.player",
+      "file": "hair/beard.char.player.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.player.f",
+      "file": "hair/beard.char.player.f.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.ubc",
+      "file": "hair/beard.char.ubc.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.beard@char.ubc.f",
+      "file": "hair/beard.char.ubc.f.glb",
+      "tris": 1034,
+      "license": "CC0",
+      "source": "recipes/hair.beard.json",
+      "description": "A full beard and moustache (facial hair; worn in the hair slot). Worn in the `hair` slot: one mesh `hair` (material hair, so a helmet's covers head/hair hides it), 100% on the head bone, refitted per body by tools/bpy/hair.py from the Quaternius UBC hairstyle Hair_Beard.",
+      "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+      "author": "Quaternius (Universal Base Characters hairstyles), fitted by Space Adventure",
+      "surfaces": {
+        "hair": [
+          "hair"
+        ]
+      },
+      "pbr": true
+    },
+    {
+      "id": "hair.none",
+      "file": null,
+      "tris": 0,
+      "license": "CC0",
+      "description": "No hair (bald): the default hair slot value. No file -- nothing is worn; the client's registry skips rows without a file.",
+      "source_url": "tools/bpy/hair.py",
+      "author": "Space Adventure"
     }
   ]
 }

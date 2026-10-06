@@ -7,7 +7,8 @@
   "budget": 5000,
   "pbr": true,
   "covers": [
-    "head/hair"
+    "head/hair",
+    "hair/hair"
   ],
   "license": "CC0",
   "author": "Space Adventure",

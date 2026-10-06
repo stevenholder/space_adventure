@@ -238,6 +238,13 @@ def ubc_human():
     for name in [u.name for u in h.data.uv_layers if u.name != keep]:
         h.data.uv_layers.remove(h.data.uv_layers[name])
     h.data.uv_layers.active = h.data.uv_layers[keep]
+    # The pack's eyebrows: greyscale strands the pack tints in its own
+    # shader (white when drawn raw). Same tinted `hair` material as the
+    # Colonist's brows and every hair piece, so a helmet hides them alike.
+    for i, m in enumerate(h.data.materials):
+        if m and m.name.startswith("MI_Hair"):
+            tex = next(n.image for n in m.node_tree.nodes if n.type == "TEX_IMAGE" and n.image and "Normal" not in n.image.name)
+            h.data.materials[i] = hair_material(tex)
 
     # Leaf bones carry finger-tip weights: fold them into the parent, then drop them.
     parents = {b.name: b.parent.name for b in rig.data.bones if "leaf" in b.name}
