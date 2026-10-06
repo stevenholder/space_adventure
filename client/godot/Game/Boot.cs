@@ -710,6 +710,7 @@ namespace SpaceAdventure.Game
             _charsView.Show(true);
             _stage = new CharacterStage(this, _assets);
             _charsView.OnStageDrag = dx => _stage?.Drag(dx);
+            _charsView.OnExit = () => GetTree().Quit(0);
             _sun.Visible = false; // the world is not built; the Sun's shadow cascades only striped the stage
             _stageBody = _stageHair = null;
             _selectUp = true;

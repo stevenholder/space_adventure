@@ -244,6 +244,8 @@ namespace SpaceAdventure.Game.UI
         public const float ListShare = 0.4f;
         /// <summary>Horizontal drag across the stage side, in pixels; Boot turns the stage body with it.</summary>
         public Action<float> OnStageDrag { get; set; }
+        /// <summary>EXIT GAME: Boot quits the tree.</summary>
+        public Action OnExit { get; set; }
 
         private readonly Control _root;
         private readonly Action<int> _onSelect;
@@ -335,6 +337,11 @@ namespace SpaceAdventure.Game.UI
             _signOut = Secondary("SIGN OUT", 16, 40, onSignOut);
             _signOut.CustomMinimumSize = new Vector2(180, 40);
             outRow.AddChild(_signOut);
+            outRow.AddChild(Styles.Grow(new Control { MouseFilter = Control.MouseFilterEnum.Ignore }));
+            // EXIT GAME on the far right: the launcher's QUIT, reachable from here too.
+            var exit = Secondary("EXIT GAME", 16, 40, () => OnExit?.Invoke());
+            exit.CustomMinimumSize = new Vector2(180, 40);
+            outRow.AddChild(exit);
             list.AddChild(Styles.Gap(4));
             list.AddChild(outRow);
 
