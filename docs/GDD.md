@@ -1432,56 +1432,72 @@ each one has a shot in `test/out/ui/`.
 
 ### Launcher login (Phase 16)
 
-Phase 15 reserved the launcher's left column. This fills it: email +
-password in the launcher, and PLAY joins as the account's player. The F1
-link-code panel in the game stays as it is (the site still mints codes;
-a second machine can still be linked that way). PLAY is never gated on
-being signed in — the coexistence rule (Phase 7) stands: a guest plays
-with the anonymous token exactly as today.
+Phase 15 reserved the launcher's left column. This fills it, and closes
+the side doors: **the only way into the world is an account.** Sign up
+and sign in happen in the launcher; PLAY is disabled until you are signed
+in; the game joins as the account's player and nothing else. Phase 7's
+coexistence rule (anonymous tokens join as guests), its link codes, the
+site's mint/import page and the game's F1 link panel are removed — one
+identity, one door.
 
-**One call.** `POST /api/game-login` `{email, password}` → `{token}`. It
-is `/api/login` and `/api/redeem` fused for the client: verify the
-password (same argon2id path, same dummy-hash timing rule, same per-IP
-bucket as login), then the account's player token — the existing one, or
-a fresh owned player minted exactly as a redeemed code would. No web
-session is created: the launcher never holds a cookie, so there is
-nothing to log out of on the server. `X-Requested-With` required like
-every mutating route.
+**Two calls, both from the launcher.** `POST /api/game-login`
+`{email, password}` → `{token, name}`: verify the password (the same
+argon2id path and dummy-hash timing as the site's login, the same per-IP
+bucket), then the account's player — the existing row, or a fresh one
+minted at a guest's start exactly as `redeem` did. `POST /api/register`
+is unchanged (the launcher's CREATE ACCOUNT calls it, then `game-login`
+with the same fields). No web session is minted for the launcher: it
+never holds a cookie. `X-Requested-With` required, as on every mutating
+route.
 
-**Account column** (left, ~40 %), three states of a pure `Login` model
-beside the update model, testable in `-selftest`:
+**The token is the player's session credential, not an identity of its
+own.** `hello` still carries it on the wire (no wire change), but the
+server only seats a token that belongs to an account player; any other
+is closed with `1008` (policy violation) before a spawn. The client keeps
+it in `[identity] token` beside `[identity] email`; the password is never
+stored. The one exception is for the machines, not players: a server
+**without a store** (`DATABASE_URL` unset — the bare dev server, every
+session ephemeral) has no accounts to check and seats anyone, and a
+server started with `SA_GUESTS=1` (the kind overlay) does too, so the
+harness fleet and the rigs keep joining with their made-up tokens.
+Production sets neither.
+
+**Account column** (left, ~40 %), a pure `Login` model beside the update
+model, testable in `-selftest`:
 
 | State | Column | PLAY |
 |---|---|---|
-| `Guest` | `ACCOUNT` header; `EMAIL`, `PASSWORD` (masked) fields; `SIGN IN`; the line `Playing as guest`; `No account? <site>` as a small dust line | enabled (per the update state) |
-| `SigningIn` | fields disabled, `SIGNING IN…` | unchanged |
-| `SignedIn(email)` | `SIGNED IN · name@host` (the email, shortened with `…` past the column width), `SIGN OUT` | unchanged |
-| `Failed(reason)` | the `Guest` column with the reason under the button: `WRONG EMAIL OR PASSWORD` (401), `TOO MANY TRIES · wait a moment` (429), `SITE UNREACHABLE` (anything else, detail in the log) | unchanged |
+| `SignedOut` | `ACCOUNT`; `EMAIL`, `PASSWORD` (masked); `SIGN IN` (primary), `CREATE ACCOUNT` (small); `Sign in to play` | **disabled** |
+| `Busy(what)` | fields disabled, `SIGNING IN…` / `CREATING ACCOUNT…` | disabled |
+| `SignedIn(name, email)` | `SIGNED IN · name` with the email in dust under it (shortened with `…` past the column); `SIGN OUT` | per the update state |
+| `Failed(reason)` | the `SignedOut` column with the reason under the buttons: `WRONG EMAIL OR PASSWORD` (401), `EMAIL ALREADY REGISTERED` (409), `PASSWORD TOO SHORT` (400), `TOO MANY TRIES · wait a moment` (429), `SITE UNREACHABLE` (anything else, detail in the log) | disabled |
 
 Rules:
 
-- **Remembered.** A successful sign-in writes the token (`SaveToken`,
-  the same `[identity] token` key the F1 panel writes) and the email to
-  `[identity] email`. The password is never stored. The next launch opens
-  in `SignedIn(email)` with no request made — the token IS the identity,
-  as it has been since Phase 1; a deleted account's token joins as a
-  fresh guest, as today (C57).
-- **Sign out** clears both keys. The next PLAY mints a fresh guest token
-  (today's first-run path). The old player is untouched and comes back
-  on the next sign-in.
-- **Signing in while signed in** (or over a guest with progress) is a
-  plain replace — the token changes, nothing is merged. Guest progress is
-  reachable by the site's import-token page, as before.
-- **Enter** in either field submits. The check is given the same 5 s as
-  the update check; longer is `Failed(SITE UNREACHABLE)`.
+- **PLAY = signed in AND the update state allows it.** Both gates, no
+  third.
+- **Remembered.** A successful sign-in or sign-up writes the token and
+  the email; the next launch opens in `SignedIn` with no request. If the
+  server then refuses the token on PLAY (`1008` — the account was
+  deleted), the game does not open: the launcher
+  comes back in `Failed(SIGNED OUT · sign in again)` with both keys
+  cleared.
+- **Password change** (on the site) does not sign remembered launchers
+  out — the player token is the row's key, and rotating it is a later
+  phase if it is ever wanted (Deferred table).
+- **Sign out** clears both keys. There is no guest to fall back to; PLAY
+  goes dark.
+- **Enter** in either field submits SIGN IN. Each request has the update
+  check's 5 s; longer is `Failed(SITE UNREACHABLE)`.
 - **Site URL** is the derived one (`Launcher.SiteUrl`), the same origin
   the server line polls.
-- **In the game** nothing changes: the HUD, F1 panel and reconnect path
-  are untouched; a token written by the launcher is indistinguishable
-  from one written by F1.
+- **In the game** F1 no longer opens anything; the game menu loses its
+  ACCOUNT row; the HUD, reconnect and in-session banner are untouched.
+  A rig run (`-token`, `-uiPlayAfter`) opens with the model in
+  `SignedIn("rig", "")` so PLAY is live.
 
-For photographs: `-uiLogin <guest|signingin|signedin|failed>` beside
-`-uiLauncher` forces the column into a state with a fake email.
+For photographs: `-uiLogin <signedout|busy|signedin|failed>` beside
+`-uiLauncher` forces the column into a state with a fake name and email.
 
 ### Character panel and backpack (Phase 11.7)
 

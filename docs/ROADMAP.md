@@ -854,6 +854,8 @@ a 128Mi pod on the first registration — is fixed and recorded. Still
 deliberately absent: password reset email (no SMTP exists; a locked-out
 account is admin-fixable via the store) and strict accounts-only join
 (coexistence rule stands).
+**2026-10-05:** Phase 16 ends the coexistence rule — accounts-only join,
+link codes and import removed; C55/C59 are history there.
 
 **Playable proof.** Visit `https://game.stevenholder.info/`: a landing page
 with live stats and how to get the client. Register with email + password.
@@ -1617,7 +1619,7 @@ installed build anyway.
 - **C152 Nothing else moved.** Sweep green; the account column is empty
   and the layout leaves it room.
 
-# Phase 16 — launcher login (2026-10-05)
+# Phase 16 — launcher login, accounts only (2026-10-05)
 
 ### Where Phase 16 stands (2026-10-05)
 
@@ -1626,75 +1628,107 @@ column reserved; the first update *through* the launcher was seen live
 (1.0.55 → 1.0.56, "looks good"), so the window is trusted enough to own
 identity too.
 
-Phase 7 built accounts that issue game identity, but the only way into
-one from the game is the F1 panel and a code minted on the site — fine
-for linking a second machine, wrong as the everyday door. This phase puts
-email + password in the launcher's left column; PLAY joins as the
-account's player. Contract: GDD "Launcher login (Phase 16)".
+Phase 7 built accounts that issue game identity and kept every other
+door open: anonymous tokens join as guests, the site mints link codes,
+the game's F1 panel redeems them, a guest's progress can be imported.
+That was the right call for a harness-driven build; it is the wrong
+shape for a game people sign up for. This phase puts sign-up and sign-in
+in the launcher's left column and **closes the other doors**: the only
+way into the world is an account, and a hello whose token belongs to no
+account is refused. Contract: GDD "Launcher login (Phase 16)".
 
 **Playable proof.** Launch the installed client. Left column: `EMAIL`,
-`PASSWORD`, `SIGN IN`, `Playing as guest`. Type the account from the
-site, press Enter: `SIGNED IN · steve@…`. PLAY — you are your account's
-player, credits and bags as the account page shows them. Quit, relaunch:
-still signed in, no prompt. `SIGN OUT`, PLAY: a fresh guest. A wrong
-password says so; the site being down says so and PLAY still works.
+`PASSWORD`, `SIGN IN`, `CREATE ACCOUNT`, `Sign in to play`; PLAY is dark.
+Create an account: `SIGNED IN · steve`, PLAY lights. PLAY — you are that
+account's player, credits and bags as the account page on the site shows
+them. Quit, relaunch: still signed in, no prompt. `SIGN OUT`: PLAY goes
+dark again. A wrong password says so; the site being down says so. Delete
+the account on the site, PLAY: the launcher comes back `SIGNED OUT · sign
+in again`.
 
 **Shape.** One new HTTP route and no wire change: `POST /api/game-login`
-`{email, password}` → `{token}` — `/api/login`'s password check fused
-with `/api/redeem`'s token mint, no web session minted (the launcher
-holds no cookie). The client stores the token where the F1 panel does and
-the email beside it; the password is never stored. The in-game path is
-untouched. The alternative — the launcher driving `/api/login` →
-`/api/link-code` → `/api/redeem` with a cookie jar — needs zero server
-lines but three round trips and a `web_session` row per launch that
-nothing logs out; the one route is smaller end to end.
+`{email, password}` → `{token, name}` — the site login's password check
+fused with the old `redeem`'s player mint, no web session. `hello` still
+carries the token; the server seats it only when `player.account_id` is
+set, else closes `1008`. Removed: `/api/link-code`, `/api/redeem`,
+`/api/import-token`, the `link_code` table, the site's mint/import
+section, the client's `AccountView`, `RedeemLinkCode`, the F1 binding and
+the menu row, and `ResolveToken`'s guest mint. Kept for the machines: a
+server without a store seats anyone (there is nothing to log into), and
+`SA_GUESTS=1` does the same on kind — the 26 harness tests that join with
+a made-up token, every rig flow and `make godot-run` are untouched, and
+the login bucket never sees a fleet. Production sets neither; a Go test
+and a strict-mode `t28` check prove the refusal.
+
+**Supersedes** Phase 7's coexistence rule (C59) and C55's link codes.
+Those rows stay in QA-STATUS as history; C156 below is the new truth.
 
 ### Wave 0 — contracts
 
-- Route: `POST /api/game-login`, body `{email, password}`, `X-Requested-With`
-  required, the login bucket (burst 5, 1 per 5 s per IP). 200 `{token}`;
-  401 `wrong email or password` (one code path, dummy-hash timing as
-  `login`); 429 from the bucket. The token is `AccountPlayerToken` or a
-  freshly minted owned player — `redeem`'s tail, lifted into one helper
-  both call.
-- Client config: `[identity] email` beside `[identity] token` in the
-  existing ConfigFile. Sign-out deletes both.
-- `Login` model (pure, in `UI/Launcher.cs`): `Guest`, `SigningIn`,
-  `SignedIn(email)`, `Failed(reason)`; events `Remembered(email)`,
-  `Submit`, `Ok(email)`, `Fail(status)`, `SignOut`; column text out.
-- No wire ids, no schema, no harness wire change (the HTTP harness `t28`
-  grows three checks).
+- Route: `POST /api/game-login`, body `{email, password}`,
+  `X-Requested-With` required, the login bucket (burst 5, 1 per 5 s per
+  IP). 200 `{token, name}`; 401 `wrong email or password` (one code path,
+  dummy-hash timing as `login`); 429 from the bucket. The token is
+  `AccountPlayerToken` or a freshly minted owned player — `redeem`'s
+  tail, lifted into `accountToken(ctx, accountID)`.
+- Join: `server.join` with a store and `SA_GUESTS` unset looks the token
+  up; a missing row or a NULL `account_id` → `closeCode(1008)`, no entity,
+  a `join.refused` counter on `/metrics`. Store absent or `SA_GUESTS=1` →
+  today's path. Nothing else about `hello` changes.
+- Schema: migration `005_drop_link_code.sql` (`DROP TABLE IF EXISTS
+  link_code`), both engines. `player.account_id` stays nullable: old guest
+  rows remain on disk, unreachable, until someone wants them gone.
+- Client config: `[identity] email` beside `[identity] token`. Sign-out
+  and a `1008` on PLAY delete both. `-token` still overrides for rigs and
+  puts the model in `SignedIn("rig", "")`.
+- `Login` model (pure, `UI/Launcher.cs`): `SignedOut`, `Busy(what)`,
+  `SignedIn(name, email)`, `Failed(reason)`; events `Remembered(name,
+  email)`, `Submit(what)`, `Ok(name, email)`, `Fail(status)`, `SignOut`,
+  `Refused`; column text and `PlayAllowed` out. `Launcher.PlayEnabled`
+  becomes `PlayEnabled && login.PlayAllowed` at the view.
+- No wire ids, no harness wire change (`t28` is the HTTP harness and is
+  rewritten around the new door).
 
 ### Task list
 
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
-| 1 | 1 | `accountToken(ctx, accountID)` helper lifted from `redeem`; `game-login` handler on it with `login`'s verify path; route registered under `mutating(limited(…))` | `server/internal/web/web.go` | `web_test.go`: right password → token = redeem's token for the same account; wrong → 401; absent email → 401 with the same body; tenth rapid call → 429 |
-| 2 | 1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → SigningIn; Ok → SignedIn with the email; Fail 401/429/other → the three reasons; SignOut → Guest) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
-| 3 | 1 | Account column in `LauncherView`: fields, SIGN IN / SIGN OUT, status line, site line; Enter submits; `SigningIn` disables the fields | `UI/Launcher.cs` | shots |
-| 4 | 1 | Boot: load `[identity] email` into the model at launcher open; `SignIn(email, pw)` = POST with a 5 s budget → `SaveToken` + save email → model `Ok`; `SignOut` clears both and makes `ResolveToken` mint fresh on PLAY; rig `-uiLogin <state>` with a fake email, shots `test/out/ui/p16-login-*.png` | `Boot.cs` | shots, `-uiPlayAfter` still `world ready` |
-| 5 | 2 | `t28`: after register, `game-login` with the password returns the same token `redeem` issued (C55's player, not a second one); wrong password 401; after delete, 401 | `test/t28-accounts.mjs` | `node test/t28-accounts.mjs` on kind |
-| 6 | 2 | Live on the Windows install: sign in, PLAY, the account page shows the same player; relaunch stays signed in; sign out → guest | manual | the record |
-| 7 | 2 | Record: QA-STATUS "Phase 16" | `docs/` | — |
+| 1 | 1 | `accountToken` lifted from `redeem`; `game-login` handler on it with `login`'s verify path; route under `mutating(limited(…))`; `/api/link-code`, `/api/redeem`, `/api/import-token` and their handlers gone; migration 005 | `server/internal/web/web.go`, `store/accounts.go`, `store/migrations/` | `web_test.go`: right password → token, twice → same token; wrong / unknown → 401 same body; tenth rapid → 429; the three old routes 404; store suite both engines |
+| 2 | 1 | Strict join: `srv.join` refuses a token with no owned row unless storeless or `SA_GUESTS=1`; `join.refused` metric | `server/internal/server/server.go`, `client.go`, `main.go` | Go test: strict server closes a guest hello with 1008 and seats an account token; `SA_GUESTS=1` seats both |
+| 3 | 1 | Site: account page loses mint + import; landing/login copy says the client signs you in | `server/internal/web/site/` | `t28` |
+| 4 | 1 | Deploy: `SA_GUESTS=1` in the kind server env; prod untouched (strict by default); RUNBOOK notes it | `deploy/manifests/10-server.yaml`, `docs/RUNBOOK.md` | `make up` + fleet |
+| 5 | 1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → Busy; Ok → SignedIn; Fail 401/409/400/429/other → the five reasons; SignOut and Refused → SignedOut with both keys cleared; PlayAllowed only in SignedIn) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
+| 6 | 1 | Account column in `LauncherView`: fields, SIGN IN / CREATE ACCOUNT / SIGN OUT, reason line; Enter submits; PLAY wired to both gates | `UI/Launcher.cs` | shots |
+| 7 | 1 | Boot: load `[identity] email` at launcher open; `SignIn` / `CreateAccount` with the 5 s budget → `SaveToken` + email → `Ok`; `SignOut` clears; a `1008` close before the first snapshot returns to the launcher in `Failed(SIGNED OUT …)` with keys cleared; `AccountView`, `RedeemLinkCode`, F1 and the menu row removed; `ResolveToken` never mints; rig `-uiLogin <state>`, shots `test/out/ui/p16-login-*.png` | `Boot.cs`, `UI/Panels.cs` | shots; `-uiPlayAfter 4 -quitAfter 11` → `world ready` |
+| 8 | 2 | `t28` rewritten: register → `game-login` → JOIN with the token → account page shows that player → `game-login` again = same token → wrong password 401 → password change (web session dies, token still joins) → delete → token refused (`SA_STRICT=1`) or joins fresh (kind); old routes 404 | `test/t28-accounts.mjs` | `node test/t28-accounts.mjs` on kind; `SA_STRICT=1` against a strict bare server with a store |
+| 9 | 2 | Live on the Windows install against prod: create account, PLAY, site shows the player; relaunch signed in; sign out → dark PLAY; delete on the site → `SIGNED OUT` on PLAY | manual | the record |
+| 10 | 2 | Record: QA-STATUS "Phase 16"; ROADMAP Phase 7 status notes the supersession; README client instructions | `docs/`, `README.md` | — |
 
 ### Acceptance criteria (C153–C157)
 
 - **C153 One door.** `POST /api/game-login` with a registered email and
-  password returns the account's player token — the same token a link
-  code redeems, so an account has one player whichever door it used. A
-  wrong password or unknown email is 401 with one body and the login
-  bucket applies.
-- **C154 The column.** The four states render per the GDD table (shots);
+  password returns the account's player token and name; twice returns
+  the same token (one player per account). A wrong password or unknown
+  email is 401 with one body; the login bucket applies. `/api/link-code`,
+  `/api/redeem` and `/api/import-token` are 404 and `link_code` is gone
+  from both engines.
+- **C154 Strict join.** On a server with a store and `SA_GUESTS` unset, a
+  hello whose token owns no account player is closed `1008` before any
+  spawn and counted; an account token joins as its player. Storeless or
+  `SA_GUESTS=1`: today's behaviour, and the full harness fleet passes
+  unchanged on kind.
+- **C155 The column.** The four states render per the GDD table (shots);
   transitions hold in `-selftest`; Enter submits; a request over 5 s or
-  thrown is `Failed(SITE UNREACHABLE)` and PLAY is unaffected.
-- **C155 Remembered.** Sign in, quit, relaunch: `SIGNED IN · email` with
-  no request; PLAY joins as that player. Sign out, PLAY: a fresh guest.
-  The password is nowhere on disk (grep the user:// config).
-- **C156 Coexistence.** Guest play unchanged; the F1 panel still links a
-  code; the full harness fleet passes unchanged; `t28` 28/28 with the
-  three new checks.
+  thrown is `Failed(SITE UNREACHABLE)`; PLAY is enabled only when signed
+  in and the update state allows it.
+- **C156 Remembered, and revocable.** Sign in, quit, relaunch: `SIGNED
+  IN · name` with no request; PLAY joins as that player. Sign out: PLAY
+  dark. Delete the account, PLAY: back to the launcher as `SIGNED OUT ·
+  sign in again`, both keys cleared. The password is nowhere on disk.
 - **C157 Nothing else moved.** Sweep green; C148–C152 still hold; the
-  launcher is still 560×360 and the status column did not shift.
+  launcher is still 560×360 and the status column did not shift; F1 does
+  nothing; the game menu has no ACCOUNT row; the site's account page has
+  no code or import.
 
 ## Deferred — and what would earn each one a place
 
@@ -1703,7 +1737,8 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Thing | Build it when |
 |---|---|
 | Sharding, delta snapshots, multiple server processes | one process actually saturates — measure first |
-| Real accounts (email/OAuth, sessions) | players other than us play it |
+| OAuth / password reset email | Phase 16 made accounts the only door; reset needs SMTP that does not exist |
+| Player-token rotation on password change (sign every launcher out) | someone's password leaks; the token is the player row's key, so rotation is a store change |
 | Managed/hosted Postgres, replicas, backups | deploying somewhere real — the DSN is already the only thing that changes |
 | Redis (cache, pub/sub, shared sessions) | a second server process needs to see the first one's state; until then the in-memory world is the cache and a function call is the bus |
 | Multiple planets / star systems | one planet has enough content to leave |
