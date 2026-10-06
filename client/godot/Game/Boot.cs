@@ -693,7 +693,8 @@ namespace SpaceAdventure.Game
             root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             _charsLayer.AddChild(root);
             // Positional, in the contract's order: play, new, create, cancel,
-            // sign out, retry, select, name, female, vanguard, hair prev, hair next.
+            // sign out, retry, select, name, female, vanguard, hair prev, hair next,
+            // then Phase 18's edit, save, delete, confirm delete, keep.
             _charsView = new CharactersView(root,
                 PlaySelected,
                 () => _chars.NewCharacter(),
@@ -706,7 +707,12 @@ namespace SpaceAdventure.Game
                 f => _chars.SetFemale(f),
                 v => _chars.SetVanguard(v),
                 () => _chars.PrevHair(),
-                () => _chars.NextHair());
+                () => _chars.NextHair(),
+                i => _chars.Edit(i),
+                () => _ = SaveCharacter(),
+                () => _chars.AskDelete(),
+                () => _ = DeleteCharacter(),
+                () => _chars.KeepIt());
             _charsView.Show(true);
             _stage = new CharacterStage(this, _assets);
             _charsView.OnStageDrag = dx => _stage?.Drag(dx);
@@ -881,6 +887,89 @@ namespace SpaceAdventure.Game
             }
         }
 
+        /// <summary>
+        /// SAVE in edit mode: PATCH /api/characters/&lt;token&gt; with both
+        /// {name, hair} (renaming to its own name is allowed, so sending the
+        /// unchanged one is harmless); 200 replaces the row, 400/404/409 show
+        /// the server's reason under the form.
+        /// </summary>
+        private async System.Threading.Tasks.Task SaveCharacter()
+        {
+            if (_createBusy || !_chars.CanSave) return;
+            _createBusy = true;
+            var chars = _chars;
+            CharacterRow editing = chars.Editing;
+            try
+            {
+                string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
+                string json = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["name"] = chars.Name,
+                    ["hair"] = chars.Hair,
+                }.ToString(Newtonsoft.Json.Formatting.None);
+                using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
+                using HttpRequestMessage req = AccountRequest(HttpMethod.Patch, site + "/api/characters/" + Uri.EscapeDataString(editing.Token), json, Identity("session"));
+                using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
+                string text = await resp.Content.ReadAsStringAsync(budget.Token);
+                if (!_selectUp || chars != _chars || chars.Editing != editing) return;
+                if ((int)resp.StatusCode == 401) { SessionRefused(); return; }
+                if (!resp.IsSuccessStatusCode)
+                {
+                    GD.Print($"select: save refused ({(int)resp.StatusCode} {text.Trim()})");
+                    chars.CreateFailed((int)resp.StatusCode, text.Trim());
+                    return;
+                }
+                CharacterRow row = ParseRow(Newtonsoft.Json.Linq.JObject.Parse(text));
+                chars.Saved(row);
+                GD.Print($"select: saved {row.Name} ({row.Hair})");
+            }
+            catch (Exception e)
+            {
+                GD.Print($"select: save unreachable ({e.GetType().Name})");
+                if (_selectUp && chars == _chars && chars.Editing == editing) chars.CreateFailed(0, "");
+            }
+            finally
+            {
+                _createBusy = false;
+            }
+        }
+
+        /// <summary>CONFIRM after DELETE: DELETE /api/characters/&lt;token&gt;; 200 removes the row.</summary>
+        private async System.Threading.Tasks.Task DeleteCharacter()
+        {
+            if (_createBusy || _chars.Editing == null || !_chars.Deleting) return;
+            _createBusy = true;
+            var chars = _chars;
+            CharacterRow editing = chars.Editing;
+            try
+            {
+                string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
+                using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
+                using HttpRequestMessage req = AccountRequest(HttpMethod.Delete, site + "/api/characters/" + Uri.EscapeDataString(editing.Token), null, Identity("session"));
+                using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
+                string text = await resp.Content.ReadAsStringAsync(budget.Token);
+                if (!_selectUp || chars != _chars || chars.Editing != editing) return;
+                if ((int)resp.StatusCode == 401) { SessionRefused(); return; }
+                if (!resp.IsSuccessStatusCode)
+                {
+                    GD.Print($"select: delete refused ({(int)resp.StatusCode} {text.Trim()})");
+                    chars.CreateFailed((int)resp.StatusCode, text.Trim());
+                    return;
+                }
+                chars.Deleted(editing.Token);
+                GD.Print($"select: deleted {editing.Name}");
+            }
+            catch (Exception e)
+            {
+                GD.Print($"select: delete unreachable ({e.GetType().Name})");
+                if (_selectUp && chars == _chars && chars.Editing == editing) chars.CreateFailed(0, "");
+            }
+            finally
+            {
+                _createBusy = false;
+            }
+        }
+
         /// <summary>PLAY in the select: the row's body on the local rig, its token saved, the stage gone, the connect.</summary>
         private void PlaySelected()
         {
@@ -941,6 +1030,15 @@ namespace SpaceAdventure.Game
                     _chars.SetFemale(true);
                     _chars.SetVanguard(true);
                     _chars.SetHair(Arg("-uiHair") ?? "hair.buns");   // -uiHair <id>: the form's hair for a shot
+                    break;
+                case "edit":   // Phase 18: the form in edit mode on fake row 0
+                    _chars.Loaded(rows);
+                    _chars.Edit(0);
+                    break;
+                case "delete": // Phase 18: the inline DELETE confirm
+                    _chars.Loaded(rows);
+                    _chars.Edit(0);
+                    _chars.AskDelete();
                     break;
                 case "empty": _chars.Loaded(new List<CharacterRow>()); break;
                 case "loading": break;
@@ -2694,6 +2792,54 @@ namespace SpaceAdventure.Game
             Check("chars: NewCharacter resets the hair", hr.Hair == "hair.buzzed");
             hr.CreateFailed(400, "bad hair");
             Check("chars: CreateFailed(400, bad hair) is BAD HAIR, still Create", hr.Reason == "BAD HAIR" && hr.Now == Characters.State.Create);
+            // Phase 18: edit and delete (GDD "Edit a character").
+            var ed = new Characters();
+            ed.Loaded(new List<CharacterRow>
+            {
+                new CharacterRow { Token = "t-k", Name = "Kade", Body = "char.ubc.f", Hair = "hair.long" },
+                new CharacterRow { Token = "t-t", Name = "Tam", Body = "char.player", Hair = "hair.none" },
+                new CharacterRow { Token = "t-v", Name = "Vex", Body = "char.player.f", Hair = "hair.buns" },
+            });
+            ed.Edit(0);
+            Check("chars: Edit(0) is Create prefilled from row 0, Editing set",
+                ed.Now == Characters.State.Create && ed.Editing == ed.Rows[0] && ed.Name == "Kade" && ed.Hair == "hair.long"
+                && ed.Female && ed.Vanguard && ed.Selected == 0);
+            Check("chars: edit mode stages the row's body and the form's hair", ed.StageBody == "char.ubc.f" && ed.StageHair == "hair.long");
+            Check("chars: unchanged edit is not Dirty, SAVE dark, CREATE dark", !ed.Dirty && !ed.CanSave && !ed.CanCreate);
+            ed.NextHair();
+            Check("chars: a hair change is Dirty, SAVE lit, staged live", ed.Dirty && ed.CanSave && ed.StageHair == "hair.buns");
+            ed.PrevHair();
+            Check("chars: hair back to the row's is clean again", !ed.Dirty && !ed.CanSave);
+            ed.SetName("Ka");
+            Check("chars: a bad name is Dirty but SAVE dark", ed.Dirty && !ed.CanSave);
+            ed.SetName("Kadence");
+            Check("chars: a good new name lights SAVE", ed.CanSave);
+            ed.CreateFailed(404, "no such character");
+            Check("chars: CreateFailed(404) is NO SUCH CHARACTER, still editing", ed.Reason == "NO SUCH CHARACTER" && ed.Editing != null && ed.Now == Characters.State.Create);
+            ed.Saved(new CharacterRow { Token = "t-k", Name = "Kadence", Body = "char.ubc.f", Hair = "hair.buns" });
+            Check("chars: Saved replaces the row in place, selected, List, Editing cleared",
+                ed.Now == Characters.State.List && ed.Rows.Count == 3 && ed.Selected == 0 && ed.Rows[0].Name == "Kadence"
+                && ed.StageHair == "hair.buns" && ed.Editing == null);
+            ed.Edit(1);
+            ed.Cancel();
+            Check("chars: Cancel clears Editing, List", ed.Editing == null && !ed.Deleting && ed.Now == Characters.State.List);
+            ed.Edit(1);
+            ed.AskDelete();
+            Check("chars: AskDelete asks", ed.Deleting && ed.Now == Characters.State.Create);
+            ed.KeepIt();
+            Check("chars: KeepIt keeps, still editing", !ed.Deleting && ed.Editing != null && ed.Now == Characters.State.Create);
+            ed.AskDelete();
+            ed.Deleted("t-t");
+            Check("chars: Deleted removes the row and selects the next",
+                ed.Now == Characters.State.List && ed.Rows.Count == 2 && ed.Rows[ed.Selected].Name == "Vex" && ed.Editing == null && !ed.Deleting);
+            ed.Edit(1);
+            ed.Deleted("t-v");
+            Check("chars: Deleted on the last row selects the previous", ed.Rows.Count == 1 && ed.Selected == 0 && ed.Rows[0].Name == "Kadence");
+            ed.Edit(0);
+            ed.Deleted("t-k");
+            Check("chars: Deleted on the only row opens Create", ed.Rows.Count == 0 && ed.Now == Characters.State.Create && ed.Editing == null && ed.Selected == -1);
+            ed.NewCharacter();
+            Check("chars: NewCharacter is not edit mode", ed.Editing == null && !ed.CanSave);
             Check("chars: a hair slot's item is its own asset, armor goes through items.json",
                 EntityViews.WornAsset(Defs.Empty, "hair.buns") == "hair.buns" && EntityViews.WornAsset(Defs.Empty, "armor.helmet.scout") == "");
             Check("chars: a player spawn's data splits on the first NUL",

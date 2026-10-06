@@ -1840,9 +1840,11 @@ fitted to its own head. Put a helmet on: the hair is gone.
 
 # Phase 18 — edit a character (2026-10-06)
 
-### Where Phase 18 stands (2026-10-06)
+### Where Phase 18 stands (2026-10-06, built)
 
-Drafted. Phase 16 shipped characters with no way to change one: the
+Built: C166–C169 recorded (docs/QA-STATUS.md "Phase 18"); t28 77 strict
+/ 76 guests. A PATCH is also applied to a live session (`Server.Retag`),
+else the next save undid it. Owed: SAVE/DELETE pressed on the install. Phase 16 shipped characters with no way to change one: the
 user's two prod characters are bald (`hair.none`) for good, and the
 Deferred table carried "character delete and rename" until a playtester
 asked. The playtester asked. Contract: GDD "Edit a character (Phase 18)".

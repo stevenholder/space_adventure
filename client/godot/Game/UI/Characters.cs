@@ -45,6 +45,11 @@ namespace SpaceAdventure.Game.UI
         public bool Vanguard { get; private set; }
         public string Hair { get; private set; } = DefaultHair;
 
+        /// <summary>The row the form edits (Phase 18), null when it creates.</summary>
+        public CharacterRow Editing { get; private set; }
+        /// <summary>DELETE was pressed: the form asks `DELETE &lt;NAME&gt;?` inline.</summary>
+        public bool Deleting { get; private set; }
+
         /// <summary>The list arrived: one or more pre-selects the first, none opens the form.</summary>
         public void Loaded(IReadOnlyList<CharacterRow> rows)
         {
@@ -76,6 +81,8 @@ namespace SpaceAdventure.Game.UI
 
         public void NewCharacter()
         {
+            Editing = null;
+            Deleting = false;
             Name = "";
             Female = false;
             Vanguard = false;
@@ -92,9 +99,75 @@ namespace SpaceAdventure.Game.UI
         public void NextHair() => Hair = HairStyles[(HairIndex(Hair) + 1) % HairStyles.Length].id;
         public void PrevHair() => Hair = HairStyles[(HairIndex(Hair) + HairStyles.Length - 1) % HairStyles.Length].id;
 
+        /// <summary>EDIT on row i: the form, prefilled, in edit mode (the body rows hidden).</summary>
+        public void Edit(int i)
+        {
+            if (i < 0 || i >= _rows.Count) return;
+            CharacterRow row = _rows[i];
+            Selected = i;
+            Editing = row;
+            Deleting = false;
+            Name = row.Name ?? "";
+            (Female, Vanguard) = ParseBody(row.Body);
+            Hair = string.IsNullOrEmpty(row.Hair) ? "hair.none" : row.Hair;
+            Reason = "";
+            Now = State.Create;
+        }
+
+        /// <summary>Edit mode: the name or the hair differs from the row.</summary>
+        public bool Dirty => Editing != null &&
+            (Name != (Editing.Name ?? "") || Hair != (string.IsNullOrEmpty(Editing.Hair) ? "hair.none" : Editing.Hair));
+
+        public void AskDelete() { if (Now == State.Create && Editing != null) Deleting = true; }
+        public void KeepIt() => Deleting = false;
+
+        /// <summary>The PATCH answered with the row: it replaces the edited one in place, selected.</summary>
+        public void Saved(CharacterRow row)
+        {
+            if (row != null)
+            {
+                int i = IndexOf(row.Token ?? Editing?.Token);
+                if (i < 0 && Editing != null) i = _rows.IndexOf(Editing);
+                if (i >= 0) { _rows[i] = row; Selected = i; }
+            }
+            Editing = null;
+            Deleting = false;
+            Reason = "";
+            Now = State.List;
+        }
+
+        /// <summary>The DELETE answered: the row goes, the next (or previous) is selected, none left opens the form.</summary>
+        public void Deleted(string token)
+        {
+            int i = IndexOf(token);
+            if (i >= 0) _rows.RemoveAt(i);
+            Editing = null;
+            Deleting = false;
+            Reason = "";
+            if (_rows.Count == 0)
+            {
+                Selected = -1;
+                NewCharacter();
+                return;
+            }
+            if (i >= 0) Selected = Math.Min(i, _rows.Count - 1);
+            else Selected = Math.Clamp(Selected, 0, _rows.Count - 1);
+            Now = State.List;
+        }
+
+        private int IndexOf(string token)
+        {
+            if (token == null) return -1;
+            for (int i = 0; i < _rows.Count; i++)
+                if (_rows[i].Token == token) return i;
+            return -1;
+        }
+
         /// <summary>Back to the list; with no rows PLAY simply stays dark.</summary>
         public void Cancel()
         {
+            Editing = null;
+            Deleting = false;
             Reason = "";
             Now = State.List;
         }
@@ -110,9 +183,10 @@ namespace SpaceAdventure.Game.UI
             Now = State.List;
         }
 
-        /// <summary>The POST answered `status` with `body`: the form stays, the reason under it.</summary>
+        /// <summary>The POST (or PATCH/DELETE) answered `status` with `body`: the form stays, the reason under it.</summary>
         public void CreateFailed(int status, string body)
         {
+            Deleting = false;
             string b = (body ?? "").ToLowerInvariant();
             Reason = status switch
             {
@@ -122,7 +196,8 @@ namespace SpaceAdventure.Game.UI
                 400 when b.Contains("bad body") => "BAD BODY",
                 400 when b.Contains("bad hair") => "BAD HAIR",
                 401 => "SIGNED OUT",
-                _ => "COULD NOT CREATE",
+                404 => "NO SUCH CHARACTER",
+                _ => Editing != null ? "COULD NOT SAVE" : "COULD NOT CREATE",
             };
             Now = State.Create;
         }
@@ -205,13 +280,15 @@ namespace SpaceAdventure.Game.UI
             return n >= 3 && n <= 16;
         }
 
-        public bool CanCreate => Now == State.Create && NameOk(Name);
+        public bool CanCreate => Now == State.Create && Editing == null && NameOk(Name);
+        public bool CanSave => Now == State.Create && Editing != null && Dirty && NameOk(Name);
         public bool CanPlay => Now == State.List && Selected >= 0 && Selected < _rows.Count;
         public bool CanNew => _rows.Count < MaxCharacters;
 
         /// <summary>The body the stage shows, or null for an empty stage.</summary>
         public string StageBody => Now switch
         {
+            State.Create when Editing != null => Editing.Body,
             State.Create => BodyId(Female, Vanguard),
             State.List when Selected >= 0 && Selected < _rows.Count => _rows[Selected].Body,
             _ => null,
@@ -251,11 +328,12 @@ namespace SpaceAdventure.Game.UI
         private readonly Action<int> _onSelect;
         private readonly Control _loading, _list, _create, _failed;
         private readonly VBoxContainer _rowsBox;
-        private readonly Button _new, _play, _signOut;
+        private readonly Button _new, _edit, _play, _signOut;
         private readonly LineEdit _name;
-        private readonly Button _male, _female, _colonist, _vanguard, _createBtn;
-        private readonly Label _createReason, _failReason, _hair;
-        private readonly Action _onCreate;
+        private readonly Button _male, _female, _colonist, _vanguard, _createBtn, _deleteBtn;
+        private readonly Label _createReason, _failReason, _hair, _confirmLine;
+        private readonly Control _bodyRows, _formButtons, _confirm;
+        private readonly Action _onCreate, _onSave;
         private Characters _model;
 
         private readonly List<(PanelContainer box, Label last, StyleBoxFlat frame)> _rowViews = new();
@@ -265,10 +343,12 @@ namespace SpaceAdventure.Game.UI
         public CharactersView(Control parent,
             Action onPlay, Action onNew, Action onCreate, Action onCancel, Action onSignOut, Action onRetry,
             Action<int> onSelect, Action<string> onName, Action<bool> onFemale, Action<bool> onVanguard,
-            Action onHairPrev, Action onHairNext)
+            Action onHairPrev, Action onHairNext,
+            Action<int> onEdit, Action onSave, Action onDelete, Action onConfirmDelete, Action onKeep)
         {
             _onSelect = onSelect;
             _onCreate = onCreate;
+            _onSave = onSave;
 
             // Full-rect and transparent; the right side passes the mouse on.
             _root = new Control { Name = "characters", MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -329,8 +409,14 @@ namespace SpaceAdventure.Game.UI
             _rowsBox = Styles.Column(12);
             list.AddChild(_rowsBox);
             list.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
+            // NEW CHARACTER grows; EDIT (Phase 18) beside it, fixed, on the selected row.
+            var newRow = Styles.Row(10);
             _new = Secondary("NEW CHARACTER", 20, 52, onNew);
-            list.AddChild(_new);
+            newRow.AddChild(Styles.Grow(_new));
+            _edit = Secondary("EDIT", 20, 52, () => { if (_model != null && _model.CanPlay) onEdit?.Invoke(_model.Selected); });
+            _edit.CustomMinimumSize = new Vector2(160, 52);
+            newRow.AddChild(_edit);
+            list.AddChild(newRow);
             _play = Primary("PLAY", 34, 84, onPlay);
             list.AddChild(_play);
             var outRow = Styles.Row(0);
@@ -365,29 +451,38 @@ namespace SpaceAdventure.Game.UI
                 _name.AddThemeStyleboxOverride(state, sb);
             }
             _name.TextChanged += s => onName?.Invoke(s);
-            _name.TextSubmitted += _ => { if (_model != null && _model.CanCreate) _onCreate?.Invoke(); };
+            _name.TextSubmitted += _ =>
+            {
+                if (_model == null) return;
+                if (_model.CanCreate) _onCreate?.Invoke();
+                else if (_model.CanSave) _onSave?.Invoke();
+            };
             create.AddChild(_name);
             create.AddChild(Styles.Gap(8));
 
-            create.AddChild(FieldLabel("GENDER"));
+            // GENDER and MODEL: hidden in edit mode (the body is fixed).
+            var bodyRows = Styles.Column(12);
+            _bodyRows = bodyRows;
+            create.AddChild(bodyRows);
+            bodyRows.AddChild(FieldLabel("GENDER"));
             var genders = Styles.Row(10);
             _male = Toggle("M", () => onFemale?.Invoke(false));
             _female = Toggle("F", () => onFemale?.Invoke(true));
             _male.CustomMinimumSize = _female.CustomMinimumSize = new Vector2(120, 56);
             genders.AddChild(_male);
             genders.AddChild(_female);
-            create.AddChild(genders);
-            create.AddChild(Styles.Gap(8));
+            bodyRows.AddChild(genders);
+            bodyRows.AddChild(Styles.Gap(8));
 
-            create.AddChild(FieldLabel("MODEL"));
+            bodyRows.AddChild(FieldLabel("MODEL"));
             var models = Styles.Row(10);
             _colonist = Toggle(Characters.ModelName(false), () => onVanguard?.Invoke(false));
             _vanguard = Toggle(Characters.ModelName(true), () => onVanguard?.Invoke(true));
             models.AddChild(Styles.Grow(_colonist));
             models.AddChild(Styles.Grow(_vanguard));
             _colonist.CustomMinimumSize = _vanguard.CustomMinimumSize = new Vector2(0, 56);
-            create.AddChild(models);
-            create.AddChild(Styles.Gap(8));
+            bodyRows.AddChild(models);
+            bodyRows.AddChild(Styles.Gap(8));
 
             // HAIR: ◀  LONG  ▶ -- the toggles' buttons, the style between them.
             create.AddChild(FieldLabel("HAIR"));
@@ -407,14 +502,42 @@ namespace SpaceAdventure.Game.UI
             create.AddChild(hairs);
 
             create.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-            _createBtn = Primary("CREATE", 34, 84, onCreate);
-            create.AddChild(_createBtn);
+            // The button row: CREATE (SAVE in edit mode), then CANCEL and,
+            // in edit mode, a small Danger DELETE on the far right.
+            var formButtons = Styles.Column(14);
+            _formButtons = formButtons;
+            create.AddChild(formButtons);
+            _createBtn = Primary("CREATE", 34, 84, () =>
+            {
+                if (_model?.Editing != null) _onSave?.Invoke();
+                else _onCreate?.Invoke();
+            });
+            formButtons.AddChild(_createBtn);
             var cancelRow = Styles.Row(0);
             var cancel = Secondary("CANCEL", 16, 40, onCancel);
             cancel.CustomMinimumSize = new Vector2(180, 40);
             cancelRow.AddChild(cancel);
-            create.AddChild(Styles.Gap(4));
-            create.AddChild(cancelRow);
+            cancelRow.AddChild(Styles.Grow(new Control { MouseFilter = Control.MouseFilterEnum.Ignore }));
+            _deleteBtn = Small(Styles.Button("DELETE", true, onDelete));
+            cancelRow.AddChild(_deleteBtn);
+            formButtons.AddChild(Styles.Gap(4));
+            formButtons.AddChild(cancelRow);
+
+            // DELETE asks once, inline, in the button row's place.
+            var confirm = Styles.Column(14);
+            _confirm = confirm;
+            create.AddChild(confirm);
+            _confirmLine = Styles.Display_("", 24, Styles.Danger);
+            _confirmLine.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            confirm.AddChild(_confirmLine);
+            var confirmRow = Styles.Row(10);
+            var yes = Styles.Button("CONFIRM", true, onConfirmDelete);
+            yes.AddThemeFontSizeOverride("font_size", 22);
+            yes.CustomMinimumSize = new Vector2(0, 56);
+            confirmRow.AddChild(Styles.Grow(yes));
+            var keep = Secondary("KEEP", 22, 56, onKeep);
+            confirmRow.AddChild(Styles.Grow(keep));
+            confirm.AddChild(confirmRow);
             _createReason = Styles.Display_("", 22, Styles.Danger);
             _createReason.CustomMinimumSize = new Vector2(0, 32);
             create.AddChild(_createReason);
@@ -456,6 +579,7 @@ namespace SpaceAdventure.Game.UI
                 case Characters.State.List:
                     SetRows(model);
                     Dis(_new, !model.CanNew);
+                    Dis(_edit, !model.CanPlay);
                     Dis(_play, !model.CanPlay);
                     break;
                 case Characters.State.Create:
@@ -466,12 +590,19 @@ namespace SpaceAdventure.Game.UI
                         _name.CaretColumn = Math.Min(caret, model.Name.Length);
                     }
                     if (entered) _name.CallDeferred(Control.MethodName.GrabFocus);
+                    bool editing = model.Editing != null;
+                    Vis(_bodyRows, !editing);
+                    Vis(_formButtons, !model.Deleting);
+                    Vis(_confirm, model.Deleting);
+                    Vis(_deleteBtn, editing);
+                    if (_createBtn.Text != (editing ? "SAVE" : "CREATE")) _createBtn.Text = editing ? "SAVE" : "CREATE";
+                    if (model.Deleting) Txt(_confirmLine, $"DELETE {(model.Editing?.Name ?? "").ToUpperInvariant()}? THIS CANNOT BE UNDONE");
                     Face(_male, !model.Female);
                     Face(_female, model.Female);
                     Face(_colonist, !model.Vanguard);
                     Face(_vanguard, model.Vanguard);
                     Txt(_hair, Characters.HairLabel(model.Hair));
-                    Dis(_createBtn, !model.CanCreate);
+                    Dis(_createBtn, editing ? !model.CanSave : !model.CanCreate);
                     Txt(_createReason, model.Reason);
                     break;
                 case Characters.State.Failed:
@@ -582,7 +713,15 @@ namespace SpaceAdventure.Game.UI
             return b;
         }
 
-        /// <summary>A steel button with cream text (NEW CHARACTER, SIGN OUT, CANCEL).</summary>
+        /// <summary>The form's small Danger DELETE, CANCEL's size.</summary>
+        private static Button Small(Button b)
+        {
+            b.AddThemeFontSizeOverride("font_size", 16);
+            b.CustomMinimumSize = new Vector2(180, 40);
+            return b;
+        }
+
+        /// <summary>A steel button with cream text (NEW CHARACTER, EDIT, SIGN OUT, CANCEL, KEEP).</summary>
         private static Button Secondary(string text, int size, int height, Action onPressed)
         {
             var b = Styles.Button(text, false, onPressed);

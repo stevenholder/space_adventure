@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,14 @@ func TestPasswordHashRoundTrip(t *testing.T) {
 }
 
 func newTestSite(t *testing.T) (*httptest.Server, *store.Store) {
+	t.Helper()
+	ts, s, _ := newTestSiteH(t)
+	return ts, s
+}
+
+// newTestSiteH is newTestSite with the Handler, for a test that sets Kick
+// or Retag before its first request.
+func newTestSiteH(t *testing.T) (*httptest.Server, *store.Store, *Handler) {
 	t.Helper()
 	// TEST_DATABASE_URL (make test-pg's) runs this suite on Postgres too;
 	// the tables are emptied per test since the database is shared.
@@ -70,7 +79,7 @@ func newTestSite(t *testing.T) (*httptest.Server, *store.Store) {
 	h.Mount(mux)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
-	return ts, s
+	return ts, s, h
 }
 
 // client with a cookie jar and the CSRF header.
@@ -506,5 +515,146 @@ func TestOldRoutesGone(t *testing.T) {
 		if r := c.post(p, map[string]string{}, true); r.StatusCode != http.StatusNotFound {
 			t.Fatalf("%s = %d", p, r.StatusCode)
 		}
+	}
+}
+
+// Phase 18: PATCH and DELETE /api/characters/<token> (C166–C168).
+func TestEditCharacter(t *testing.T) {
+	ctx := context.Background()
+	ts, st, h := newTestSiteH(t)
+	var kicked [][]string
+	h.Kick = func(tokens []string) { kicked = append(kicked, slices.Clone(tokens)) }
+	var retagged []string
+	h.Retag = func(token, name, hair string) { retagged = append(retagged, token+"|"+name+"|"+hair) }
+
+	login := func(email, ip string) (*site, string) {
+		jar, _ := newJar()
+		c := &site{t: t, ts: ts, c: &http.Client{Jar: jar}, ip: ip}
+		if r := c.post("/api/register", credsReq{email, "longenough"}, true); r.StatusCode != 200 {
+			t.Fatalf("register %s = %d", email, r.StatusCode)
+		}
+		return c, gameLogin(t, c, email, "longenough")
+	}
+	c, sid := login("pilot@x.com", "10.0.0.1")
+	c2, sidB := login("other@x.com", "10.0.0.2")
+	create := func(c *site, sid, name string) charRow {
+		r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": name, "body": "char.ubc.f"})
+		if r.StatusCode != 200 {
+			t.Fatalf("create %s = %d %s", name, r.StatusCode, body(t, r))
+		}
+		var row charRow
+		decode(t, r, &row)
+		time.Sleep(2 * time.Millisecond) // list order is created_ms
+		return row
+	}
+	kade := create(c, sid, "Kade")
+	ash := create(c, sid, "Ash")
+	nova := create(c2, sidB, "Nova")
+
+	patch := func(sid, token string, req map[string]string) (int, string) {
+		r := c.bearerReq("PATCH", "/api/characters/"+token, sid, req)
+		return r.StatusCode, body(t, r)
+	}
+
+	// Rename + hair on an own token: the row comes back, the list shows it,
+	// the body is untouched, and a live session is retagged.
+	code, got := patch(sid, kade.Token, map[string]string{"name": "Kadence", "hair": "hair.buns"})
+	var row charRow
+	if code != 200 || json.Unmarshal([]byte(got), &row) != nil ||
+		row.Token != kade.Token || row.Name != "Kadence" || row.Hair != "hair.buns" || row.Body != "char.ubc.f" {
+		t.Fatalf("patch kade = %d %s", code, got)
+	}
+	if rows := listChars(t, c, sid); len(rows) != 2 || rows[0].Name != "Kadence" || rows[0].Hair != "hair.buns" {
+		t.Fatalf("list after patch = %+v", rows)
+	}
+	if !slices.Equal(retagged, []string{kade.Token + "|Kadence|hair.buns"}) {
+		t.Fatalf("retagged %v", retagged)
+	}
+	if p, _ := st.GetPlayer(ctx, kade.Token); p == nil || p.AccountID == "" || p.Credits != 1000 {
+		t.Fatalf("row after patch = %+v", p)
+	}
+	// Hair only; then its own name in another case.
+	if code, got := patch(sid, kade.Token, map[string]string{"hair": "hair.long"}); code != 200 || !strings.Contains(got, `"name":"Kadence"`) {
+		t.Fatalf("hair only = %d %s", code, got)
+	}
+	if code, got := patch(sid, kade.Token, map[string]string{"name": "KADENCE"}); code != 200 || !strings.Contains(got, `"name":"KADENCE"`) {
+		t.Fatalf("own name re-cased = %d %s", code, got)
+	}
+
+	for _, tc := range []struct {
+		sid, token string
+		req        map[string]string
+		code       int
+		msg        string
+	}{
+		{sid, kade.Token, map[string]string{"name": "nova"}, 409, "name taken"}, // another account's
+		{sid, kade.Token, map[string]string{"name": "ash"}, 409, "name taken"},  // a sibling's
+		{sid, kade.Token, map[string]string{"name": "K"}, 400, "bad name"},
+		{sid, kade.Token, map[string]string{"name": "Kade!"}, 400, "bad name"},
+		{sid, kade.Token, map[string]string{"hair": "hair.nope"}, 400, "bad hair"},
+		{sid, nova.Token, map[string]string{"name": "Mine"}, 404, "no such character"},
+		{sid, "0123456789abcdef0123456789abcdef", map[string]string{"name": "Mine"}, 404, "no such character"},
+		{"", kade.Token, map[string]string{"name": "Mine"}, 401, "not logged in"},
+	} {
+		if code, got := patch(tc.sid, tc.token, tc.req); code != tc.code || got != tc.msg {
+			t.Fatalf("patch %s %v = %d %q, want %d %q", tc.token, tc.req, code, got, tc.code, tc.msg)
+		}
+	}
+	if p, _ := st.GetPlayer(ctx, nova.Token); p == nil || p.Name != "Nova" {
+		t.Fatalf("Nova after foreign patch = %+v", p)
+	}
+	if p, _ := st.GetPlayer(ctx, kade.Token); p == nil || p.Name != "KADENCE" || p.Hair != "hair.long" {
+		t.Fatalf("Kade after refused patches = %+v", p)
+	}
+	// No CSRF header: 403, like every mutating route.
+	req, _ := http.NewRequest("PATCH", ts.URL+"/api/characters/"+kade.Token, strings.NewReader(`{"name":"Csrf"}`))
+	req.Header.Set("Authorization", "Bearer "+sid)
+	if r, err := http.DefaultClient.Do(req); err != nil || r.StatusCode != 403 {
+		t.Fatalf("patch without X-Requested-With = %v %v", r, err)
+	}
+	if r := c.bearerReq("POST", "/api/characters/"+kade.Token, sid, map[string]string{}); r.StatusCode != 405 {
+		t.Fatalf("POST on a token = %d", r.StatusCode)
+	}
+
+	del := func(c *site, sid, token string) (int, string) {
+		r := c.bearerReq("DELETE", "/api/characters/"+token, sid, nil)
+		return r.StatusCode, body(t, r)
+	}
+	// Another account's token: 404, the row stays, nobody kicked.
+	if code, got := del(c, sid, nova.Token); code != 404 || got != "no such character" {
+		t.Fatalf("delete foreign = %d %q", code, got)
+	}
+	if p, _ := st.GetPlayer(ctx, nova.Token); p == nil {
+		t.Fatal("foreign delete removed Nova")
+	}
+	if len(kicked) != 0 {
+		t.Fatalf("kicked %v before any delete", kicked)
+	}
+	// Own: 200, the list shrinks, the row is gone, exactly [token] kicked.
+	if code, got := del(c, sid, kade.Token); code != 200 || got != `{"ok":true}` {
+		t.Fatalf("delete kade = %d %q", code, got)
+	}
+	if rows := listChars(t, c, sid); len(rows) != 1 || rows[0].Token != ash.Token {
+		t.Fatalf("list after delete = %+v", rows)
+	}
+	if p, _ := st.GetPlayer(ctx, kade.Token); p != nil {
+		t.Fatalf("kade's row survived: %+v", p)
+	}
+	if len(kicked) != 1 || !slices.Equal(kicked[0], []string{kade.Token}) {
+		t.Fatalf("kicked %v, want [[%s]]", kicked, kade.Token)
+	}
+	if code, _ := del(c, sid, kade.Token); code != 404 {
+		t.Fatalf("delete again = %d", code)
+	}
+	if code, _ := patch(sid, kade.Token, map[string]string{"name": "Ghost"}); code != 404 {
+		t.Fatalf("patch deleted = %d", code)
+	}
+	// The other account is untouched; deleting its own works for it.
+	if rows := listChars(t, c2, sidB); len(rows) != 1 || rows[0].Name != "Nova" {
+		t.Fatalf("other account's list = %+v", rows)
+	}
+	// The deleted name is free again.
+	if r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": "Kadence", "body": "char.ubc"}); r.StatusCode != 200 {
+		t.Fatalf("re-create freed name = %d", r.StatusCode)
 	}
 }

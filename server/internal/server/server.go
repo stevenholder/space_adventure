@@ -1040,6 +1040,28 @@ func (s *Server) Kick(tokens []string) {
 	}
 }
 
+// Retag points every live session of token at its edited row (Phase 18):
+// without it, the session's next save writes the old name and hair back
+// over the web edit. Blocks while an in-flight save finishes, so a save
+// that snapshotted the old values has landed by the time it returns; the
+// caller writes the edit once more after it.
+func (s *Server) Retag(token, name, hair string) {
+	if token == "" {
+		return
+	}
+	var hit []*client
+	s.mu.Lock()
+	for _, c := range s.clients {
+		if c.ident != nil && c.ident.token == token {
+			hit = append(hit, c)
+		}
+	}
+	s.mu.Unlock()
+	for _, c := range hit {
+		c.ident.retag(name, hair)
+	}
+}
+
 func (s *Server) leave(c *client) {
 	s.mu.Lock()
 	if c.entity == nil {
