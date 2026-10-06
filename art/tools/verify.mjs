@@ -8,6 +8,8 @@
  *   3. the triangle count is within the id-class budget
  *        char.* <= 1500, ship.* <= 2000, prop.* <= 500
  *        (see BUDGETS below for the current table; tool.* is a hand tool)
+ *   3b. every embedded image is <= TEXTURE_MAX px a side, a body glb
+ *       (char.* / npc.*) <= BODY_BYTES
  *   4. the node-name contract holds:
  *        char.player -> eye, head, torso, arm.l, arm.r, leg.l, leg.r
  *                       (eye and head must be siblings: the client hides
@@ -233,6 +235,50 @@ function loadGlb(file) {
   });
 }
 
+// Texture budgets. Every embedded image is at most TEXTURE_MAX px on a side
+// (the Colonist's baked face atlas is 2048; the UBC bodies' maps are scaled to
+// 1024 at build), and a body glb (char.* / npc.*) stays under BODY_BYTES --
+// the baked face and normal maps added ~0.4 MB to each Colonist (2.1 -> 2.6
+// MB). Like the triangle budgets: raising one is a decision.
+const TEXTURE_MAX = 2048;
+const BODY_BYTES = 8 * 1024 * 1024;
+
+/** [width, height] of a PNG or JPEG in a buffer, or null. */
+function imageSize(b) {
+  if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc)
+        return [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)];
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+
+/** Problems with a glb's embedded images and size. */
+function textureProblems(asset) {
+  const buf = readFileSync(path.join(artDir, asset.file));
+  const out = [];
+  if (/^(char|npc)\./.test(asset.id) && buf.length > BODY_BYTES)
+    out.push(`${(buf.length / 1048576).toFixed(1)} MB exceeds body budget ${BODY_BYTES / 1048576} MB`);
+  if (buf.readUInt32LE(0) !== 0x46546c67) return out;
+  const jlen = buf.readUInt32LE(12);
+  const json = JSON.parse(buf.subarray(20, 20 + jlen).toString("utf8"));
+  const bin = buf.subarray(20 + jlen + 8);
+  for (const [i, img] of (json.images ?? []).entries()) {
+    if (img.bufferView === undefined) continue;
+    const bv = json.bufferViews[img.bufferView];
+    const size = imageSize(bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength));
+    if (size && Math.max(...size) > TEXTURE_MAX)
+      out.push(`image ${img.name ?? i} ${size[0]}x${size[1]} exceeds ${TEXTURE_MAX} px`);
+  }
+  return out;
+}
+
 const failures = [];
 const rows = [];
 
@@ -293,6 +339,7 @@ for (const asset of selected) {
   }
 
 
+  problems.push(...textureProblems(asset));
   if (tris !== asset.tris)
     problems.push(`manifest tris ${asset.tris} != counted ${tris}`);
   if (tris > budget)

@@ -160,14 +160,55 @@ same 9000-tri ceiling.
   ~8900, the suited torso and legs coarse.
 - **Collar**: the neck is cut along a plane (`collar()`, bmesh bisect) so the
   undersuit's edge is a clean line.
-- **Eyebrows**: Quaternius `Eyebrows_Regular` / `Eyebrows_Female`, refitted
-  by `refit()`: scaled by the eyes' spacing (across, by the forehead's
-  width), lifted 4 mm (more at the inner ends), then every vertex keeps the
-  height it had above the UBC skin, measured above THIS skin along its
-  normal, with the corrections smoothed over the mesh. Joined into `head`
-  on the head bone, material `hair`, so the local player never sees them
-  and a helmet's `covers: head/hair` hides them. The UBC bodies' own brows
-  wear the same tinted `hair` material.
+- **Eyebrows**: Quaternius `Eyebrows_Female` on BOTH Colonists, less its
+  eyeliner wings (loose parts that never reach 12 mm above the eyes; the
+  male `Eyebrows_Regular` ended in an upturned clump at the temple and read
+  stern, and `Eyebrows_Female` with its liner read made-up). Refitted by
+  `refit()`: scaled by the eyes' spacing (across, by the forehead's width;
+  the male 1.4x thicker), lifted (`brow_lift`, 6 mm F / 5 mm M), the inner
+  ends raised a little (`brow_flat`), the outer tails thinned toward the
+  brow's midline (`brow_tail`), and every vertex held within 1.8x the
+  brow's median half-thickness under its top edge (`brow_clamp`: the inner
+  end hooked down toward the nose). Then every vertex keeps the height it
+  had above the UBC skin, measured above THIS skin along its normal, at
+  least 1.5 mm off it (0.8 mm let the skin show through in patches).
+  Joined into `head` on the head bone, material `hair`, so the local player
+  never sees them and a helmet's `covers: head/hair` hides them. The UBC
+  bodies' own brows wear the same tinted `hair` material.
+- **Eyes**: MPFB `eyes/*-eye-height2-incr` (0.45 M / 0.4 F) and
+  `*-eye-scale-incr` 0.15 open the lids; the eyeball sphere's radius is the
+  helper's mean radius x `EYEBALL_FIT` (0.926: the helper includes a cornea
+  bulge). The spheres get an azimuthal UV (front pole at the centre) and one
+  512 px texture (`skin.eye_image`): pupil, striated iris in the variant's
+  `eye` colour (brown M, hazel-green F) with a lighter collarette and a dark
+  limbal ring, white sclera, on both `eye` and `sclera` (roughness 0.08 /
+  0.18 -- distinct, or import_pack's dedup() merges them and the head's
+  surface list changes).
+- **Ears**: decimation weight 0.04 (`LOD_WEIGHT["ear"]`, MakeHuman's `ears`
+  group), then `smooth_ears()` relaxes the ear's inner vertices twice: the
+  decimated concha was a few big triangles that faceted under a key light.
+  The painted AO carries the folds.
+- **Painted skin** (`tools/bpy/skin.py`, `lod` variants only): on the
+  FULL-resolution mesh, before decimation, the skin faces' MakeHuman UV
+  islands are packed alone into the unit square (decimation carries the
+  UVs). Per-vertex masks -- the `lips` group feathered over the mesh, warm
+  nose / cheeks / ears / chin (soft blobs round landmarks found from the
+  eyes), eye sockets, the lid margin (skin resting on the eyeball inside the
+  front cone, feathered over the lid: the lash line), a faint beard and
+  scalp-stubble shadow on the male -- are mixed into colour attributes and
+  baked with Cycles (EMIT) into a 2048 px atlas, an ambient-occlusion bake
+  (10 cm reach: nostrils, sockets, ear folds) multiplied in (not across the
+  lips: their seam read as an open mouth), plus low-frequency blotches and
+  fine pores. After the brows are fitted their footprint is splatted in as
+  a soft shadow. A tangent-space normal map is baked from the dense skin
+  onto the decimated head (selected-to-active, 2 mm cage), flattened on the
+  lip seam and the ears (rays there hit the wrong fold). Both maps are JPEG
+  (q90) in `build/tex/` and packed into the glb; the export writes tangents
+  for `lod` variants. Costs: +~0.43 MB per Colonist glb (2.13 -> 2.56 MB).
+  No MPFB skin textures are used (its masks ship under the GPL with the
+  add-on); everything is derived from the CC0 base mesh.
+- **Texture budget** (verify.mjs): every embedded image <= 2048 px a side,
+  every body glb (`char.*`, `npc.*`) <= 8 MB.
 - **Hair material**: the pack's strand textures are greyscale (the pack
   tints them in its own shader; raw they draw white). `hair_material()`
   multiplies the texture (256 px) by `HAIR_TINT`, exported as

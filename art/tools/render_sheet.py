@@ -13,7 +13,8 @@ EEVEE with a key/fill/rim rig, so a brow ridge or a cheekbone shows as
 light and shadow, and material factors (a tinted hair texture) render as
 the game draws them. Prints each group's eye height and bounds.
 
-Env: SHEET_TILE (px, default 400); SHEET_FACE (close-up width, m, default
+Env: SHEET_ONLY=faces renders just the close-ups (front, three-quarter,
+side) in one row per group -- the texture pass's sheet; SHEET_TILE (px, default 400); SHEET_FACE (close-up width, m, default
 0.34) and SHEET_FACE_DZ (its centre above the eye, default 0.02).
 """
 import math
@@ -115,6 +116,15 @@ for i, objs in enumerate(loaded):
     ez = eye.matrix_world.translation.z if eye else 1.7
     print(f"GROUP {i} {groups[i][0]} eye {ez:.3f}")
     full, faces = [], []
+    if os.environ.get("SHEET_ONLY") == "faces":
+        for name in ("front", "q34", "side"):
+            p = f"{tmp}/{i}_face_{name}.png"
+            floor.hide_render = True
+            shoot(p, (0, 0.0, ez + float(os.environ.get("SHEET_FACE_DZ", "0.02"))), VIEWS[name],
+                  float(os.environ.get("SHEET_FACE", "0.34")), T, T)
+            faces.append(load(p))
+        rows.append(np.concatenate(faces, axis=1))
+        continue
     for name, d in VIEWS.items():
         p = f"{tmp}/{i}_{name}.png"
         shoot(p, (0, 0, 0.98), d, 2.05, T, 2 * T)
