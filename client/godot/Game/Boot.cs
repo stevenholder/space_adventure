@@ -709,6 +709,9 @@ namespace SpaceAdventure.Game
                 () => _chars.NextHair());
             _charsView.Show(true);
             _stage = new CharacterStage(this, _assets);
+            _charsView.OnStageDrag = dx => _stage?.Drag(dx);
+            _charsView.OnExit = () => GetTree().Quit(0);
+            _sun.Visible = false; // the world is not built; the Sun's shadow cascades only striped the stage
             _stageBody = _stageHair = null;
             _selectUp = true;
             GD.Print("select: open");
@@ -745,6 +748,7 @@ namespace SpaceAdventure.Game
         private void CloseSelect()
         {
             _selectUp = false;
+            _sun.Visible = true;
             _stage?.Free();
             _stage = null;
             _charsView?.Show(false);
