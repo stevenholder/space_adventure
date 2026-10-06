@@ -1617,6 +1617,85 @@ installed build anyway.
 - **C152 Nothing else moved.** Sweep green; the account column is empty
   and the layout leaves it room.
 
+# Phase 16 — launcher login (2026-10-05)
+
+### Where Phase 16 stands (2026-10-05)
+
+Drafted. Nothing built. Phase 15's launcher shipped with its account
+column reserved; the first update *through* the launcher was seen live
+(1.0.55 → 1.0.56, "looks good"), so the window is trusted enough to own
+identity too.
+
+Phase 7 built accounts that issue game identity, but the only way into
+one from the game is the F1 panel and a code minted on the site — fine
+for linking a second machine, wrong as the everyday door. This phase puts
+email + password in the launcher's left column; PLAY joins as the
+account's player. Contract: GDD "Launcher login (Phase 16)".
+
+**Playable proof.** Launch the installed client. Left column: `EMAIL`,
+`PASSWORD`, `SIGN IN`, `Playing as guest`. Type the account from the
+site, press Enter: `SIGNED IN · steve@…`. PLAY — you are your account's
+player, credits and bags as the account page shows them. Quit, relaunch:
+still signed in, no prompt. `SIGN OUT`, PLAY: a fresh guest. A wrong
+password says so; the site being down says so and PLAY still works.
+
+**Shape.** One new HTTP route and no wire change: `POST /api/game-login`
+`{email, password}` → `{token}` — `/api/login`'s password check fused
+with `/api/redeem`'s token mint, no web session minted (the launcher
+holds no cookie). The client stores the token where the F1 panel does and
+the email beside it; the password is never stored. The in-game path is
+untouched. The alternative — the launcher driving `/api/login` →
+`/api/link-code` → `/api/redeem` with a cookie jar — needs zero server
+lines but three round trips and a `web_session` row per launch that
+nothing logs out; the one route is smaller end to end.
+
+### Wave 0 — contracts
+
+- Route: `POST /api/game-login`, body `{email, password}`, `X-Requested-With`
+  required, the login bucket (burst 5, 1 per 5 s per IP). 200 `{token}`;
+  401 `wrong email or password` (one code path, dummy-hash timing as
+  `login`); 429 from the bucket. The token is `AccountPlayerToken` or a
+  freshly minted owned player — `redeem`'s tail, lifted into one helper
+  both call.
+- Client config: `[identity] email` beside `[identity] token` in the
+  existing ConfigFile. Sign-out deletes both.
+- `Login` model (pure, in `UI/Launcher.cs`): `Guest`, `SigningIn`,
+  `SignedIn(email)`, `Failed(reason)`; events `Remembered(email)`,
+  `Submit`, `Ok(email)`, `Fail(status)`, `SignOut`; column text out.
+- No wire ids, no schema, no harness wire change (the HTTP harness `t28`
+  grows three checks).
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | `accountToken(ctx, accountID)` helper lifted from `redeem`; `game-login` handler on it with `login`'s verify path; route registered under `mutating(limited(…))` | `server/internal/web/web.go` | `web_test.go`: right password → token = redeem's token for the same account; wrong → 401; absent email → 401 with the same body; tenth rapid call → 429 |
+| 2 | 1 | `Login` model + `-selftest` transitions (Remembered → SignedIn; Submit → SigningIn; Ok → SignedIn with the email; Fail 401/429/other → the three reasons; SignOut → Guest) | `client/godot/Game/UI/Launcher.cs` | `-selftest` |
+| 3 | 1 | Account column in `LauncherView`: fields, SIGN IN / SIGN OUT, status line, site line; Enter submits; `SigningIn` disables the fields | `UI/Launcher.cs` | shots |
+| 4 | 1 | Boot: load `[identity] email` into the model at launcher open; `SignIn(email, pw)` = POST with a 5 s budget → `SaveToken` + save email → model `Ok`; `SignOut` clears both and makes `ResolveToken` mint fresh on PLAY; rig `-uiLogin <state>` with a fake email, shots `test/out/ui/p16-login-*.png` | `Boot.cs` | shots, `-uiPlayAfter` still `world ready` |
+| 5 | 2 | `t28`: after register, `game-login` with the password returns the same token `redeem` issued (C55's player, not a second one); wrong password 401; after delete, 401 | `test/t28-accounts.mjs` | `node test/t28-accounts.mjs` on kind |
+| 6 | 2 | Live on the Windows install: sign in, PLAY, the account page shows the same player; relaunch stays signed in; sign out → guest | manual | the record |
+| 7 | 2 | Record: QA-STATUS "Phase 16" | `docs/` | — |
+
+### Acceptance criteria (C153–C157)
+
+- **C153 One door.** `POST /api/game-login` with a registered email and
+  password returns the account's player token — the same token a link
+  code redeems, so an account has one player whichever door it used. A
+  wrong password or unknown email is 401 with one body and the login
+  bucket applies.
+- **C154 The column.** The four states render per the GDD table (shots);
+  transitions hold in `-selftest`; Enter submits; a request over 5 s or
+  thrown is `Failed(SITE UNREACHABLE)` and PLAY is unaffected.
+- **C155 Remembered.** Sign in, quit, relaunch: `SIGNED IN · email` with
+  no request; PLAY joins as that player. Sign out, PLAY: a fresh guest.
+  The password is nowhere on disk (grep the user:// config).
+- **C156 Coexistence.** Guest play unchanged; the F1 panel still links a
+  code; the full harness fleet passes unchanged; `t28` 28/28 with the
+  three new checks.
+- **C157 Nothing else moved.** Sweep green; C148–C152 still hold; the
+  launcher is still 560×360 and the status column did not shift.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.

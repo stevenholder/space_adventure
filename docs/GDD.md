@@ -1389,7 +1389,7 @@ on Windows: the corner during a hook-shaped run shows only the desktop.
 | Region | Content |
 |---|---|
 | Header | `SPACE ADVENTURE`, the build label (`v1.0.41 · 3cbd797` / `dev · 3cbd797`) right-aligned |
-| Account column (left, ~40 %) | **reserved, empty** — the login (email + password against the site's `/api/login`) lands here in a later phase; nothing is drawn now beyond the panel frame |
+| Account column (left, ~40 %) | reserved and empty in Phase 15; the sign-in column of "Launcher login (Phase 16)" below |
 | Status column (right) | the update line and its progress bar; the server line; `PLAY` (wide, primary) and `QUIT` (small) underneath |
 
 **Update line, binding states** (the launcher model is a pure state
@@ -1429,6 +1429,59 @@ new `-play` flag for a human who wants straight in. `make godot-run` /
 photographs: `-uiShot … -uiLauncher <state>` forces the launcher into
 one of the states above (with a fake version and a fake server line) so
 each one has a shot in `test/out/ui/`.
+
+### Launcher login (Phase 16)
+
+Phase 15 reserved the launcher's left column. This fills it: email +
+password in the launcher, and PLAY joins as the account's player. The F1
+link-code panel in the game stays as it is (the site still mints codes;
+a second machine can still be linked that way). PLAY is never gated on
+being signed in — the coexistence rule (Phase 7) stands: a guest plays
+with the anonymous token exactly as today.
+
+**One call.** `POST /api/game-login` `{email, password}` → `{token}`. It
+is `/api/login` and `/api/redeem` fused for the client: verify the
+password (same argon2id path, same dummy-hash timing rule, same per-IP
+bucket as login), then the account's player token — the existing one, or
+a fresh owned player minted exactly as a redeemed code would. No web
+session is created: the launcher never holds a cookie, so there is
+nothing to log out of on the server. `X-Requested-With` required like
+every mutating route.
+
+**Account column** (left, ~40 %), three states of a pure `Login` model
+beside the update model, testable in `-selftest`:
+
+| State | Column | PLAY |
+|---|---|---|
+| `Guest` | `ACCOUNT` header; `EMAIL`, `PASSWORD` (masked) fields; `SIGN IN`; the line `Playing as guest`; `No account? <site>` as a small dust line | enabled (per the update state) |
+| `SigningIn` | fields disabled, `SIGNING IN…` | unchanged |
+| `SignedIn(email)` | `SIGNED IN · name@host` (the email, shortened with `…` past the column width), `SIGN OUT` | unchanged |
+| `Failed(reason)` | the `Guest` column with the reason under the button: `WRONG EMAIL OR PASSWORD` (401), `TOO MANY TRIES · wait a moment` (429), `SITE UNREACHABLE` (anything else, detail in the log) | unchanged |
+
+Rules:
+
+- **Remembered.** A successful sign-in writes the token (`SaveToken`,
+  the same `[identity] token` key the F1 panel writes) and the email to
+  `[identity] email`. The password is never stored. The next launch opens
+  in `SignedIn(email)` with no request made — the token IS the identity,
+  as it has been since Phase 1; a deleted account's token joins as a
+  fresh guest, as today (C57).
+- **Sign out** clears both keys. The next PLAY mints a fresh guest token
+  (today's first-run path). The old player is untouched and comes back
+  on the next sign-in.
+- **Signing in while signed in** (or over a guest with progress) is a
+  plain replace — the token changes, nothing is merged. Guest progress is
+  reachable by the site's import-token page, as before.
+- **Enter** in either field submits. The check is given the same 5 s as
+  the update check; longer is `Failed(SITE UNREACHABLE)`.
+- **Site URL** is the derived one (`Launcher.SiteUrl`), the same origin
+  the server line polls.
+- **In the game** nothing changes: the HUD, F1 panel and reconnect path
+  are untouched; a token written by the launcher is indistinguishable
+  from one written by F1.
+
+For photographs: `-uiLogin <guest|signingin|signedin|failed>` beside
+`-uiLauncher` forces the column into a state with a fake email.
 
 ### Character panel and backpack (Phase 11.7)
 
