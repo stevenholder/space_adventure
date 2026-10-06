@@ -77,23 +77,37 @@ real materials, about 18k triangles dressed.
 - **Body** (`tools/bpy/human.py`): a MakeHuman human from MPFB2's sliders
   (`MACRO`), MPFB's 53-bone `game_engine` rig with its weights, turned to +Y
   front and scaled so the eyes are at 1.70 m, helpers removed, decimated to
-  6k triangles, split into `body`/`arms`/`head`. Undersuit, gloves and boots
+  6k triangles, split into `torso`/`legs`/`arms`/`head`. Undersuit, gloves and boots
   are materials on the body. Clips are posed by world-space swings and an
   analytic two-bone IK toward WRIST targets (shoulders at ±0.20, 0.02, 1.45;
   wrist reach 0.54 m), and both hands carry mounts (`hand.r`, `hand.l`): the
   client runs a two-handed weapon's barrel from the right hand toward the
   left, every frame.
-- **Why `body` is capped**: the client hides the local player's `head` and
-  draws its `arms` shadows-only, so the `body` it does draw is open at the
-  neck and both shoulders; looking down, you saw the ragged cut and the
-  hollow torso inside. `split()` hands the cut's teeth (torso faces that
-  mostly border the head or an arm, or own a corner alone) to that part,
-  then `cap()` closes every open ring with undersuit (`suit`) triangles made
-  of the ring's own vertices (so they carry its weights), wound outward,
-  sharp at the rim (smooth across it, the cap shaded black). `lod`
-  decimation reserves `CAP_TRIS` for them; UBC bodies are simplified to
-  budget by the import anyway. Remote players never see a cap: it sits
-  under their head and arms.
+- **Why `legs` is its own mesh, open, and the torso capped** (2026-10-06):
+  in first person the client hides the local player's `head`, draws its
+  `torso` and `arms` shadows-only (the first-person arms are a separate
+  copy) and draws `legs`: looking down shows thighs, shins and boots, no
+  torso. `split()` cuts by dominant bone (`head`/`neck_01` -> head,
+  arm and finger bones -> arms) and cuts torso from legs LEVEL at the hip
+  joints (the `thigh_l`/`thigh_r` heads, z 0.93-0.97): the pelvis/thigh
+  weight border runs down the groin crease, two rings that left the
+  buttocks on the torso. It hands the cut's teeth (faces that mostly border
+  another part, or own a corner alone) from the torso to the head and arms
+  and from the legs to the torso, then `cap()` closes the torso's open
+  rings -- neck, shoulders and waist -- with undersuit (`suit`) triangles
+  made of the ring's own vertices (so they carry its weights), wound
+  outward, sharp at the rim (smooth across it, the cap shaded black).
+  `lod` decimation reserves `CAP_TRIS` (110; 74-84 measured) for them;
+  UBC bodies are simplified to budget by the import anyway.
+  **`legs` is open at the waist on purpose.** A waist cap on the legs
+  filled the view looking down (even with the camera leaned 18 cm forward)
+  and hid the feet; open, the inside of the legs is back-face culled, so
+  the local player sees through the hollow thighs to the boots and the
+  ground, with the legs' rim as an outline (its ragged teeth are still
+  tidied). Remote players draw the torso, whose waist cap closes the ring,
+  so they never see it open. The npc.* bodies are still the older
+  `body`/`arms`/`head` build until they are next rebuilt (boots cover both
+  `legs/boot` and `body/boot`).
 - **Armor** (`tools/bpy/armor.py`): hard plates are clean grids laid on a
   cylinder around their bone, masked to a rounded rectangle, projected
   inward along their normals onto a SMOOTHED copy of the body with a gap,
@@ -387,8 +401,9 @@ authored at bulk 1.0, so an orc would clip through them.
 
 ### First person
 
-Every humanoid has three meshes: `body`, `arms` (both arms and hands,
-split along the sleeve seam by `split_arms`) and `head`. The client hangs a
+Every humanoid has `torso` and `legs` (`body` on npc.* bodies built
+before 2026-10-06), `arms` (both arms and hands, split along the sleeve
+seam) and `head`. The client hangs a
 second `char.player` under the camera and draws only its `arms`, so worn
 sleeves and gloves cover them like on any body (`armor.suit.scout` and
 `armor.gloves.scout` cover `arms/*`). The `fp_*` clips (`fp_idle`,

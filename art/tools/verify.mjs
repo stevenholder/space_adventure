@@ -24,7 +24,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Box3 } from "three";
+import { Box3, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { Texture } from "three";
 
@@ -95,25 +95,29 @@ const NODE_CONTRACTS = {
   // The MakeHuman body (tools/bpy/human.py): game-engine bone names, both
   // hand mounts (grip in the right, barrel toward the left).
   "char.player": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
   },
   "npc.shopkeeper": {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
   "char.player.f": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
   },
   // Quaternius UBC bodies (human.py variants char.ubc, char.ubc.f): same rig names after their import.
   "char.ubc.f": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
   },
   "char.ubc": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
   },
   "npc.dispatcher": {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
@@ -373,6 +377,24 @@ for (const asset of selected) {
       const eye = findByName(gltf.scene, "eye")[0];
       if (eye.parent && eye.parent.name === "head")
         problems.push("eye is a child of head: hiding head would hide the camera");
+    }
+    // `legsCut` (player bodies): the local player draws `legs` and hides
+    // `torso`, so looking down shows legs and feet, no torso. The feet are
+    // in `legs` and the waist cut sits at the hips: legs top below 0.62 of
+    // the eye height, torso bottom above the knees.
+    if (contract.legsCut) {
+      const box = (n) => findByName(gltf.scene, n)[0];
+      const legs = box("legs"), torso = box("torso");
+      const knee = findByName(gltf.scene, "calf_l")[0];
+      const eye = findByName(gltf.scene, "eye")[0];
+      if (legs && torso && knee && eye) {
+        gltf.scene.updateMatrixWorld(true);
+        const lb = new Box3().setFromObject(legs), tb = new Box3().setFromObject(torso);
+        const kneeY = knee.getWorldPosition(new Vector3()).y, eyeY = eye.getWorldPosition(new Vector3()).y;
+        if (lb.min.y > 0.05) problems.push(`legs: no feet (min y ${lb.min.y.toFixed(2)})`);
+        if (lb.max.y > eyeY * 0.62) problems.push(`legs: reach ${lb.max.y.toFixed(2)}, above the hips (${(eyeY * 0.62).toFixed(2)})`);
+        if (tb.min.y < kneeY) problems.push(`torso: reaches ${tb.min.y.toFixed(2)}, below the knee (${kneeY.toFixed(2)})`);
+      } else problems.push("legsCut: needs meshes legs, torso, bone calf_l and node eye");
     }
   }
 

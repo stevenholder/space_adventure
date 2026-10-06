@@ -297,14 +297,16 @@ namespace SpaceAdventure.Game
                 Node3D piece = assets.AttachSkinned(id, skeleton);
                 if (piece == null) continue;
                 nodes[kv.Key] = piece;
-                // The local body: the camera is inside the head, and the arms
-                // the eye should see are the first-person ones. A helmet or a
-                // sleeve drawn here is a box over the view or a second pair of
-                // arms -- shadows-only, exactly like the head and arms.
-                // Hair rides the head, so it is shadows-only with it (C165).
-                if (local && (kv.Key == "head" || kv.Key == "hair" || CoversArms(assets, id)))
+                // The local body draws legs and feet only (GDD "First-person
+                // body"): looking down shows where you stand, no torso. So
+                // everything worn above the waist -- helmet, hair (C165),
+                // chest, back, gloves -- is shadows-only, like the torso,
+                // head and arms it sits on; the first-person arms carry the
+                // arm pieces the eye sees. Legs and feet pieces draw.
+                if (local && ((kv.Key != "legs" && kv.Key != "feet") || CoversArms(assets, id)))
                     foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(piece))
                         g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+                else if (local) NoSelfShadow(piece);
                 if (material != null) ViewModel.FpOverride(piece);
                 if (layers != 0)
                 {
@@ -315,6 +317,31 @@ namespace SpaceAdventure.Game
             }
             if (changed) Cover(assets, asset, model, drawn);
         }
+
+        /// <summary>
+        /// The local body's drawn part (legs, legs/feet pieces) receives no
+        /// shadows: the shadows-only torso sits right above it and its
+        /// shadow turned the hips, seen from the eye, into a black mass.
+        /// Per-source copies of the surface materials, so remote bodies and
+        /// the shared material keep their shadows.
+        /// </summary>
+        public static void NoSelfShadow(Node root)
+        {
+            foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(root))
+                if (mi.Mesh != null)
+                    for (int i = 0; i < mi.Mesh.GetSurfaceCount(); i++)
+                        if (mi.GetActiveMaterial(i) is BaseMaterial3D m && !m.DisableReceiveShadows)
+                        {
+                            if (!Unshadowed.TryGetValue(m, out BaseMaterial3D copy))
+                            {
+                                copy = (BaseMaterial3D)m.Duplicate();
+                                copy.DisableReceiveShadows = true;
+                                Unshadowed[m] = copy;
+                            }
+                            mi.SetSurfaceOverrideMaterial(i, copy);
+                        }
+        }
+        private static readonly Dictionary<BaseMaterial3D, BaseMaterial3D> Unshadowed = new();
 
         /// <summary>A worn piece that covers the arms ("arms/…" in its manifest `covers`).</summary>
         public static bool CoversArms(AssetRegistry assets, string asset) =>

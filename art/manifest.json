@@ -4,10 +4,10 @@
     {
       "id": "char.player",
       "file": "chars/player.glb",
-      "tris": 8880,
+      "tris": 8901,
       "license": "CC0",
       "source": "recipes/char.player.json",
-      "description": "Player body, the COLONIST (GDD 'Faces and hair'): tools/bpy/human.py variant char.player -- a MakeHuman build (MPFB2, CC0 output) slimmer and shorter than the Vanguard (muscle 0.40, weight 0.45, narrower shoulders), eyes at 1.65 m, decimated with the budget on the face (head ~4100 tris: brow ridge, cheekbones, jaw, eyelids, lips), baked 2048 px face albedo with painted eyebrows (skin.BROW_M: straight, medium, a little heavier inner third, dark brown) + normal map, textured iris/sclera, baked glove map (tools/bpy/skin.py), bald (hair is a worn hair.* piece). Undersuit, game-engine bone names, clips, hand mounts, head/arms/body split. Faces -Z.",
+      "description": "Player body, the COLONIST (GDD 'Faces and hair'): tools/bpy/human.py variant char.player -- a MakeHuman build (MPFB2, CC0 output) slimmer and shorter than the Vanguard (muscle 0.40, weight 0.45, narrower shoulders), eyes at 1.65 m, decimated with the budget on the face (head ~4100 tris: brow ridge, cheekbones, jaw, eyelids, lips), baked 2048 px face albedo with painted eyebrows (skin.BROW_M: straight, medium, a little heavier inner third, dark brown) + normal map, textured iris/sclera, baked glove map (tools/bpy/skin.py), bald (hair is a worn hair.* piece). Undersuit, game-engine bone names, clips, hand mounts, head/arms/torso/legs split. Faces -Z.",
       "source_url": "tools/bpy/human.py",
       "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
@@ -16,15 +16,18 @@
           "suit",
           "glove"
         ],
-        "body": [
-          "suit",
-          "boot"
-        ],
         "head": [
           "suit",
           "skin",
           "eye",
           "sclera"
+        ],
+        "legs": [
+          "suit",
+          "boot"
+        ],
+        "torso": [
+          "suit"
         ],
         "hair": [
           "hair"
@@ -35,10 +38,10 @@
     {
       "id": "char.player.f",
       "file": "chars/player_f.glb",
-      "tris": 8823,
+      "tris": 8841,
       "license": "CC0",
       "source": "recipes/char.player.f.json",
-      "description": "Player body, female (GDD 'Bodies': COLONIST F): tools/bpy/human.py variant char.player.f -- the Colonist v2 build with gender 0.0 (muscle 0.38, weight 0.42), eyes at 1.65 m, head-weighted decimation (~4100-tri face), baked 2048 px face albedo with painted eyebrows (skin.BROW_F: thin, even, gentle arch, tapered tail) + normal map, textured iris/sclera, baked glove map (tools/bpy/skin.py), bald; same undersuit, bone names, clips, hand mounts and head/arms/body split. Faces -Z.",
+      "description": "Player body, female (GDD 'Bodies': COLONIST F): tools/bpy/human.py variant char.player.f -- the Colonist v2 build with gender 0.0 (muscle 0.38, weight 0.42), eyes at 1.65 m, head-weighted decimation (~4100-tri face), baked 2048 px face albedo with painted eyebrows (skin.BROW_F: thin, even, gentle arch, tapered tail) + normal map, textured iris/sclera, baked glove map (tools/bpy/skin.py), bald; same undersuit, bone names, clips, hand mounts and head/arms/torso/legs split. Faces -Z.",
       "source_url": "tools/bpy/human.py",
       "author": "Space Adventure (MakeHuman base mesh, CC0)",
       "rig": "animated",
@@ -48,15 +51,18 @@
           "suit",
           "glove"
         ],
-        "body": [
-          "suit",
-          "boot"
-        ],
         "head": [
           "suit",
           "skin",
           "eye",
           "sclera"
+        ],
+        "legs": [
+          "suit",
+          "boot"
+        ],
+        "torso": [
+          "suit"
         ],
         "hair": [
           "hair"
@@ -79,14 +85,17 @@
           "suit",
           "glove"
         ],
-        "body": [
-          "suit",
-          "boot"
-        ],
         "head": [
           "MI_Superhero_Male",
           "hair",
           "MI_Eyes",
+          "suit"
+        ],
+        "legs": [
+          "suit",
+          "boot"
+        ],
+        "torso": [
           "suit"
         ],
         "hair": [
@@ -110,14 +119,17 @@
           "suit",
           "glove"
         ],
-        "body": [
-          "suit",
-          "boot"
-        ],
         "head": [
           "MI_Superhero_Female",
           "hair",
           "MI_Eyes",
+          "suit"
+        ],
+        "legs": [
+          "suit",
+          "boot"
+        ],
+        "torso": [
           "suit"
         ],
         "hair": [
@@ -2139,6 +2151,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2171,6 +2184,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2203,6 +2217,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2235,6 +2250,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2267,6 +2283,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2299,6 +2316,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2331,6 +2349,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -2363,6 +2382,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -3939,6 +3959,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -3971,6 +3992,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -4003,6 +4025,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -4035,6 +4058,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -4067,6 +4091,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -4099,6 +4124,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -4131,6 +4157,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true
@@ -4163,6 +4190,7 @@
         ]
       },
       "covers": [
+        "legs/boot",
         "body/boot"
       ],
       "pbr": true

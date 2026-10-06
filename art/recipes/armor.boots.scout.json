@@ -1,5 +1,5 @@
 {
-  "$comment": "Scout set for the MakeHuman body: hard plates wrapped onto a smoothed copy of the body and rigid on one bone, gloves/boots skinned (tools/bpy/armor.py). Real materials (pbr).",
+  "$comment": "Scout set for the MakeHuman body: hard plates wrapped onto a smoothed copy of the body and rigid on one bone, gloves/boots skinned (tools/bpy/armor.py). Real materials (pbr). Covers `legs/boot` (the player bodies are split torso/legs since 2026-10-06) and `body/boot` (the npc.* bodies, built before the split).",
   "id": "armor.boots.scout",
   "src": "build/armor.boots.scout.raw.glb",
   "out": "armor/boots_scout.glb",
@@ -7,6 +7,7 @@
   "budget": 5000,
   "pbr": true,
   "covers": [
+    "legs/boot",
     "body/boot"
   ],
   "license": "CC0",

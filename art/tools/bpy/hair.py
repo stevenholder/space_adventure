@@ -80,7 +80,7 @@ def shipped_body(body_id):
     rows = json.load(open(os.path.join(ART, "manifest.json")))["assets"]
     path = os.path.join(ART, next(a["file"] for a in rows if a["id"] == body_id))
     objs = human._import(path)
-    meshes = [o for o in objs if o.type == "MESH" and o.name.split(".")[0] in ("head", "body")]
+    meshes = [o for o in objs if o.type == "MESH" and o.name.split(".")[0] in ("head", "torso", "body")]   # body: a pre-split build
     human._drop([o for o in objs if o not in meshes])
     bpy.ops.object.select_all(action="DESELECT")
     for o in meshes:
