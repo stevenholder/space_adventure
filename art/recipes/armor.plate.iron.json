@@ -12,6 +12,9 @@
   "bodies": [
     "npc.grunt",
     "npc.shopkeeper",
-    "npc.dispatcher"
+    "npc.dispatcher",
+    "char.ubc",
+    "char.player.f",
+    "char.ubc.f"
   ]
 }

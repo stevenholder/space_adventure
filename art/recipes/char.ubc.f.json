@@ -1,0 +1,20 @@
+{
+  "$comment": "Universal Base Characters Superhero female (Quaternius, CC0) as a body (GDD 'Bodies': VANGUARD F): tools/bpy/human.py variant char.ubc.f imports it from vendor/ubc exactly as char.ubc does (Hair_Buns), keeps its textured head, adds our undersuit, rig re-rested to MakeHuman's A-pose. Simplified to the char budget here.",
+  "id": "char.ubc.f",
+  "src": "build/char.ubc.f.raw.glb",
+  "out": "chars/ubc_f.glb",
+  "fit": false,
+  "budget": 9000,
+  "pbr": true,
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ]
+  },
+  "license": "CC0",
+  "author": "Quaternius (Universal Base Characters), dressed by Space Adventure",
+  "source_url": "https://quaternius.com/packs/universalbasecharacters.html",
+  "rig": "animated"
+}

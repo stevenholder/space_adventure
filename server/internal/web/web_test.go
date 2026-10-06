@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"space-adventure/server/internal/store"
 )
@@ -180,8 +181,17 @@ func TestAccountFlow(t *testing.T) {
 		t.Fatalf("login = %d", r.StatusCode)
 	}
 
-	// The launcher's door: game-login mints the first character; me sees it.
+	// The launcher's door: game-login mints nothing (the character select
+	// makes the first); me sees the one the account then creates.
 	sid := gameLogin(t, c, "a@x.com", "longenough")
+	decode(t, c.get("/api/me"), &me)
+	if len(me.Players) != 0 {
+		t.Fatalf("players after game-login = %d, want 0", len(me.Players))
+	}
+	r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": "Ayla", "body": "char.player"})
+	if r.StatusCode != 200 {
+		t.Fatalf("create = %d %s", r.StatusCode, body(t, r))
+	}
 	decode(t, c.get("/api/me"), &me)
 	if len(me.Players) != 1 {
 		t.Fatalf("players = %d", len(me.Players))
@@ -301,7 +311,8 @@ func TestGameLoginAndCharacters(t *testing.T) {
 		t.Fatalf("register = %d", r.StatusCode)
 	}
 
-	// Right password → a session me accepts as a bearer, with one player.
+	// Right password → a session me accepts as a bearer, with no player:
+	// game-login mints nothing, the character select makes the first.
 	sid := gameLogin(t, c, "pilot@x.com", "longenough")
 	var me struct {
 		Email   string `json:"email"`
@@ -315,14 +326,14 @@ func TestGameLoginAndCharacters(t *testing.T) {
 		t.Fatalf("bearer me = %d", r.StatusCode)
 	}
 	decode(t, r, &me)
-	if me.Email != "pilot@x.com" || len(me.Players) != 1 || me.Players[0].Name != "pilot" ||
-		me.Players[0].Body != store.DefaultBody {
+	if me.Email != "pilot@x.com" || len(me.Players) != 0 {
 		t.Fatalf("me = %+v", me)
 	}
-	// Twice → still one player.
+	// The list is an empty array, not null: the select reads it as "make
+	// your first". Twice → still none.
 	sid2 := gameLogin(t, c, "pilot@x.com", "longenough")
-	if rows := listChars(t, c, sid2); len(rows) != 1 {
-		t.Fatalf("second game-login: %d characters", len(rows))
+	if r := c.bearerReq("GET", "/api/characters", sid2, nil); r.StatusCode != 200 || body(t, r) != "[]" {
+		t.Fatalf("second game-login: characters not an empty array")
 	}
 
 	// Wrong password and unknown email: 401, one body.
@@ -340,14 +351,6 @@ func TestGameLoginAndCharacters(t *testing.T) {
 		t.Fatalf("bad bearer + cookie = %d", r.StatusCode)
 	}
 
-	// The list: one row, the default body, a 32-hex token.
-	rows := listChars(t, c, sid)
-	hex32 := regexp.MustCompile(`^[0-9a-f]{32}$`)
-	if len(rows) != 1 || rows[0].Body != "char.player" || !hex32.MatchString(rows[0].Token) {
-		t.Fatalf("rows = %+v", rows)
-	}
-	first := rows[0].Token
-
 	create := func(name, bodyID string) (*http.Response, charRow) {
 		r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": name, "body": bodyID})
 		var row charRow
@@ -356,6 +359,26 @@ func TestGameLoginAndCharacters(t *testing.T) {
 		}
 		return r, row
 	}
+
+	// The first character: one row, the default body, a 32-hex token; me
+	// sees it.
+	if r, _ := create("pilot", "char.player"); r.StatusCode != 200 {
+		t.Fatalf("create pilot = %d %s", r.StatusCode, body(t, r))
+	}
+	rows := listChars(t, c, sid)
+	hex32 := regexp.MustCompile(`^[0-9a-f]{32}$`)
+	if len(rows) != 1 || rows[0].Name != "pilot" || rows[0].Body != store.DefaultBody || !hex32.MatchString(rows[0].Token) {
+		t.Fatalf("rows = %+v", rows)
+	}
+	first := rows[0].Token
+	r = c.bearerReq("GET", "/api/me", sid, nil)
+	decode(t, r, &me)
+	if len(me.Players) != 1 || me.Players[0].Name != "pilot" || me.Players[0].Body != store.DefaultBody {
+		t.Fatalf("me after create = %+v", me)
+	}
+	// The list is oldest first by created_ms, then token: a second create in
+	// the same millisecond would order by a random token.
+	time.Sleep(2 * time.Millisecond)
 	r, kade := create("Kade", "char.ubc.f")
 	if r.StatusCode != 200 || kade.Name != "Kade" || kade.Body != "char.ubc.f" || kade.Credits != 1000 {
 		t.Fatalf("create Kade = %d %+v", r.StatusCode, kade)
@@ -441,23 +464,25 @@ func TestGameLoginAndCharacters(t *testing.T) {
 	}
 }
 
-// Two accounts whose emails share a local part both get a first character;
-// the second's name is numbered rather than refused by the name index.
-func TestGameLoginFirstNameClash(t *testing.T) {
+// Two accounts both creating "sam": the first gets it, the second is
+// refused by the name index — game-login no longer names anyone.
+func TestCharacterNameClashAcrossAccounts(t *testing.T) {
 	ts, _ := newTestSite(t)
-	var names []string
+	var codes []int
 	for _, e := range []string{"sam@a.com", "sam@b.com"} {
 		jar, _ := newJar()
 		c := &site{t: t, ts: ts, c: &http.Client{Jar: jar}, ip: e}
 		c.post("/api/register", credsReq{e, "longenough"}, true)
-		rows := listChars(t, c, gameLogin(t, c, e, "longenough"))
-		if len(rows) != 1 {
-			t.Fatalf("%s: %d characters", e, len(rows))
+		sid := gameLogin(t, c, e, "longenough")
+		if rows := listChars(t, c, sid); len(rows) != 0 {
+			t.Fatalf("%s: %d characters after game-login, want 0", e, len(rows))
 		}
-		names = append(names, rows[0].Name)
+		r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": "sam", "body": "char.player"})
+		codes = append(codes, r.StatusCode)
+		r.Body.Close()
 	}
-	if names[0] != "sam" || names[1] != "sam 2" {
-		t.Fatalf("names = %q", names)
+	if codes[0] != 200 || codes[1] != 409 {
+		t.Fatalf("create sam = %v, want [200 409]", codes)
 	}
 }
 

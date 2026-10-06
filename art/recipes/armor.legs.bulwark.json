@@ -13,6 +13,8 @@
     "npc.grunt",
     "npc.shopkeeper",
     "npc.dispatcher",
-    "char.ubc"
+    "char.ubc",
+    "char.player.f",
+    "char.ubc.f"
   ]
 }

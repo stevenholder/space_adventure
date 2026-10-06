@@ -73,6 +73,9 @@ KEEP_GROUPS = ("body", "helper-l-eye", "helper-r-eye")
 # variants that keep that build (gunner) can wear it, bigger ones (orc) not.
 VARIANTS = {
     "char.player": {},
+    "char.player.f": {                         # the player body, female (GDD "Bodies": COLONIST F)
+        "macro": {"gender": 0.0},
+    },
     "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
         "macro": {"age": 0.75, "weight": 0.72, "muscle": 0.45, "height": 0.45},
         "materials": {"suit": (0.46, 0.41, 0.30), "hair": (0.55, 0.53, 0.50), "skin": (0.72, 0.55, 0.45)},
@@ -94,6 +97,9 @@ VARIANTS = {
     },
     "char.ubc": {                              # spike: Quaternius Universal Base Characters body (CC0)
         "ubc": {"body": "Superhero_Male_FullBody", "hair": "Hair_Buzzed"},
+    },
+    "char.ubc.f": {                            # UBC Superhero female (GDD "Bodies": VANGUARD F)
+        "ubc": {"body": "Superhero_Female_FullBody", "hair": "Hair_Buns"},
     },
     "npc.gunner": {                            # ranged raider: a combat robot (player's build, so armor fits)
         "materials": {"skin": (0.48, 0.50, 0.54), "suit": (0.30, 0.32, 0.35), "glove": (0.40, 0.42, 0.45),
@@ -155,6 +161,11 @@ def ubc_human():
             if o.type == "MESH":
                 o.parent = rig
                 o.matrix_parent_inverse = Matrix.Identity(4)
+                # Named "hair" so a helmet's `covers: head/hair` hides it
+                # (Hair_Buns stands out through every helmet otherwise).
+                for m in o.data.materials:
+                    if m:
+                        m.name = "hair"
             else:
                 bpy.data.objects.remove(o, do_unlink=True)
     # Some materials point at "<name>_png.png"; the pack ships "<name>.png".
@@ -181,7 +192,7 @@ def ubc_human():
     bpy.ops.object.select_all(action="DESELECT")
     for o in meshes:
         o.select_set(True)
-    h = next(o for o in meshes if o.name.startswith("SuperHero") or len(o.data.vertices) > 5000)
+    h = next(o for o in meshes if o.name.lower().startswith("superhero") or len(o.data.vertices) > 5000)
     bpy.context.view_layer.objects.active = h
     bpy.ops.object.join()
     # The pack's all-white vertex colours make Godot set "vertex colour as

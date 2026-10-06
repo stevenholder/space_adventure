@@ -765,6 +765,17 @@ func v4f32(v [4]float64) [4]float32 {
 	return [4]float32{float32(v[0]), float32(v[1]), float32(v[2]), float32(v[3])}
 }
 
+// playerSpawnData is a player spawn row's data (PROTOCOL "spawn"): the
+// name, then NUL and the body id when the body is not the default. A guest
+// ("" body) and a char.player character encode exactly as before bodies
+// existed, and a reader that stops at the first NUL still reads the name.
+func playerSpawnData(e *entity) []byte {
+	if e.Body == "" || e.Body == store.DefaultBody {
+		return []byte(e.Name)
+	}
+	return []byte(e.Name + "\x00" + e.Body)
+}
+
 // join registers c as a new player: allocates the entity and identity,
 // enqueues the join handshake (hello_ack, terrain, defs, colliders, spawn
 // for every existing entity, spawn for self), then publishes c to the world
@@ -891,7 +902,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		others = append(others, msg{data: protocol.EncodeSpawn(protocol.Spawn{
 			EntityID:   oc.entity.ID,
 			EntityType: protocol.EntityTypePlayer,
-			Data:       []byte(oc.entity.Name),
+			Data:       playerSpawnData(oc.entity),
 		})})
 	}
 	s.mu.Unlock()
@@ -899,7 +910,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	self := protocol.EncodeSpawn(protocol.Spawn{
 		EntityID:   id,
 		EntityType: protocol.EntityTypePlayer,
-		Data:       []byte(name),
+		Data:       playerSpawnData(c.entity),
 	})
 	c.send(msg{data: protocol.EncodeHelloAck(protocol.HelloAck{
 		ServerVer: protocol.VersionPhase2,
