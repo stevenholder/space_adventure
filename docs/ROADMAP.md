@@ -1838,6 +1838,44 @@ fitted to its own head. Put a helmet on: the hair is gone.
 - **C165 Nothing else moved.** Sweep green; C153–C160 hold; the
   first-person view is unchanged (hair never draws for the local player).
 
+# Phase 18 — edit a character (2026-10-06)
+
+### Where Phase 18 stands (2026-10-06)
+
+Drafted. Phase 16 shipped characters with no way to change one: the
+user's two prod characters are bald (`hair.none`) for good, and the
+Deferred table carried "character delete and rename" until a playtester
+asked. The playtester asked. Contract: GDD "Edit a character (Phase 18)".
+
+**Playable proof.** Select a character, EDIT: rename her, cycle the hair
+to buns, SAVE — the row reads the new name and the stage wears the buns.
+PLAY — the nametag is the new name, the hair is on. Back out, EDIT,
+DELETE, CONFIRM — the row is gone; with none left the create form opens.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | `PATCH`/`DELETE /api/characters/<token>`: ownership check (404), create's validation, `ErrNameTaken` → 409, rename to own name ok; delete removes the row and calls `Kick([token])`; store `DeletePlayer(token)` if absent | `server/internal/web/web.go`, `store/` | `web_test.go`: own token rename + hair; other account's token 404; unknown 404; taken 409; own name 200; bad hair 400; delete → list shrinks, token gone; Go server test: a connected character deleted this way is closed 1008 and its row is not re-saved |
+| 2 | 1 | `Characters` model: `Edit(i)` → `Create` state with `Editing = row`, `Dirty`, `CanSave`; `Deleting` flag + `AskDelete`/`KeepIt`; `Saved(row)`, `Deleted(token)` (select next or → Create when empty); `CreateFailed` reasons reused. View: EDIT button, edit-mode form (no GENDER/MODEL), SAVE, DELETE + inline confirm; rigs `-uiChars edit|delete` | `client/godot/Game/UI/Characters.cs`, `Boot.cs` | `-selftest` (+ edit/delete transitions); shots `p18-chars-{edit,delete}.png` |
+| 3 | 1 | Boot: `SaveCharacter` (PATCH) and `DeleteCharacter` (DELETE) with the 5 s budget, 401 → launcher as today; stage follows the edited hair | `Boot.cs` | live on kind: rename + hair → PLAY shows both |
+| 4 | 2 | `t28`: rename Kade + hair → list reflects; other account's token 404; delete pilot 3 → list −1, token refused 1008 (strict) / fresh guest (kind); delete while connected → 1008 on that socket, row gone | `test/t28-accounts.mjs` | both modes |
+| 5 | 2 | Record: QA-STATUS "Phase 18"; the Deferred row removed | `docs/` | — |
+
+### Acceptance criteria (C166–C169)
+
+- **C166 Rename and re-hair.** `PATCH` on an owned token changes name and
+  hair with create's rules; the list and the account page show it; PLAY
+  joins under the new name wearing the new hair.
+- **C167 Delete.** `DELETE` on an owned token removes the row; a
+  connected session of it is closed 1008 and not re-saved; its token is
+  refused afterwards (strict); the other characters are untouched.
+- **C168 Not yours.** `PATCH`/`DELETE` on another account's token or an
+  unknown one is 404 and changes nothing.
+- **C169 The form.** EDIT opens the form prefilled without the body
+  rows; SAVE is dark until a valid change; DELETE asks once inline; the
+  shots and `-selftest` transitions hold; C153–C165 still hold.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
@@ -1846,7 +1884,6 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 |---|---|
 | Sharding, delta snapshots, multiple server processes | one process actually saturates — measure first |
 | OAuth / password reset email | Phase 16 made accounts the only door; reset needs SMTP that does not exist |
-| Character delete and rename | a playtester asks; delete is the account-delete cascade scoped to one row, rename is the name index plus a nametag refresh |
 | More bodies, hair, skin and suit colours | the four Phase 16 bodies feel samey; UBC's hairstyles pack is already vendored and rigs to the head bone |
 | Managed/hosted Postgres, replicas, backups | deploying somewhere real — the DSN is already the only thing that changes |
 | Redis (cache, pub/sub, shared sessions) | a second server process needs to see the first one's state; until then the in-memory world is the cache and a function call is the bus |
