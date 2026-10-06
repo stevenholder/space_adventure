@@ -468,3 +468,19 @@ pack); `mobs/CATALOG.md` is the generated, browsable list with thumbnails.
 - **Licences**: all CC0 except the Bestiary (Quaternius Asset License v1.0:
   use in games, no redistribution of the assets themselves), committed at the
   owner's decision.
+
+## Blender on the GPU (WSL2)
+
+Cycles bakes (skin.py) run on the GPU when Blender can see one:
+`tools/bpy/cycles_gpu.py` picks OptiX → CUDA → HIP → Metal and falls back to
+the CPU with a line saying so. Under WSL2 the NVIDIA user-space libraries
+live in `/usr/lib/wsl/lib`, and Blender only finds them with that directory
+on `LD_LIBRARY_PATH` — the `package.json` scripts set it; a hand-run build
+wants the same:
+
+```sh
+LD_LIBRARY_PATH=/usr/lib/wsl/lib $BLENDER -b --python tools/bpy/human.py -- char.player
+```
+
+OptiX is not exposed through WSL (discovery returns nothing); CUDA is.
+EEVEE (the render sheets) draws through WSLg's GL and needs nothing extra.

@@ -32,6 +32,7 @@ import os
 
 import bpy
 import bmesh
+import cycles_gpu  # noqa: E402 -- beside this file; human.py puts tools/bpy on sys.path
 import numpy as np
 from mathutils import Vector, geometry
 from mathutils.bvhtree import BVHTree
@@ -204,7 +205,7 @@ def bake(h, skin, layers, size=None):
     scene = bpy.context.scene
     prev_engine = scene.render.engine
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    cycles_gpu.cycles_device(scene)
     if scene.world is None:
         scene.world = bpy.data.worlds.new("bake")
     scene.world.light_settings.distance = AO_DIST
@@ -467,6 +468,7 @@ def normal_map(head, skin_mat):
     scene = bpy.context.scene
     prev_engine = scene.render.engine
     scene.render.engine = "CYCLES"
+    cycles_gpu.cycles_device(scene)
     hi = STATE["hi"]
     scene.collection.objects.link(hi)
     lo = head.copy()
