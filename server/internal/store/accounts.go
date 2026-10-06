@@ -159,22 +159,6 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 
 // ---- account ↔ player ------------------------------------------------------
 
-// AccountPlayerToken returns the token of the account's oldest character,
-// "" when it has none yet.
-func (s *Store) AccountPlayerToken(ctx context.Context, accountID string) (string, error) {
-	var token string
-	err := s.DB.QueryRowContext(ctx,
-		`SELECT token FROM player WHERE account_id = $1 ORDER BY created_ms, token LIMIT 1`,
-		accountID).Scan(&token)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("store: selecting account player: %w", err)
-	}
-	return token, nil
-}
-
 // AccountPlayers lists the account's characters, oldest first.
 func (s *Store) AccountPlayers(ctx context.Context, accountID string) ([]Player, error) {
 	rows, err := s.DB.QueryContext(ctx,
