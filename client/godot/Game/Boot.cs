@@ -1352,7 +1352,7 @@ namespace SpaceAdventure.Game
             _viewModel.Hold(holding ? _views.Defs.ItemAsset(held) : "", holding ? _views.Defs.HoldSuffix(held) : "");
             _viewModel.BodyVisible = _seat == 0;
             State body = _predictor.State;
-            _viewModel.Place(_predictor.Smooth.Pos, body.Facing);
+            _viewModel.Place(_predictor.Smooth.Pos, body.Facing, _fps.PitchRadians);
             // Right mouse aims, only while the world has the pointer (a free
             // cursor's right-click belongs to the bags and the hotbar).
             bool aiming = _rigAim || (CanShoot && Swung == null && _input.RightButtonHeld && Godot.Input.MouseMode == Godot.Input.MouseModeEnum.Captured);
