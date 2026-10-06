@@ -249,8 +249,10 @@ def smoothed_body(body):
     sm.factor = 0.8
     # A muscular body (UBC) shrinks under 12 passes and plates sink into the
     # real skin.
-    sm.iterations = 4 if human.ACTIVE.get("ubc") else 12
+    sm.iterations = FIT.get("smooth", 12)
     bpy.ops.object.modifier_apply(modifier=sm.name)
+    TORSO_MASK[:] = [b is not None and b.startswith(("spine", "pelvis", "clavicle", "neck"))
+                     for b in human.dominant_bones(body.obj)]
     obj.hide_set(True)
     return obj
 
@@ -334,6 +336,8 @@ def plate(name, wrap_onto, a, b, ref, theta, t, gap, thickness, bone, mat="plate
         for v, ax, rd in missed:
             r = min(start, key=lambda s: (s[0] - v.co).length)[1]
             v.co = a + ax + rd.normalized() * r
+    if FIT.get("drape") and bone.startswith("spine"):
+        drape(me, wrap_onto, a, d, gap, FIT["drape"])
     relax_outline(obj, relax)
     sm = obj.modifiers.new("sm", "SMOOTH")
     sm.factor = 0.5
@@ -344,6 +348,45 @@ def plate(name, wrap_onto, a, b, ref, theta, t, gap, thickness, bone, mat="plate
     rigid(obj, bone)
     print(f"PLATE {name}: {sum(len(p.vertices) - 2 for p in obj.data.polygons)} tris")
     return obj
+
+
+def drape(me, body, a, d, gap, window):
+    """A torso plate hangs from what is above and below it, like a cuirass:
+    each vertex is pushed out to clear every body point within `window`
+    metres along the spine and ~3 cm across, plus the gap. The projection
+    alone follows the body into overhangs -- under a big bust the rays meet
+    the ribs, and the plate between two rows cut through the breast."""
+    import numpy as np
+    # Only the torso's own surface: arms hang beside it and would push the
+    # plate's flanks out into wings.
+    pts = np.array([tuple(v.co) for v, t in zip(body.data.vertices, TORSO_MASK) if t])
+    A, D = np.array(tuple(a)), np.array(tuple(d))
+    rel = pts - A
+    ax = rel @ D
+    rad = rel - np.outer(ax, D)
+    rr = np.linalg.norm(rad, axis=1)
+    keep = rr > 1e-4
+    ax, rad, rr = ax[keep], rad[keep], rr[keep]
+    unit = rad / rr[:, None]
+    moved = 0
+    for v in me.vertices:
+        p = np.array(tuple(v.co)) - A
+        vax = p @ D
+        vrad = p - vax * D
+        vr = np.linalg.norm(vrad)
+        if vr < 1e-4:
+            continue
+        u = vrad / vr
+        near = (np.abs(ax - vax) < window) & (np.linalg.norm(unit - u, axis=1) * rr < 0.03) & (unit @ u > 0.9)
+        if not near.any():
+            continue
+        need = rr[near].max() + gap
+        if need > vr:
+            v.co = Vector(tuple(A + vax * D + u * need))
+            moved += 1
+    me.update()
+    if moved:
+        print(f"DRAPE {moved} vertices pushed out")
 
 
 def block(name, center, size, mat, bone, bevel=0.006, rot=(0, 0, 0)):
@@ -790,7 +833,18 @@ def pieces(body):
 # the robot gunner); the rest are races whose MakeHuman macro or eye height
 # differs, and get their own copy of every piece, exported as
 # "<asset>@<body>" -- the client picks it by the wearer's asset id.
-BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher", "char.ubc")
+BODIES = ("", "npc.grunt", "npc.shopkeeper", "npc.dispatcher", "char.ubc", "char.player.f", "char.ubc.f")
+
+# Per-body fit: `smooth` = passes on the body plates wrap onto (a muscular
+# UBC body shrinks under 12 and its plates sink into the skin); `drape` =
+# torso plates clear the body within this many metres along the spine (the
+# UBC female's bust overhangs the ribs the projection lands on).
+FITS = {
+    "char.ubc": {"smooth": 4},
+    "char.ubc.f": {"smooth": 4, "drape": 0.08},
+}
+FIT = {}
+TORSO_MASK = []     # per smoothed-body vertex: on the torso (drape's obstacles)
 
 
 def main():
@@ -809,6 +863,8 @@ def build_for(body_id):
         v = human.VARIANTS[body_id]
         human.ACTIVE.update({k: v[k] for k in ("macro", "eye", "ubc") if k in v})
     EYE = human.ACTIVE.get("eye", human.EYE)
+    FIT.clear()
+    FIT.update(FITS.get(body_id, {}))
     suffix = "@" + body_id if body_id else ""
     h, rig, _ = human.make_human(decimate=False)
     h.data.update()

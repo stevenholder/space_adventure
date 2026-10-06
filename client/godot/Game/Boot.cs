@@ -391,14 +391,18 @@ namespace SpaceAdventure.Game
         private Window.ContentScaleModeEnum _gameScaleMode;
         private Window.ContentScaleAspectEnum _gameScaleAspect;
         private Vector2I _gameScaleSize;
+        /// <summary>OpenLauncherWindow kept the game's stretch (a rig select never opened the launcher).</summary>
+        private bool _launcherWindowSaved;
 
         /// <summary>A player's launch: everything not rigged and not `-play`; `-uiLauncher` photographs it.</summary>
-        private bool LauncherMode => (!Rigged && !Flag("-play")) || Arg("-uiLauncher") != null || Arg("-uiPlayAfter") != null;
+        private bool LauncherMode => Arg("-uiChars") == null &&
+            ((!Rigged && !Flag("-play")) || Arg("-uiLauncher") != null || Arg("-uiPlayAfter") != null || Arg("-uiPlayReal") != null);
 
         /// <summary>The 560×360 window at 1:1 pixels; the game's stretch is kept to restore on PLAY.</summary>
         private void OpenLauncherWindow()
         {
             Window w = GetWindow();
+            _launcherWindowSaved = true;
             _gameScaleMode = w.ContentScaleMode;
             _gameScaleAspect = w.ContentScaleAspect;
             _gameScaleSize = w.ContentScaleSize;
@@ -471,6 +475,10 @@ namespace SpaceAdventure.Game
             // path runs headless (`world ready` under -quitAfter is the proof).
             string playAfter = Arg("-uiPlayAfter");
             if (playAfter != null && _elapsed >= double.Parse(playAfter, CultureInfo.InvariantCulture)) { Play(); return; }
+            // Rig: -uiPlayReal <s> presses PLAY with no rig bypass -- the real
+            // session, the real character select.
+            string playReal = Arg("-uiPlayReal");
+            if (playReal != null && _elapsed >= double.Parse(playReal, CultureInfo.InvariantCulture)) { Play(); if (!_launcherUp) return; }
             if (Arg("-uiLauncher") != null || _statsBusy || Clock.Now < _nextStats) return;
             _nextStats = Clock.Now + 10;
             _ = PollStats();
@@ -578,76 +586,308 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
-        /// PLAY: (signed in) the account's character token, then the saved
-        /// display mode and UI scale, the game's canvas stretch back, the
-        /// launcher gone, and the connect UpdateThenConnect always made.
-        /// Rigs (-token, -uiPlayAfter) skip the login.
+        /// PLAY: (signed in) the game window on the character select (GDD
+        /// "Character select"); the world waits for a character. Rigs
+        /// (-token, -uiPlayAfter) skip the login and the select.
         /// </summary>
         private void Play()
         {
             if (!_launcherUp || _playBusy || !_launch.PlayEnabled) return;
             if (Arg("-token") != null || Arg("-uiPlayAfter") != null) { EnterGame(RigToken()); return; }
             if (!_login.PlayAllowed) return;
-            _ = PlayAsCharacter();
+            OpenGame();
+            OpenSelect(fake: false);
         }
 
         /// <summary>
-        /// GET /api/characters with the session; PR A plays the first row.
-        /// 401 is a dead session (`SIGNED OUT · sign in again`); anything
-        /// else that fails keeps the launcher up as SITE UNREACHABLE.
+        /// The game window after the launcher: the game's canvas stretch back,
+        /// the saved display mode and UI scale, the launcher hidden. No connect.
         /// </summary>
-        private async System.Threading.Tasks.Task PlayAsCharacter()
+        private void OpenGame()
         {
-            _playBusy = true;
-            string token = null;
+            _launcherUp = false;
+            _launcherView?.Show(false);
+            Window w = GetWindow();
+            if (_launcherWindowSaved)
+            {
+                w.ContentScaleMode = _gameScaleMode;
+                w.ContentScaleAspect = _gameScaleAspect;
+                w.ContentScaleSize = _gameScaleSize;
+            }
+            OpenGameWindow();
+            ApplySettings();
+        }
+
+        private void EnterGame(string token)
+        {
+            OpenGame();
+            _ui.Root.Visible = true;
+            Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
+            Connect(token);
+        }
+
+        // ---- the character select (GDD "Character select", Phase 16) ----------
+
+        private Characters _chars;
+        private CharactersView _charsView;
+        private CanvasLayer _charsLayer;
+        private CharacterStage _stage;
+        private string _stageBody;
+        private bool _selectUp;
+        private bool _createBusy;
+        /// <summary>The session came from the select: a 1008 before the first snapshot returns there.</summary>
+        private bool _selectBorn;
+        private bool _gotSnapshot;
+
+        /// <summary>The chosen character's body (row.Body), set at PLAY in the select.</summary>
+        public string SelfBody { get; private set; } = "char.player";
+
+        /// <summary>
+        /// The select over the game canvas: its own layer above the HUD, the
+        /// stage under Boot (main viewport, its own camera and light), the
+        /// list loading. `fake` (-uiChars) leaves the model to the rig.
+        /// </summary>
+        private void OpenSelect(bool fake)
+        {
+            _ui.Root.Visible = false;
+            Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
+            _chars = new Characters();
+            _charsLayer = new CanvasLayer { Name = "Characters", Layer = 110 };
+            AddChild(_charsLayer);
+            var root = new Control { Name = "root", MouseFilter = Control.MouseFilterEnum.Ignore };
+            root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            _charsLayer.AddChild(root);
+            // Positional, in the contract's order: play, new, create, cancel,
+            // sign out, retry, select, name, female, vanguard.
+            _charsView = new CharactersView(root,
+                PlaySelected,
+                () => _chars.NewCharacter(),
+                () => _ = CreateCharacter(),
+                () => _chars.Cancel(),
+                SignOutFromSelect,
+                () => _ = LoadCharacters(),
+                i => _chars.Select(i),
+                n => _chars.SetName(n),
+                f => _chars.SetFemale(f),
+                v => _chars.SetVanguard(v));
+            _charsView.Show(true);
+            _stage = new CharacterStage(this, _assets);
+            _stageBody = null;
+            _selectUp = true;
+            GD.Print("select: open");
+            if (!fake) _ = LoadCharacters();
+        }
+
+        /// <summary>The select's frame: the model onto the view, the stage turning, its body following the model.</summary>
+        private void SelectFrame(double dt)
+        {
+            _charsView.Set(_chars);
+            string body = _chars.StageBody ?? "";   // "" = the empty stage (Loading, Failed)
+            if (body != _stageBody)
+            {
+                _stageBody = body;
+                _stage.Show(body == "" ? null : StageAsset(body));
+            }
+            _stage.Frame(dt);
+            // Rig: -uiSelectPlay <s> presses PLAY in the select once a row is
+            // selectable, so the select → world path runs headless.
+            string selectPlay = Arg("-uiSelectPlay");
+            if (selectPlay != null && _chars.CanPlay && _elapsed >= double.Parse(selectPlay, CultureInfo.InvariantCulture)) PlaySelected();
+        }
+
+        /// <summary>A body id the registry can draw: the `.f` asset falls back to its model's male body until it lands.</summary>
+        private string StageAsset(string id)
+        {
+            if (_assets.Has(id)) return id;
+            if (id.EndsWith(".f", StringComparison.Ordinal) && _assets.Has(id.Substring(0, id.Length - 2))) return id.Substring(0, id.Length - 2);
+            return "char.player";
+        }
+
+        private void CloseSelect()
+        {
+            _selectUp = false;
+            _stage?.Free();
+            _stage = null;
+            _charsView?.Show(false);
+            _charsView = null;
+            _charsLayer?.QueueFree();
+            _charsLayer = null;
+            _camera.Current = true;
+        }
+
+        /// <summary>The select gone, the launcher window back (a dead session, SIGN OUT).</summary>
+        private void BackToLauncher()
+        {
+            CloseSelect();
+            if (_launcherView == null) { GetTree().Quit(0); return; } // a rig select has no launcher to return to
+            OpenLauncherWindow();
+            _launcherView.Show(true);
+            _launcherUp = true;
+            _ui.Root.Visible = false;
+            Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
+        }
+
+        /// <summary>A 401 anywhere in the select: both keys cleared, `SIGNED OUT · sign in again`.</summary>
+        private void SessionRefused()
+        {
+            GD.Print("select: session refused, signed out");
+            ClearIdentity();
+            _login.Refused();
+            BackToLauncher();
+        }
+
+        private void SignOutFromSelect()
+        {
+            SignOut();
+            BackToLauncher();
+        }
+
+        /// <summary>GET /api/characters (RETRY, a vanished character): a fresh model in Loading, then the rows.</summary>
+        private async System.Threading.Tasks.Task LoadCharacters()
+        {
+            var chars = _chars = new Characters();
             try
             {
                 string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
                 using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
                 using HttpRequestMessage req = AccountRequest(HttpMethod.Get, site + "/api/characters", null, Identity("session"));
                 using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
-                if ((int)resp.StatusCode == 401)
+                if (!_selectUp || chars != _chars) return;
+                if ((int)resp.StatusCode == 401) { SessionRefused(); return; }
+                if (!resp.IsSuccessStatusCode)
                 {
-                    GD.Print("launcher: session refused, signed out");
-                    ClearIdentity();
-                    _login.Refused();
+                    GD.Print($"select: characters failed ({(int)resp.StatusCode})");
+                    chars.Fail(LoadFailed);
+                    return;
                 }
-                else if (!resp.IsSuccessStatusCode)
-                {
-                    GD.Print($"launcher: characters failed ({(int)resp.StatusCode})");
-                    _login.Fail(0);
-                }
-                else
-                {
-                    var rows = Newtonsoft.Json.Linq.JArray.Parse(await resp.Content.ReadAsStringAsync(budget.Token));
-                    token = rows.Count > 0 ? (string)rows[0]["token"] : null;
-                    if (string.IsNullOrEmpty(token)) { GD.Print("launcher: no character"); _login.Fail(0); }
-                }
+                var rows = new List<CharacterRow>();
+                foreach (Newtonsoft.Json.Linq.JToken r in Newtonsoft.Json.Linq.JArray.Parse(await resp.Content.ReadAsStringAsync(budget.Token)))
+                    rows.Add(ParseRow(r));
+                if (!_selectUp || chars != _chars) return;
+                chars.Loaded(rows);
+                GD.Print($"select: {rows.Count} characters");
             }
             catch (Exception e)
             {
-                GD.Print($"launcher: characters unreachable ({e.GetType().Name})");
-                _login.Fail(0);
+                GD.Print($"select: characters unreachable ({e.GetType().Name})");
+                if (_selectUp && chars == _chars) chars.Fail(LoadFailed);
             }
-            _playBusy = false;
-            if (string.IsNullOrEmpty(token) || !_launcherUp) return;
-            SaveToken(token);
-            EnterGame(token);
         }
 
-        private void EnterGame(string token)
+        private const string LoadFailed = "COULD NOT LOAD CHARACTERS · retry";
+
+        private static CharacterRow ParseRow(Newtonsoft.Json.Linq.JToken r) => new CharacterRow
         {
-            _launcherUp = false;
-            _launcherView.Show(false);
+            Token = (string)r["token"] ?? "",
+            Name = (string)r["name"] ?? "",
+            Body = string.IsNullOrEmpty((string)r["body"]) ? "char.player" : (string)r["body"],
+            Credits = (long?)r["credits"] ?? 0,
+            LastSeenMs = (long?)r["last_seen_ms"] ?? 0,
+        };
+
+        /// <summary>CREATE: POST /api/characters {name, body}; 200 lists and selects it, 400/409 show the server's reason.</summary>
+        private async System.Threading.Tasks.Task CreateCharacter()
+        {
+            if (_createBusy || !_chars.CanCreate) return;
+            _createBusy = true;
+            var chars = _chars;
+            try
+            {
+                string site = Launcher.SiteUrl(_serverUrl) ?? throw new FormatException(_serverUrl);
+                string json = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["name"] = chars.Name,
+                    ["body"] = Characters.BodyId(chars.Female, chars.Vanguard),
+                }.ToString(Newtonsoft.Json.Formatting.None);
+                using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
+                using HttpRequestMessage req = AccountRequest(HttpMethod.Post, site + "/api/characters", json, Identity("session"));
+                using HttpResponseMessage resp = await AccountHttp.SendAsync(req, budget.Token);
+                string text = await resp.Content.ReadAsStringAsync(budget.Token);
+                if (!_selectUp || chars != _chars) return;
+                if ((int)resp.StatusCode == 401) { SessionRefused(); return; }
+                if (!resp.IsSuccessStatusCode)
+                {
+                    GD.Print($"select: create refused ({(int)resp.StatusCode} {text.Trim()})");
+                    chars.CreateFailed((int)resp.StatusCode, text.Trim());
+                    return;
+                }
+                CharacterRow row = ParseRow(Newtonsoft.Json.Linq.JObject.Parse(text));
+                chars.Created(row);
+                GD.Print($"select: created {row.Name} ({row.Body})");
+            }
+            catch (Exception e)
+            {
+                GD.Print($"select: create unreachable ({e.GetType().Name})");
+                if (_selectUp && chars == _chars) chars.CreateFailed(0, "");
+            }
+            finally
+            {
+                _createBusy = false;
+            }
+        }
+
+        /// <summary>PLAY in the select: the row's body on the local rig, its token saved, the stage gone, the connect.</summary>
+        private void PlaySelected()
+        {
+            if (!_selectUp || !_chars.CanPlay) return;
+            CharacterRow row = _chars.Rows[_chars.Selected];
+            SelfBody = string.IsNullOrEmpty(row.Body) ? "char.player" : row.Body;
+            _viewModel.SetBody(SelfBody);
+            SaveToken(row.Token); // Reconnect keeps working
+            CloseSelect();
             _ui.Root.Visible = true;
-            Window w = GetWindow();
-            w.ContentScaleMode = _gameScaleMode;
-            w.ContentScaleAspect = _gameScaleAspect;
-            w.ContentScaleSize = _gameScaleSize;
-            OpenGameWindow();
-            ApplySettings();
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Captured;
-            Connect(token);
+            _selectBorn = true;
+            _gotSnapshot = false;
+            GD.Print($"select: play {row.Name} ({SelfBody})");
+            Connect(row.Token);
+        }
+
+        /// <summary>
+        /// GDD: a 1008 close before the first snapshot (the character went
+        /// under you) returns to the select, reloaded. The pump would retry
+        /// the dead token forever, so the client is replaced.
+        /// </summary>
+        private bool CharacterRefused()
+        {
+            if (!_selectBorn || _gotSnapshot || _net.LastCloseCode != 1008) return false;
+            GD.Print("select: the server refused the character (1008), back to the select");
+            _selectBorn = false;
+            _net.Dispose();
+            _net = new NetClient();
+            OpenSelect(fake: false);
+            return true;
+        }
+
+        // ---- select rig (-uiShot … -uiChars <state>) ----------------------------
+
+        /// <summary>-uiChars &lt;state&gt;: the select in a named state with fake rows, no network.</summary>
+        private void FakeChars(string state)
+        {
+            OpenSelect(fake: true);
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var rows = new List<CharacterRow>
+            {
+                new CharacterRow { Token = "fake-kade", Name = "Kade", Body = "char.ubc.f", Credits = 1240, LastSeenMs = now - 2 * 3_600_000L },
+                new CharacterRow { Token = "fake-tam", Name = "Tam", Body = "char.player", Credits = 300, LastSeenMs = now - 3 * 86_400_000L },
+                new CharacterRow { Token = "fake-vex", Name = "Vex", Body = "char.player.f", Credits = 5, LastSeenMs = now },
+            };
+            switch (state)
+            {
+                case "select": _chars.Loaded(rows); _chars.Select(0); break;
+                case "create":
+                    _chars.Loaded(rows);
+                    _chars.NewCharacter();
+                    _chars.SetName("Ka");
+                    _chars.SetFemale(true);
+                    _chars.SetVanguard(true);
+                    break;
+                case "empty": _chars.Loaded(new List<CharacterRow>()); break;
+                case "loading": break;
+                case "failed": _chars.Fail(LoadFailed); break;
+                default: GD.PushError($"-uiChars: unknown state {state}"); break;
+            }
+            GD.Print($"select: faked {_chars.Now}");
         }
 
         /// <summary>
@@ -828,7 +1068,9 @@ namespace SpaceAdventure.Game
             _net = new NetClient();
             _serverUrl = ResolveServerUrl();
             string fake = Arg("-uiLauncher");
-            if (launcher)
+            string fakeChars = Arg("-uiChars");
+            if (fakeChars != null) FakeChars(fakeChars);
+            else if (launcher)
             {
                 BuildLauncher();
                 string fakeLogin = Arg("-uiLogin");
@@ -846,7 +1088,7 @@ namespace SpaceAdventure.Game
             // review artifact for C60 (test/out/ui/) and the only eyes a
             // headless agent has.
             string shot = Arg("-uiShot");
-            if (shot != null && fake != null) _ = SaveLauncherShot(shot);
+            if (shot != null && (fake != null || fakeChars != null || Arg("-uiPlayReal") != null)) _ = SaveLauncherShot(shot);
             else if (shot != null) _ = SaveUiShot(shot);
         }
 
@@ -880,6 +1122,13 @@ namespace SpaceAdventure.Game
             try
             {
                 Clock.Dt = delta;
+                if (_selectUp)
+                {
+                    _elapsed += delta;
+                    if (_quitAfter >= 0 && _elapsed >= _quitAfter) GetTree().Quit(0);
+                    else SelectFrame(delta);
+                    return;
+                }
                 if (_launcherUp)
                 {
                     _elapsed += delta;
@@ -914,6 +1163,7 @@ namespace SpaceAdventure.Game
             }
 
             DrainNetwork();
+            if (CharacterRefused()) return;
             if (!_worldBuilt)
             {
                 // No world yet: the only thing worth drawing is why.
@@ -1387,6 +1637,7 @@ namespace SpaceAdventure.Game
                 case Msg.Snapshot:
                 {
                     Snapshot snap = Decode.Snapshot(frame.Reader);
+                    _gotSnapshot = true;
                     _timeline.Add(snap, Clock.Now);
                     foreach (var row in snap.Entities)
                     {
@@ -2314,6 +2565,47 @@ namespace SpaceAdventure.Game
             string longName = UI.Login.Shorten("averyveryverylongname@example.com");
             Check("login: a long email is shortened with …", longName.Length <= 26 && longName.EndsWith("…", StringComparison.Ordinal));
             Check("login: a short email is unchanged", UI.Login.Shorten("a@b.c") == "a@b.c");
+            // Phase 16: the character select's model (GDD "Character select").
+            CharacterRow Row(string name, string body) => new CharacterRow { Token = "t-" + name, Name = name, Body = body, Credits = 10, LastSeenMs = 0 };
+            var three = new List<CharacterRow> { Row("Kade", "char.ubc.f"), Row("Tam", "char.player"), Row("Vex", "char.player.f") };
+            var ch = new Characters();
+            Check("chars: starts Loading, PLAY dark", ch.Now == Characters.State.Loading && !ch.CanPlay);
+            ch.Loaded(three);
+            Check("chars: Loaded(3) is List, row 0 selected, PLAY lit, stage on row 0's body",
+                ch.Now == Characters.State.List && ch.Selected == 0 && ch.CanPlay && ch.StageBody == "char.ubc.f");
+            ch.Select(2);
+            Check("chars: Select(2) stages row 2's body", ch.Selected == 2 && ch.StageBody == "char.player.f");
+            var ce = new Characters();
+            ce.Loaded(new List<CharacterRow>());
+            Check("chars: Loaded(empty) opens Create, PLAY dark", ce.Now == Characters.State.Create && !ce.CanPlay);
+            ch.NewCharacter();
+            Check("chars: NewCharacter is Create, stage char.player", ch.Now == Characters.State.Create && ch.StageBody == "char.player");
+            ch.SetFemale(true);
+            ch.SetVanguard(true);
+            Check("chars: F + VANGUARD stages char.ubc.f", ch.StageBody == "char.ubc.f");
+            foreach (var (name, ok) in new[] { ("Ka", false), ("Kade", true), ("Kade!", false), (" Kade", false), ("Ka  de", false), ("Abcdefghijklmnop", true), ("Abcdefghijklmnopq", false) })
+                Check($"chars: NameOk(\"{name}\") is {ok}", Characters.NameOk(name) == ok);
+            ch.SetName("Kade");
+            Check("chars: a good name lights CREATE", ch.CanCreate);
+            ch.CreateFailed(409, "name taken");
+            Check("chars: CreateFailed(409, name taken) is NAME TAKEN, still Create", ch.Reason == "NAME TAKEN" && ch.Now == Characters.State.Create);
+            ch.Created(Row("Juno", "char.ubc.f"));
+            Check("chars: Created lists and selects the new row, PLAY lit",
+                ch.Now == Characters.State.List && ch.Rows.Count == 4 && ch.Rows[ch.Selected].Name == "Juno" && ch.CanPlay);
+            ch.NewCharacter();
+            ch.Cancel();
+            Check("chars: Cancel is List", ch.Now == Characters.State.List);
+            Check("chars: NEW lit under five", ch.CanNew);
+            ch.NewCharacter();
+            ch.Created(Row("Zed", "char.player"));
+            Check("chars: NEW dark at five", ch.Rows.Count == 5 && !ch.CanNew);
+            var cf = new Characters();
+            cf.Fail("COULD NOT LOAD CHARACTERS · retry");
+            Check("chars: Fail is Failed, PLAY dark", cf.Now == Characters.State.Failed && !cf.CanPlay && cf.Reason == "COULD NOT LOAD CHARACTERS · retry");
+            foreach (var (female, vanguard, id) in new[] { (false, false, "char.player"), (true, false, "char.player.f"), (false, true, "char.ubc"), (true, true, "char.ubc.f") })
+                Check($"chars: BodyId/ParseBody round-trip {id}", Characters.BodyId(female, vanguard) == id && Characters.ParseBody(id) == (female, vanguard));
+            Check("chars: a player spawn's data splits on the first NUL",
+                EntityViews.SplitPlayerData("Kade\0char.ubc.f") == ("Kade", "char.ubc.f") && EntityViews.SplitPlayerData("Tam") == ("Tam", null));
             Check("outward CCW triangle is not inward", !TerrainMesh.FacesInward(verts, new[] { 0, 1, 2 }));
             Check("the same triangle reversed is inward", TerrainMesh.FacesInward(verts, new[] { 0, 2, 1 }));
 

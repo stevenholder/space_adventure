@@ -1621,12 +1621,27 @@ installed build anyway.
 
 # Phase 16 — accounts only, launcher login, characters (2026-10-05)
 
-### Where Phase 16 stands (2026-10-05)
+### Where Phase 16 stands (2026-10-06)
 
-Drafted. Nothing built. Phase 15's launcher shipped with its account
-column reserved; the first update *through* the launcher was seen live
-(1.0.55 → 1.0.56, "looks good"), so the window is trusted enough to own
-identity too.
+**A, the door — MERGED (#70).** Sign in / create account in the launcher,
+`game-login` → bearer session, strict join (1008 + the refused counter),
+link codes and the F1 panel gone, migration 005. Three bugs found on kind
+and fixed on the way: the migration's clash rename collided with itself
+(now the whole token as suffix), the unknown-email dummy argon2 hash was
+a 64 MiB literal that OOM-killed the 128Mi pod (now built from the real
+19 MiB parameters), and an account delete with a character still
+connected resurrected the row from the disconnect save (now `Server.Kick`
+discards the live identity and closes 1008). t28: 36 strict / 34 guests.
+
+**B, the characters — built, this PR.** Four bodies (`char.player.f` from
+human.py's gender macro, `char.ubc.f` from the Superhero_Female gltf; 40
+new armor glbs, plus the 10 the male UBC body never had), the spawn row
+carries `name\0body`, `game-login` mints nothing, PLAY opens the character
+select (list, create with name + M/F + COLONIST/VANGUARD, the body on a
+turntable in the main viewport), the chosen body is the local body and
+its first-person arms. C153–C160 recorded (docs/QA-STATUS.md "Phase 16").
+t28: 41 strict / 39 guests. Owed to the Windows install against prod:
+the proof below end to end, and a second client seeing both bodies.
 
 Phase 7 built accounts that issue game identity and kept every other
 door open: anonymous tokens join as guests, the site mints link codes,

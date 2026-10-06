@@ -75,6 +75,12 @@ namespace SpaceAdventure.Net
         /// <summary>Last error, for the HUD to show. Null when healthy.</summary>
         public string LastError { get; private set; }
 
+        /// <summary>
+        /// The status of the last close frame the server sent (1008 = the
+        /// hello was refused, Phase 16), 0 when none since Connect.
+        /// </summary>
+        public int LastCloseCode { get; private set; }
+
         /// <summary>Our own entity id, from hello_ack. Zero until joined.</summary>
         public uint EntityId { get; private set; }
 
@@ -104,6 +110,7 @@ namespace SpaceAdventure.Net
             _cts = new CancellationTokenSource();
             State = LinkState.Connecting;
             LastError = null;
+            LastCloseCode = 0;
             _ = Task.Run(() => PumpForeverAsync(_cts.Token));
         }
 
@@ -238,6 +245,7 @@ namespace SpaceAdventure.Net
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     LastError = $"server closed: {result.CloseStatus} {result.CloseStatusDescription}";
+                    LastCloseCode = (int)(result.CloseStatus ?? 0);
                     return;
                 }
                 if (result.MessageType != WebSocketMessageType.Binary)

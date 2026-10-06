@@ -1,0 +1,20 @@
+{
+  "$comment": "The player body, female (GDD 'Bodies': COLONIST F): tools/bpy/human.py variant char.player.f, the char.player build with the MakeHuman gender macro at 0.0; same rig, clips, hand mounts and eye height. The recipe only adds eye.",
+  "id": "char.player.f",
+  "src": "build/char.player.f.raw.glb",
+  "out": "chars/player_f.glb",
+  "fit": false,
+  "budget": 9000,
+  "pbr": true,
+  "mounts": {
+    "eye": [
+      0,
+      1.7,
+      0
+    ]
+  },
+  "license": "CC0",
+  "author": "Space Adventure (MakeHuman base mesh, CC0)",
+  "source_url": "tools/bpy/human.py",
+  "rig": "animated"
+}

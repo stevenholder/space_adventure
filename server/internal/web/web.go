@@ -278,55 +278,19 @@ func (h *Handler) verifyLogin(w http.ResponseWriter, r *http.Request) *store.Acc
 }
 
 // gameLogin is the launcher's sign-in: the site's session row, returned in
-// the body for an Authorization header instead of set as a cookie.
+// the body for an Authorization header instead of set as a cookie. It mints
+// nothing: a new account has no characters and the character select
+// creates the first (GDD "Character select").
 func (h *Handler) gameLogin(w http.ResponseWriter, r *http.Request) {
 	acc := h.verifyLogin(w, r)
 	if acc == nil {
 		return
-	}
-	// PR A alone has no character select: the account plays its oldest
-	// character, so make sure there is one to play.
-	token, err := h.Store.AccountPlayerToken(r.Context(), acc.ID)
-	if err != nil {
-		http.Error(w, "lookup failed", http.StatusInternalServerError)
-		return
-	}
-	if token == "" {
-		if _, err := h.mintFirstCharacter(r.Context(), acc); err != nil {
-			http.Error(w, "character mint failed", http.StatusInternalServerError)
-			return
-		}
 	}
 	sid, ok := h.newSession(w, r, acc.ID)
 	if !ok {
 		return
 	}
 	writeJSON(w, map[string]any{"session": sid, "name": acc.Email})
-}
-
-// mintFirstCharacter names the account's first character after the email's
-// local part, as Phase 7's redeem did. Names are unique among characters
-// now, so "steve@a" and "steve@b" cannot both be "steve": later ones get a
-// number, and past that a token-ish suffix.
-func (h *Handler) mintFirstCharacter(ctx context.Context, acc *store.Account) (store.Player, error) {
-	base := server.SanitizeName(strings.SplitN(acc.Email, "@", 2)[0], 0)
-	for i := 1; ; i++ {
-		name := base
-		switch {
-		case i > 9:
-			suffix, err := randomHex()
-			if err != nil {
-				return store.Player{}, err
-			}
-			name = base + " " + suffix[:4]
-		case i > 1:
-			name = base + " " + string(rune('0'+i))
-		}
-		p, err := h.mintCharacter(ctx, acc, name, store.DefaultBody)
-		if !errors.Is(err, store.ErrNameTaken) || i > 12 {
-			return p, err
-		}
-	}
 }
 
 // mintCharacter makes a character the way a guest starts (NewPlayer), owned

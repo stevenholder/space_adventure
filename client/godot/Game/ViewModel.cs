@@ -185,7 +185,57 @@ void fragment() {
             _muzzle = new Node3D { Name = "muzzle", Position = new Vector3(0.1f, -0.15f, -0.6f) };
             eye.AddChild(_muzzle);
 
-            assets.Attach("char.player", _fp, model =>
+            AttachFp("char.player");
+
+            // ---- body: a real object in the world, seen when you look down ----
+            _body = new Node3D { Name = "LocalBody" };
+            worldParent.AddChild(_body);
+            BoxMesh.Attach(_body, "model", Models.PlayerLocal(), material, 0);
+            // The head casts but does not draw. Without it the shadow on the
+            // ground in front of you is headless.
+            MeshInstance3D head = BoxMesh.Attach(_body, "head-shadow", Models.PlayerHead(), material, 0);
+            head.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+
+            AttachBody("char.player");
+        }
+
+        /// <summary>The body id both instances wear ("char.player" until SetBody).</summary>
+        public string BodyId { get; private set; } = "char.player";
+
+        /// <summary>
+        /// Phase 16: the chosen character's body (GDD "Characters" Bodies) on
+        /// both the first-person arms and the local body. The old instances
+        /// go, armor and the held weapon are re-hung on the new ones. An id
+        /// with no .glb falls back to char.player.
+        /// </summary>
+        public void SetBody(string bodyId)
+        {
+            if (string.IsNullOrEmpty(bodyId)) bodyId = "char.player";
+            if (!_assets.Has(bodyId))
+            {
+                GD.Print($"viewmodel: body {bodyId} not in the manifest, wearing char.player");
+                bodyId = "char.player";
+            }
+            if (bodyId == BodyId) return;
+            BodyId = bodyId;
+
+            if (_fpModel != null) { _fpModel.QueueFree(); _fpModel = null; }
+            _fpAnim = null;
+            _fpHeld = null; _fpMuzzle = null; _fpGrip = null; _fpHeldAsset = "";
+            _fpWornDrawn.Clear(); _fpWornNodes.Clear();
+
+            if (_bodyModel != null) { _bodyModel.QueueFree(); _bodyModel = null; }
+            _bodyAnim = null;
+            _held = null;
+            _wornDrawn.Clear(); _wornNodes.Clear();
+
+            AttachFp(bodyId);
+            AttachBody(bodyId);
+        }
+
+        private void AttachFp(string bodyId)
+        {
+            _assets.Attach(bodyId, _fp, model =>
             {
                 _fpModel = model;
                 foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
@@ -199,17 +249,11 @@ void fragment() {
                 DressFp();
                 HoldFp(_heldAsset);
             });
+        }
 
-            // ---- body: a real object in the world, seen when you look down ----
-            _body = new Node3D { Name = "LocalBody" };
-            worldParent.AddChild(_body);
-            BoxMesh.Attach(_body, "model", Models.PlayerLocal(), material, 0);
-            // The head casts but does not draw. Without it the shadow on the
-            // ground in front of you is headless.
-            MeshInstance3D head = BoxMesh.Attach(_body, "head-shadow", Models.PlayerHead(), material, 0);
-            head.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
-
-            assets.Attach("char.player", _body, model =>
+        private void AttachBody(string bodyId)
+        {
+            _assets.Attach(bodyId, _body, model =>
             {
                 _bodyModel = model;
                 foreach (string part in new[] { "head", "arms" })

@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * Phase 16 acceptance, live: C153, C154, C156, C157 (the door, PR A).
+ * Phase 16 acceptance, live: C153, C154, C156, C157, C159.
  *
  * Register → POST /api/game-login (the launcher's sign-in: a session in the
- * body, sent back as `Authorization: Bearer`) → GET /api/characters (the
- * first game-login minted the account's first character, named after the
- * email's local part) → JOIN THE GAME with that character's token under a
- * different hello name: the self spawn carries the ROW's name → the account
- * page shows the same player and credits → a second game-login mints
- * nothing → wrong password / unknown email are one 401 → the login bucket
- * 429s a burst → POST /api/characters: a second character, the name rule,
- * case-insensitive uniqueness, five per account → JOIN as it → a password
- * change kills the bearer (401) but the character token still joins →
+ * body, sent back as `Authorization: Bearer`) → GET /api/characters is []
+ * (game-login mints nothing; a new account has no character) → POST
+ * /api/characters makes the first one (char.player, a per-run
+ * name) → JOIN THE GAME with its token under a different hello name:
+ * the self spawn carries the ROW's name, no NUL → the account page shows the
+ * same player and credits → a second game-login still lists ONE row → wrong
+ * password / unknown email are one 401 → the login bucket 429s a burst →
+ * POST /api/characters: a second character (char.ubc.f), the name rule,
+ * case-insensitive uniqueness, five per account → C159: JOIN as it while the
+ * first is in the world: its self spawn data is `name \0 char.ubc.f`, the
+ * other client sees the same bytes, and it sees the first as a bare name → a
+ * password change kills the bearer (401) but the character token still joins →
  * logout ends a bearer → the Phase 7 link-code / redeem / import routes are
  * 404 → delete the account: its characters go with it.
  *
@@ -46,6 +49,12 @@ function cmd (seq, op, body) {
   const d = enc.encode(JSON.stringify(body)), b = u8(8 + d.length), dv = new DataView(b.buffer)
   dv.setUint16(0, seq, true); dv.setUint16(2, op, true); dv.setUint32(4, d.length, true); b.set(d, 8)
   return frame(0x000e, b)
+}
+// A player spawn row's data: `name`, or `name \0 body` (GDD "Characters";
+// the same split as lib/wire.mjs decodeSpawn).
+const split = (data) => {
+  const i = data?.indexOf('\0') ?? -1
+  return i < 0 ? { name: data, body: 'char.player' } : { name: data.slice(0, i), body: data.slice(i + 1) }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const HEX32 = /^[0-9a-f]{32}$/
@@ -121,11 +130,46 @@ function joinGame (token, name = 't28') {
   })
 }
 
+// Stay in the game: like joinGame, but the socket is kept open and every
+// spawn row is collected (entity id → raw data) until close() is called.
+// Resolves once the self spawn arrives (or the server closes first).
+function openGame (token, name = 't28') {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(WS)
+    ws.binaryType = 'arraybuffer'
+    const out = { id: 0, data: null, close: null, rows: new Map(), leave: () => ws.close() }
+    let done = false
+    const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(out) } }
+    const timer = setTimeout(() => { ws.close(); reject(new Error('join timeout')) }, 8000)
+    ws.addEventListener('open', () => ws.send(hello(name, token)))
+    ws.addEventListener('message', (ev) => {
+      const dv = new DataView(ev.data), t = dv.getUint16(0, true), p = new Uint8Array(ev.data, 2)
+      if (t === 0x0002) out.id = dv.getUint32(2 + 8, true)
+      else if (t === 0x0005) {
+        const id = dv.getUint32(2, true)
+        const data = dec.decode(p.subarray(10, 10 + dv.getUint32(2 + 6, true)))
+        out.rows.set(id, data)
+        if (out.id && id === out.id && out.data === null) { out.data = data; finish() }
+      }
+    })
+    ws.addEventListener('close', (ev) => { if (out.close === null) out.close = ev.code; finish() })
+    ws.addEventListener('error', () => {})
+  })
+}
+// Wait (up to ms) until a socket from openGame has seen a row for id.
+async function rowFor (g, id, ms = 3000) {
+  for (let t = 0; t < ms && !g.rows.has(id); t += 50) await sleep(50)
+  return g.rows.get(id) ?? null
+}
+
 const email = `t28-${run}@example.com`
-const local = email.split('@')[0]
+// The first character's name: per run (names are unique across accounts and
+// kind's database outlives a run) and inside the 3-16 name rule, which the
+// email's local part (17 characters) is not.
+const local = `t28-${run.toString(36)}`
 const a = client()
 
-// --- 1. C153: register → game-login → bearer → the first character -------
+// --- 1. C153/C157: register → game-login → bearer → no character → make one
 let r = await a('/api/register', { method: 'POST', body: { email, password: 'orbital-insertion' } })
 check('C153 register', r.status === 200, `status ${r.status}`)
 r = await a('/api/game-login', { method: 'POST', body: { email, password: 'orbital-insertion' } })
@@ -138,14 +182,16 @@ r = await g('/api/me')
 check('C153 bearer session accepted by /api/me', r.status === 200, `status ${r.status}`)
 r = await g('/api/characters')
 let chars = await json(r)
-const first = chars?.[0]
-check('C153 game-login minted one first character', r.status === 200 && chars?.length === 1 &&
-  first.body === 'char.player' && HEX32.test(first.token ?? '') && first.name === local,
-  `status ${r.status}, ${JSON.stringify(chars?.map((c) => [c.name, c.body]))}`)
+check('C157 a new account has no character (game-login mints none)', r.status === 200 && Array.isArray(chars) && chars.length === 0,
+  `status ${r.status}, ${JSON.stringify(chars)}`)
+r = await g('/api/characters', { method: 'POST', body: { name: local, body: 'char.player' } })
+const first = await json(r)
+check('C157 create the first character', r.status === 200 && first?.name === local && first?.body === 'char.player' &&
+  HEX32.test(first?.token ?? ''), `status ${r.status}, ${JSON.stringify(first && [first.name, first.body])}`)
 
 // --- 2. C154: the token joins under the ROW's name ------------------------
 const j1 = await joinGame(first?.token ?? '', 'ignored-name')
-check('C154 character joins under the row name, not hello.name', j1.id > 0 && j1.data === local,
+check('C154 character joins under the row name, not hello.name (char.player: no NUL)', j1.id > 0 && j1.data === local,
   `entity ${j1.id}, data ${JSON.stringify(j1.data)}, close ${j1.close}`)
 await sleep(1500) // let the save land
 
@@ -159,7 +205,7 @@ r = await a('/api/game-login', { method: 'POST', body: { email, password: 'orbit
 const gl2 = await json(r)
 r = await client({ bearer: gl2?.session })('/api/characters')
 chars = await json(r)
-check('C156 a second game-login mints no second character', chars?.length === 1 && chars[0].token === first?.token,
+check('C156 a second game-login: the list is still one row', r.status === 200 && chars?.length === 1 && chars[0].token === first?.token,
   `rows ${chars?.length}`)
 
 // --- 4. C153: one 401 body; the bucket ------------------------------------
@@ -216,9 +262,21 @@ const me5 = await json(r)
 check('C157 the account page shows the same rows', me5?.players?.length === 5 &&
   me5.players.map((p) => p.name + '|' + p.body).join(',') === (await json(await g('/api/characters')))?.map((c) => c.name + '|' + c.body).join(','),
   `players ${me5?.players?.length}`)
-const j2 = await joinGame(k?.token ?? '', 'not-kade')
-check('C157 join as the new character: self spawn data is its name', j2.id > 0 && j2.data === kade,
-  `entity ${j2.id}, data ${JSON.stringify(j2.data)}, close ${j2.close}`)
+// C159: the first character stays in the world while Kade joins.
+const want = `${kade}\0char.ubc.f`
+const o1 = await openGame(first?.token ?? '', 'observer')
+check('C159 the char.player row is its bare name (no NUL)', o1.id > 0 && o1.data === local && !o1.data.includes('\0') &&
+  split(o1.data).body === 'char.player', `entity ${o1.id}, data ${JSON.stringify(o1.data)}, close ${o1.close}`)
+const o2 = await openGame(k?.token ?? '', 'not-kade')
+const ks = split(o2.data)
+check('C159 join as char.ubc.f: self spawn data is name \\0 body', o2.id > 0 && o2.data === want,
+  `entity ${o2.id}, data ${JSON.stringify(o2.data)}, close ${o2.close}`)
+check('C159 the split gives name and body', ks.name === kade && ks.body === 'char.ubc.f', JSON.stringify(ks))
+const seen = await rowFor(o1, o2.id)
+check('C159 the other client sees the same bytes for Kade', seen === want, `row ${JSON.stringify(seen)}`)
+const back = await rowFor(o2, o1.id)
+check('C159 Kade sees the char.player row as a bare name', back === local, `row ${JSON.stringify(back)}`)
+o2.leave(); o1.leave()
 await sleep(1000)
 
 // --- 6. C156/C157: a password change kills the bearer, not the token -------

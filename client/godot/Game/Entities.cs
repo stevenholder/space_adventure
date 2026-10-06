@@ -199,8 +199,30 @@ namespace SpaceAdventure.Game
         public void OnSpawn(Spawn spawn)
         {
             _pendingTypes[spawn.EntityId] = spawn.EntityType;
-            _pendingLabels[spawn.EntityId] = spawn.DataUtf8;
+            string data = spawn.DataUtf8;
+            if (spawn.EntityType == EntityType.Player)
+            {
+                // Phase 16: `name` or `name\0body` (GDD "Characters").
+                var (name, body) = SplitPlayerData(data);
+                _pendingLabels[spawn.EntityId] = name;
+                if (body != null) _pendingBodies[spawn.EntityId] = body;
+                else _pendingBodies.Remove(spawn.EntityId);
+            }
+            else _pendingLabels[spawn.EntityId] = data;
         }
+
+        /// <summary>A player spawn's data: the name, and the body id after the first NUL (null when absent).</summary>
+        public static (string name, string body) SplitPlayerData(string data)
+        {
+            data ??= "";
+            int nul = data.IndexOf('\0');
+            if (nul < 0) return (data, null);
+            string body = data.Substring(nul + 1);
+            return (data.Substring(0, nul), body == "" ? null : body);
+        }
+
+        /// <summary>Spawned players' bodies (only the non-default ones), for the row that follows.</summary>
+        private readonly Dictionary<uint, string> _pendingBodies = new Dictionary<uint, string>();
 
         public void OnDespawn(uint id)
         {
@@ -211,6 +233,7 @@ namespace SpaceAdventure.Game
             }
             _pendingTypes.Remove(id);
             _pendingLabels.Remove(id);
+            _pendingBodies.Remove(id);
             _pendingEquipped.Remove(id);
             _pendingWorn.Remove(id);
         }
@@ -694,7 +717,15 @@ namespace SpaceAdventure.Game
                 _pendingWorn.Remove(id);
             }
 
-            _assets.Attach(AssetFor(type, label), root, model =>
+            string asset = AssetFor(type, label);
+            if (type == EntityType.Player && _pendingBodies.TryGetValue(id, out string body))
+            {
+                // The body the row names; its "asset" meta is this id, so the
+                // armor dresser picks the `@<body>` pieces built for it.
+                if (_assets.Has(body)) asset = body;
+                else GD.Print($"entities: body {body} not in the manifest, drawing {asset}");
+            }
+            _assets.Attach(asset, root, model =>
             {
                 box?.QueueFree();
                 view.Anim = CharacterAnim.For(model);

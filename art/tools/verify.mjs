@@ -99,7 +99,15 @@ const NODE_CONTRACTS = {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
   },
-  // Quaternius UBC body (human.py variant char.ubc): same rig names after its import.
+  "char.player.f": {
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    eyeHeadSiblings: true,
+  },
+  // Quaternius UBC bodies (human.py variants char.ubc, char.ubc.f): same rig names after their import.
+  "char.ubc.f": {
+    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    eyeHeadSiblings: true,
+  },
   "char.ubc": {
     nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,

@@ -152,7 +152,12 @@ export function decodeSpawn(p) {
   const entityType = p.readUInt16LE(4)
   const dataLen = p.readUInt32LE(6)
   const data = p.slice(10, 10 + dataLen).toString('utf8')
-  return { entityId, entityType, data }
+  // A player row is `name`, or `name \0 body` for a body other than
+  // char.player (GDD "Characters"); `data` stays the raw string.
+  const nul = data.indexOf('\0')
+  const name = nul < 0 ? data : data.slice(0, nul)
+  const body = nul < 0 ? 'char.player' : data.slice(nul + 1)
+  return { entityId, entityType, data, name, body }
 }
 
 export function decodeDespawn(p) {

@@ -87,7 +87,9 @@ Sent once, immediately after `colliders`, and never resent.
 
 Constants:
 
-- `entity_type`: `0x0001` player body; `0x0002` ship (Phase 5, manifest id
+- `entity_type`: `0x0001` player body (Phase 16 — `spawn.data` is the
+  name, or `name NUL body` when the body is not `char.player`; see "Player
+  identity"); `0x0002` ship (Phase 5, manifest id
   `ship.v1`); `0x0003` NPC; `0x0004` target dummy; `0x0005` ground vehicle
   (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3);
   `0x0008` node (Phase 12 — `spawn.data` is the node def id, e.g.
@@ -319,6 +321,16 @@ Constants:
   - Sanitizing server-side matters: the name is rendered on every other
     player's screen, so it is untrusted input crossing a trust boundary. The
     client must also render it as text only, never as markup.
+  - **The body rides after the name** (Phase 16). A character's `spawn.data`
+    is `name`, or `name` `0x00` `body` when its body is anything but
+    `char.player` — e.g. `Kade\0char.ubc.f`. A guest and a `char.player`
+    character send the bare name, byte-identical to before bodies existed.
+    Every player `spawn` carries it: the self spawn, the rows a joiner gets
+    for players already in, and the broadcast of a joiner. Sanitized names
+    hold no control characters, so the first NUL is unambiguous; a reader
+    that stops there reads the name and draws the default body. The body ids
+    are GDD "Bodies" (`char.player`, `char.player.f`, `char.ubc`,
+    `char.ubc.f`).
 - `spawn`/`despawn` are sent to clients as entities enter/leave the world
   (M1: player join/leave, heartbeat timeout). A joining client receives
   `spawn` for every entity already in the world (M1: existing players; M2:

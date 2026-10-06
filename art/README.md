@@ -123,7 +123,18 @@ gunner (robot: the player's build in flat-shaded gunmetal with a visor band
 and antenna, so the Scout/iron armor fits it). A variant sets MakeHuman
 sliders, eye height, colours/metalness, hair, flat shading and rigid head
 parts; rig, clips, mounts and grips are shared. `blender -b --python
-tools/bpy/human.py -- npc.grunt` rebuilds one. body.py now only builds the
+tools/bpy/human.py -- npc.grunt` rebuilds one.
+
+The four player bodies (GDD "Bodies"): `char.player` and `char.player.f`
+(the same MakeHuman build, `gender` 1.0 / 0.0), `char.ubc` and `char.ubc.f`
+(Quaternius UBC Superhero male / female, Hair_Buzzed / Hair_Buns; the
+hairstyle's material is renamed `hair` so a helmet's `covers: head/hair`
+hides it). armor.py builds every piece for all of them (`BODIES`); per-body
+fit lives in its `FITS`: UBC wraps onto a body smoothed 4 passes, not 12,
+and the UBC female's torso plates `drape` (each vertex clears the torso
+within 8 cm along the spine) so the chest plate rides over the bust
+instead of being cut by it. `blender -b --python tools/bpy/armor.py --
+char.ubc.f` rebuilds one body's set. body.py now only builds the
 retired 11-bone skeleton and is kept for its older docs.
 
 ## Surface textures and decals (2026-10-01)
