@@ -509,31 +509,7 @@ void fragment() {
         /// which is NOT where the camera looks. Pitch belongs to the head; a
         /// body that pitches with the view lies on its back when you look up.
         /// </summary>
-        public void Place(Vec3 feet, Vec3 facing) => Place(feet, facing, 0f);
-
-        /// <summary>
-        /// Looking down puts the eye inside the collar: the near plane slices
-        /// the shoulders and the chest renders as dark shards. So the local
-        /// body slides BACK along the facing as the view pitches below
-        /// PullbackStartDeg, up to PullbackMetres at PullbackFullDeg. Local
-        /// view only: the server, the shadow's origin and what others see
-        /// never move. ponytail: one linear knob; a per-pitch curve if the
-        /// chest still clips on some body.
-        /// </summary>
-        public void Place(Vec3 feet, Vec3 facing, float pitchRadians)
-        {
-            float downDeg = -pitchRadians * 180f / Mathf.Pi;
-            float t = Mathf.Clamp((downDeg - PullbackStartDeg) / (PullbackFullDeg - PullbackStartDeg), 0f, 1f);
-            if (t > 0f)
-            {
-                Vec3 up = feet.Normalized();
-                Vec3 fwd = facing.RejectFrom(up);
-                if (fwd.Length > 1e-8) feet -= fwd.Normalized() * (PullbackMetres * t);
-            }
-            EntityViews.Place(_body, feet, facing);
-        }
-
-        private const float PullbackStartDeg = 20f, PullbackFullDeg = 70f, PullbackMetres = 0.14f;
+        public void Place(Vec3 feet, Vec3 facing) => EntityViews.Place(_body, feet, facing);
 
         /// <summary>
         /// Distance along `fwd` from `eye` to the nearest collider or the

@@ -184,8 +184,28 @@ namespace SpaceAdventure.Game
         {
             if (_camera == null) return;
             Vector3 pos = Frame.ToGodot(simPos);
-            _camera.GlobalPosition = pos + pos.Normalized() * EyeHeight;
+            Vector3 up = pos.Normalized();
+            Vector3 eye = pos + up * EyeHeight;
+            // Looking down puts the eye inside the collar, and the shoulders,
+            // a chest plate or pauldrons cross the near plane as dark shards.
+            // Past DipStartDeg the camera rises and steps back a little --
+            // DipLift up, DipBack behind the facing at DipFullDeg -- so the
+            // collar is never within the near plane while the body stays
+            // under you and the legs stay in view. The server's shot origin
+            // stays at the eye; the few centimetres do not matter to a hit.
+            // ponytail: linear in pitch; a curve if a body still clips.
+            float downDeg = -_pitch * 180f / Mathf.Pi;
+            float t = Mathf.Clamp((downDeg - DipStartDeg) / (DipFullDeg - DipStartDeg), 0f, 1f);
+            if (t > 0f)
+            {
+                Vector3 fwd = (-_camera.GlobalBasis.Z).Slide(up);
+                eye += up * (DipLift * t);
+                if (fwd.LengthSquared() > 1e-8f) eye -= fwd.Normalized() * (DipBack * t);
+            }
+            _camera.GlobalPosition = eye;
         }
+
+        private const float DipStartDeg = 20f, DipFullDeg = 70f, DipLift = 0.12f, DipBack = 0.10f;
 
         /// <summary>
         /// Pins the sign rules: mouse-right turns toward the movement frame's
