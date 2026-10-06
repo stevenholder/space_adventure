@@ -90,18 +90,15 @@ func TestOwnAndDeleteCascade(t *testing.T) {
 	must(s.PutPlayer(ctx, guest))
 
 	must(s.SetPlayerAccount(ctx, guest.Token, "a"))
-	if tok, _ := s.AccountPlayerToken(ctx, "a"); tok != guest.Token {
-		t.Fatalf("AccountPlayerToken = %q", tok)
-	}
 	players, err := s.AccountPlayers(ctx, "a")
-	if err != nil || len(players) != 1 || players[0].Credits != 750 {
+	if err != nil || len(players) != 1 || players[0].Token != guest.Token || players[0].Credits != 750 {
 		t.Fatalf("AccountPlayers = %+v, %v", players, err)
 	}
 
 	// PutPlayer (the game's save path) must not strip ownership.
 	guest.Credits = 900
 	must(s.PutPlayer(ctx, guest))
-	if tok, _ := s.AccountPlayerToken(ctx, "a"); tok != guest.Token {
+	if players, _ := s.AccountPlayers(ctx, "a"); len(players) != 1 || players[0].Token != guest.Token {
 		t.Fatal("a game save orphaned the account's player")
 	}
 
@@ -236,9 +233,6 @@ func TestCountAndListAccountPlayers(t *testing.T) {
 		}
 		if bodies["Kade"] != "char.ubc.f" || bodies["Ash"] != DefaultBody {
 			t.Errorf("bodies = %v", bodies)
-		}
-		if tok, _ := s.AccountPlayerToken(ctx, "a"); tok == "" {
-			t.Error("AccountPlayerToken found none of two characters")
 		}
 	})
 }
