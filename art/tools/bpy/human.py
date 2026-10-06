@@ -670,7 +670,7 @@ def make_human(decimate=True):
         h.name = "human"
         return h, rig, eyes
     if ACTIVE.get("lod"):
-        paint_skin(h, eyes)
+        paint_skin(h, eyes, rig)
         lod_decimate(h, eyes)
         new_eyeballs(h, eyes)
         h.name = "human"
@@ -706,10 +706,24 @@ def skin_faces(h, eyes):
     return out
 
 
-def paint_skin(h, eyes):
+def paint_skin(h, eyes, rig):
     base = ACTIVE.get("materials", {}).get("skin", MATERIALS["skin"][0])
     female = ACTIVE.get("macro", {}).get("gender", MACRO["gender"]) < 0.5
-    skinpaint.paint(h, eyes, eye_r(), base, female, skin_faces(h, eyes), ACTIVE["_eyeball"])
+    # The gloves (dress(): every face whose dominant bone is a hand or finger).
+    dom = dominant_bones(h)
+    glove = []
+    for p in h.data.polygons:
+        bones = [dom[v] for v in p.vertices]
+        b = max(set(bones), key=bones.count)
+        glove.append(bool(b) and b.startswith(FINGER_BONES))
+    knuckles = []
+    for side in ("r", "l"):
+        dorsal = -palm_normal(rig, side)
+        for f in ("index", "middle", "ring", "pinky"):
+            for j, r in (("01", 0.012), ("02", 0.008), ("03", 0.006)):
+                knuckles.append((tuple(pb(rig, f"{f}_{j}_{side}").matrix.translation), tuple(dorsal), r))
+    skinpaint.paint(h, eyes, eye_r(), base, female, skin_faces(h, eyes), ACTIVE["_eyeball"],
+                    glove, ACTIVE.get("materials", {}).get("glove", MATERIALS["glove"][0]), knuckles)
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres
@@ -1703,6 +1717,7 @@ def build():
         if ACTIVE.get("lod"):
             skinpaint.brow_shadow(parts["head"], brow_pts, material("skin"))
     if ACTIVE.get("lod"):
+        skinpaint.finish_glove(material("glove"), TEX_DIR, ACTIVE["_id"])
         skinpaint.finish(parts["head"], material("skin"), TEX_DIR, ACTIVE["_id"])
     kind = ACTIVE.get("head_parts")
     if kind:

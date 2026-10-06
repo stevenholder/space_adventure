@@ -207,6 +207,13 @@ same 9000-tri ceiling.
   for `lod` variants. Costs: +~0.43 MB per Colonist glb (2.13 -> 2.56 MB).
   No MPFB skin textures are used (its masks ship under the GPL with the
   add-on); everything is derived from the CC0 base mesh.
+- **Gloves** (`skin.paint_glove`): the suit's gloves are what first person
+  sees most. Their faces' MakeHuman UVs are packed into a 1024 px map of
+  their own (the tiling fabric maps, on box UVs, are dropped for them):
+  the glove colour with a worn, lighter sheen over each finger joint on the
+  back of the hand (soft blobs at the finger bones' heads, facing away from
+  the palm), an AO bake (finger creases, the gaps between fingers) and a
+  fine weave. No nails: the hands are gloved.
 - **Texture budget** (verify.mjs): every embedded image <= 2048 px a side,
   every body glb (`char.*`, `npc.*`) <= 8 MB.
 - **Hair material**: the pack's strand textures are greyscale (the pack

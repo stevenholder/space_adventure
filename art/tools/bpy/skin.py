@@ -91,7 +91,8 @@ def group_weights(obj, name):
 
 # ---- UVs ------------------------------------------------------------------------
 def pack_skin_uvs(h, skin):
-    """Pack the skin faces' UV islands alone into the unit square."""
+    """Pack the skin faces' UV islands alone into the unit square (the
+    other faces' UVs stay put; the glove's are packed by a second call)."""
     bpy.ops.object.select_all(action="DESELECT")
     h.select_set(True)
     bpy.context.view_layer.objects.active = h
@@ -195,7 +196,7 @@ def _pixels(img):
     return a.reshape(img.size[1], img.size[0], 4)[..., :3].astype(np.float64)
 
 
-def bake(h, skin, layers):
+def bake(h, skin, layers, size=None):
     """EMIT each per-vertex layer ({name: (n, 3) linear}) and AO into
     SKIN_TEX images; returns {name: (S, S, 3)} plus "AO": (S, S)."""
     scene = bpy.context.scene
@@ -255,7 +256,7 @@ def bake(h, skin, layers):
     bpy.context.view_layer.objects.active = tgt
     res = {}
     for name in list(layers) + ["AO"]:
-        img = _float_image("_bake_" + name, SKIN_TEX)
+        img = _float_image("_bake_" + name, size or SKIN_TEX)
         tex.image = img
         attr.attribute_name = name
         scene.cycles.samples = AO_SAMPLES if name == "AO" else 1
@@ -263,9 +264,8 @@ def bake(h, skin, layers):
         res[name] = _pixels(img)
         bpy.data.images.remove(img)
     bpy.data.objects.remove(occ, do_unlink=True)
-    # The full-resolution skin stays (unlinked) as normal_map()'s source.
     scene.collection.objects.unlink(tgt)
-    STATE["hi"] = tgt
+    res["_target"] = tgt
     h.hide_render = False
     h.data.attributes.remove(h.data.attributes["_vi"])
     scene.render.engine = prev_engine
@@ -298,13 +298,18 @@ def _noise(rng, size, cells):
     return rows[:, i] * (1 - f)[None, :] + rows[:, i + 1] * f[None, :]
 
 
-def paint(h, eyes, R, base, female, skin, ball):
-    """Steps 1-2: pack the UVs, bake, compose. Leaves the albedo in STATE."""
+def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuckles=()):
+    """Steps 1-2: pack the UVs, bake, compose. Leaves the albedo in STATE.
+    With `glove` (faces) the gloved hands get their own GLOVE_TEX map."""
     pack_skin_uvs(h, skin)
+    if glove is not None:
+        pack_skin_uvs(h, glove)
+        paint_glove(h, glove, glove_col, knuckles)
     m = masks(h, eyes, R, female, np.array(ball, dtype=bool))
     aux = np.stack([m["lips"], m["lash"], m["ears"]], -1)
     res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux})
     emit, ao, aux = res["paint"], res["AO"], res["aux"]
+    STATE["hi"] = res["_target"]          # the dense skin: normal_map()'s source
     # Crevices: darker and a little warmer (light scattering in the skin);
     # not across the lips (their seam read as an open mouth).
     occ = (1 - ao) * (1 - 0.7 * aux[..., 0])
@@ -316,6 +321,47 @@ def paint(h, eyes, R, base, female, skin, ball):
     pores = _noise(rng, S, 512) - 0.5
     alb = alb * (1 + 0.10 * blotch[..., None] * np.array([1.0, 1.15, 1.2])) * (1 + 0.05 * pores[..., None])
     STATE.update(alb=alb, ao=ao, lips=aux[..., 0], ears=aux[..., 2])
+
+
+GLOVE_TEX = 1024
+
+
+def paint_glove(h, glove, col, knuckles):
+    """The suit's gloves, seen up close in first person: AO (finger creases,
+    the gaps between fingers), a worn, lighter sheen over the knuckles (back
+    of the hand: a soft blob at each finger joint, facing away from the
+    palm), a fine weave. (Hard-edged knuckle plates from vertex masks came
+    out blotchy at the hand's vertex density.) Leaves STATE["glove"]."""
+    me = h.data
+    n = len(me.vertices)
+    co = np.empty(n * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    nr = np.empty(n * 3)
+    me.vertices.foreach_get("normal", nr)
+    nr = nr.reshape(-1, 3)
+    edges = _neighbours(me)
+    pad = np.zeros(n)
+    for p, dorsal, r in knuckles:
+        d2 = np.sum((co - np.array(p)) ** 2, axis=1)
+        facing = np.clip(nr @ np.array(dorsal), 0, 1)
+        pad = np.maximum(pad, np.exp(-d2 / (2 * r * r)) * smoothstep(0.2, 0.6, facing))
+    pad = smooth(pad, edges, n, 3)
+    pad = pad / max(pad.max(), 1e-6)
+    lin = srgb_to_lin(np.array(col))
+    pad_col = srgb_to_lin(np.array(col) * 1.5 + 0.03)          # worn, lighter over the knuckles
+    w = 0.6 * pad[:, None]
+    layer = np.repeat(lin[None, :], n, axis=0) * (1 - w) + pad_col[None, :] * w
+    aux = np.stack([pad, np.zeros(n), np.zeros(n)], -1)
+    res = bake(h, glove, {"paint": layer, "aux": aux}, GLOVE_TEX)
+    bpy.data.objects.remove(res["_target"], do_unlink=True)
+    occ = 1 - res["AO"]
+    alb = res["paint"] * (1 - 0.85 * occ)[..., None]
+    rng = np.random.default_rng(5)
+    S = GLOVE_TEX
+    weave = (np.sin(np.arange(S) * 2 * np.pi / 3.0)[None, :] * np.sin(np.arange(S) * 2 * np.pi / 3.0)[:, None])
+    alb = alb * (1 + 0.04 * weave[..., None]) * (1 + 0.08 * (_noise(rng, S, 32) - 0.5)[..., None])
+    STATE["glove"] = alb
 
 
 def brow_shadow(head, brow_pts, skin_mat):
@@ -396,6 +442,18 @@ def normal_map(head, skin_mat):
     bpy.data.materials.remove(mat)
     scene.render.engine = prev_engine
     return nrm
+
+
+def finish_glove(glove_mat, out_dir, name):
+    """Replace the glove's tiling fabric maps (box UVs) with the baked map."""
+    if "glove" not in STATE:
+        return
+    path = os.path.join(out_dir, name + "_glove.jpg")
+    _save_jpeg(lin_to_srgb(STATE.pop("glove")), path)
+    nt = glove_mat.node_tree
+    for nd in [nd for nd in nt.nodes if nd.type in ("TEX_IMAGE", "NORMAL_MAP")]:
+        nt.nodes.remove(nd)
+    _link(glove_mat, path, roughness=0.7)
 
 
 def finish(head, skin_mat, out_dir, name):
