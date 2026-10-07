@@ -20,6 +20,8 @@ export const MSG = {
   BOARD: 0x000b,
   DISEMBARK: 0x000c,
   SEAT_RESULT: 0x000d,
+  CMD: 0x000e,
+  CMD_RESULT: 0x000f,
 }
 
 // seat_result codes (docs/PROTOCOL.md "Constants").
@@ -161,7 +163,7 @@ export function decodeSpawn(p) {
 }
 
 // event (0x0007): u32 entity_id | u16 event_id | u32 data_len | bytes data.
-export const EVENT = { EQUIPPED: 0x0006, WORN: 0x000f }
+export const EVENT = { EQUIPPED: 0x0006, WORN: 0x000f, CHAT: 0x0011 }
 export function decodeEvent(p) {
   if (p.length < 10) throw new Error(`event: bad size ${p.length}`)
   const entityId = p.readUInt32LE(0)
@@ -175,6 +177,35 @@ export function decodeWorn(data) {
   const s = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
   const i = s.indexOf('=')
   return i < 0 ? { slot: s, item: '' } : { slot: s.slice(0, i), item: s.slice(i + 1) }
+}
+
+// A `chat` event's data is `name` NUL `text` (Phase 20); split on the first NUL.
+export function decodeChat(data) {
+  const s = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
+  const i = s.indexOf('\0')
+  return i < 0 ? { name: s, text: '' } : { name: s.slice(0, i), text: s.slice(i + 1) }
+}
+
+// cmd (0x000E) opcodes — docs/PROTOCOL.md "Constants" (only those a harness here names).
+export const OP = { CHAT: 0x0016 }
+
+/** cmd: u16 seq | u16 opcode | u32 data_len | bytes data (UTF-8 JSON; a string/Buffer is sent as is). */
+export function encodeCmd(seq, opcode, body) {
+  const d = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body), 'utf8')
+  const out = Buffer.alloc(8 + d.length)
+  out.writeUInt16LE(seq & 0xffff, 0)
+  out.writeUInt16LE(opcode & 0xffff, 2)
+  out.writeUInt32LE(d.length, 4)
+  d.copy(out, 8)
+  return out
+}
+
+/** cmd_result: u16 seq | u16 opcode | u8 status | u32 data_len | bytes data (UTF-8 JSON). */
+export function decodeCmdResult(p) {
+  if (p.length < 9) throw new Error(`cmd_result: bad size ${p.length}`)
+  const dataLen = p.readUInt32LE(5)
+  const raw = p.slice(9, 9 + dataLen).toString('utf8')
+  return { seq: p.readUInt16LE(0), opcode: p.readUInt16LE(2), status: p.readUInt8(4), raw, body: raw ? JSON.parse(raw) : null }
 }
 
 export function decodeDespawn(p) {

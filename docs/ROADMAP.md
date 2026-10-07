@@ -198,6 +198,8 @@ Three smaller course corrections:
 | `0x0010` | `defs` | S→C | 2 |
 | `0x0011` | `fire` | C→S | 2 |
 | `0x0012` | `colliders` | S→C | 2 |
+| cmd `0x0016` | `chat` | C→S | 20 |
+| event `0x0011` | `chat` | S→C | 20 |
 
 Final entity row (**land once, in Phase 2**, 54 B):
 
@@ -1931,9 +1933,10 @@ whole.
 
 # Phase 20 — chat (2026-10-06)
 
-### Where Phase 20 stands (2026-10-06)
+### Where Phase 20 stands (2026-10-06, built)
 
-Drafted. The Deferred table held "chat, guilds" for "after Phase 5";
+Built: C174–C177 recorded (docs/QA-STATUS.md "Phase 20"); `t42` 21/21.
+Owed: two real clients typing, the kind round-trip. The Deferred table held "chat, guilds" for "after Phase 5";
 accounts made it sensible and the user asked. One world channel, text
 only, nothing stored. Contract: GDD "Chat (Phase 20)". Wire: `cmd`
 `0x0016` in, `event` `0x0011` out — three ends.
@@ -1980,7 +1983,7 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Multiple planets / star systems | one planet has enough content to leave |
 | Walking around inside a moving ship | Phase 5 ships and the seated version feels limiting |
 | PvP, player-vs-player collision | after NPC combat is fun; PvP changes every balance number |
-| Chat, guilds | after Phase 5; not on the critical path (crafting landed in Phase 12, quests in Phase 10) |
+| Guilds | chat landed in Phase 20; a guild needs a reason to exist first (shared bases or territory) |
 | A persistent world players mutate (bases, territory) | Phase 6 candidate — the persistence layer from Phase 2 is the seed |
 | Rig + animation clips | procedural motion stops carrying the fidelity |
 | Pack aggro (one herd member waking the rest) | a playtest finds herds too easy to pick off one at a time; until then overlapping `aggro_radius` does it |

@@ -97,6 +97,7 @@ namespace SpaceAdventure.Net
         public const ushort Use = 0x0013; // Phase 13: a consumable or a worn ability
         public const ushort ShopBuyback = 0x0014; // Phase 13: re-buy a sale at what the shop paid
         public const ushort Wield = 0x0015; // {"slot":"primary"|"melee"}: which weapon is in hand
+        public const ushort Chat = 0x0016; // Phase 20: {"text":"..."}, one world channel
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -130,6 +131,7 @@ namespace SpaceAdventure.Net
         public const ushort GatherEnd = 0x000E; // Phase 12: {node,reason,item,qty}
         public const ushort Worn = 0x000F; // armor: "slot=item", item empty = cleared
         public const ushort Attack = 0x0010; // an attack starts (NPC wind-up or a melee swing): entity = attacker, data = u32 target (0 = none)
+        public const ushort Chat = 0x0011; // Phase 20: entity = speaker, data = name + "\0" + text
     }
 
     /// <summary>collider kinds.</summary>

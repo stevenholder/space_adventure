@@ -772,3 +772,16 @@ construction (real depth) and still to be seen.
 | C171 | PASS | bare −45/−70/−89 and Bulwark −70/−89, both yaws (`tmp/p19-{bare,bulwark}-*.png`; the Bulwark −70/−89 at y300 are `test/out/ui/p17-fp-lookdown{,-89}.png`): no sawtooth, no hole, no interior, nothing drawn over the world; a pauldron's near edge dissolves over the 5 cm band; `NearCut 0.30` / `NearCutBand 0.05` never showed the interior |
 | C172 | PASS | the cap, the chest plate (emblem decal as a cut-out), a knee and both feet appear where the body stands; the 3PM's shadow and the drawn feet agree on the ground; the shared skeleton animates the drawn legs (same `Dress`/attach path as remote) |
 | C173 | PASS | `npm --prefix art test` 278/278 (24 hair pieces refit to the re-decimated heads), Go vet/test, `dotnet build` 0 warnings, `-selftest` (+ "near cut: all eight variants compile"), gate/test/codec/conformance, export + packaged join; fp arms unchanged (`-rigArmed`); C153–C169 untouched (no server or API change) |
+
+# Phase 20 — chat (2026-10-06)
+
+One wave: server (cmd `0x0016`, event `0x0011`), client (`ChatView`,
+input gate), harness (`t42`). Proofs on a bare server from the branch;
+the kind round-trip and two real clients typing are owed.
+
+| # | Result | Evidence |
+|---|---|---|
+| C174 | PASS | `TestChat_BroadcastAndBounds` + `t42` 21/21: a line from A reaches A and B as exactly one `event 0x0011` with A's entity id and `Talker\0over here`, the event lands before A's `cmd_result 0 {}`; a guest and two characters all receive; nothing stored (no store call in `chat.go`), `space_adventure_chat_total` counts accepted lines |
+| C175 | PASS | blank → status 3 `{"reason":"empty"}`, no event; 201 bytes → 2, no event; four in a burst → 0,0,0,4 and three events (the chat bucket is its own: a `skills` cmd right after is still 0); `a\u0007b` → `ab` on every socket; bad JSON shape → 2; no stray events over the run (5 per socket) |
+| C176 | PASS (headless) | `test/out/ui/p20-chat.png`: the log bottom-left above the vitals, speaker Amber / text Cream, input open; `-selftest` +6 `chat:` checks (cap 8 oldest-dropped, 10 s expiry, 2 s fade alpha, Visible, Open); the gate is `InputState.Muted` — every key/mouse read goes through it, so movement, hotbar, fire and panels are all silent while the line is open. **Owed:** typing on the install, two clients |
+| C177 | PASS | Go vet/test (+`-race`), `dotnet build` 0 warnings, `godot-gate`, `godot-codec` (9 checks), `godot-conformance`, the Phase 15 proof `world ready`; no change to the fleet's frames (the event is new, nothing else moved); C153–C173 untouched |

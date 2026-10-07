@@ -175,7 +175,16 @@ Constants:
   the gun. A missing weapon falls back to the other slot (no gun worn: the
   melee weapon is held regardless). Result `{"slot", "item"}`, `item` being
   what is now held; a change is broadcast as `equipped`.
-  `0x0016`+ still reserved.
+  Phase 20 (GDD "Chat (Phase 20)"): `0x0016` `chat` `{"text": "<utf-8>"}`
+  — one line to the world channel. The server strips control characters
+  (the name rule's filter: invalid UTF-8, ASCII and C1 controls), trims,
+  and refuses empty (status 3 `{"reason":"empty"}`) and over 200 bytes
+  after the strip (status 2). Its own bucket per connection, burst 3,
+  refill 1 per second, apart from the cmd bucket below: excess is status
+  4 and never parsed. Success is `{}`, and the line goes out as event
+  `0x0011` `chat` to every client, the speaker included. Nothing is
+  stored or logged; the server counts lines (`space_adventure_chat_total`).
+  `0x0017`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -230,6 +239,11 @@ Constants:
   with no wind-up lands), so the swing leads the `hit` by `attack_windup`.
   Cosmetic: the client plays the body's `attack` clip once; damage still
   arrives as `hit`/`death` or a projectile. Not replayed at join.
+  And `0x0011` `chat` (Phase 20) — `entity_id` is the speaker and `data`
+  is `name` | `0x00` | `text`, both UTF-8: the speaker's entity name (a
+  character's row name) and the line as the server accepted it (stripped,
+  trimmed, 1–200 bytes). Neither part can hold a NUL. Broadcast to every
+  connected client, the speaker included; no history, not replayed at join.
 
 ## Semantics
 
@@ -432,6 +446,7 @@ Bodies per opcode:
 | `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) |
 | `use` (Phase 13) | `{"item":"consumable.medkit"}` | `{"item":"consumable.medkit","effect":{"health":100},"cooldown":8}` |
 | `craft` (Phase 12) | `{"npc": <entity_id>, "recipe":"recipe.cells", "qty":1}` | `{"inventory":[…],"crafted":{"item":"ammo.cell","qty":30}}` — `qty` includes any `craft_extra` bonus |
+| `chat` (Phase 20) | `{"text":"over here"}` | `{}` — refusals: status 3 `{"reason":"empty"}` (nothing left after strip + trim), status 2 (over 200 bytes after the strip), status 4 (the chat bucket: burst 3, 1 per s) |
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
 `insufficient_credits`, `out_of_range`, `unknown_item`, `no_stock`,
@@ -528,6 +543,7 @@ arrives. Not command state, not idempotent, not replayed.
 | equipped `0x0006` | the player | item id, UTF-8 (empty = nothing equipped) |
 | explosion `0x0001` | thrower | `f32 pos[3]` \| `f32 radius` \| item id, UTF-8 |
 | attack `0x0010` | attacker | `u32 target` (0 = a player's melee swing) |
+| chat `0x0011` (Phase 20) | speaker | `name` UTF-8 \| `u8 0x00` \| `text` UTF-8 (1–200 bytes) |
 
 ### `colliders` — static world geometry (Phase 2)
 

@@ -23,4 +23,11 @@ var joinRefused = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "Hellos closed 1008 because the token owns no account character.",
 })
 
-func init() { prometheus.MustRegister(tickSeconds, joinRefused) }
+// chatLines counts accepted chat lines (Phase 20). The count is all the
+// server keeps of chat: no text is stored or logged.
+var chatLines = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "space_adventure_chat_total",
+	Help: "Chat lines accepted and broadcast.",
+})
+
+func init() { prometheus.MustRegister(tickSeconds, joinRefused, chatLines) }

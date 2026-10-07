@@ -51,17 +51,19 @@ var interactCosMin = math.Cos(20.0 * math.Pi / 180)
 type cmdRate struct {
 	tokens float64
 	last   time.Time
+	hz     float64 // refill per second
+	burst  float64 // bucket size, and the starting fill
 }
 
 func newCmdRate(now time.Time) *cmdRate {
-	return &cmdRate{tokens: cmdRateBurst, last: now}
+	return &cmdRate{tokens: cmdRateBurst, last: now, hz: cmdRateHz, burst: cmdRateBurst}
 }
 
 // allow refills for elapsed time then takes one token if available. A
 // caller that gets false must not execute the cmd.
 func (r *cmdRate) allow(now time.Time) bool {
 	if d := now.Sub(r.last); d > 0 {
-		r.tokens = math.Min(cmdRateBurst, r.tokens+d.Seconds()*cmdRateHz)
+		r.tokens = math.Min(r.burst, r.tokens+d.Seconds()*r.hz)
 		r.last = now
 	}
 	if r.tokens < 1 {

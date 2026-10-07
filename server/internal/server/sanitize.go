@@ -15,6 +15,25 @@ const maxNameBytes = 24
 // an empty result with "Player <entity_id>". The result is what every
 // client renders, so it must be safe and stable.
 func SanitizeName(raw string, id uint32) string {
+	s := strings.TrimSpace(stripControls(raw))
+	if len(s) > maxNameBytes {
+		cut := maxNameBytes
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		s = s[:cut]
+	}
+	if s == "" {
+		return fmt.Sprintf("Player %d", id)
+	}
+	return s
+}
+
+// stripControls drops invalid UTF-8 bytes and ASCII/C1 control characters
+// (NUL included), keeping everything else. Shared by names and chat lines
+// (GDD "Chat (Phase 20)"): nothing a client sends reaches another client
+// with a control character in it.
+func stripControls(raw string) string {
 	var b strings.Builder
 	b.Grow(len(raw))
 	for i := 0; i < len(raw); {
@@ -31,16 +50,5 @@ func SanitizeName(raw string, id uint32) string {
 		b.WriteRune(r)
 		i += size
 	}
-	s := strings.TrimSpace(b.String())
-	if len(s) > maxNameBytes {
-		cut := maxNameBytes
-		for cut > 0 && !utf8.RuneStart(s[cut]) {
-			cut--
-		}
-		s = s[:cut]
-	}
-	if s == "" {
-		return fmt.Sprintf("Player %d", id)
-	}
-	return s
+	return b.String()
 }

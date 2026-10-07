@@ -94,6 +94,7 @@ const (
 	OpUse          uint16 = 0x0013 // Phase 13: a consumable or a worn ability
 	OpShopBuyback  uint16 = 0x0014 // Phase 13: re-buy something sold this session, at what the shop paid
 	OpWield        uint16 = 0x0015 // melee: {"slot":"primary"|"melee"} picks the weapon in hand
+	OpChat         uint16 = 0x0016 // Phase 20: {"text":"..."}, broadcast as EventChat
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -125,6 +126,7 @@ const (
 	EventGatherEnd       uint16 = 0x000E // Phase 12: {node,reason,item,qty}, unicast
 	EventWorn            uint16 = 0x000F // armor: data = "slot=item" UTF-8 (item empty = cleared), broadcast + replayed at join
 	EventAttack          uint16 = 0x0010 // an NPC starts an attack (its wind-up) or a body swings a melee weapon: entity = attacker, data = u32 target id (0 = a player swing, no target); broadcast
+	EventChat            uint16 = 0x0011 // Phase 20: entity = speaker, data = name "\x00" text (UTF-8); broadcast to all, speaker included
 )
 
 // collider kinds (PROTOCOL.md `colliders`).
