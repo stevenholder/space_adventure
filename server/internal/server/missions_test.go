@@ -198,6 +198,7 @@ func TestMissionShare(t *testing.T) {
 	}
 
 	// Party up, share, and the recipient hears the full template.
+	b.awaitPublished(t)
 	a.cmdOK(t, 3, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, b.id))
 	b.event(t, protocol.EventPartyInvited)
 	b.cmdOK(t, 4, protocol.OpPartyRespond, `{"accept":true}`)

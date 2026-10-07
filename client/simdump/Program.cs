@@ -1569,6 +1569,18 @@ internal static class Program
             string t = line.Trim();
             if (t.Length == 0) continue;
             using var doc = JsonDocument.Parse(t);
+            // {"start":{"dir","facing"}} re-parks the rover, exactly as
+            // `server drive` does (t23's steep-slope scenario).
+            if (doc.RootElement.TryGetProperty("start", out var se))
+            {
+                Vec3 su = ReadVec(se.GetProperty("dir")).Normalized();
+                Vec3 sf = ReadVec(se.GetProperty("facing"));
+                sf = (sf - su * Vec3.Dot(sf, su)).Normalized();
+                s.Pos = su * field.SampleRadius(su);
+                s.Vel = Vec3.Zero;
+                s.Quat = Quat.FromBasis(Vec3.Cross(su, sf), su, sf);
+                s.Grounded = true;
+            }
             if (!doc.RootElement.TryGetProperty("input", out var ie)) continue;
 
             Drive.Apply(ref s,

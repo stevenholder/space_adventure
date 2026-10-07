@@ -1196,7 +1196,7 @@ carried `grounded`; nothing beyond the wire triplet plus one bool.
 | `grip` | 6 | 1/s | lateral velocity half-life ~0.12 s: a hard turn drifts for a beat, then bites |
 | `damp_drive` | 0.8 | 1/s | coast half-life ~0.87 s — lifting throttle is a brake, there is no brake input |
 | `hold_speed` | 0.1 | m/s | static friction: with no throttle, a tangential speed under this zeroes outright — parked is parked, an exponential decay alone never reaches zero and a parked rover would creep downhill forever |
-| `drive_slope_max` | 40 | deg | throttle authority cutoff; less capable than feet (`max_slope` 50), so the last stretch of a climb is on foot |
+| `drive_slope_max` | 40 | deg | throttle authority cutoff; less capable than feet (`max_slope` 50), so the last stretch of a climb is on foot. Uphill only (2026-10-07): past it, throttle that drives the rover downhill still works — a rover never wedges |
 | `rover_spawn_dist` | 20 | m | deterministic parked spawn along the spawn bearing (pseudocode below) |
 | `crew_size_rover` | 2 | — | 1 driver + 1 passenger; the wire `seat` field is u16, more later is a table change |
 
@@ -1220,7 +1220,9 @@ fallback.
        h ← rotate_about_axis(h, up, −steer · steer_rate · dt)
        (positive steer turns toward local +X, i.e. right; the sign is the
         right-hand rule about up)
-4  if grounded and slope(terrain, up) ≤ drive_slope_max and throttle ≠ 0:
+4  if grounded and throttle ≠ 0 and
+     (slope(terrain, up) ≤ drive_slope_max or dot(h·sign(throttle), downhill) > 0):
+       (downhill ← normalize(g − n·dot(g, n)), g = −up, n = surface_normal(terrain, up))
        a ← throttle > 0 ? accel_drive : accel_drive · 0.5
        vel ← vel + h · (throttle · a · dt)
 5  vel ← vel − up · (gravity · dt)
