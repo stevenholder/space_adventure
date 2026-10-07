@@ -119,3 +119,14 @@ export function loadField(json) {
     radii: Uint16Array.from(json.radii),
   }
 }
+
+/**
+ * Downhill tangent at up: gravity-down projected onto the ground plane,
+ * normalize(g − n·dot(g, n)) with g = −up — the direction drive.go's step 4
+ * accepts throttle along past drive_slope_max ("a rover never wedges").
+ */
+export function downhillTangent(f, up, normalEps = (2 * Math.PI) / 180) {
+  const n = surfaceNormal(f, up, normalEps)
+  const gn = -(up[0] * n[0] + up[1] * n[1] + up[2] * n[2])
+  return norm3([-up[0] - n[0] * gn, -up[1] - n[1] * gn, -up[2] - n[2] * gn])
+}

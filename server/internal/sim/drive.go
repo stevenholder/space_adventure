@@ -61,9 +61,12 @@ func StepRover(e *Ent, dt float64, ctx StepCtx) {
 		h = rotateAboutAxis(h, up, -steer*SteerRate*dt)
 	}
 
-	// 4: throttle, grounded and under the slope cutoff only. Reverse at
-	// half accel, same rule as the flight model's backward thrust.
-	if v.Grounded && throttle != 0 && ctx.Terrain.Slope(up) <= DriveSlopeMax {
+	// 4: throttle, grounded only, and under the slope cutoff OR pointed
+	// downhill: past drive_slope_max uphill throttle is refused, but throttle
+	// that would carry the rover downhill still works, so a rover that comes
+	// to rest on a scarp can always drive off it ("a rover never wedges").
+	// Reverse at half accel, same rule as the flight model's backward thrust.
+	if v.Grounded && throttle != 0 && driveAllowed(ctx.Terrain, up, h, throttle) {
 		a := AccelDrive * effMult(v.EffMult)
 		if throttle < 0 {
 			a = AccelDrive * 0.5 * effMult(v.EffMult)
@@ -146,6 +149,28 @@ func StepRover(e *Ent, dt float64, ctx StepCtx) {
 	} else {
 		e.Flags &^= protocol.FlagGrounded
 	}
+}
+
+// driveAllowed is step 4's slope rule: slope ≤ drive_slope_max, or the
+// drive direction (h, reversed for negative throttle) has a positive
+// component along the downhill tangent — gravity-down projected onto the
+// ground plane at the surface normal n:
+//
+//	downhill = normalize(g − n·dot(g, n)),  g = −up
+//
+// Drive.cs DriveAllowed is the same expression in the same order.
+func driveAllowed(t *terrain.Field, up, h Vec, throttle float64) bool {
+	if t.Slope(up) <= DriveSlopeMax {
+		return true
+	}
+	n := t.SurfaceNormal(up)
+	g := up.Scale(-1)
+	downhill := terrain.Normalize(g.Sub(n.Scale(g.Dot(n))))
+	dir := h
+	if throttle < 0 {
+		dir = h.Scale(-1)
+	}
+	return dir.Dot(downhill) > 0
 }
 
 // rotateAboutAxis rotates v about unit axis k by ang (Rodrigues). The C#

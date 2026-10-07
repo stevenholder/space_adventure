@@ -13,12 +13,18 @@
  * lock, coast, reverse, then S-curves — every branch of stepRover gets
  * driven (throttle sign, steer sign, grounded and airborne ticks).
  *
+ * Second scenario, "a rover never wedges" (2026-10-07): park on a scarp
+ * past drive_slope_max (40°) facing uphill, hold throttle (refused — no
+ * acceleration), reverse (downhill — allowed, it drives off), then drive on
+ * the flatter ground below (normal). Diffed at STEEP_LIMIT (1e-10).
+ *
  * Run: node test/t23-drive-conformance.mjs   (needs go + dotnet, no Editor)
  */
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadField, norm3, slopeDeg, surfaceNormal } from './lib/field.mjs'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const WORLD = 'test/out/world-seed1337.json'
@@ -112,6 +118,72 @@ function peakWithin (rows, ticks, vmax) {
   let m = 0
   for (let i = 0; i < Math.min(ticks, rows.length); i++) m = Math.max(m, tangSpeed(rows[i]))
   return m >= vmax * 0.9
+}
+
+// ---- scenario 2: a rover never wedges ---------------------------------------
+// A deterministic steep site: scan a lat/long grid of the captured wire field
+// for the first direction measuring 44–50° (GDD normal_eps, 2°) — past
+// drive_slope_max with margin, under max_slope so it is a scarp not a wall.
+const STEEP_SCRIPT = 'test/out/t23-drive-steep.jsonl'
+const STEEP_LIMIT = 1e-10
+const field = loadField(JSON.parse(readFileSync(path.join(root, WORLD), 'utf8')))
+const NEPS = (2 * Math.PI) / 180
+let site = null
+for (let la = -80; la <= 80 && !site; la += 0.5) {
+  for (let lo = -180; lo < 180 && !site; lo += 0.5) {
+    const a = la * Math.PI / 180, b = lo * Math.PI / 180
+    const d = [Math.cos(a) * Math.cos(b), Math.sin(a), Math.cos(a) * Math.sin(b)]
+    const sd = slopeDeg(field, d, NEPS)
+    if (sd >= 44 && sd <= 50) site = { d, slope: sd }
+  }
+}
+check('found a > drive_slope_max site to park on', site !== null,
+  site ? `slope ${site.slope.toFixed(2)}° at dir [${site.d.map((c) => c.toFixed(4))}]` : 'none in the scan')
+if (site) {
+  // uphill = −downhill, downhill = normalize(g − n·dot(g, n)), g = −up
+  const up = site.d, n = surfaceNormal(field, up, NEPS)
+  const gn = -(up[0] * n[0] + up[1] * n[1] + up[2] * n[2])
+  const uphill = norm3([up[0] + n[0] * gn, up[1] + n[1] * gn, up[2] + n[2] * gn])
+  const PH = { up: 40, down: 100, coast: 40, flat: 200 }
+  const sl = [JSON.stringify({ start: { dir: up, facing: uphill } })]
+  for (let i = 0; i < PH.up; i++) sl.push(JSON.stringify({ input: { throttle: 1, steer: 0 } }))
+  for (let i = 0; i < PH.down; i++) sl.push(JSON.stringify({ input: { throttle: -1, steer: 0 } }))
+  for (let i = 0; i < PH.coast; i++) sl.push(JSON.stringify({ input: { throttle: 0, steer: 0 } }))
+  for (let i = 0; i < PH.flat; i++) sl.push(JSON.stringify({ input: { throttle: 1, steer: 1 } }))
+  writeFileSync(path.join(root, STEEP_SCRIPT), sl.join('\n') + '\n')
+  const total = PH.up + PH.down + PH.coast + PH.flat
+  const sgo = parse(execFileSync(path.join(root, 'test/out/server-dump'),
+    ['drive', '-inputs', STEEP_SCRIPT, '-seed', String(SEED)], { cwd: root, maxBuffer: 256 << 20 }))
+  const scs = parse(execFileSync('dotnet',
+    ['run', '--project', 'client/simdump', '--nologo', '--', '--drive', STEEP_SCRIPT, '--world', WORLD],
+    { cwd: root, maxBuffer: 256 << 20, stdio: ['ignore', 'pipe', 'inherit'] }))
+  check('steep: both sims ran the full script', sgo.length === total && scs.length === total,
+    `go ${sgo.length}, cs ${scs.length}, want ${total}`)
+  let mp = 0, mv = 0, mq = 0, gm = 0
+  for (let i = 0; i < Math.min(sgo.length, scs.length); i++) {
+    mp = Math.max(mp, dist3(sgo[i].pos, scs[i].pos))
+    mv = Math.max(mv, dist3(sgo[i].vel, scs[i].vel))
+    mq = Math.max(mq, dist4(sgo[i].quat, scs[i].quat))
+    if (sgo[i].grounded !== scs[i].grounded) gm++
+  }
+  check(`steep: pos/vel/quat agreement within ${STEEP_LIMIT}`, mp <= STEEP_LIMIT && mv <= STEEP_LIMIT && mq <= STEEP_LIMIT,
+    `max pos ${mp.toExponential(3)} m, vel ${mv.toExponential(3)} m/s, quat ${mq.toExponential(3)}`)
+  check('steep: grounded agrees on every tick', gm === 0, `${gm} mismatches`)
+  const start = sgo[0].pos
+  const moved = (i) => dist3(sgo[i].pos, start)
+  let upPeak = 0
+  for (let i = 0; i < PH.up; i++) upPeak = Math.max(upPeak, tangSpeed(sgo[i]))
+  check('steep: uphill throttle past drive_slope_max is refused', upPeak < 1e-3 && moved(PH.up - 1) < 1e-2,
+    `peak ${upPeak.toExponential(2)} m/s, moved ${moved(PH.up - 1).toFixed(4)} m in ${PH.up} ticks`)
+  const dEnd = PH.up + PH.down - 1
+  const slopeAt = (i) => slopeDeg(field, norm3(sgo[i].pos), NEPS)
+  check('steep: downhill throttle drives it off the scarp', moved(dEnd) > 5 && slopeAt(dEnd) <= 40,
+    `moved ${moved(dEnd).toFixed(2)} m, now on ${slopeAt(dEnd).toFixed(1)}° (from ${site.slope.toFixed(1)}°)`)
+  const fStart = PH.up + PH.down + PH.coast
+  let fPeak = 0
+  for (let i = fStart; i < total && i < sgo.length; i++) fPeak = Math.max(fPeak, tangSpeed(sgo[i]))
+  check('steep: off the scarp it drives normally', fPeak >= VMAX * 0.5,
+    `peak ${fPeak.toFixed(2)} m/s over the last ${PH.flat} ticks`)
 }
 
 const fails = checks.filter(([, ok]) => !ok)

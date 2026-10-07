@@ -9,13 +9,15 @@
  * independent field sampler says the rover is never under the surface —
  * there is no dev-override backdoor in the production binary to force it
  * under, on purpose) -> passenger input is inert (C31) -> disembark at
- * speed lands on the ground near the rover (C32).
+ * speed lands on the ground near the rover (C32). Between C31 and C32, "a
+ * rover never wedges": drive on onto the 46° scarp ahead (past
+ * drive_slope_max 40°), uphill throttle is refused, downhill drives it off.
  *
  * Run: node test/t24-rover.mjs   (needs `make up` / `make check-server`)
  */
 import { readFileSync } from 'node:fs'
 import { quatRotate, SEAT } from './lib/wire.mjs'
-import { loadField, sampleRadius } from './lib/field.mjs'
+import { downhillTangent, loadField, sampleRadius, slopeDeg } from './lib/field.mjs'
 
 const enc = new TextEncoder(), dec = new TextDecoder()
 const u8 = (n) => new Uint8Array(n)
@@ -44,6 +46,9 @@ const norm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l) }
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 const dist = (a, b) => Math.hypot(...sub(a, b))
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+const tangent = (d, up) => { const k = dot(d, up); return [d[0] - up[0] * k, d[1] - up[1] * k, d[2] - up[2] * k] }
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const checks = []
@@ -189,9 +194,54 @@ check('C31 passenger input leaves the rover invariant', dist(rover().pos, parked
 const bRow = b.ents.get(b.id)
 check('C31 passenger stays composed at the seat', bRow.parent === roverId && bRow.seat === 2)
 
-// C32: drive again and disembark at speed — in REVERSE, so the unmanned
-// coast runs back over ground already driven, not on toward the scarp.
-for (let i = 0; i < 30; i++) { a.ws.send(input(-1, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
+// A rover never wedges: drive on toward the 46° scarp ahead and stop on it
+// (throttle off the moment the ground under it passes drive_slope_max, then
+// park), then prove uphill throttle is refused and downhill throttle drives
+// it off — the rule that keeps a later t29 on this server from finding it
+// stuck. Whichever end faces downhill drives, steered onto the fall line.
+const slopeAt = () => slopeDeg(field, norm(rover().pos))
+const fwdOf = () => { const up = norm(rover().pos); return norm(tangent(quatRotate(rover().quat, [0, 0, 1]), up)) }
+let offSign = -1 // C32's direction: away from the scarp
+for (let i = 0; i < 80 && slopeAt() <= 40; i++) { a.ws.send(input(1, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
+for (let i = 0; i < 60 && Math.hypot(...rover().vel) > 0.01; i++) { a.ws.send(input(0, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
+const steepSlope = slopeAt()
+if (steepSlope <= 40) {
+  console.log(`SKIP a rover never wedges: the rover parked on ${steepSlope.toFixed(1)}°, not past drive_slope_max 40° — no scarp reached`)
+} else {
+  // Square the uphill end onto the fall line first (skid steer turns in
+  // place at any slope): parked near-across the slope, "uphill" by the wire's
+  // float32 pose can be a hair downhill to the server, which then (rightly)
+  // lets it creep along the contour.
+  const down0 = downhillTangent(field, norm(rover().pos))
+  const upSign = dot(fwdOf(), down0) >= 0 ? -1 : 1
+  for (let i = 0; i < 60; i++) {
+    const u = norm(rover().pos), f = fwdOf(), target = downhillTangent(field, u).map((c) => -upSign * c)
+    if (dot(f, target) > 0.97) break
+    a.ws.send(input(0, Math.max(-1, Math.min(1, 3 * dot(target, cross(f, u)))), [0, 0, 1], 0, a.seq++, 2))
+    await sleep(50)
+  }
+  const at = rover().pos.slice()
+  for (let i = 0; i < 20; i++) { a.ws.send(input(upSign, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
+  check('a rover never wedges: uphill throttle past drive_slope_max is refused', dist(rover().pos, at) < 0.05,
+    `on ${steepSlope.toFixed(1)}°, moved ${dist(rover().pos, at).toFixed(3)} m under 1 s of uphill throttle`)
+  let slopeNow = slopeAt()
+  for (let i = 0; i < 100 && slopeNow > 40; i++) {
+    const u = norm(rover().pos), f = fwdOf(), d = downhillTangent(field, u)
+    offSign = dot(f, d) >= 0 ? 1 : -1
+    const steer = Math.max(-1, Math.min(1, 3 * offSign * dot(d, cross(f, u))))
+    a.ws.send(input(offSign, steer, [0, 0, 1], 0, a.seq++, 2))
+    await sleep(50)
+    slopeNow = slopeAt()
+  }
+  check('a rover never wedges: downhill throttle drives it off the scarp', slopeNow <= 40,
+    `${steepSlope.toFixed(1)}° -> ${slopeNow.toFixed(1)}° after ${dist(rover().pos, at).toFixed(1)} m`)
+  for (let i = 0; i < 60 && Math.hypot(...rover().vel) > 0.01; i++) { a.ws.send(input(0, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
+}
+
+// C32: drive again and disembark at speed — AWAY from the scarp (reverse
+// if it was never reached, else the end that just drove off it), so the
+// unmanned coast does not run back onto it.
+for (let i = 0; i < 30; i++) { a.ws.send(input(offSign, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
 a.ws.send(disembark())
 r = await nextSeat(a)
 check('disembark at speed granted', r?.result === SEAT.GRANTED, `result ${r?.result}`)

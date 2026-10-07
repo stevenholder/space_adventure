@@ -58,9 +58,11 @@ namespace SpaceAdventure.Sim
             if (s.Grounded && steer != 0)
                 h = RotateAboutAxis(h, up, -steer * DriveRules.SteerRate * dt);
 
-            // 4: throttle, grounded and under the slope cutoff. Reverse at
-            // half accel.
-            if (s.Grounded && throttle != 0 && t.Slope(up) <= DriveRules.DriveSlopeMax)
+            // 4: throttle, grounded only, and under the slope cutoff OR
+            // pointed downhill (drive.go step 4): past drive_slope_max uphill
+            // throttle is refused, downhill still works, so a rover parked on
+            // a scarp can always drive off it. Reverse at half accel.
+            if (s.Grounded && throttle != 0 && DriveAllowed(t, up, h, throttle))
             {
                 double a = (throttle < 0 ? DriveRules.AccelDrive * 0.5 : DriveRules.AccelDrive) * EffMult(effMult);
                 vel += h * (throttle * a * dt);
@@ -129,6 +131,21 @@ namespace SpaceAdventure.Sim
             s.Pos = pos;
             s.Vel = vel;
             s.Quat = Quat.FromBasis(Vec3.Cross(n, h2), n, h2);
+        }
+
+        // Step 4's slope rule, the exact expression of drive.go's
+        // driveAllowed: slope ≤ drive_slope_max, or the drive direction (h,
+        // reversed for negative throttle) has a positive component along
+        // downhill = normalize(g − n·dot(g, n)), g = −up, n = surface normal.
+        private static bool DriveAllowed(TerrainField t, Vec3 up, Vec3 h, double throttle)
+        {
+            if (t.Slope(up) <= DriveRules.DriveSlopeMax) return true;
+            Vec3 n = t.SurfaceNormal(up);
+            Vec3 g = up * -1.0;
+            Vec3 downhill = (g - n * Vec3.Dot(g, n)).Normalized();
+            Vec3 dir = h;
+            if (throttle < 0) dir = h * -1.0;
+            return Vec3.Dot(dir, downhill) > 0;
         }
 
         // Rodrigues, the exact expression of drive.go's rotateAboutAxis — not

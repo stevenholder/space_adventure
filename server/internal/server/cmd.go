@@ -110,13 +110,23 @@ type cmdWorld struct {
 	Scan          func(rng float64) []map[string]any
 
 	// Ent is the requester's own server-side entity, for the rounds
-	// currently in the magazine.
-	//
-	// The magazine lives on the connection rather than on the stored player
-	// row: it is per-life state, not something to persist. It is only ever
-	// touched by this connection's reader goroutine — `fire` and this
-	// handler are both dispatched from it — so it needs no lock of its own.
+	// currently in the magazine. The magazine lives on the connection
+	// rather than on the stored player row: it is per-life state, not
+	// something to persist. Touch it only through withEnt.
 	Ent *entity
+	// EntLock runs f under s.mu, the lock fireLocked spends rounds under,
+	// so the magazine has one owner however `fire` and cmds are dispatched.
+	// Nil in fixtures: f then runs bare.
+	EntLock func(f func())
+}
+
+// withEnt runs f on the requester's entity under EntLock.
+func (w cmdWorld) withEnt(f func(e *entity)) {
+	if w.EntLock == nil {
+		f(w.Ent)
+		return
+	}
+	w.EntLock(func() { f(w.Ent) })
 }
 
 // inRange re-validates interact_dist and interact_cone (GDD "Interaction")
@@ -299,38 +309,43 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 			return refuse(sim.ReasonNotOwned)
 		}
 
+		// Magazine is read and written under s.mu, as fireLocked does.
 		capacity := wp.Magazine
-		if w.Ent.Magazine >= capacity {
-			// A mag mod that came off leaves more rounds loaded than the
-			// bare rifle holds: clamp on this reload and hand the surplus
-			// back to the bag (best effort — a full bag loses them), never
-			// empty the magazine (GDD "Weapon mods").
-			if surplus := w.Ent.Magazine - capacity; surplus > 0 {
-				w.Ent.Magazine = capacity
-				_ = sim.AddItem(w.Player, wp.AmmoItem, surplus, w.Reg)
+		var mag, reserve int
+		why := ""
+		w.withEnt(func(e *entity) {
+			reserve = sim.CountItem(w.Player, wp.AmmoItem)
+			if e.Magazine >= capacity {
+				// A mag mod that came off leaves more rounds loaded than the
+				// bare rifle holds: clamp on this reload and hand the surplus
+				// back to the bag (best effort — a full bag loses them), never
+				// empty the magazine (GDD "Weapon mods").
+				if surplus := e.Magazine - capacity; surplus > 0 {
+					e.Magazine = capacity
+					_ = sim.AddItem(w.Player, wp.AmmoItem, surplus, w.Reg)
+					reserve = sim.CountItem(w.Player, wp.AmmoItem)
+				}
+				mag = e.Magazine
+				return
 			}
-			return reply(protocol.StatusOK, encodeJSON(map[string]any{
-				"magazine": w.Ent.Magazine,
-				"reserve":  sim.CountItem(w.Player, wp.AmmoItem),
-			}))
+			take := min(capacity-e.Magazine, reserve)
+			if take <= 0 {
+				why = "no_ammo"
+				return
+			}
+			if err := sim.TakeItem(w.Player, wp.AmmoItem, take); err != nil {
+				why = "refused"
+				return
+			}
+			e.Magazine += take
+			mag, reserve = e.Magazine, reserve-take
+		})
+		if why != "" {
+			return refuse(why)
 		}
-
-		reserve := sim.CountItem(w.Player, wp.AmmoItem)
-		take := capacity - w.Ent.Magazine
-		if take > reserve {
-			take = reserve
-		}
-		if take <= 0 {
-			return refuse("no_ammo")
-		}
-		if err := sim.TakeItem(w.Player, wp.AmmoItem, take); err != nil {
-			return refuse("refused")
-		}
-		w.Ent.Magazine += take
-
 		return reply(protocol.StatusOK, encodeJSON(map[string]any{
-			"magazine": w.Ent.Magazine,
-			"reserve":  reserve - take,
+			"magazine": mag,
+			"reserve":  reserve,
 		}))
 
 	case protocol.OpShopSell:

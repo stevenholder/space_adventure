@@ -3,7 +3,7 @@
 // `server dump` is for C5/C40.
 //
 // Script lines (JSONL): {"input": {"throttle": x, "steer": y}} — one per
-// tick. The start state is the deterministic mirrored one both sims build
+// tick; an optional {"start": {"dir", "facing"}} line re-parks the rover. The start state is the deterministic mirrored one both sims build
 // from primitives they already share: the spawn point, facing the spawn
 // bearing, grounded (NOT sim.SpawnRover — the walkable-retry scan is
 // server-only and the client has no reason to mirror it).
@@ -29,6 +29,14 @@ import (
 )
 
 type driveScriptLine struct {
+	// Start, when present, re-parks the rover: grounded at rest on the
+	// surface along Dir, facing Facing projected onto the tangent plane.
+	// t23's steep-slope scenario uses it to start on a > drive_slope_max
+	// scarp; SimDump --drive reads the same line the same way.
+	Start *struct {
+		Dir    [3]float64 `json:"dir"`
+		Facing [3]float64 `json:"facing"`
+	} `json:"start"`
 	Input *struct {
 		Throttle float64 `json:"throttle"`
 		Steer    float64 `json:"steer"`
@@ -97,6 +105,15 @@ func runDrive(args []string) error {
 		var l driveScriptLine
 		if err := json.Unmarshal(raw, &l); err != nil {
 			return fmt.Errorf("drive: tick %d: %w", tick, err)
+		}
+		if l.Start != nil {
+			su := terrain.Normalize(terrain.Vec(l.Start.Dir))
+			sf := terrain.Vec(l.Start.Facing)
+			sf = terrain.Normalize(sf.Sub(su.Scale(sf.Dot(su))))
+			e.Pos = [3]float64(su.Scale(field.SampleRadius(su)))
+			e.Vel = [3]float64{}
+			e.Quat = [4]float64(sim.QuatFromBasis(terrain.Cross(su, sf), su, sf))
+			v.Grounded = true
 		}
 		if l.Input == nil {
 			continue

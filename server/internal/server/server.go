@@ -1148,6 +1148,11 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			},
 			FindNode: s.findNode,
 			Ent:      c.entity,
+			EntLock: func(f func()) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				f()
+			},
 			Busy: func() bool {
 				s.mu.Lock()
 				defer s.mu.Unlock()

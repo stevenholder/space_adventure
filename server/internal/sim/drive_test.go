@@ -210,3 +210,45 @@ func TestRoverStopsAtWall(t *testing.T) {
 		t.Fatalf("rover only moved %.2f m, want it to drive up to the wall", along)
 	}
 }
+
+// A rover never wedges: on a slope past drive_slope_max, throttle uphill is
+// refused but throttle that carries it downhill works — forward and reverse.
+func TestRoverDrivesOffSteepSlope(t *testing.T) {
+	f := slopeFieldY(1000, 45*math.Pi/180)
+	up := Vec{0, 1, 0}
+	if s := f.Slope(up); s <= DriveSlopeMax {
+		t.Fatalf("test field slope %.1f° not past drive_slope_max", s*180/math.Pi)
+	}
+	park := func(facing Vec) *Ent {
+		e := &Ent{
+			Kind: EntityKind(protocol.EntityTypeVehicle),
+			Pos:  [3]float64(up.Scale(f.SampleRadius(up))),
+			Quat: [4]float64(QuatFromBasis(terrain.Cross(up, facing), up, facing)),
+			Data: &VehicleState{Grounded: true},
+		}
+		return e
+	}
+	// Uphill is +Z on the +Y face (r grows with v = z/y).
+	cases := []struct {
+		name     string
+		facing   Vec
+		throttle float64
+		moves    bool
+	}{
+		{"forward uphill", Vec{0, 0, 1}, 1, false},
+		{"reverse uphill", Vec{0, 0, -1}, -1, false},
+		{"forward downhill", Vec{0, 0, -1}, 1, true},
+		{"reverse downhill", Vec{0, 0, 1}, -1, true},
+	}
+	for _, c := range cases {
+		e := park(c.facing)
+		driveTicks(e, f, 10, c.throttle, 0)
+		sp := tangentSpeed(e)
+		if c.moves && sp < 1 {
+			t.Errorf("%s: speed %.3f m/s after 0.5 s, want it to drive off", c.name, sp)
+		}
+		if !c.moves && sp > 1e-6 {
+			t.Errorf("%s: speed %.3g m/s, want uphill throttle refused", c.name, sp)
+		}
+	}
+}

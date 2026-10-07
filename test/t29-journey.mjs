@@ -31,7 +31,7 @@
  * Run: node test/t29-journey.mjs   (needs `make up`)
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { loadField, sampleRadius, slopeDeg } from './lib/field.mjs'
+import { downhillTangent, loadField, sampleRadius, slopeDeg } from './lib/field.mjs'
 import { quatRotate, SEAT } from './lib/wire.mjs'
 
 const enc = new TextEncoder(), dec = new TextDecoder(), u8 = (n) => new Uint8Array(n)
@@ -165,7 +165,7 @@ console.log(`joined id=${myId}, ${spawns.size} spawns, health ${me().health}`)
 
 const WALK_ONLY = !!process.env.SA_T29_WALK_ONLY
 // Drive results, hoisted past the WALK_ONLY guard for the evidence write.
-let out = { odometer: 0 }, parkedOff = 0, minClearance = Infinity, wedged = false
+let out = { odometer: 0 }, parkedOff = 0, minClearance = Infinity, startSlope = null, unwedged = null
 
 // ---- act 1: the quartermaster ----------------------------------------------
 
@@ -195,19 +195,39 @@ const rover = () => ents.get(roverId)
 // The rover sits wherever the LAST run (this test, or t24) parked it —
 // vehicles are world state, not per-player. Walk to it wherever it is.
 console.log(`rover is ${dist(rover().pos, me().pos).toFixed(0)} m away`)
-// A rover parked past drive_slope_max (40°) can never be driven again — the
-// sim gates throttle on the slope under it, both ways, and nothing on foot
-// shoves it off (tried: 0.4 m, uphill). An earlier session that coasted it
-// onto a scarp would fail this whole journey on state it does not own, so
-// say so and walk on: the drive is proven again on the next fresh server.
-const roverSlope = slopeDeg(field, norm(rover().pos))
-wedged = roverSlope > 40
-if (wedged) console.log(`SKIP drive act: the rover is parked on a ${roverSlope.toFixed(1)}° slope, past drive_slope_max 40° — left there by an earlier session, undrivable until a restart`)
-if (!wedged) {
+// A rover an earlier session parked past drive_slope_max (40°) refuses
+// uphill throttle, but downhill throttle still works (drive.go step 4: "a
+// rover never wedges") — so board it wherever it is and, if it is on a
+// scarp, drive it downhill off it before the waypoint plan.
+startSlope = slopeDeg(field, norm(rover().pos))
 await walkTo(() => rover().pos, 5, 120000)
 ws.send(board(roverId, 1))
 let seat = await nextSeat()
 check('driver seat granted', seat?.result === SEAT.GRANTED, `result ${seat?.result}`)
+if (startSlope > 40) {
+  const from = rover().pos.slice()
+  let slopeNow = startSlope
+  for (let i = 0; i < 100 && slopeNow > 40; i++) {
+    // Whichever end faces more downhill drives; steer that end onto the
+    // fall line — a rover parked across the slope (heading on the contour,
+    // where an earlier forward push leaves it) has neither end downhill.
+    const rv = rover(), up = norm(rv.pos)
+    const fwd = norm(tangent(quatRotate(rv.quat, [0, 0, 1]), up))
+    const right = [fwd[1] * up[2] - fwd[2] * up[1], fwd[2] * up[0] - fwd[0] * up[2], fwd[0] * up[1] - fwd[1] * up[0]]
+    const down = downhillTangent(field, up)
+    const sign = dot(fwd, down) >= 0 ? 1 : -1
+    const steer = Math.max(-1, Math.min(1, 3 * sign * dot(down, right)))
+    ws.send(input(sign, steer, [0, 0, 1], 0, seq++, 2))
+    await sleep(50)
+    slopeNow = slopeDeg(field, norm(rover().pos))
+  }
+  for (let i = 0; i < 40 && Math.hypot(...rover().vel) > 0.01; i++) { ws.send(input(0, 0, [0, 0, 1], 0, seq++, 2)); await sleep(50) }
+  unwedged = slopeNow <= 40
+  check('a rover never wedges: drove it downhill off the scarp', unwedged,
+    `parked on ${startSlope.toFixed(1)}° (past drive_slope_max 40°), now ${slopeNow.toFixed(1)}° after ${dist(rover().pos, from).toFixed(1)} m`)
+} else {
+  console.log(`rover parked on ${startSlope.toFixed(1)}° (within drive_slope_max 40°)`)
+}
 
 // Waypoint steering. Positive steer rotates the heading by −steer·θ
 // about up (drive.go), which moves it toward Cross(fwd, up) — the game
@@ -263,7 +283,6 @@ check('disembark granted', seat?.result === SEAT.GRANTED, `result ${seat?.result
 await wait(() => me().parent === 0, 2000)
 const up0 = norm(me().pos)
 check('on foot, on the terrain', me().parent === 0 && Math.abs(Math.hypot(...me().pos) - sampleRadius(field, up0)) < 0.5)
-}
 }
 
 // ---- act 3: walk the rest of the route into the camp ------------------------
@@ -362,7 +381,9 @@ ws.close()
 const fails = checks.filter(([, ok]) => !ok)
 writeFileSync(new URL('./out/t29-journey.json', import.meta.url), JSON.stringify({
   when: new Date().toISOString(),
-  driveSkipped: WALK_ONLY ? 'walk-only' : wedged ? 'rover wedged' : null,
+  driveSkipped: WALK_ONLY ? 'walk-only' : null,
+  roverStartSlope: startSlope,
+  unwedged,
   drivenOut: WALK_ONLY ? null : +out.odometer.toFixed(1),
   parkedOff: WALK_ONLY ? null : +parkedOff.toFixed(1),
   minClearance, standoff: +standoff.toFixed(1),

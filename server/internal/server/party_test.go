@@ -91,6 +91,31 @@ func (c *pClient) event(t *testing.T, want uint16) protocol.Event {
 	return protocol.Event{}
 }
 
+// awaitPublished returns once the server has published this client, so
+// another player's cmd can target it. hello_ack goes out BEFORE join adds
+// the client to s.clients; join runs on this connection's reader, so the
+// pong to a ping sent now cannot leave until join has finished. Under
+// full-suite load an invite sent on hello_ack alone found no target
+// (status 5, not found). Events read on the way are buffered.
+func (c *pClient) awaitPublished(t *testing.T) {
+	t.Helper()
+	c.ws.sendFrame(t, protocol.EncodePing(protocol.Ping{}))
+	for i := 0; i < 500; i++ {
+		typ, payload := c.ws.next(t)
+		switch typ {
+		case protocol.MsgPong:
+			return
+		case protocol.MsgEvent:
+			ev, err := protocol.DecodeEvent(payload)
+			if err != nil {
+				t.Fatalf("event: %v", err)
+			}
+			c.events = append(c.events, ev)
+		}
+	}
+	t.Fatal("no pong")
+}
+
 func joinPlayer(t *testing.T, url, name string) *pClient {
 	t.Helper()
 	c := dialWS(t, url)
@@ -129,6 +154,7 @@ func TestPartyLifecycle(t *testing.T) {
 	}
 
 	// A invites B; B sees the toast naming A, accepts, both get the roster.
+	b.awaitPublished(t)
 	a.cmdOK(t, 4, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, b.id))
 	inv := b.event(t, protocol.EventPartyInvited)
 	if inv.EntityID != a.id {
@@ -143,6 +169,7 @@ func TestPartyLifecycle(t *testing.T) {
 	}
 
 	// B invites C; roster reaches all three.
+	c.awaitPublished(t)
 	b.cmdOK(t, 6, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, c.id))
 	c.event(t, protocol.EventPartyInvited)
 	c.cmdOK(t, 7, protocol.OpPartyRespond, `{"accept":true}`)
@@ -186,6 +213,7 @@ func TestPartyCap(t *testing.T) {
 	// P0 invites P1..P3 — a full four.
 	seq := uint16(10)
 	for i := 1; i <= 3; i++ {
+		members[i].awaitPublished(t)
 		members[0].cmdOK(t, seq, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, members[i].id))
 		seq++
 		members[i].event(t, protocol.EventPartyInvited)
@@ -193,6 +221,7 @@ func TestPartyCap(t *testing.T) {
 		seq++
 	}
 	// A fifth invite refuses at the door.
+	members[4].awaitPublished(t)
 	if r := members[0].cmd(t, seq, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, members[4].id)); r.Status != protocol.StatusRefused {
 		t.Fatalf("fifth invite: status %d, want refused", r.Status)
 	}

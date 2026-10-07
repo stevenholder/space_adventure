@@ -111,6 +111,7 @@ func TestBountyLateJoinerKill(t *testing.T) {
 
 	// B joins A's party after the claim.
 	b := joinPlayer(t, url, "B")
+	b.awaitPublished(t)
 	a.cmdOK(t, 2, protocol.OpPartyInvite, fmt.Sprintf(`{"target":%d}`, b.id))
 	b.event(t, protocol.EventPartyInvited)
 	b.cmdOK(t, 3, protocol.OpPartyRespond, `{"accept":true}`)
