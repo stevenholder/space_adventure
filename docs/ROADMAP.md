@@ -1929,6 +1929,43 @@ whole.
   armor and hair on); first-person arms unchanged; sweep green; C153–C169
   hold.
 
+# Phase 20 — chat (2026-10-06)
+
+### Where Phase 20 stands (2026-10-06)
+
+Drafted. The Deferred table held "chat, guilds" for "after Phase 5";
+accounts made it sensible and the user asked. One world channel, text
+only, nothing stored. Contract: GDD "Chat (Phase 20)". Wire: `cmd`
+`0x0016` in, `event` `0x0011` out — three ends.
+
+**Playable proof.** Two clients. Press Enter, type "over here", Enter:
+both see `KADE: over here` bottom-left, fading after ten seconds. Mash
+Enter with text five times in a second: the fourth and fifth are refused
+and nothing crashes.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 1 | Server: `chat` cmd (trim, strip controls, empty → status 3 `empty`, > 200 bytes → status 2, bucket 3 burst / 1 per s → status 4), broadcast `event 0x0011` `name\0text`; PROTOCOL rows for both ids | `server/internal/server/`, `docs/PROTOCOL.md` | Go test: two clients, one sends, both receive with the speaker's row name; refusals; the bucket |
+| 2 | 1 | Harness: `wire.mjs` `EVENT.CHAT`, `decodeChat`; `t42-chat.mjs`: two sockets, send/receive both, empty 3, 201 bytes 2, burst → 4, control chars stripped | `test/lib/wire.mjs`, `test/t42-chat.mjs` | bare server + kind |
+| 3 | 1 | Client: `ChatView` (input + fading log), Enter/Escape, input swallow while open, send cmd, decode the event; `-uiChat` rig; self-test on the log model (push/expire/cap 8) | `client/godot/Game/UI/Chat.cs`, `Boot.cs`, codec | shot `p20-chat.png`; `godot-codec` for the new event |
+| 4 | 2 | Record: QA-STATUS "Phase 20"; Deferred row "chat, guilds" → "guilds" | `docs/` | — |
+
+### Acceptance criteria (C174–C177)
+
+- **C174 It arrives.** A chat cmd from one client reaches every client
+  (speaker included) as `event 0x0011` with the speaker's row name and
+  the text; nothing is stored.
+- **C175 It is bounded.** Empty → status 3 `empty`; over 200 bytes →
+  status 2; the fourth line within a second → status 4; control
+  characters never reach anyone.
+- **C176 The line.** Enter opens, swallows game keys, sends on Enter,
+  closes on Escape; the log fades after 10 s and holds 8 lines (shot +
+  self-test).
+- **C177 Nothing else moved.** Sweep green incl. `godot-codec`; the fleet
+  unchanged; C153–C173 hold.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
