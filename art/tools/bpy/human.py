@@ -80,6 +80,8 @@ COLONIST_FACE = {
     # a more open eye (the lids narrowed to slits at game distance)
     "eyes/l-eye-height2-incr": 0.45, "eyes/r-eye-height2-incr": 0.45,
     "eyes/l-eye-scale-incr": 0.15, "eyes/r-eye-scale-incr": 0.15,
+    # lips together at rest (MakeHuman's default mouth is a little parted)
+    "expression/mouth-compression": 0.5,
 }
 COLONIST_FACE_F = {
     "eyebrows/eyebrows-trans-forward": 0.25,
@@ -88,6 +90,9 @@ COLONIST_FACE_F = {
     "chin/chin-prominent-incr": 0.15,
     "eyes/l-eye-height2-incr": 0.4, "eyes/r-eye-height2-incr": 0.4,
     "eyes/l-eye-scale-incr": 0.15, "eyes/r-eye-scale-incr": 0.15,
+    # lips together at rest, a little less full
+    "expression/mouth-compression": 0.55,
+    "mouth/mouth-upperlip-volume-decr": 0.15, "mouth/mouth-lowerlip-volume-decr": 0.25,
 }
 # Head-weighted decimation (`lod` variants): the decimator's vertex-group
 # factor makes collapsing a head edge this much costlier than a torso one;
@@ -112,15 +117,15 @@ VARIANTS = {
         "macro": {"muscle": 0.40, "weight": 0.45, "proportions": 0.75, "age": 0.5},
         "targets": dict(COLONIST_FACE, **{"torso/measure-shoulder-dist-decr": 0.45, "torso/torso-vshape-decr": 0.25}),
         "eye": 1.65, "hair": False, "lod": True,
-        "paint_brows": skinpaint.BROW_M,
-        "materials": {"skin": (0.78, 0.58, 0.46), "eye": (0.44, 0.32, 0.21)},
+        "paint_brows": skinpaint.BROW_M, "hairline": skinpaint.HAIR_M,
+        "materials": {"skin": (0.73, 0.54, 0.37), "eye": (0.44, 0.32, 0.21)},
     },
     "char.player.f": {                         # the player body, female (GDD "Bodies": COLONIST F)
         "macro": {"gender": 0.0, "muscle": 0.38, "weight": 0.42, "proportions": 0.8, "age": 0.5},
         "targets": dict(COLONIST_FACE_F, **{"torso/measure-shoulder-dist-decr": 0.25}),
         "eye": 1.65, "hair": False, "lod": True,
-        "paint_brows": skinpaint.BROW_F,
-        "materials": {"skin": (0.80, 0.60, 0.48), "eye": (0.42, 0.46, 0.28)},
+        "paint_brows": skinpaint.BROW_F, "hairline": skinpaint.HAIR_F,
+        "materials": {"skin": (0.75, 0.56, 0.39), "eye": (0.42, 0.46, 0.28)},
     },
     "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
         "macro": {"age": 0.75, "weight": 0.72, "muscle": 0.45, "height": 0.45},
@@ -532,7 +537,7 @@ def make_human(decimate=True):
     if ACTIVE.get("lod") and "lips" in h.vertex_groups:
         h.vertex_groups["lips"].name = "_lips"      # lod_decimate keeps them; "_" groups are not bones
         h.vertex_groups["ears"].name = "_ears"      # painted (skin.py) and kept smoother in decimation
-        h.vertex_groups["scalp"].name = "_scalp"    # painted: a faint stubble shadow (male)
+        h.vertex_groups["scalp"].name = "_scalp"    # (no longer painted: skin.paint_hairline draws the line)
     for g in list(h.vertex_groups):
         if g.name not in bones and not g.name.startswith("_"):
             h.vertex_groups.remove(g)
@@ -592,10 +597,11 @@ def paint_skin(h, eyes, rig):
         dorsal = -palm_normal(rig, side)
         for f in ("index", "middle", "ring", "pinky"):
             for j, r in (("01", 0.012), ("02", 0.008), ("03", 0.006)):
-                knuckles.append((tuple(pb(rig, f"{f}_{j}_{side}").matrix.translation), tuple(dorsal), r))
+                m = pb(rig, f"{f}_{j}_{side}").matrix
+                knuckles.append((tuple(m.translation), tuple(dorsal), r, tuple(m.col[1].xyz.normalized())))
     skinpaint.paint(h, eyes, eye_r(), base, female, skin_faces(h, eyes), ACTIVE["_eyeball"],
                     glove, ACTIVE.get("materials", {}).get("glove", MATERIALS["glove"][0]), knuckles,
-                    brow=ACTIVE.get("paint_brows"))
+                    brow=ACTIVE.get("paint_brows"), hairline=ACTIVE.get("hairline"))
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres

@@ -142,6 +142,13 @@ def masks(h, eyes, R, female, ball):
         d = np.sum((co - p) ** 2, axis=1) + (~front) * 1.0
         return co[np.argmin(d)]
     cheeks = [surf(e + np.array([np.sign(e[0] - mid[0]) * 0.012, 0.03, -0.035])) for e in (el, er)]
+    # cooler (less red) over the forehead and the chin: skin is not one tone
+    m["cool"] = np.clip(0.8 * near(surf(mid + np.array([0, 0.03, 0.045])), 0.022)
+                        + 0.6 * near(surf(mid + np.array([0, 0.05, -0.125])), 0.014), 0, 1) * front.clip(0.6)
+    # the hollows under the cheekbones and the temples: a shade darker
+    m["hollow"] = np.clip(sum(0.8 * near(surf(e + np.array([np.sign(e[0] - mid[0]) * 0.022, 0.0, -0.06])), 0.016)
+                              + 0.5 * near(surf(e + np.array([np.sign(e[0] - mid[0]) * 0.035, -0.03, 0.025])), 0.016)
+                              for e in (el, er)), 0, 1) * front.clip(0.6)
     m["red"] = np.clip(0.9 * near(nose, 0.011) + sum(0.7 * near(c, 0.018) for c in cheeks)
                        + 0.6 * m["ears"] + 0.25 * near(surf(mid + np.array([0, 0.05, -0.105])), 0.015), 0, 1) * front.clip(0.6)
     d = np.minimum(np.linalg.norm(co - el, axis=1), np.linalg.norm(co - er, axis=1))
@@ -158,7 +165,6 @@ def masks(h, eyes, R, female, ball):
     lash = smooth(rim.astype(float), edges, n, 4 if female else 3) * (~ball)
     lash = np.clip(lash / max(lash.max(), 1e-6) * 3.0, 0, 1)
     m["lash"] = lash * (0.35 + 0.65 * upper)
-    m["scalp"] = np.zeros(n) if female else smoothstep(0.2, 0.9, smooth(group_weights(h, "_scalp"), edges, n, 6))
     if female:
         m["beard"] = np.zeros(n)
     else:
@@ -174,11 +180,12 @@ def paint_colours(m, base, female):
     def mix(c, w):
         nonlocal col
         col = col * (1 - w[:, None]) + lin(c) * w[:, None]
-    mix((0.82, 0.50, 0.44), 0.50 * m["red"])
-    mix((0.64, 0.47, 0.47), 0.45 * m["socket"])
-    mix((0.55, 0.50, 0.50), 0.22 * m["beard"])
-    mix((0.50, 0.44, 0.41), 0.30 * m["scalp"])
-    mix((0.72, 0.44, 0.43) if female else (0.67, 0.44, 0.41), (0.7 if female else 0.75) * m["lips"])
+    mix((0.80, 0.49, 0.36), 0.50 * m["red"])           # warm: nose, cheeks, ears
+    mix((0.70, 0.56, 0.43), 0.40 * m["cool"])          # a shade less red: forehead, chin
+    mix((0.56, 0.42, 0.36), 0.45 * m["socket"])
+    mix((0.58, 0.42, 0.32), 0.30 * m["hollow"])
+    mix((0.50, 0.45, 0.41), 0.30 * m["beard"])
+    mix((0.72, 0.43, 0.37) if female else (0.66, 0.42, 0.35), (0.7 if female else 0.75) * m["lips"])
     mix((0.07, 0.05, 0.05), 0.92 * m["lash"])
     return col
 
@@ -301,7 +308,7 @@ def _noise(rng, size, cells):
     return rows[:, i] * (1 - f)[None, :] + rows[:, i + 1] * f[None, :]
 
 
-def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuckles=(), brow=None):
+def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuckles=(), brow=None, hairline=None):
     """Steps 1-2: pack the UVs, bake, compose. Leaves the albedo in STATE.
     With `glove` (faces) the gloved hands get their own GLOVE_TEX map."""
     pack_skin_uvs(h, skin)
@@ -314,7 +321,8 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
     h.data.vertices.foreach_get("co", co)
     mid = (np.array(eyes[0]) + np.array(eyes[1])) / 2
     pos = co.reshape(-1, 3) - mid + 0.5               # positive: an emission colour
-    res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux, "pos": pos})
+    aux2 = np.stack([m["red"], m["cool"], np.zeros(len(m["red"]))], -1)
+    res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux, "aux2": aux2, "pos": pos})
     emit, ao, aux = res["paint"], res["AO"], res["aux"]
     STATE["hi"] = res["_target"]          # the dense skin: normal_map()'s source
     # Crevices: darker and a little warmer (light scattering in the skin);
@@ -322,17 +330,134 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
     occ = (1 - ao) * (1 - 0.7 * aux[..., 0])
     shade = 1 - 0.8 * occ
     alb = emit * shade[..., None] * (1 + occ[..., None] * np.array([0.10, -0.05, -0.08]))
-    rng = np.random.default_rng(17 if female else 7)
-    S = SKIN_TEX
-    blotch = sum(_noise(rng, S, c) * w for c, w in ((6, 0.5), (24, 0.3), (96, 0.2))) - 0.5
-    pores = _noise(rng, S, 512) - 0.5
-    alb = alb * (1 + 0.10 * blotch[..., None] * np.array([1.0, 1.15, 1.2])) * (1 + 0.05 * pores[..., None])
+    P = res["pos"] + mid - 0.5                        # each texel's surface position
+    alb = mottle(alb, P, res["aux2"], 17 if female else 7)
+    if hairline:
+        alb = paint_hairline(alb, P, eyes, hairline)
     if brow:
-        alb = paint_brows(alb, res["pos"] + mid - 0.5, eyes, R, brow)
+        alb = paint_brows(alb, P, eyes, R, brow)
     STATE.update(alb=alb, ao=ao, lips=aux[..., 0], ears=aux[..., 2])
 
 
 GLOVE_TEX = 1024
+GLOVE_CREASE = 0.45      # darkening in the knuckle creases
+
+
+def creases(P, knuckles):
+    """Fine fold lines across each finger joint (per texel, from the baked
+    surface position P): two or three bands square to the bone, ~1 mm wide,
+    deepest on the back of the hand, fading round the finger's sides."""
+    out = np.zeros(P.shape[:2])
+    for p, dorsal, r, axis in knuckles:
+        d = P - np.array(p)
+        ax, dn = np.array(axis), np.array(dorsal)
+        t = d @ ax                                   # along the finger
+        rad = d - t[..., None] * ax
+        near = np.linalg.norm(rad, axis=-1) < 1.6 * r
+        if not near.any():
+            continue
+        facing = np.clip((rad @ dn) / np.maximum(np.linalg.norm(rad, axis=-1), 1e-6), 0, 1)
+        band = sum(np.exp(-((t - o) / 0.0007) ** 2) * k for o, k in ((0.0, 1.0), (0.0019, 0.6), (-0.0019, 0.6)))
+        out = np.maximum(out, band * smoothstep(0.1, 0.6, facing) * near)
+    print(f"glove creases: {int((out > 0.5).sum())} texels")
+    return out
+
+
+def _vnoise3(p, cell, seed):
+    """Value noise over 3D positions (S, S, 3), `cell` m, smooth, 0..1. In
+    space, not UV: no seams where the islands are cut."""
+    q = p / cell
+    i = np.floor(q)
+    f = q - i
+    f = f * f * (3 - 2 * f)
+    h = lambda dx, dy, dz: np.modf(np.abs(np.sin((i[..., 0] + dx) * 127.1 + (i[..., 1] + dy) * 311.7
+                                                + (i[..., 2] + dz) * 74.7 + seed * 19.3) * 43758.5453))[0]
+    out = 0
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                w = (f[..., 0] if dx else 1 - f[..., 0]) * (f[..., 1] if dy else 1 - f[..., 1]) * (f[..., 2] if dz else 1 - f[..., 2])
+                out = out + w * h(dx, dy, dz)
+    return out
+
+
+# Skin variation, in space (cells in m). Hue shifts are per channel (R, G, B)
+# multipliers per unit of centred noise: warm patches go red, cool ones not.
+MOTTLE = {
+    "blotch": ((0.030, 0.14, (1.0, 1.15, 1.25)), (0.010, 0.07, (0.9, 1.0, 1.15))),
+    "hue": (0.020, 0.06),            # red vs. yellow drift, low frequency
+    "pores": (0.0007, 0.06),         # cell >= 2 texels (texel ~0.25 mm on the face): never a comb
+    "freckles": (0.0016, 0.78, 0.10),   # cell, threshold, darkening; on the warm areas
+}
+
+
+def mottle(alb, P, aux2, seed):
+    """Low-frequency tonal variation, pores and a few freckles."""
+    d = np.linalg.norm(np.diff(P[:, :, :], axis=1), axis=-1)
+    print(f"skin texel ~{np.median(d[d < 0.01]) * 1000:.2f} mm")
+    out = alb
+    for k, (cell, amp, tint) in enumerate(MOTTLE["blotch"]):
+        n = _vnoise3(P, cell, seed + k) - 0.5
+        out = out * (1 + amp * n[..., None] * np.array(tint))
+    cell, amp = MOTTLE["hue"]
+    n = _vnoise3(P, cell, seed + 7) - 0.5
+    out = out * (1 + amp * n[..., None] * np.array([1.0, -0.2, -1.0]))
+    cell, amp = MOTTLE["pores"]
+    pores = (_vnoise3(P, cell, seed + 11) - 0.5) + 0.5 * (_vnoise3(P, cell * 0.6, seed + 13) - 0.5)
+    out = out * (1 + amp * pores[..., None])
+    cell, thr, dark = MOTTLE["freckles"]
+    fr = smoothstep(thr, thr + 0.12, _vnoise3(P, cell, seed + 17)) * np.clip(aux2[..., 0] * 1.5, 0, 1)
+    out = out * (1 - dark * fr[..., None] * np.array([0.7, 1.0, 1.2]))
+    return out
+
+
+# ---- painted hairline ------------------------------------------------------------------
+# A shaved scalp: where hair would grow is a soft band darker than the skin,
+# so `hair.none` reads shaved, not egg. The line is a height above the eyes'
+# midpoint per azimuth round the head (0 = front, 90 = over the ear, 180 =
+# nape), measured about a vertical axis `yc` behind the eyes (m).
+# It must sit UNDER every hair piece: the knots are the lower edge of the
+# cap-like pieces (buzzed, buzzed_female, simple_parted -- the strand pieces,
+# long and buns, cover more) found by horizontal rays from that axis on each
+# body, the highest of the three per azimuth, +3 mm, then rounded off; the
+# soft edge and its noise stay within that margin.
+#   line     (azimuth deg, height m) knots, interpolated
+#   soft     the edge's feather (m); `edge` its irregularity (m)
+#   col      sRGB of the stubble; `density` its opacity at the core
+#   grain    stubble dots' cell (m): >= 2 texels (~0.18 mm)
+HAIR_M = {
+    "yc": -0.078, "soft": 0.003, "edge": 0.0015, "col": (0.12, 0.10, 0.09), "density": 0.85, "grain": 0.0006,
+    "line": ((0, 0.082), (8, 0.079), (16, 0.080), (28, 0.082), (36, 0.077), (44, 0.071), (48, 0.066),
+             (52, 0.040), (56, 0.032), (60, 0.022), (64, 0.019), (68, 0.008), (72, -0.006), (76, -0.006),
+             (80, 0.015), (88, 0.022), (96, 0.024), (104, 0.020), (112, 0.015), (116, 0.010),
+             (120, -0.020), (128, -0.025), (140, -0.028), (160, -0.031), (180, -0.037)),
+}
+# the female line: rounder at the temples (the pieces leave it no lower)
+HAIR_F = {
+    "yc": -0.078, "soft": 0.003, "edge": 0.0012, "col": (0.13, 0.10, 0.09), "density": 0.78, "grain": 0.0006,
+    "line": ((0, 0.080), (10, 0.078), (20, 0.080), (30, 0.081), (38, 0.076), (44, 0.069), (49, 0.058),
+             (53, 0.036), (57, 0.025), (61, 0.020), (65, 0.011), (69, -0.004), (73, -0.003), (77, 0.016),
+             (84, 0.021), (92, 0.023), (100, 0.018), (108, 0.011), (112, -0.008), (116, -0.022),
+             (124, -0.026), (140, -0.029), (160, -0.031), (180, -0.035)),
+}
+
+
+def paint_hairline(alb, P, eyes, b):
+    mid = (np.array(eyes[0]) + np.array(eyes[1])) / 2
+    rel = P - mid
+    az = np.degrees(np.arctan2(np.abs(rel[..., 0]), rel[..., 1] - b["yc"]))
+    k = np.array(b["line"])
+    line = np.interp(az, k[:, 0], k[:, 1])
+    line = line + b["edge"] * (_vnoise3(P, 0.003, 31) - 0.5) + 0.5 * b["edge"] * (_vnoise3(P, 0.0012, 37) - 0.5)
+    w = smoothstep(line - b["soft"], line + b["soft"], rel[..., 2])
+    w = w * (rel[..., 2] > -0.2)
+    # two octaves at unrelated cells: no lattice squares
+    grain = 0.6 * _vnoise3(P, b["grain"], 41) + 0.4 * _vnoise3(P, b["grain"] * 0.63, 43)
+    dens = b["density"] * (0.8 + 0.3 * smoothstep(0.3, 0.7, grain))
+    k_ = (w * dens)[..., None]
+    col = srgb_to_lin(np.array(b["col"]))
+    print(f"hairline: {int((w > 0.5).sum())} texels")
+    return alb * (1 - k_) + (alb * 0.22 + col * 0.78) * k_
 
 
 # ---- painted eyebrows ----------------------------------------------------------------
@@ -439,7 +564,7 @@ def paint_glove(h, glove, col, knuckles):
     nr = nr.reshape(-1, 3)
     edges = _neighbours(me)
     pad = np.zeros(n)
-    for p, dorsal, r in knuckles:
+    for p, dorsal, r, _ in knuckles:
         d2 = np.sum((co - np.array(p)) ** 2, axis=1)
         facing = np.clip(nr @ np.array(dorsal), 0, 1)
         pad = np.maximum(pad, np.exp(-d2 / (2 * r * r)) * smoothstep(0.2, 0.6, facing))
@@ -450,10 +575,12 @@ def paint_glove(h, glove, col, knuckles):
     w = 0.6 * pad[:, None]
     layer = np.repeat(lin[None, :], n, axis=0) * (1 - w) + pad_col[None, :] * w
     aux = np.stack([pad, np.zeros(n), np.zeros(n)], -1)
-    res = bake(h, glove, {"paint": layer, "aux": aux}, GLOVE_TEX)
+    pos = co + 0.5                                   # positive: an emission colour
+    res = bake(h, glove, {"paint": layer, "aux": aux, "pos": pos}, GLOVE_TEX)
     bpy.data.objects.remove(res["_target"], do_unlink=True)
     occ = 1 - res["AO"]
     alb = res["paint"] * (1 - 0.85 * occ)[..., None]
+    alb = alb * (1 - GLOVE_CREASE * creases(res["pos"] - 0.5, knuckles))[..., None]
     rng = np.random.default_rng(5)
     S = GLOVE_TEX
     weave = (np.sin(np.arange(S) * 2 * np.pi / 3.0)[None, :] * np.sin(np.arange(S) * 2 * np.pi / 3.0)[:, None])
@@ -534,7 +661,7 @@ def finish(head, skin_mat, out_dir, name):
     nrm = nrm * (1 - flat) + np.array([0.5, 0.5, 1.0]) * flat
     path = os.path.join(out_dir, name + "_skin.jpg")
     _save_jpeg(lin_to_srgb(STATE["alb"]), path)
-    _link(skin_mat, path, roughness=0.5)
+    _link(skin_mat, path, roughness=0.58)
     npath = os.path.join(out_dir, name + "_skin_n.jpg")
     _save_jpeg(nrm, npath)
     img = bpy.data.images.load(npath, check_existing=False)

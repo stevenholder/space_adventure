@@ -192,6 +192,11 @@ same 9000-tri ceiling.
   loaded before the rig is fitted): `torso/measure-shoulder-dist-decr`,
   `eyebrows-trans-forward` (brow ridge), `cheek/*-cheek-bones-incr`,
   `chin-bones-incr`, `chin-prominent-incr`, small `nose-hump-incr`.
+  The mouth is closed at rest (MakeHuman's default is a little parted):
+  `expression/mouth-compression` 0.5 M / 0.55 F, and the female lips a
+  little less full (`mouth-upperlip-volume-decr` 0.15,
+  `mouth-lowerlip-volume-decr` 0.25). It moves the lips ~2 mm, so the
+  Colonist hair pieces were refit (hair.py) after it.
 - **Head-weighted decimation** (`lod`): the eyeballs come off first (they
   return as clean spheres), then one collapse pass with a vertex group:
   eyelids and lips 0.05, head 0.2, hands 0.6, everything else 1.0. Blender's
@@ -239,12 +244,27 @@ same 9000-tri ceiling.
   UVs). Per-vertex masks -- the `lips` group feathered over the mesh, warm
   nose / cheeks / ears / chin (soft blobs round landmarks found from the
   eyes), eye sockets, the lid margin (skin resting on the eyeball inside the
-  front cone, feathered over the lid: the lash line), a faint beard and
-  scalp-stubble shadow on the male -- are mixed into colour attributes and
+  front cone, feathered over the lid: the lash line), a cooler forehead and
+  chin, darker cheek hollows and temples, a faint beard shadow on the male
+  -- are mixed into colour attributes and
   baked with Cycles (EMIT) into a 2048 px atlas, an ambient-occlusion bake
   (10 cm reach: nostrils, sockets, ear folds) multiplied in (not across the
-  lips: their seam read as an open mouth), plus low-frequency blotches and
-  fine pores, then the painted eyebrows (above). A tangent-space normal map is baked from the dense skin
+  lips: their seam read as an open mouth). Then `skin.mottle()`: value
+  noise over each texel's baked 3D POSITION (no seams at island cuts) --
+  30 / 10 mm tonal blotches, a red/yellow hue drift, pores (0.7 mm cell,
+  ~4 texels at 0.18 mm/texel: never a comb), sparse freckles on the warm
+  areas (`MOTTLE`). One warm-tan default per body (skin M (0.73, 0.54,
+  0.37), F (0.75, 0.56, 0.39), roughness 0.58); no tone picker. Then the
+  painted hairline (`skin.paint_hairline`, `HAIR_M` / `HAIR_F`): a darker
+  stubble band where hair grows, so `hair.none` reads shaved, not egg. The
+  line is a height above the eyes per azimuth round a vertical axis behind
+  them; its knots are the lower edge of the cap-like hair pieces (buzzed,
+  buzzed_female, simple_parted: the highest of the three per 4 degrees,
+  found by horizontal rays from that axis on each body) + 3 mm, so it
+  always sits UNDER any piece (the strand pieces cover more). That puts it
+  higher than a natural line (front ~80 mm above the eyes, nape ~ -37 mm),
+  and the female's can be no lower -- only rounder at the temples. If a
+  hair piece's shape changes, re-measure. Then the painted eyebrows (above). A tangent-space normal map is baked from the dense skin
   onto the decimated head (selected-to-active, 2 mm cage), flattened on the
   lip seam and the ears (rays there hit the wrong fold). Both maps are JPEG
   (q90) in `build/tex/` and packed into the glb; the export writes tangents
@@ -256,8 +276,10 @@ same 9000-tri ceiling.
   their own (the tiling fabric maps, on box UVs, are dropped for them):
   the glove colour with a worn, lighter sheen over each finger joint on the
   back of the hand (soft blobs at the finger bones' heads, facing away from
-  the palm), an AO bake (finger creases, the gaps between fingers) and a
-  fine weave. No nails: the hands are gloved.
+  the palm), an AO bake (finger creases, the gaps between fingers), fold
+  lines across each finger joint (`skin.creases`: three ~1 mm bands square
+  to the bone on the back of the hand, per texel from the baked position,
+  `GLOVE_CREASE` 45 % darker) and a fine weave. No nails: the hands are gloved.
 - **Texture budget** (verify.mjs): every embedded image <= 2048 px a side,
   every body glb (`char.*`, `npc.*`) <= 8 MB.
 - **Hair material**: the pack's strand textures are greyscale (the pack
