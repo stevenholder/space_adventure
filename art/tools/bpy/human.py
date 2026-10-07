@@ -80,6 +80,9 @@ COLONIST_FACE = {
     # a more open eye (the lids narrowed to slits at game distance)
     "eyes/l-eye-height2-incr": 0.45, "eyes/r-eye-height2-incr": 0.45,
     "eyes/l-eye-scale-incr": 0.15, "eyes/r-eye-scale-incr": 0.15,
+    # lips together at rest (MakeHuman's default mouth is a little parted)
+    "expression/mouth-compression": 0.55,
+    "mouth/mouth-upperlip-volume-decr": 0.1, "mouth/mouth-lowerlip-volume-decr": 0.1,
 }
 COLONIST_FACE_F = {
     "eyebrows/eyebrows-trans-forward": 0.25,
@@ -88,6 +91,9 @@ COLONIST_FACE_F = {
     "chin/chin-prominent-incr": 0.15,
     "eyes/l-eye-height2-incr": 0.4, "eyes/r-eye-height2-incr": 0.4,
     "eyes/l-eye-scale-incr": 0.15, "eyes/r-eye-scale-incr": 0.15,
+    # lips together at rest, a little less full
+    "expression/mouth-compression": 0.55,
+    "mouth/mouth-upperlip-volume-decr": 0.15, "mouth/mouth-lowerlip-volume-decr": 0.25,
 }
 # Head-weighted decimation (`lod` variants): the decimator's vertex-group
 # factor makes collapsing a head edge this much costlier than a torso one;
@@ -112,15 +118,15 @@ VARIANTS = {
         "macro": {"muscle": 0.40, "weight": 0.45, "proportions": 0.75, "age": 0.5},
         "targets": dict(COLONIST_FACE, **{"torso/measure-shoulder-dist-decr": 0.45, "torso/torso-vshape-decr": 0.25}),
         "eye": 1.65, "hair": False, "lod": True,
-        "paint_brows": skinpaint.BROW_M,
-        "materials": {"skin": (0.78, 0.58, 0.46), "eye": (0.44, 0.32, 0.21)},
+        "paint_brows": skinpaint.BROW_M, "hairline": skinpaint.HAIR_M,
+        "materials": {"skin": (0.73, 0.54, 0.37), "eye": (0.44, 0.32, 0.21)},
     },
     "char.player.f": {                         # the player body, female (GDD "Bodies": COLONIST F)
         "macro": {"gender": 0.0, "muscle": 0.38, "weight": 0.42, "proportions": 0.8, "age": 0.5},
         "targets": dict(COLONIST_FACE_F, **{"torso/measure-shoulder-dist-decr": 0.25}),
         "eye": 1.65, "hair": False, "lod": True,
-        "paint_brows": skinpaint.BROW_F,
-        "materials": {"skin": (0.80, 0.60, 0.48), "eye": (0.42, 0.46, 0.28)},
+        "paint_brows": skinpaint.BROW_F, "hairline": skinpaint.HAIR_F,
+        "materials": {"skin": (0.75, 0.56, 0.39), "eye": (0.42, 0.46, 0.28)},
     },
     "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
         "macro": {"age": 0.75, "weight": 0.72, "muscle": 0.45, "height": 0.45},
@@ -532,7 +538,7 @@ def make_human(decimate=True):
     if ACTIVE.get("lod") and "lips" in h.vertex_groups:
         h.vertex_groups["lips"].name = "_lips"      # lod_decimate keeps them; "_" groups are not bones
         h.vertex_groups["ears"].name = "_ears"      # painted (skin.py) and kept smoother in decimation
-        h.vertex_groups["scalp"].name = "_scalp"    # painted: a faint stubble shadow (male)
+        h.vertex_groups["scalp"].name = "_scalp"    # (no longer painted: skin.paint_hairline draws the line)
     for g in list(h.vertex_groups):
         if g.name not in bones and not g.name.startswith("_"):
             h.vertex_groups.remove(g)
@@ -592,10 +598,11 @@ def paint_skin(h, eyes, rig):
         dorsal = -palm_normal(rig, side)
         for f in ("index", "middle", "ring", "pinky"):
             for j, r in (("01", 0.012), ("02", 0.008), ("03", 0.006)):
-                knuckles.append((tuple(pb(rig, f"{f}_{j}_{side}").matrix.translation), tuple(dorsal), r))
+                m = pb(rig, f"{f}_{j}_{side}").matrix
+                knuckles.append((tuple(m.translation), tuple(dorsal), r, tuple(m.col[1].xyz.normalized())))
     skinpaint.paint(h, eyes, eye_r(), base, female, skin_faces(h, eyes), ACTIVE["_eyeball"],
                     glove, ACTIVE.get("materials", {}).get("glove", MATERIALS["glove"][0]), knuckles,
-                    brow=ACTIVE.get("paint_brows"))
+                    brow=ACTIVE.get("paint_brows"), hairline=ACTIVE.get("hairline"))
 
 
 EYEBALL_TRIS = 2 * (16 * 10 * 2 + 2 * 16)     # new_eyeballs(): two 16x12 UV spheres
@@ -872,6 +879,10 @@ def split(h, rig):
     # read (the new vertices carry interpolated weights).
     chest = chest_line(h)
     bisect_chest(h, chest)
+    # The whole body's smooth normals, kept per vertex: the cut parts are
+    # shaded with them (keep_normals), so no seam or sliver shades on its own.
+    vn = h.data.attributes.new("_vn", "FLOAT_VECTOR", "POINT")
+    vn.data.foreach_set("vector", [c for v in h.data.vertex_normals for c in v.vector])
     dom = dominant_bones(h)
     # The waist cut is LEVEL, at the hip joints (the thighs' heads), not
     # the pelvis/thigh weight border: that border runs down the groin
@@ -969,9 +980,30 @@ def split(h, rig):
     # the chest). `torso` is capped at the chest line -- the solid suit face
     # the local player looks down at -- and OPEN at the hips (the legs are
     # drawn beneath it). `legs` is open at the waist, as before.
+    n0 = {n: len(o.data.polygons) for n, o in parts.items()}
     print("caps", cap(parts["chest"], open_at=(chest,)), "tris on chest,",
           cap(parts["torso"], open_at=(cut,)), "on torso")
+    for n, o in parts.items():
+        if n in ("chest", "torso", "legs") and not ACTIVE.get("flat"):
+            keep_normals(o, n0[n])
+        o.data.attributes.remove(o.data.attributes["_vn"])
     return parts
+
+
+def keep_normals(obj, n0):
+    """Every corner of the part's own faces (index < n0) takes the whole
+    body's vertex normal (split()'s `_vn`); a cap face (n0 on) keeps its flat
+    normal. Cut apart, a part's rim vertices would average only its own
+    faces -- and a decimation sliver left alone on the rim (the grunt's
+    shoulder folds) would shade flat, and black. Kept, the parts shade as
+    the one body did."""
+    me = obj.data
+    vn = me.attributes["_vn"].data
+    loops = [None] * len(me.loops)
+    for p in me.polygons:
+        for li in p.loop_indices:
+            loops[li] = tuple(vn[me.loops[li].vertex_index].vector) if p.index < n0 else tuple(p.normal)
+    me.normals_split_custom_set(loops)
 
 
 def cap(obj, open_at=()):
@@ -1032,7 +1064,23 @@ def cap(obj, open_at=()):
                 path = path[:i]
             path.append(v)
         fill(path)
-    new = bmesh.ops.triangulate(bm, faces=new, quad_method="BEAUTY", ngon_method="BEAUTY")["faces"]
+    # A ring far from planar (a decimated collar) can fill with a fold: cap
+    # triangles turned against the ring that show through the suit as a dark
+    # wedge. Such a cap is fanned from its centre instead.
+    rings = {f: (list(f.verts), f.normal.copy()) for f in new}
+    res = bmesh.ops.triangulate(bm, faces=new, quad_method="BEAUTY", ngon_method="BEAUTY")
+    by = {f: [] for f in rings}
+    for t in res["faces"]:
+        by[res["face_map"].get(t, t)].append(t)
+    new = []
+    for f0, tris in by.items():
+        verts, nrm = rings[f0]
+        if all(t.normal.dot(nrm) > 0.2 for t in tris):
+            new += tris
+            continue
+        bmesh.ops.delete(bm, geom=tris, context="FACES_ONLY")
+        f = bm.faces.new(verts)
+        new += bmesh.ops.poke(bm, faces=[f], center_mode="MEAN")["faces"]
     suit = next(i for i, m in enumerate(obj.data.materials) if m and m.name == "suit")
     for f in new:
         f.material_index = suit

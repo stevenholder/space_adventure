@@ -14,7 +14,8 @@ light and shadow, and material factors (a tinted hair texture) render as
 the game draws them. Prints each group's eye height and bounds.
 
 Env: SHEET_ONLY=faces renders just the close-ups (front, three-quarter,
-side) in one row per group -- the texture pass's sheet; SHEET_TILE (px, default 400); SHEET_FACE (close-up width, m, default
+side) in one row per group -- the texture pass's sheet; SHEET_VIEWS picks
+other close-ups (comma list of front, side, back, q34, scalp); SHEET_TILE (px, default 400); SHEET_FACE (close-up width, m, default
 0.34) and SHEET_FACE_DZ (its centre above the eye, default 0.02; SHEET_FACE_DX
 sideways, for a hand close-up).
 """
@@ -110,6 +111,7 @@ def load(path):
 
 
 VIEWS = {"front": (0, 1, 0), "side": (1, 0, 0), "back": (0, -1, 0), "q34": (1, 1, 0.25)}
+EXTRA = {"scalp": (0.45, -0.8, 1.0)}         # above-behind: the hairline on a bald head
 rows = []
 for i, objs in enumerate(loaded):
     show(i)
@@ -118,10 +120,10 @@ for i, objs in enumerate(loaded):
     print(f"GROUP {i} {groups[i][0]} eye {ez:.3f}")
     full, faces = [], []
     if os.environ.get("SHEET_ONLY") == "faces":
-        for name in ("front", "q34", "side"):
+        for name in os.environ.get("SHEET_VIEWS", "front,q34,side").split(","):
             p = f"{tmp}/{i}_face_{name}.png"
             floor.hide_render = True
-            shoot(p, (float(os.environ.get("SHEET_FACE_DX", "0")), 0.0, ez + float(os.environ.get("SHEET_FACE_DZ", "0.02"))), VIEWS[name],
+            shoot(p, (float(os.environ.get("SHEET_FACE_DX", "0")), 0.0, ez + float(os.environ.get("SHEET_FACE_DZ", "0.02"))), {**VIEWS, **EXTRA}[name],
                   float(os.environ.get("SHEET_FACE", "0.34")), T, T)
             faces.append(load(p))
         rows.append(np.concatenate(faces, axis=1))
