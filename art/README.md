@@ -334,7 +334,9 @@ MakeHuman build -> the unsuffixed `hair.<style>`, then `@char.player`,
    highest points onto the target) to `HAIR_MARGIN` (5 mm) under the
    line, and the lower band is stretched down by it, fading out over
    `BAND` (30 mm, at least twice the drop); each vertex keeps its height
-   off the scalp. `lift_faces` then lifts any face whose centre or edge
+   off the scalp, and none is stretched below the line - `FLOOR` (8 mm)
+   unless it already was (a neighbouring azimuth's drop threw buzzed's
+   sideburn tips to the jaw: flaps beside the ears in game). `lift_faces` then lifts any face whose centre or edge
    midpoints dip under the skin (the buzzed crown showed scalp slivers
    through big triangles). Up to ~45 mm at the front; tris unchanged.
    `long` and `buns` hang past the line (their partings and bangs show the

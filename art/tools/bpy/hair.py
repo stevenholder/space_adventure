@@ -61,6 +61,7 @@ BODIES = ("", "char.player", "char.player.f", "char.ubc", "char.ubc.f")
 CAPS = ("hair.buzzed", "hair.buzzed_female", "hair.simple_parted")
 HAIR_MARGIN = 0.005  # m
 EDGE_WIN = 8         # deg each side: the window the drop takes the edge's maximum over
+FLOOR = 0.008        # m: no vertex stretched further than this under the line
 LIE = 0.012          # m: hair this close to the scalp covers it
 BAND = 0.030         # m: the stretch fades out this far above the old edge (at least 2x the drop)
 HEAD_BONES = ("head", "neck_01")
@@ -198,9 +199,14 @@ def reach_down(obj, db, eyes, line):
         if ramp <= 0:
             continue
         r0, r_head0 = math.hypot(rel.x, rel.y), radius(a, v.co.z)
-        z1 = v.co.z - dz * ramp
+        # never below the line - FLOOR at its own azimuth unless it already
+        # was (a neighbouring azimuth's drop threw sideburn tips to the jaw)
+        floor = mid.z + float(np.interp(abs(a), k[:, 0], k[:, 1])) - FLOOR
+        z1 = max(v.co.z - dz * ramp, min(v.co.z, floor))
         r_head1 = radius(a, z1)
         r1 = r0 if r_head0 is None or r_head1 is None else r_head1 + (r0 - r_head0)
+        if abs(r1 - r0) > 0.01:          # the ray met an ear, or left the head: keep the radius
+            r1 = r0
         s = r1 / max(r0, 1e-9)
         v.co = Vector((mid.x + rel.x * s, mid.y + yc + rel.y * s, z1))
     for v in obj.data.vertices:
