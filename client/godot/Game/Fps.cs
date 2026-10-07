@@ -69,6 +69,8 @@ namespace SpaceAdventure.Game
 
         /// <summary>Pointer movement this frame, for the viewmodel's sway.</summary>
         public Vector2 LookDelta { get; private set; }
+        /// <summary>Pixels of mouse motion the rig adds every frame (-uiTurn): a turn with the sway a real mouse has.</summary>
+        public Vector2 RigLook;
 
         public FpsController(Camera3D camera, InputState input)
         {
@@ -113,6 +115,7 @@ namespace SpaceAdventure.Game
             }
 
             Vector2 delta = MouseLookEnabled ? _input.MouseDelta : Vector2.Zero;
+            delta += RigLook;   // the screenshot rig's steady mouse turn (-uiTurn)
             LookDelta = delta;
 
             var result = new LocalInput();

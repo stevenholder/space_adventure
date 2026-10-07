@@ -31,10 +31,12 @@
 //   -uiFire <secs>          reload and hold the trigger on it
 //   -uiQuest                accept the starter mission at the board, wait for a party invite
 //   -uiLamp                 swing the sun onto whatever the camera ends up looking at
-//   -uiBoard [-uiSeat n]    walk to the nearest rover and take seat n (default 1, the driver's)
+//   -uiBoard [-uiSeat n]    after any -uiBuy/-uiWield: walk to the nearest rover and take seat n (default 1, the driver's)
 //   -rigArmed               show the rig without a purchase
 //   -uiAim                  hold aim-down-sights for the shot
 //   -uiWalk                 walk forward through the shot
+//   -uiStrafe               step right through the shot
+//   -uiTurn <px>            turn right <px> mouse pixels a frame through the shot (arm sway)
 //   -uiFlinch <secs>        nearest body flinches; shot that far in
 //   -uiDie <secs>           nearest body plays its death; shot that far in
 //   -uiFaceHeight <m>       with -uiFace: aim that far above the target's feet
@@ -63,6 +65,7 @@ namespace SpaceAdventure.Game
         private bool _rigLamp;
         private bool _rigAutoParty; // accept any party invite
         private bool _rigBack;      // step backwards
+        private bool _rigStrafe;    // -uiStrafe: hold D through the shot
         private bool _rigArmed;
         private bool _rigAim;       // -uiAim: hold the aim (right mouse) for the shot
         private bool _rigLowered;   // -uiLowered: pretend a wall is in the way
@@ -86,6 +89,7 @@ namespace SpaceAdventure.Game
             if (_rigFire) li.FirePressed = true;
             if (_rigInteract) { li.InteractPressed = true; _rigInteract = false; }
             if (_rigBack) li.MoveY = -1;
+            if (_rigStrafe) li.MoveX = 1;   // -uiStrafe: step right, a walk not a sprint
         }
 
         /// <summary>
@@ -263,32 +267,6 @@ namespace SpaceAdventure.Game
                 _combatFeed.Damage(g1.Root.GlobalPosition + up1 * 1.55f, 20, false);
                 _combatFeed.HitMarker(false);
                 await Wait(0.12);
-            }
-
-            // -uiBoard: walk to the nearest rover and take the driver's seat,
-            // for a shot of the seated camera and HUD.
-            if (Flag("-uiBoard"))
-            {
-                EntityView rover = null; float roverD = float.MaxValue;
-                foreach (EntityView v in _views.All)
-                {
-                    if (v.Root == null || v.Type != EntityType.Vehicle) continue;
-                    float d = (v.Root.GlobalPosition - Eye).LengthSquared();
-                    if (d < roverD) { roverD = d; rover = v; }
-                }
-                if (rover != null)
-                {
-                    await ApproachTo(rover.Root.GlobalPosition, 3f);
-                    ushort seat = ushort.TryParse(Arg("-uiSeat"), out ushort sn) ? sn : (ushort)1;
-                    _net.Send(Encode.Board(rover.Id, seat));
-                    for (double sw = 0; _seat == 0 && sw < 5; sw += 0.1) await Wait(0.1);
-                    GD.Print(_seat != 0 ? $"ui: seated in rover {rover.Id} seat {_seat}" : "ui: board refused");
-                    // Look out over the bonnet: the view root's +Z is the
-                    // facing (Entities.Place); the model inside it is flipped.
-                    _fps.FaceToward(Eye, rover.Root.GlobalTransform * new Vector3(0, 1.2f, 8f));
-                    await Wait(1.0);
-                }
-                else GD.Print("ui: no rover to board");
             }
 
             // -uiFace target|npc|hostile|player|wounded: aim the camera at
@@ -524,6 +502,33 @@ namespace SpaceAdventure.Game
                 _net.Send(Character.WieldCmd(NextCmdSeq(), true));
                 await Wait(0.8);
                 GD.Print($"ui: wield melee: held={_character.Held}");
+            }
+
+            // -uiBoard: walk to the nearest rover and take the driver's seat,
+            // for a shot of the seated camera and HUD. After the shop, so a
+            // bought helmet rides along (the seated self is dressed off the wire).
+            if (Flag("-uiBoard"))
+            {
+                EntityView rover = null; float roverD = float.MaxValue;
+                foreach (EntityView v in _views.All)
+                {
+                    if (v.Root == null || v.Type != EntityType.Vehicle) continue;
+                    float d = (v.Root.GlobalPosition - Eye).LengthSquared();
+                    if (d < roverD) { roverD = d; rover = v; }
+                }
+                if (rover != null)
+                {
+                    await ApproachTo(rover.Root.GlobalPosition, 3f);
+                    ushort seat = ushort.TryParse(Arg("-uiSeat"), out ushort sn) ? sn : (ushort)1;
+                    _net.Send(Encode.Board(rover.Id, seat));
+                    for (double sw = 0; _seat == 0 && sw < 5; sw += 0.1) await Wait(0.1);
+                    GD.Print(_seat != 0 ? $"ui: seated in rover {rover.Id} seat {_seat}" : "ui: board refused");
+                    // Look out over the bonnet: the view root's +Z is the
+                    // facing (Entities.Place); the model inside it is flipped.
+                    _fps.FaceToward(Eye, rover.Root.GlobalTransform * new Vector3(0, 1.2f, 8f));
+                    await Wait(1.0);
+                }
+                else GD.Print("ui: no rover to board");
             }
 
             // -uiClaim: claim the priority bounty the way the journal's button
@@ -807,6 +812,12 @@ namespace SpaceAdventure.Game
             }
             // -uiWalk: hold W through the shot (gait / aimed-while-moving checks).
             if (Flag("-uiWalk")) { _rigWalk = true; await Wait(1.0); }
+            // -uiStrafe: hold D. -uiTurn <px>: turn right that many mouse pixels
+            // a frame through the shot (playtest 2026-10-06: the left hand left
+            // the gun on a mouse turn -- the sway lags the arms, the converge did not).
+            if (Flag("-uiStrafe")) { _rigStrafe = true; await Wait(1.0); }
+            if (Arg("-uiTurn") is string turnPx && float.TryParse(turnPx, NumberStyles.Float, CultureInfo.InvariantCulture, out float px))
+            { _fps.RigLook = new Vector2(px, 0f); await Wait(1.0); }
 
             // -uiSwing <secs>: swing what is in hand (a real `fire`), shoot that
             // far into the swing. -uiUse <item> uses/throws it and waits 0.6 s.
