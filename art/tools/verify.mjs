@@ -101,8 +101,10 @@ const NODE_CONTRACTS = {
     chestCut: true,
   },
   "npc.shopkeeper": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
+    chestCut: true,
   },
   "char.player.f": {
     nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
@@ -124,19 +126,25 @@ const NODE_CONTRACTS = {
     chestCut: true,
   },
   "npc.dispatcher": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
+    chestCut: true,
   },
   // The hostiles carry the same layout on purpose: the client's nametag,
   // health-bar and animation code walks these names and does not care which
   // archetype it is looking at.
   "npc.grunt": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
+    chestCut: true,
   },
   "npc.gunner": {
-    nodes: ["eye", "head", "arms", "body", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
     eyeHeadSiblings: true,
+    legsCut: true,
+    chestCut: true,
   },
   "ship.v1": { nodes: ["seat.pilot", "seat.passenger.0", "seat.passenger.1"] },
   "vehicle.rover.v1": { nodes: ["seat.driver", "seat.passenger.0"] },
@@ -382,7 +390,7 @@ for (const asset of selected) {
       if (eye.parent && eye.parent.name === "head")
         problems.push("eye is a child of head: hiding head would hide the camera");
     }
-    // `legsCut` (player bodies): the local player draws `legs` and hides
+    // `legsCut` (every humanoid body): the local player draws `legs` and hides
     // `torso`, so looking down shows legs and feet, no torso. The feet are
     // in `legs` and the waist cut sits at the hips: legs top below 0.62 of
     // the eye height, torso bottom above the knees.

@@ -872,6 +872,10 @@ def split(h, rig):
     # read (the new vertices carry interpolated weights).
     chest = chest_line(h)
     bisect_chest(h, chest)
+    # The whole body's smooth normals, kept per vertex: the cut parts are
+    # shaded with them (keep_normals), so no seam or sliver shades on its own.
+    vn = h.data.attributes.new("_vn", "FLOAT_VECTOR", "POINT")
+    vn.data.foreach_set("vector", [c for v in h.data.vertex_normals for c in v.vector])
     dom = dominant_bones(h)
     # The waist cut is LEVEL, at the hip joints (the thighs' heads), not
     # the pelvis/thigh weight border: that border runs down the groin
@@ -969,9 +973,30 @@ def split(h, rig):
     # the chest). `torso` is capped at the chest line -- the solid suit face
     # the local player looks down at -- and OPEN at the hips (the legs are
     # drawn beneath it). `legs` is open at the waist, as before.
+    n0 = {n: len(o.data.polygons) for n, o in parts.items()}
     print("caps", cap(parts["chest"], open_at=(chest,)), "tris on chest,",
           cap(parts["torso"], open_at=(cut,)), "on torso")
+    for n, o in parts.items():
+        if n in ("chest", "torso", "legs") and not ACTIVE.get("flat"):
+            keep_normals(o, n0[n])
+        o.data.attributes.remove(o.data.attributes["_vn"])
     return parts
+
+
+def keep_normals(obj, n0):
+    """Every corner of the part's own faces (index < n0) takes the whole
+    body's vertex normal (split()'s `_vn`); a cap face (n0 on) keeps its flat
+    normal. Cut apart, a part's rim vertices would average only its own
+    faces -- and a decimation sliver left alone on the rim (the grunt's
+    shoulder folds) would shade flat, and black. Kept, the parts shade as
+    the one body did."""
+    me = obj.data
+    vn = me.attributes["_vn"].data
+    loops = [None] * len(me.loops)
+    for p in me.polygons:
+        for li in p.loop_indices:
+            loops[li] = tuple(vn[me.loops[li].vertex_index].vector) if p.index < n0 else tuple(p.normal)
+    me.normals_split_custom_set(loops)
 
 
 def cap(obj, open_at=()):

@@ -117,10 +117,12 @@ real materials, about 18k triangles dressed.
   0.40 m drop keeps that cap outside the 0.30 m near cut even leaning.
   `lod` decimation reserves `CAP_TRIS` (230: the bisect ~110 plus the
   caps ~100) for all of this; UBC bodies are simplified to budget by the
-  import anyway. The npc.* bodies are still the older
-  `body`/`arms`/`head` build until they are next rebuilt (a rebuild gives
-  them the five meshes too; boots cover both `legs/boot` and
-  `body/boot`). hair.py reads `head`, `chest` and `torso` of the shipped
+  import anyway. The npc.* bodies carry the same five meshes (rebuilt
+  2026-10-06; each cuts at its own eye - 0.40, the grunt's at 1.42), so
+  boots cover `legs/boot` alone. `keep_normals()` shades `chest`, `torso`
+  and `legs` with the uncut body's vertex normals (caps keep their own):
+  without it a decimation sliver left on a rim shades flat, and where it
+  is folded (the grunt's shoulders) black. hair.py reads `head`, `chest` and `torso` of the shipped
   body for the scalp and shoulders it fits to.
 - **Armor** (`tools/bpy/armor.py`): hard plates are clean grids laid on a
   cylinder around their bone, masked to a rounded rectangle, projected
@@ -415,8 +417,7 @@ authored at bulk 1.0, so an orc would clip through them.
 
 ### First person
 
-Every humanoid has `chest`, `torso` and `legs` (`body` on npc.* bodies built
-before 2026-10-06), `arms` (both arms and hands, split along the sleeve
+Every humanoid has `chest`, `torso` and `legs`, `arms` (both arms and hands, split along the sleeve
 seam) and `head`. The client hangs a
 second `char.player` under the camera and draws only its `arms`, so worn
 sleeves and gloves cover them like on any body (`armor.suit.scout` and
