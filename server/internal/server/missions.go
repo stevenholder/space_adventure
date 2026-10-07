@@ -244,11 +244,8 @@ func (s *Server) boardKind(c *client, npcID uint32) (starterOnly bool, ok bool) 
 	if !found {
 		return false, false
 	}
-	w := cmdWorld{
-		Pos:  c.entity.State.Pos,
-		Up:   terrain.Normalize(c.entity.State.Pos),
-		Look: c.lookDir(),
-	}
+	me, look := s.poseOf(c)
+	w := cmdWorld{Pos: me, Up: terrain.Normalize(me), Look: look}
 	if !inRange(w, npc, pos) {
 		return false, false
 	}

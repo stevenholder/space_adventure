@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -12,6 +13,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -656,5 +659,52 @@ func TestEditCharacter(t *testing.T) {
 	// The deleted name is free again.
 	if r := c.bearerReq("POST", "/api/characters", sid, map[string]string{"name": "Kadence", "body": "char.ubc"}); r.StatusCode != 200 {
 		t.Fatalf("re-create freed name = %d", r.StatusCode)
+	}
+}
+
+// TestKDFGate: six logins from six addresses never run more than two argon2
+// verifies at once, and all six succeed by waiting; a saturated gate 503s.
+func TestKDFGate(t *testing.T) {
+	ts, _ := newTestSite(t)
+	var inFlight, peak atomic.Int32
+	kdfHeld = func() {
+		n := inFlight.Add(1)
+		for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
+		}
+		time.Sleep(30 * time.Millisecond) // widen the window so overlap shows
+		inFlight.Add(-1)
+	}
+	t.Cleanup(func() { kdfHeld = func() {} })
+
+	var wg sync.WaitGroup
+	codes := make([]int, 6)
+	for i := range codes {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			c := &site{t: t, ts: ts, c: &http.Client{}, ip: fmt.Sprintf("10.0.0.%d", i+1)}
+			codes[i] = c.post("/api/login", credsReq{"nobody@x.com", "whateverpw"}, true).StatusCode
+		}(i)
+	}
+	wg.Wait()
+	for i, code := range codes {
+		if code != http.StatusUnauthorized { // unknown email: the dummy-hash path ran
+			t.Fatalf("login %d = %d, want 401", i, code)
+		}
+	}
+	if p := peak.Load(); p > 2 || p < 1 {
+		t.Fatalf("peak concurrent verifies = %d, want <= 2", p)
+	}
+
+	// Saturated: both slots taken, a short wait, 503 + Retry-After.
+	kdfSlots <- struct{}{}
+	kdfSlots <- struct{}{}
+	old := kdfWait
+	kdfWait = 50 * time.Millisecond
+	t.Cleanup(func() { kdfWait = old; <-kdfSlots; <-kdfSlots })
+	c := &site{t: t, ts: ts, c: &http.Client{}, ip: "10.0.1.1"}
+	r := c.post("/api/login", credsReq{"nobody@x.com", "whateverpw"}, true)
+	if r.StatusCode != http.StatusServiceUnavailable || r.Header.Get("Retry-After") != "1" {
+		t.Fatalf("saturated login = %d Retry-After=%q, want 503 / 1", r.StatusCode, r.Header.Get("Retry-After"))
 	}
 }

@@ -244,6 +244,11 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "password too short (8 minimum)", http.StatusBadRequest)
 		return
 	}
+	release := kdfGate(w)
+	if release == nil {
+		return
+	}
+	defer release()
 	hash, err := hashPassword(req.Password)
 	if err != nil {
 		http.Error(w, "hashing failed", http.StatusInternalServerError)
@@ -286,6 +291,11 @@ func (h *Handler) verifyLogin(w http.ResponseWriter, r *http.Request) *store.Acc
 		http.Error(w, "login failed", http.StatusInternalServerError)
 		return nil
 	}
+	release := kdfGate(w)
+	if release == nil {
+		return nil
+	}
+	defer release()
 	// One code path for wrong email and wrong password: verify against a
 	// dummy hash when the account is absent, so timing does not say which.
 	hash := dummyHash
@@ -657,6 +667,11 @@ func (h *Handler) password(w http.ResponseWriter, r *http.Request, a accountCtx)
 	if !readJSON(w, r, &req) {
 		return
 	}
+	release := kdfGate(w)
+	if release == nil {
+		return
+	}
+	defer release()
 	acc, err := h.Store.GetAccount(r.Context(), a.id)
 	if err != nil || acc == nil || !verifyPassword(req.Old, acc.PwHash) {
 		http.Error(w, "wrong password", http.StatusUnauthorized)
@@ -685,6 +700,11 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request, a accoun
 	if !readJSON(w, r, &req) {
 		return
 	}
+	release := kdfGate(w)
+	if release == nil {
+		return
+	}
+	defer release()
 	acc, err := h.Store.GetAccount(r.Context(), a.id)
 	if err != nil || acc == nil || !verifyPassword(req.Password, acc.PwHash) {
 		http.Error(w, "wrong password", http.StatusUnauthorized)

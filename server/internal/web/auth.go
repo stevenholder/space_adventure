@@ -16,7 +16,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -41,6 +43,33 @@ var dummyHash = func() string {
 	}
 	return h
 }()
+
+// kdfSlots caps argon2 calls process-wide. The per-IP login bucket bounds one
+// address, but N addresses in parallel cost N x 19 MiB inside a 128Mi pod.
+// ponytail: 2 slots = 38 MiB of KDF at most; a caller waits kdfWait for one,
+// then gets 503 + Retry-After: 1 instead of queueing without bound.
+var (
+	kdfSlots = make(chan struct{}, 2)
+	kdfWait  = 2 * time.Second
+	kdfHeld  = func() {} // test hook: runs while a slot is held
+)
+
+// kdfGate takes a slot, or writes 503 and returns nil. Every handler that
+// hashes or verifies (the dummy-hash path included) goes through it, so the
+// unknown-email timing stays the same as a known one.
+func kdfGate(w http.ResponseWriter) (release func()) {
+	t := time.NewTimer(kdfWait)
+	defer t.Stop()
+	select {
+	case kdfSlots <- struct{}{}:
+	case <-t.C:
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "busy, try again", http.StatusServiceUnavailable)
+		return nil
+	}
+	kdfHeld()
+	return func() { <-kdfSlots }
+}
 
 func hashPassword(pw string) (string, error) {
 	salt := make([]byte, argonSaltLen)

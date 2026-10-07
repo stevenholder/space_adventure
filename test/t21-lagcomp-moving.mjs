@@ -5,48 +5,60 @@
  *
  * The Phase 2 criterion fires at a target dummy. Dummies do not move, so the
  * rewound position equals the live one and rewind is a no-op: `t18` measures
- * 20/20 whether the server rewinds or not. Its own note claims "rewind is what
- * makes the first number 20 and not 12", and nothing in it tests that.
+ * 20/20 whether the server rewinds or not. This fires at a camp grunt running
+ * at a second player, from a shooter behind 500 ms of injected RTT, aimed
+ * where THAT client draws the grunt (interp_delay behind its estimate of the
+ * server clock). A shot only counts when that drawn capsule and the one a
+ * server WITHOUT rewind would test — the grunt where the shot arrives, live +
+ * vel·L — are further apart across the ray than the hitbox plus the weapon's
+ * whole spread cone at that range: a server resolving at the present CANNOT
+ * score it.
  *
- * This does, by firing at a camp grunt that is chasing a second player and
- * splitting the shots into two volleys aimed at two different points:
+ * Two checks carry the criterion:
+ *   - HITS_NEEDED of at most SHOTS such shots land; and
+ *   - every hit was resolved at the tick the client drew. The server's
+ *     broadcast ray enters exactly one of the bait's recorded per-tick
+ *     capsules at the reported hit point (0.000 m), which names the tick it
+ *     rewound to. A hit count alone cannot see a rewind short by
+ *     interp_delay (2 ticks, 0.4 m at 4 m/s still clips a 0.35 m capsule); a
+ *     server built with the pre-fix rule (rewind = L only) scored 3/3 here
+ *     and read server − drawn = +1.2..+1.9 ticks, against −0.8..−0.1 for
+ *     the real one.
  *
- *   STALE aim — at the grunt where THIS client currently sees it. This is the
- *               criterion: it is what a player does, and lag compensation
- *               exists to make it land.
- *   LIVE  aim — at the grunt where it actually is right now, read from a
- *               second, undelayed session. No real client can know this; it is
- *               here to say WHERE the server resolved, when the first volley
- *               misses.
+ * The staging is fixed, from the camp's own layout (zones/camp.json), and
+ * the grunt AI and spawn are deterministic, so the run repeats:
  *
- * Every shot records the stale-to-live offset, and a shot is only fired once
- * that offset exceeds the grunt's own hitbox radius (0.35 m) — otherwise both
- * aim points name the same capsule and the volleys measure nothing. A control
- * volley fires first, because a zero in both volleys says nothing about rewind
- * if a shot from that spot could never land.
+ *   - BAIT_STAND, 6 m outside the west gate on its axis: the two gate-side
+ *     grunts (-4,±4) see it through the 4 m gap inside aggro (22 m), and no
+ *     gunner (30 m) or the far grunt (2,-9) does. It stands; the grunts' 18 m
+ *     run at it, west at 4 m/s, is the window.
+ *   - SHOOTER_STAND, south-west of that on the flattened apron, more than
+ *     aggro_radius from every post (24 m from the nearest). The walls do NOT
+ *     hide a stand inside 22 m: a first try at 19.7 m had a grunt pressed to
+ *     the inside of the west wall, tracking the shooter. The run crosses its
+ *     sightline side-on at 17–21 m. Hitscan ignores walls (ResolveShot tests
+ *     entities only), so the part of the run behind the wall is in play.
  *
- * Before the fix, at 300 ms RTT and 31 m: control 3/3, stale 0/8, live 8/8 —
- * the server was resolving at the target's present position.
+ * Firing stops at HITS_NEEDED: a grunt has 60 hp and the pulse does 25, so
+ * the third hit on one grunt is the last shot fired. Arrival-aimed shots fire
+ * only on a failure, as diagnosis. Hard ceiling: CEILING_MS for the whole
+ * run (a pass takes ~65 s, ~55 of it walking the route).
  *
- * Deviations from the criterion's letter, and why:
+ * History: the first version shuttled the bait across a sightline it picked
+ * at runtime, fired 3 control + 8 stale + 8 live shots needing 8/8, waited up
+ * to 60 s per shot for a usable moment, and measured against live-NOW, which
+ * is only interp_delay from what the client draws (0.1–0.3 m, rarely past the
+ * hitbox). It ran past 300 s, killed grunts mid-volley (20 s respawns) and
+ * sat red on main.
  *
- *   - 300 ms RTT, not 100. The two aim points have to be separated by more
- *     than a whole body or both of them hit the same capsule and the run
- *     proves nothing. A 4.0 m/s grunt covers 0.2 m per 100 ms of RTT against
- *     a capsule 0.7 m across, so 100 ms RTT is unmeasurable by construction
- *     and 200 ms was still inconclusive in practice: the resolved hit points
- *     landed BETWEEN the aim points and both volleys scored alike. 300 ms
- *     gives ~1.2 m, comfortably more than the body.
- *   - 8 shots per volley, not 20. The pulse does 25 and a grunt has 60, so
- *     every third hit is a corpse and a 20 s respawn. `t18` keeps the 20-shot
- *     volume run against the dummies; this measures the property they cannot.
- *
- * Run: node test/t21-lagcomp-moving.mjs   (needs `make up`)
+ * Run: SA_PORT=18085 node test/t21-lagcomp-moving.mjs   (SA_PORT: the
+ * server's port, kind's 18080 by default; the latency proxy takes :18082)
  */
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadField, sampleRadius } from './lib/field.mjs'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const enc = new TextEncoder(), dec = new TextDecoder()
@@ -62,14 +74,17 @@ const dist = (a, b) => Math.hypot(...sub(a, b))
 
 // --- world constants this script reasons about (server/data) ---------------
 const HITBOX_RADIUS = 0.35   // items.json entity_defs, npc capsule radius
-const ONE_WAY_MS = 150       // injected per direction; 300 ms RTT
+const SPREAD_BASE_DEG = 0.6  // items.json weapon.pulse spread_base: the server's whole cone
+const AIM_MARGIN = 0.1       // m: tick quantisation of the rewind (50 ms × 4 m/s / 2)
+const ONE_WAY_MS = 250       // injected per direction; 500 ms RTT (rewind 5 + 2 ticks, under rewind_max 10)
 const INTERP_DELAY_MS = 100  // GDD "Lag compensation" interp_delay; the client owes this
-const SHOTS = 8              // per volley
-const SHOT_SPACING_MS = 520  // spread_per_shot 0.35 deg vs spread_decay 3.0/s
-const AGGRO_RADIUS = 22      // npcs.json npc.grunt; the shooter must stay out
-const KITE_STANDOFF = 15     // bait to the grunt it baits: inside that radius
-const SHOOT_RANGE = 24       // shooter to the shuttle: outside aggro, inside spread
-const MAX_SHOT_RANGE = 27    // past this, spread_base alone is wider than the hitbox
+const SHOTS = 4              // qualifying stale shots, at most
+const HITS_NEEDED = 3        // of SHOTS; firing stops here, so one 60 hp grunt dies on the last shot at worst
+const SHOT_SPACING_MS = 520  // a shot's hit event lands within one RTT + a tick
+const CEILING_MS = 120000
+const T0 = Date.now()
+const stamp = () => `[${((Date.now() - T0) / 1000).toFixed(0).padStart(3)} s]`
+const ceiling = setTimeout(() => { console.log(`${stamp()} FAIL hard ceiling: ${CEILING_MS / 1000} s`); process.exit(1) }, CEILING_MS)
 
 function frame(type, body) { const o = u8(2 + body.length); new DataView(o.buffer).setUint16(0, type, true); o.set(body, 2); return o }
 function hello(name, token) {
@@ -98,8 +113,8 @@ function fire(seq, dir) {
   return frame(0x0011, b)
 }
 
-async function session(name, port) {
-  const s = { myId: 0, ents: new Map(), spawns: new Map(), results: [], events: [], defs: null, seq: 1, snaps: 0, closed: null }
+async function session(name, port, lagMs = 0) {
+  const s = { name, byTick: new Map(), myId: 0, ents: new Map(), spawns: new Map(), results: [], events: [], defs: null, seq: 1, snaps: 0, closed: null }
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`); ws.binaryType = 'arraybuffer'
   const token = `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   ws.addEventListener('open', () => ws.send(hello(name, token)))
@@ -125,6 +140,8 @@ async function session(name, port) {
       // together they are the whole of a client's knowledge of the server
       // clock, and rendering the contract's way needs both.
       s.newest = { tick, at: Date.now() }
+      s.byTick.set(tick, new Map([...s.ents].map(([k, v]) => [k, v.pos])))
+      s.byTick.delete(tick - 60)
     }
     else if (t === 0x000f) s.results.push({ seq: pv.getUint16(0,true), op: pv.getUint16(2,true), status: pv.getUint8(4), body: JSON.parse(dec.decode(p.subarray(9)) || '{}') })
     else if (t === 0x0007) {
@@ -134,6 +151,9 @@ async function session(name, port) {
       // Read the body only if it is actually there: a short `hit` is a server
       // bug (one shipped), and a harness that dies on it reports nothing at
       // all about the run it was measuring.
+      if (e.ev === 2 && pv.getUint32(6, true) >= 28) {
+        e.ray = { o: [0, 1, 2].map(k => pv.getFloat32(10 + 4 * k, true)), d: [0, 1, 2].map(k => pv.getFloat32(22 + 4 * k, true)) }
+      }
       if (e.ev === 3 && pv.getUint32(6, true) >= 20) {
         e.shooter = pv.getUint32(10, true)
         // The hit point is on the capsule the server actually resolved
@@ -164,11 +184,16 @@ async function session(name, port) {
     s.look = norm(sub(d, mul(up, dot(d, up))))
     ws.send(input(0, 0, s.look, 0, s.seq++))
   }
+  // A lagged walker sees itself one trip late and its stop lands one trip
+  // later still: it coasts 2·lag·speed past where it let go. Let go early by
+  // that much — at 250 ms that is 3.75 m of sprint, which overshot the
+  // quartermaster's 3 m interact range on every attempt.
   s.walkTo = async (dst, stop, steps = 500) => {
     s.walking = true
+    const lead = 7.5 * 2 * lagMs / 1000
     try {
     for (let i = 0; i < steps; i++) {
-      const d = sub(dst, s.me()); if (Math.hypot(...d) <= stop) break
+      const d = sub(dst, s.me()); if (Math.hypot(...d) <= stop + lead) break
       const up = norm(s.me()); const lk = norm(sub(d, mul(up, dot(d, up))))
       s.look = lk
       ws.send(input(0, 1, lk, 0x0001, s.seq++)); await sleep(50)
@@ -194,7 +219,16 @@ async function armed(s) {
   // in, face the shopkeeper, let the look reach the server, and retry.
   let buy = null
   for (let attempt = 1; attempt <= 4 && buy?.status !== 0; attempt++) {
-    await s.walkTo(npcPos, 2.0, 200)
+    if (attempt === 1) await s.walkTo(npcPos, 2.0, 200)
+    else {
+      // Settled, so the view is current: step the rest blind, one sprint
+      // tick (0.375 m) per input, rather than walk-and-watch a stale view.
+      const n = Math.max(0, Math.ceil((dist(s.me(), npcPos) - 2.0) / 0.375))
+      for (let i = 0; i < n; i++) {
+        const d = sub(npcPos, s.me()), up = norm(s.me())
+        s.send(input(0, 1, norm(sub(d, mul(up, dot(d, up)))), 0x0001, s.seq++)); await sleep(50)
+      }
+    }
     s.lookAt(npcPos)
     await sleep(2 * ONE_WAY_MS + 100)
     buy = await s.call(0x0002, { npc: npcId, item: 'weapon.pulse', qty: 1 })
@@ -245,142 +279,31 @@ async function walkRoute(s, route, stopAt) {
   const t0 = Date.now()
   s.walking = true
   try {
-  for (const wp of route.waypoints) {
+  for (const [i, wp] of route.waypoints.entries()) {
     const legT0 = Date.now()
+    let lastPos = s.me().slice(), lastMove = Date.now()
     while (Date.now() - legT0 < 20000 && Date.now() - t0 < 240000) {
       if (dist(camp, s.me()) <= stopAt) return
       if (dist(wp, s.me()) <= 6) break
       const d = sub(wp, s.me()), up = norm(s.me())
       s.look = norm(sub(d, mul(up, dot(d, up))))
-      s.send(input(0, 1, s.look, 0x0001, s.seq++)); await sleep(50)
+      // Wedged on a scarp for a second? Jump at it, as t29's walker does —
+      // without this, legs 5-11 burned their whole 20 s each.
+      if (dist(s.me(), lastPos) > 0.5) { lastPos = s.me().slice(); lastMove = Date.now() }
+      const mask = Date.now() - lastMove > 1000 ? 0x0003 : 0x0001 // sprint (+jump when stuck)
+      s.send(input(0, 1, s.look, mask, s.seq++)); await sleep(50)
     }
+    if (dist(wp, s.me()) > 6) console.log(`${stamp()}   ${s.name}: leg ${i} timed out ${dist(wp, s.me()).toFixed(1)} m short`)
   }
-  } finally { s.walking = false }
+  // Stop explicitly: the server holds the last input until a new one lands,
+  // so a walker that just goes quiet sprints on until the next heartbeat —
+  // 7 m past its mark, which put the shooter inside grunt aggro.
+  } finally { s.walking = false; s.hold() }
 }
 
-const resolved = []
 const checks = []
-const check = (name, ok, detail = '') => { checks.push([name, ok]); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`) }
+const check = (name, ok, detail = '') => { checks.push([name, ok]); console.log(`${stamp()} ${ok ? 'PASS' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`) }
 
-// --- setup -----------------------------------------------------------------
-// SA_PORT: the server's port (kind's 18080 by default), so the test can be
-// pointed at a second server beside it.
-const SA_PORT = Number(process.env.SA_PORT ?? 18080)
-const proxy = spawn('node', [path.join(root, 'test/lib/proxy.mjs'), '18082', '127.0.0.1', String(SA_PORT), String(ONE_WAY_MS)], { stdio: 'ignore' })
-await sleep(400)
-const route = JSON.parse(readFileSync(new URL('./out/route-camp.json', import.meta.url), 'utf8'))
-const camp = route.waypoints[route.waypoints.length - 1]
-
-const shooter = await session('lagshooter', 18082)
-const bait = await session('lagbait', SA_PORT)
-console.log(`shooter id=${shooter.myId} (RTT ${2 * ONE_WAY_MS} ms), bait id=${bait.myId} (direct)`)
-await armed(shooter)
-console.log('shooter armed with the pulse rifle')
-
-// Both stop ON the solved route, at different distances: only the route is
-// known to be walkable, and the first version of this script lost 20 s and
-// both marks trying to step the shooter sideways across a scarp.
-//
-// The shooter stops far enough back to stay outside grunt aggro (22 m,
-// npcs.json), because a grunt targets the NEAREST player in radius
-// (ai/brain.go selectTarget) — pull it onto the shooter and its motion turns
-// radial, which is exactly the motion rewind cannot be measured against.
-await Promise.all([walkRoute(bait, route, 29), walkRoute(shooter, route, 60)])
-// Stopping on the route is not enough: the route passes ~28 m from the nearest
-// post and aggro_radius is 22, so the camp simply ignores a bait parked there.
-// Close on the nearest grunt until it notices, then shuttle around a point
-// KITE_STANDOFF out from it.
-const gruntIds = [...bait.spawns].filter(([, v]) => v.type === 3 && v.def === 'npc.grunt').map(([k]) => k)
-if (gruntIds.length === 0) throw new Error('no camp grunts in the spawn set')
-const nearest = gruntIds.map(id => ({ id, pos: bait.ents.get(id).pos }))
-  .sort((a, b) => dist(a.pos, bait.me()) - dist(b.pos, bait.me()))[0]
-const centre = add(nearest.pos, mul(norm(sub(bait.me(), nearest.pos)), KITE_STANDOFF))
-await bait.walkTo(centre, 3.0, 200)
-// Aggro is gated on line of sight (ai/brain.go selectTarget) and the camp's
-// walls block it, so a bait parked at the standoff can sit there unseen and
-// the volleys later find no moving grunt. Step in until the grunt moves.
-const post0 = bait.ents.get(nearest.id).pos.slice()
-for (let i = 1; i <= 6 && dist(bait.ents.get(nearest.id).pos, post0) < 1; i++) {
-  await bait.walkTo(nearest.pos, Math.max(4, KITE_STANDOFF - 2 * i), 40)
-  await sleep(1000)
-}
-
-// The shuttle runs perpendicular to the SHOOTER's line of sight, so a grunt
-// chasing the bait crosses that line instead of running along it. Motion along
-// it is invisible to this test: a capsule hit is indifferent to where along the
-// ray the target sits.
-// Pull the shooter to a fixed range from the shuttle. Range is not cosmetic:
-// the spread cone is an angle, so at 46 m spread_base alone is 0.48 m against
-// a 0.35 m capsule and even a perfectly aimed shot mostly misses. At 30 m it
-// is 0.31 m and aim decides the outcome, which is what this measures.
-const shooterMark = add(centre, mul(norm(sub(shooter.me(), centre)), SHOOT_RANGE))
-await shooter.walkTo(shooterMark, 3.0, 200)
-
-const losDir = norm(sub(centre, shooter.me()))
-const axis = norm(cross(norm(centre), losDir))
-const left = add(centre, mul(axis, 10))
-const right = add(centre, mul(axis, -10))
-console.log(`bait shuttling 20 m across the sightline, ${dist(centre, nearest.pos).toFixed(0)} m from grunt ${nearest.id}; ` +
-            `shooter ${dist(shooter.me(), centre).toFixed(0)} m from the shuttle, ${dist(camp, shooter.me()).toFixed(0)} m from camp`)
-
-let kiting = true
-const kiteLoop = (async () => {
-  while (kiting) {
-    await bait.walkTo(right, 2.5, 120)
-    if (!kiting) break
-    await bait.walkTo(left, 2.5, 120)
-  }
-})()
-
-console.log(`camp grunts: ${gruntIds.length}`)
-
-function gruntTable(label) {
-  console.log(`${label} | shooter snaps=${shooter.snaps} closed=${shooter.closed} | bait snaps=${bait.snaps} closed=${bait.closed}`)
-  for (const id of gruntIds) {
-    const st = shooter.ents.get(id), lv = bait.ents.get(id)
-    console.log(`  grunt ${id}: shooter ${st ? st.pos.map(x => x.toFixed(1)).join(',') : 'absent'} hp=${st?.health}` +
-                ` | bait ${lv ? lv.pos.map(x => x.toFixed(1)).join(',') : 'absent'} hp=${lv?.health}` +
-                ` | offset ${st && lv ? dist(st.pos, lv.pos).toFixed(2) : 'n/a'} m` +
-                ` | from shooter ${lv ? dist(shooter.me(), lv.pos).toFixed(1) : 'n/a'} m`)
-  }
-}
-gruntTable('before the volleys')
-await sleep(3000)
-gruntTable('3 s later')
-
-/**
- * usable finds a grunt that both sessions can see alive, and whose stale and
- * live positions are further apart than its own hitbox — the condition that
- * makes the two aim points name different capsules.
- */
-function usable() {
-  let best = null
-  const eye = add(shooter.me(), mul(norm(shooter.me()), 1.7))
-  for (const id of gruntIds) {
-    const live = bait.ents.get(id), seen = shooter.ents.get(id)
-    if (!seen || !live || seen.health === 0 || live.health === 0) continue
-    const shown = displayed(shooter, id)
-    if (!shown) continue
-    const stale = { pos: shown }
-    const range = dist(shooter.me(), live.pos)
-    // Too close and the grunt re-targets onto the shooter, turning its motion
-    // radial. Too far and spread_base alone exceeds the hitbox: the cone is an
-    // angle, 0.6 deg is 0.35 m at 33 m, and past that the weapon's own
-    // dispersion decides the shot rather than the aim. t18 makes the same
-    // trade the other way and reads 19/20 for it.
-    if (range < AGGRO_RADIUS || range > MAX_SHOT_RANGE) continue
-    // Only the offset ACROSS the ray moves a shot off the capsule; offset
-    // along it slides the aim point up and down a line that still intersects.
-    const ray = norm(sub(stale.pos, eye))
-    const d = sub(live.pos, stale.pos)
-    const lateral = Math.hypot(...sub(d, mul(ray, dot(d, ray))))
-    if (lateral <= HITBOX_RADIUS) continue
-    if (!best || lateral > best.off) {
-      best = { id, off: lateral, stale: stale.pos.slice(), live: live.pos.slice() }
-    }
-  }
-  return best
-}
 
 /**
  * shoot fires one round at `aim` and reports what the server did with it.
@@ -390,131 +313,194 @@ function usable() {
  */
 async function shoot(aim, victimId) {
   const mark = bait.events.length
+  // The (fractional) server tick this client is drawing right now — what
+  // displayed() extrapolated to — and so the tick a correct rewind lands on.
+  const displayTick = shooter.newest.tick + (Date.now() - shooter.newest.at + ONE_WAY_MS - INTERP_DELAY_MS) / 50
   shooter.look = aimAt(shooter, aim)
   shooter.send(fire(shooter.seq++, shooter.look))
   await sleep(SHOT_SPACING_MS)
   const seen = bait.events.slice(mark)
   const hit = seen.find(e => e.ev === 3 && e.id === victimId && e.shooter === shooter.myId)
+  const other = seen.find(e => e.ev === 3 && e.id !== victimId && e.shooter === shooter.myId)
+  const fe = seen.find(e => e.ev === 2 && e.id === shooter.myId && e.ray)
   return {
+    displayTick,
+    rewoundTick: hit && fe ? rewoundTick(fe.ray, hit.point, victimId) : null,
+    other: other?.id,
     fired: seen.some(e => e.ev === 2 && e.id === shooter.myId),
     hit: !!hit,
-    point: hit?.point,
   }
 }
 
-// resolvedAt reports how far the server's hit point sits from each candidate
-// body axis. It is the one direct read of where the rewind landed: much
-// nearer the stale axis means the shooter's own frame was reconstructed,
-// nearer live means the present was, and halfway means the rewind is short.
-function resolvedAt(point, stale, live) {
-  const axis = (p, base) => {
-    const up = norm(base)
-    const d = sub(p, base)
-    return Math.hypot(...sub(d, mul(up, dot(d, up)))) // distance from the capsule's axis
+/**
+ * rewoundTick names the tick the server ACTUALLY resolved a hit against: the
+ * one whose capsule (bait's per-tick record, near-live) the server's own
+ * broadcast ray first enters at exactly the reported hit point. A hit/miss
+ * count cannot see a rewind that is short by a tick or two (0.4 m at 4 m/s
+ * still clips a 0.35 m capsule) — this can, to the tick.
+ */
+const HITBOX_HEIGHT = 1.8 // items.json entity_defs npc hitbox height
+function rewoundTick(ray, point, victimId) {
+  const segDist = (p, a, b) => { const ab = sub(b, a), t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / dot(ab, ab))); return dist(p, add(a, mul(ab, t))) }
+  let best = null
+  for (const [tk, m] of bait.byTick) {
+    const feet = m.get(victimId); if (!feet) continue
+    const head = add(feet, mul(norm(feet), HITBOX_HEIGHT))
+    const f = (t) => segDist(add(ray.o, mul(ray.d, t)), feet, head) - HITBOX_RADIUS
+    // Closest approach by scan, then bisect back to the entry.
+    let tMin = 0, fMin = Infinity
+    for (let t = 0; t < 60; t += 0.02) { const v = f(t); if (v < fMin) { fMin = v; tMin = t } }
+    if (fMin > 0) continue
+    let lo = 0, hi = tMin
+    for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid }
+    const err = dist(add(ray.o, mul(ray.d, hi)), point)
+    if (!best || err < best.err) best = { tick: tk, err }
   }
-  return { toStale: axis(point, stale), toLive: axis(point, live) }
+  return best
 }
 
-/** volley fires n shots at `mode` and returns [hits, offsets]. */
-async function volley(mode, n) {
-  let hits = 0, fired = 0
-  const offsets = []
-  for (let i = 0; i < n; i++) {
-    const t = await shooter.wait(usable, 60000)
-    if (!t) { console.log(`  shot ${i + 1}: no moving grunt within 60 s — giving up`); break }
-    const r = await shoot(mode === 'stale' ? t.stale : t.live, t.id)
-    offsets.push(t.off)
-    if (r.hit) hits++
-    if (r.fired) fired++
-    let where = ''
-    if (r.point) {
-      const a = resolvedAt(r.point, t.stale, t.live)
-      resolved.push(a)
-      where = `  [resolved ${a.toStale.toFixed(2)} m from the stale axis, ${a.toLive.toFixed(2)} m from live]`
-    }
-    console.log(`  ${mode} shot ${String(i + 1).padStart(2)}: offset ${t.off.toFixed(2)} m, range ${dist(shooter.me(), t.live).toFixed(1)} m` +
-                ` -> ${r.fired ? (r.hit ? 'HIT' : 'miss') : 'NOT FIRED'}${where}`)
+// --- the camp frame (server/internal/defs/zone.go worldTransform) -----------
+const field = loadField(JSON.parse(readFileSync(new URL('./out/world-seed1337.json', import.meta.url), 'utf8')))
+const campZone = JSON.parse(readFileSync(new URL('../server/data/zones/camp.json', import.meta.url), 'utf8'))
+const campUp = norm(campZone.origin_dir)
+const campNorth = norm(sub([0, 0, 1], mul(campUp, campUp[2])))
+const campEast = cross(campUp, campNorth)
+const campOrigin = mul(campUp, sampleRadius(field, campUp))
+const campPoint = (x, z) => { const d = norm(add(campOrigin, add(mul(campEast, x), mul(campNorth, z)))); return mul(d, sampleRadius(field, d)) }
+const BAIT_STAND = campPoint(-22, 0)
+const SHOOTER_STAND = campPoint(-26, -14)
+
+// --- setup -----------------------------------------------------------------
+const SA_PORT = Number(process.env.SA_PORT ?? 18080)
+const proxy = spawn('node', [path.join(root, 'test/lib/proxy.mjs'), '18082', '127.0.0.1', String(SA_PORT), String(ONE_WAY_MS)], { stdio: 'ignore' })
+process.on('exit', () => proxy.kill()) // the ceiling exits too; an orphan holds :18082 with ITS delay
+await sleep(400)
+// A proxy left by a killed run still listens on :18082 with whatever delay
+// it was given, and this one dies on EADDRINUSE without a word: every
+// number below would then be measured at the wrong latency.
+if (proxy.exitCode !== null) throw new Error('latency proxy exited at start — is :18082 held by an orphan from an earlier run?')
+const route = JSON.parse(readFileSync(new URL('./out/route-camp.json', import.meta.url), 'utf8'))
+const camp = route.waypoints[route.waypoints.length - 1]
+const wp12 = route.waypoints[12] // the last waypoint outside the gate
+
+const shooter = await session('lagshooter', 18082, ONE_WAY_MS)
+const bait = await session('lagbait', SA_PORT)
+console.log(`${stamp()} shooter id=${shooter.myId} (RTT ${2 * ONE_WAY_MS} ms), bait id=${bait.myId} (direct)`)
+await armed(shooter)
+console.log(`${stamp()} shooter armed with the pulse rifle`)
+
+// Both walk the solved route to 34 m from the camp — outside aggro of
+// anything that can see them through the gate. The shooter goes straight to
+// its stand from there, NOT via wp12: wp12 is 14 m from the gate grunts and
+// in their sight, and a grunt that picks the shooter up there follows it to
+// the stand (the first run of this staging did exactly that).
+await Promise.all([walkRoute(bait, route, 34), walkRoute(shooter, route, 34)])
+await shooter.walkTo(SHOOTER_STAND, 1.0, 200)
+console.log(`${stamp()} shooter at its stand, ${dist(shooter.me(), SHOOTER_STAND).toFixed(1)} m off`)
+
+const gruntIds = [...bait.spawns].filter(([, v]) => v.type === 3 && v.def === 'npc.grunt').map(([k]) => k)
+  .filter(id => bait.ents.get(id) && dist(bait.ents.get(id).pos, camp) < 30)
+if (gruntIds.length === 0) throw new Error('no camp grunts in the spawn set')
+const posts = new Map(gruntIds.map(id => [id, bait.ents.get(id).pos.slice()]))
+
+await bait.walkTo(wp12, 2.0, 200)
+await bait.walkTo(BAIT_STAND, 1.0, 200)
+console.log(`${stamp()} bait at the gate, ${dist(bait.me(), BAIT_STAND).toFixed(1)} m off; waiting for a grunt`)
+// The two gate grunts see the bait through the gap and run at it, 18 m at
+// 4 m/s, west — side-on to the shooter. The bait stands; the run is the window.
+const answered = await bait.wait(() => gruntIds.find(id => {
+  const e = bait.ents.get(id)
+  return e && Math.hypot(...e.vel) > 2 && dist(e.pos, bait.me()) < dist(e.pos, shooter.me())
+}), 20000)
+check('a gate grunt runs at the bait', !!answered, answered ? `grunt ${answered}` : 'none within 20 s')
+
+/**
+ * qualifying finds a running grunt whose capsule as this client SEES it and
+ * as a server without rewind would test it are further apart across the ray
+ * than the hitbox plus the cone at that range: a shot at it can land ONLY if
+ * the server rewound to what the shooter saw. "Without rewind" is the grunt
+ * where the shot ARRIVES, one one-way trip from now: live + vel·L. (The first
+ * draft measured against live-now, which is only interp_delay away from what
+ * the client sees and read 0.1–0.3 m — never a qualifying gap.)
+ */
+const coneAt = (range) => range * Math.tan(SPREAD_BASE_DEG * Math.PI / 180)
+function qualifying() {
+  let best = null
+  const eye = add(shooter.me(), mul(norm(shooter.me()), 1.7))
+  for (const id of gruntIds) {
+    const live = bait.ents.get(id), seen = shooter.ents.get(id)
+    if (!seen || !live || seen.health === 0 || live.health === 0) continue
+    // Chasing the bait, not the shooter: nearer the bait, and moving.
+    if (dist(live.pos, bait.me()) >= dist(live.pos, shooter.me())) continue
+    if (Math.hypot(...live.vel) < 2) continue
+    const stale = displayed(shooter, id)
+    if (!stale) continue
+    const arrive = add(live.pos, mul(live.vel, ONE_WAY_MS / 1000))
+    const ray = norm(sub(stale, eye)), d = sub(arrive, stale)
+    const lateral = Math.hypot(...sub(d, mul(ray, dot(d, ray))))
+    const need = HITBOX_RADIUS + coneAt(dist(eye, live.pos)) + AIM_MARGIN
+    if (lateral <= need) continue
+    if (!best || lateral - need > best.margin) best = { id, off: lateral, need, margin: lateral - need, stale: stale.slice(), live: arrive }
   }
-  console.log(`  ${mode}: ${hits} hits, ${fired}/${offsets.length} shots accepted by the server`)
-  return [hits, offsets]
+  return best
 }
 
-// --- control: can this shooter hit anything from here? ---------------------
-// A zero in both volleys is only evidence about rewind if a shot from this
-// position lands at all. Range, spread, terrain and the camp walls all sit
-// between the two, and each of them fails the same silent way.
-console.log('\n=== control: shots at a near-stationary grunt, aimed live ===')
-let controlHits = 0
-for (let i = 0; i < 3; i++) {
-  const still = gruntIds
-    .map(id => ({ id, st: shooter.ents.get(id), lv: bait.ents.get(id) }))
-    // In range: since Phase 9 the outpost's idle grunts sit ~178 m out, past
-    // max_range, and are exactly the zero-offset pick this sort would make.
-    .filter(g => g.st && g.lv && g.lv.health > 0 && dist(shooter.me(), g.lv.pos) < 100)
-    .sort((a, b) => dist(a.st.pos, a.lv.pos) - dist(b.st.pos, b.lv.pos))[0]
-  if (!still) break
-  const r = await shoot(still.lv.pos, still.id)
-  if (r.hit) controlHits++
-  console.log(`  control shot ${i + 1}: offset ${dist(still.st.pos, still.lv.pos).toFixed(2)} m,` +
-              ` range ${dist(shooter.me(), still.lv.pos).toFixed(1)} m -> ${r.fired ? (r.hit ? 'HIT' : 'miss') : 'NOT FIRED'}`)
+function gruntTable() {
+  const eye = add(shooter.me(), mul(norm(shooter.me()), 1.7))
+  for (const id of gruntIds) {
+    const live = bait.ents.get(id), stale = displayed(shooter, id)
+    if (!live || !stale) { console.log(`    grunt ${id}: not in view`); continue }
+    const ray = norm(sub(stale, eye)), d = sub(add(live.pos, mul(live.vel, ONE_WAY_MS / 1000)), stale)
+    console.log(`    grunt ${id}: hp ${live.health}, ${dist(live.pos, bait.me()).toFixed(1)} m from bait, ${dist(live.pos, shooter.me()).toFixed(1)} from shooter,` +
+                ` ${Math.hypot(...live.vel).toFixed(1)} m/s, across-ray offset ${Math.hypot(...sub(d, mul(ray, dot(d, ray)))).toFixed(2)} m`)
+  }
 }
-console.log(`  control: ${controlHits}/3`)
 
-// --- the two volleys -------------------------------------------------------
-console.log('\n=== aiming where THIS client sees the grunt (stale) ===')
-const [staleHits, staleOffsets] = await volley('stale', SHOTS)
+const tickRows = []
+let hits = 0, shots = 0
+while (answered && shots < SHOTS && hits < HITS_NEEDED) {
+  const t = await shooter.wait(qualifying, 3000)
+  if (!t) { console.log(`${stamp()}   no qualifying grunt for 3 s; bait hp ${bait.ents.get(bait.myId)?.health}`); gruntTable(); break }
+  const r = await shoot(t.stale, t.id)
+  shots++
+  if (r.hit) hits++
+  let where = ''
+  if (r.rewoundTick) {
+    tickRows.push(r.rewoundTick.tick - r.displayTick)
+    where += `  [server resolved tick ${r.rewoundTick.tick} (entry ${r.rewoundTick.err.toFixed(3)} m off the hit point), client drew ${r.displayTick.toFixed(1)}]`
+  }
+  console.log(`${stamp()}   stale shot ${shots}: grunt ${t.id} seen-to-arrival offset ${t.off.toFixed(2)} m across the ray (needs > ${t.need.toFixed(2)}),` +
+              ` range ${dist(shooter.me(), t.live).toFixed(1)} m -> ${r.fired ? (r.hit ? 'HIT' : r.other ? `hit grunt ${r.other} instead` : 'miss') : 'NOT FIRED'}${where}`)
+}
 
-console.log('\n=== aiming where the grunt actually is (live) ===')
-const [liveHits, liveOffsets] = await volley('live', SHOTS)
+check(`C14: shots aimed where the client SEES a moving target register (${HITS_NEEDED} of at most ${SHOTS})`,
+      hits >= HITS_NEEDED, `${hits}/${shots}`)
+// Correct rewind lands in (-1, 0] of the drawn tick (the server rewinds from
+// the last COMPLETED tick); one short by interp_delay lands in (1, 2] — read
+// +1.2..+1.9 against a server built with the pre-fix rule, which still scored
+// 3/3 hits, because 0.4 m of error still clips a 0.35 m capsule.
+check('every hit resolved at the tick the client drew (-1.5 < server - drawn < 1)',
+      tickRows.length > 0 && tickRows.every(d => d > -1.5 && d < 1),
+      tickRows.map(d => (d >= 0 ? '+' : '') + d.toFixed(1)).join(' '))
 
-kiting = false
-await kiteLoop.catch(() => {})
+// Diagnosis, on a failure only: does a shot aimed where a NON-rewinding
+// server would test land instead? Each costs a grunt hit points.
+if (hits < HITS_NEEDED) {
+  for (let i = 0; i < 2; i++) {
+    const t = qualifying()
+    if (!t) break
+    const r = await shoot(t.live, t.id)
+    console.log(`  diagnosis, ARRIVAL-aimed shot ${i + 1}: offset ${t.off.toFixed(2)} m -> ${r.fired ? (r.hit ? 'HIT' : 'miss') : 'NOT FIRED'}`)
+  }
+  console.log('  An arrival-aimed hit where stale-aimed shots missed means rewind is pointed at the\n' +
+              '  wrong instant: check rewindTicks (server/internal/server/client.go) still carries\n' +
+              '  staleness, RTT/2 and interp_delay (GDD "Lag compensation").')
+}
+
 clearInterval(shooter.heartbeat); clearInterval(bait.heartbeat)
-
-const offsets = [...staleOffsets, ...liveOffsets]
-const meanOffset = offsets.reduce((a, b) => a + b, 0) / (offsets.length || 1)
-console.log(`\nstale-to-live offset ACROSS the ray: mean ${meanOffset.toFixed(2)} m, min ${Math.min(...offsets).toFixed(2)} m over ${offsets.length} shots (hitbox radius ${HITBOX_RADIUS} m)`)
-
-// Run validity first. A red criterion is only worth reading if the run could
-// have gone green: something had to be hittable from here, and the two aim
-// points had to name different capsules.
-check('control: a shot from this position lands at all', controlHits > 0, `${controlHits}/3`)
-check('the two aim points were further apart ACROSS the ray than the hitbox',
-      offsets.length > 0 && Math.min(...offsets) > HITBOX_RADIUS,
-      `min ${offsets.length ? Math.min(...offsets).toFixed(2) : 'n/a'} m`)
-
-// The criterion itself: a player shoots what their screen shows them.
-check(`C14: ${SHOTS} shots aimed where the client SEES the target register`,
-      staleHits === SHOTS && staleOffsets.length === SHOTS, `${staleHits}/${SHOTS}`)
-
-if (resolved.length) {
-  const mean = (f) => resolved.reduce((a, r) => a + f(r), 0) / resolved.length
-  console.log(`\nwhere the server resolved, over ${resolved.length} landed shots:` +
-              ` ${mean(r => r.toStale).toFixed(2)} m from the stale axis,` +
-              ` ${mean(r => r.toLive).toFixed(2)} m from the live axis` +
-              ` (hitbox radius ${HITBOX_RADIUS} m)`)
-}
-console.log(`\ndiagnosis: aiming at the target's PRESENT position instead scored ${liveHits}/${liveOffsets.length}.`)
-if (staleHits > liveHits) {
-  console.log(
-    '  Rewind is pointed correctly: what the client saw lands, and the position no client\n' +
-    '  can know does not.')
-} else if (liveHits > staleHits) {
-  console.log(
-    '  Rewind is pointed at the wrong instant — the server is resolving nearer to the\n' +
-    '  target\'s present than to the frame the client fired at. Check that rewindTicks\n' +
-    '  (server/internal/server/client.go) still carries all three terms: staleness, RTT/2\n' +
-    '  and interp_delay (GDD "Lag compensation").')
-} else {
-  console.log(
-    '  Both aim points scored the same, so this run says nothing about rewind. The two\n' +
-    '  were far enough apart across the ray, so suspect the weapon: at these ranges\n' +
-    '  spread_base is a large fraction of the hitbox and dispersion, not aim, is\n' +
-    '  deciding the shots.')
-}
-
+clearTimeout(ceiling)
 proxy.kill()
 shooter.ws.close(); bait.ws.close()
 const bad = checks.filter(([, ok]) => !ok).length
-console.log(`\nOVERALL: ${bad ? `FAIL (${bad}/${checks.length})` : `PASS (${checks.length} checks)`}`)
+console.log(`\n${stamp()} OVERALL: ${bad ? `FAIL (${bad}/${checks.length})` : `PASS (${checks.length} checks)`}`)
 process.exit(bad ? 1 : 0)
