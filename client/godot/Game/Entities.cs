@@ -59,7 +59,8 @@ namespace SpaceAdventure.Game
         public ushort Seat;
         /// <summary>The local player's own view: only ever drawn seated, headless.</summary>
         public bool IsSelf;
-        public bool HeadHidden;
+        /// <summary>The model whose head PlaceSeated already hid (a body swap brings a new, visible one).</summary>
+        public Node3D HeadHiddenOn;
 
         /// <summary>Phase 12: the tint last applied, so it is set once per change.</summary>
         public bool DepletedDrawn;
@@ -649,13 +650,34 @@ namespace SpaceAdventure.Game
                     mount.GlobalPosition - b.Y * (FpsController.EyeHeight - SitDrop));
                 view.Anim?.Sit(clip);
                 if (view.Held != null) view.Held.Visible = clip == "sit_armed";
-                if (view.IsSelf && !view.HeadHidden && view.Model != null)
-                {
-                    view.HeadHidden = true;
-                    if (AssetRegistry.FindNode(view.Model, "head") is GeometryInstance3D head) head.Visible = false;
-                }
+                if (view.IsSelf) HideOwnHead(view);
             }
         }
+
+        /// <summary>
+        /// The camera sits inside our own seated head, so the head mesh and
+        /// whatever rides it -- the helmet and the hair -- must not draw
+        /// (playtest 2026-10-06: the visor's inside and the hair filled the
+        /// view at the wheel). Every frame: a Dress re-hangs a piece visible,
+        /// and a body swap brings a new head.
+        /// </summary>
+        private static void HideOwnHead(EntityView view)
+        {
+            if (view.Model != null && view.HeadHiddenOn != view.Model)
+            {
+                view.HeadHiddenOn = view.Model;
+                if (AssetRegistry.FindNode(view.Model, "head") is GeometryInstance3D head) head.Visible = false;
+            }
+            foreach (string slot in HeadSlots)
+                if (view.WornNodes.TryGetValue(slot, out Node3D piece) && piece.Visible)
+                {
+                    piece.Visible = false;
+                    GD.Print($"seated: hid own {slot} ({view.WornDrawn.GetValueOrDefault(slot)})");
+                }
+        }
+
+        /// <summary>The worn slots that ride the head bone: the helmet and the hair.</summary>
+        private static readonly string[] HeadSlots = { "head", "hair" };
 
         /// <summary>
         /// The rover's dash speed bar: amber, growing from the mount's left

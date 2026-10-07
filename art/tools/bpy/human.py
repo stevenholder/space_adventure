@@ -1492,7 +1492,7 @@ def keyed(keys, t):
 M1_AIM3P = dict(G=(0.24, 0.28, 1.05), forward=(0.05, 0.55, 0.83))      # blade up and forward at the hip
 M1_FP = dict(G=(0.20, 0.38, 1.12), forward=(0.48, -0.50, 0.72))   # first person: upright on screen, leaning right, clear of the crosshair (tipped back: the view pulls a forward lean left)
 M1_LOWER = dict(G=(0.20, 0.24, 1.00), forward=(0.0, 0.85, -0.5))
-M2_AIM3P = dict(G=(0.16, 0.30, 1.08), forward=(-0.25, 0.45, 0.86))      # two-hander held up across the body
+M2_AIM3P = dict(G=(0.04, 0.32, 1.10), forward=(0.30, 0.42, 0.86))       # two-hander held up across the body: blade over the RIGHT shoulder, so the pommel hand sits ahead of the belly, not through it (playtest 2026-10-06: the old left-leaning blade put the left fist at the right hip and the forearm through the torso)
 M2_FP = dict(G=(0.16, 0.38, 1.16), forward=(0.44, -0.50, 0.74))
 M2_LOWER = dict(G=(0.14, 0.26, 0.98), forward=(-0.2, 0.8, -0.55))
 
