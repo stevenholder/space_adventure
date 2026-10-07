@@ -889,6 +889,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	// why. Seed it from the same def the entity's health came from.
 	c.vitals = sim.Vitals{Health: c.entity.Health}
 	c.rate = newCmdRate(time.Now())
+	c.chatRate = newChatRate(time.Now())
 	c.ident = joinIdentity(ctx, s.store, s.reg, token, name, [3]float64(spawnState.Pos), row)
 
 	// Collect the world's entities and the existing players' spawn rows before
@@ -1121,6 +1122,8 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		return s.skillsCmd(c, req)
 	case protocol.OpWield:
 		return s.wieldCmd(c, req)
+	case protocol.OpChat:
+		return s.chatCmd(c, req)
 	}
 	pos, look := s.poseOf(c)
 	var result protocol.CmdResult

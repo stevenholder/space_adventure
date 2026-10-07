@@ -213,6 +213,8 @@ namespace SpaceAdventure.Game
         private SettingsView _settingsView;
         private Hotbar _hotbar; // Phase 13
         private HotbarView _hotbarView;
+        private readonly ChatLog _chat = new ChatLog();
+        private ChatView _chatView;
         private readonly List<(string name, Vector3 pos, double until)> _scanPings = new List<(string, Vector3, double)>();
         // Phase 12 gather channel as drawn: the bar runs from start to end.
         private double _channelStart = -1, _channelEnd = -1;
@@ -1189,6 +1191,7 @@ namespace SpaceAdventure.Game
             _hotbar = new Hotbar();
             _hotbar.Load();
             _hotbarView = new HotbarView(_ui.Root, _hotbar, _character, _icons);
+            _chatView = new ChatView(_ui.Root, SendChat) { Closed = () => _chat.Open = false };
             _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b), _interact);
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
@@ -1331,6 +1334,16 @@ namespace SpaceAdventure.Game
                 // No world yet: the only thing worth drawing is why.
                 _hudView.SetBanner(LinkBanner(), true);
                 return;
+            }
+
+            // The chat line, while open, swallows every game key (one gate:
+            // InputState.Muted); Enter with nothing else open raises it.
+            // The LineEdit owns Enter/Escape while it has focus.
+            _input.Muted = _chat.Open;
+            if (!_chat.Open && !ModalOpen && !_map.Open && (_input.Pressed(Key.Enter) || _input.Pressed(Key.KpEnter)))
+            {
+                _chat.Open = true;
+                _chatView.SetOpen(true);
             }
 
             // Escape: close whatever is open; with nothing open, the game
@@ -1495,6 +1508,7 @@ namespace SpaceAdventure.Game
             _fx.Tick();
 
             UpdateHudView();
+            ChatFrame();
             _combatFeed.Tick(_camera);
             _skillsFeed.Tick(_skills, _character.Defs, (float)Clock.Now);
 
@@ -1958,6 +1972,15 @@ namespace SpaceAdventure.Game
                             }
                             break;
                         }
+                        case EventId.Chat:
+                        {
+                            // name + "\0" + text (PROTOCOL event_id 0x0011);
+                            // our own line comes back the same way.
+                            string data = WireReader.Utf8.GetString(ev.Data);
+                            int nul = data.IndexOf('\0');
+                            if (nul >= 0) _chat.Push(data.Substring(0, nul), data.Substring(nul + 1), Clock.Now);
+                            break;
+                        }
                         case EventId.Equipped:
                         {
                             string item = WireReader.Utf8.GetString(ev.Data);
@@ -2007,6 +2030,17 @@ namespace SpaceAdventure.Game
                     {
                         _benchView.Status = r.Ok ? "crafted" : Reason(r.Body);
                         if (_benchView.Open) _benchView.Rebuild();
+                    }
+                    if (r.Opcode == Op.Chat && !r.Ok)
+                    {
+                        _interact.Notice = r.StatusCode switch
+                        {
+                            Status.RateLimited => "chat: too fast",
+                            Status.Malformed => "chat: too long",
+                            Status.Refused => "chat: nothing to send",
+                            _ => "chat: not sent",
+                        };
+                        _noticeUntil = Clock.Now + 2;
                     }
                     if (r.Opcode == Op.ShopSell && !r.Ok) { _interact.Notice = Reason(r.Body); _noticeUntil = Clock.Now + 2; }
                     if (r.Ok && r.Opcode == Op.Equip) _character.OnEquipResult(r.Body);
@@ -2080,6 +2114,17 @@ namespace SpaceAdventure.Game
 
         // ---- the interface ----------------------------------------------------
 
+
+        /// <summary>The chat line's Enter: one cmd 0x0016, the text as a JSON string.</summary>
+        private void SendChat(string text) =>
+            _net.Send(Encode.Cmd(NextCmdSeq(), Op.Chat, "{\"text\":" + Newtonsoft.Json.JsonConvert.ToString(text) + "}"));
+
+        /// <summary>Per frame: lines past 10 s go, the rest fade and draw.</summary>
+        private void ChatFrame()
+        {
+            _chat.Expire(Clock.Now);
+            _chatView.Set(_chat, Clock.Now);
+        }
 
         /// <summary>-uiPanel bags|sheet|map|journal|party|skills|account|debug: opened for a screenshot.</summary>
         private void OpenUiPanel(string name)
@@ -2688,6 +2733,27 @@ namespace SpaceAdventure.Game
                 for (int i = 0; i + 1 < d.Length; i += 2) peak = Math.Max(peak, Math.Abs((int)(short)(d[i] | d[i + 1] << 8)));
                 return d.Length > 400 && peak > 25000 && peak < 32000;
             }));
+            // Phase 20: the chat log's model (GDD "Chat (Phase 20)", C176).
+            var chat = new UI.ChatLog();
+            Check("chat: an empty log is not visible", !chat.Visible && chat.Lines.Count == 0);
+            for (int i = 0; i < 10; i++) chat.Push($"p{i}", $"line {i}", i * 0.1);
+            Check("chat: Push caps at 8, oldest dropped", chat.Visible && chat.Lines.Count == UI.ChatLog.MaxLines
+                && chat.Lines[0].Text == "line 2" && chat.Lines[7].Text == "line 9");
+            var aged = new UI.ChatLog();
+            aged.Push("Kade", "old", 0.0);
+            aged.Push("Tam", "young", 5.0);
+            aged.Expire(10.5);
+            Check("chat: Expire drops lines older than 10 s, keeps younger", aged.Lines.Count == 1 && aged.Lines[0].Name == "Tam");
+            Check("chat: a line fades over its last 2 s", UI.ChatLog.Alpha(aged.Lines[0], 12.0) == 1f
+                && Math.Abs(UI.ChatLog.Alpha(aged.Lines[0], 14.0) - 0.5f) < 1e-5f);
+            aged.Expire(16.0);
+            Check("chat: all expired is not visible", !aged.Visible);
+            var open = new UI.ChatLog();
+            bool closedAtStart = !open.Open;
+            open.Open = true;
+            bool opened = open.Open;
+            open.Open = false;
+            Check("chat: Open toggles", closedAtStart && opened && !open.Open);
             // Phase 15: the launcher's state machine (GDD table).
             var l1 = new UI.Launcher();
             Check("launcher: starts Checking with PLAY disabled", l1.Now == UI.Launcher.State.Checking && !l1.PlayEnabled && l1.Line == "CHECKING FOR UPDATES…");

@@ -31,14 +31,21 @@ namespace SpaceAdventure.Game
             }
         }
 
+        /// <summary>
+        /// The one gate on game keys (Phase 20): while the chat line is open
+        /// every key and button reads as up, so typing "wasd" walks nowhere
+        /// and "1" fires no hotbar. Mouse look still moves the view.
+        /// </summary>
+        public bool Muted;
+
         /// <summary>Held right now.</summary>
-        public bool Held(Key k) => Input.IsPhysicalKeyPressed(k);
+        public bool Held(Key k) => !Muted && Input.IsPhysicalKeyPressed(k);
 
         /// <summary>Went down this frame (the Input System's wasPressedThisFrame).</summary>
-        public bool Pressed(Key k) => _pressedThisFrame.Contains(k);
+        public bool Pressed(Key k) => !Muted && _pressedThisFrame.Contains(k);
 
-        public bool LeftButtonHeld => Input.IsMouseButtonPressed(MouseButton.Left);
-        public bool RightButtonHeld => Input.IsMouseButtonPressed(MouseButton.Right);
+        public bool LeftButtonHeld => !Muted && Input.IsMouseButtonPressed(MouseButton.Left);
+        public bool RightButtonHeld => !Muted && Input.IsMouseButtonPressed(MouseButton.Right);
 
         public void EndFrame()
         {

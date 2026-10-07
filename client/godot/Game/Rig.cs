@@ -43,6 +43,7 @@
 //   -uiWield melee          after -uiBuy: put the melee weapon in hand (Tab)
 //   -uiSwing <secs>         swing what is in hand; shoot that far into it
 //   -uiUse <item>           use / throw it (-uiUseWait <secs>, default 0.6)
+//   -uiChat                 three fake chat lines and the input line open (Phase 20)
 
 using System;
 using System.Collections.Generic;
@@ -643,6 +644,19 @@ namespace SpaceAdventure.Game
                 _shopView.Rebuild();
                 await Wait(1.0);
                 GD.Print($"ui: shop scroll {before} -> {_shopView.ScrollOffset}");
+            }
+
+            // -uiChat: three fake lines in the log and the input line open,
+            // for the Phase 20 shot. Local only; nothing is sent.
+            if (Flag("-uiChat"))
+            {
+                _chat.Push("Kade", "over here", Clock.Now - 1.0);
+                _chat.Push("Tam", "on my way", Clock.Now - 0.5);
+                _chat.Push("Vex", "watch the ridge", Clock.Now);
+                _chat.Open = true;
+                _chatView.SetOpen(true);
+                await Wait(0.3);
+                GD.Print($"ui: chat lines={_chat.Lines.Count} open={_chat.Open}");
             }
 
             // -uiDeathDemo: the death screen without dying -- local flag only,

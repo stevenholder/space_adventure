@@ -78,6 +78,9 @@ type client struct {
 	entity *entity   // nil until hello succeeds
 	ident  *identity // nil until hello succeeds
 	rate   *cmdRate  // nil until hello succeeds
+	// chatRate is the chat line's own bucket (Phase 20), apart from rate
+	// so a chatty player's shop cmds are unaffected. Nil until hello.
+	chatRate *cmdRate
 
 	input  atomic.Pointer[protocol.Input] // the input this tick applies (popInput)
 	ackSeq atomic.Uint32                  // seq of the input last applied

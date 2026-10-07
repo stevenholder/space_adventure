@@ -1714,6 +1714,29 @@ shard or a body drawn over the world.
 Rig: `-uiPitch <deg>` as today; `-rigWorn slot=asset,…` dresses the guest
 body for the armored case (asset ids).
 
+### Chat (Phase 20)
+
+One world channel, text only. Enough to say "over here" to the other
+person on the planet; nothing a Phase 7 guest could abuse, because there
+are no guests.
+
+- **Send.** `cmd` opcode `0x0016` `chat` `{"text": "<utf-8>"}`. The
+  server trims, runs `SanitizeName`'s control-character strip, refuses
+  empty (`status 3`, reason `empty`) and over 200 bytes (`status 2`
+  malformed), and rate-limits to one line per second per connection with
+  a burst of 3 (`status 4` as every excess cmd). The result carries `{}`.
+- **Receive.** `event` `0x0011` `chat`: `entity_id` is the speaker, `data`
+  is `name\0text` (the speaker's row name, then the text). Broadcast to
+  every connected client including the speaker; no history, nothing
+  stored, nothing on the account page.
+- **Client.** Enter opens the chat line (bottom-left, above the hotbar,
+  Scrapyard panel); while it is open movement and hotbar keys are
+  swallowed; Enter sends and closes, Escape closes. The log shows the
+  last 8 lines, speaker in Amber, text in Cream, each fading out 10 s
+  after arrival; the panel is hidden when empty. A line from yourself
+  shows the same as anyone's. Rigs: `-uiChat` shows the log with three
+  fake lines and the input open for a shot.
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
