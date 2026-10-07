@@ -1092,6 +1092,15 @@ func (s *Server) leave(c *client) {
 	s.mu.Unlock()
 }
 
+// poseOf copies the requester's position and look under s.mu: the tick
+// writes both in sim.Step while holding it, and a cmd runs on the socket's
+// read goroutine (a -race find, 2026-10-06).
+func (s *Server) poseOf(c *client) (pos, look sim.Vec) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return c.entity.State.Pos, c.lookDir()
+}
+
 // doCmd builds the requester's server-truth cmdWorld and runs their cmd
 // through handleCmd (docs/tasks/phase2-wave2.md "W2-14"). It snapshots the
 // identity's player row, hands handleCmd a pointer to the copy (safe: the
@@ -1113,6 +1122,7 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 	case protocol.OpWield:
 		return s.wieldCmd(c, req)
 	}
+	pos, look := s.poseOf(c)
 	var result protocol.CmdResult
 	var before, after string
 	var wornBefore, wornAfter map[string]string
@@ -1124,9 +1134,9 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 		result = handleCmd(c.rate, time.Now(), req, cmdWorld{
 			Player:  p,
 			Reg:     s.reg,
-			Pos:     c.entity.State.Pos,
-			Up:      terrain.Normalize(c.entity.State.Pos),
-			Look:    c.lookDir(),
+			Pos:     pos,
+			Up:      terrain.Normalize(pos),
+			Look:    look,
 			FindNPC: s.findNPC,
 			Throw: func(item string, t defs.Throw) {
 				s.mu.Lock()

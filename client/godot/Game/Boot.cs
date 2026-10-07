@@ -1096,6 +1096,7 @@ namespace SpaceAdventure.Game
             if (Flag("-selftest"))
             {
                 GetTree().Quit(SelfTest());
+                SetProcess(false); // Quit lands after this frame; no HUD was built for RunFrame to draw
                 return;
             }
 

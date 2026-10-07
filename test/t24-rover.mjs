@@ -154,11 +154,15 @@ if (seatRow) {
     `${dist(seatRow.pos, want).toExponential(2)} m`)
 }
 
-// Drive: 3 s of mode-2 full throttle. C27 property along the way.
+// Drive: 1 s of mode-2 full throttle, then 2 s of coast. C27 property along
+// the way. Not 3 s flat out: that is 16 m/s and a 20 m coast, which ran the
+// rover onto a 46° scarp ~29 m ahead of its spawn, past drive_slope_max
+// (40°) — parked there, no throttle moves it again until a restart, and every
+// later t29 on the same server found it wedged.
 const start = rover().pos.slice()
 let minClearance = Infinity
 for (let i = 0; i < 60; i++) {
-  a.ws.send(input(1, 0, [0, 0, 1], 0, a.seq++, 2))
+  a.ws.send(input(i < 20 ? 1 : 0, 0, [0, 0, 1], 0, a.seq++, 2))
   await sleep(50)
   const p = rover().pos
   minClearance = Math.min(minClearance, Math.hypot(...p) - sampleRadius(field, norm(p)))
@@ -185,8 +189,9 @@ check('C31 passenger input leaves the rover invariant', dist(rover().pos, parked
 const bRow = b.ents.get(b.id)
 check('C31 passenger stays composed at the seat', bRow.parent === roverId && bRow.seat === 2)
 
-// C32: drive again and disembark at speed.
-for (let i = 0; i < 30; i++) { a.ws.send(input(1, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
+// C32: drive again and disembark at speed — in REVERSE, so the unmanned
+// coast runs back over ground already driven, not on toward the scarp.
+for (let i = 0; i < 30; i++) { a.ws.send(input(-1, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
 a.ws.send(disembark())
 r = await nextSeat(a)
 check('disembark at speed granted', r?.result === SEAT.GRANTED, `result ${r?.result}`)

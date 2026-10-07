@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"space-adventure/server/internal/store"
 )
@@ -40,6 +41,7 @@ func TestCharacterHair(t *testing.T) {
 	if code, msg, _ := create(map[string]string{"name": "Nope", "body": "char.ubc", "hair": "hair.nope"}); code != 400 || msg != "bad hair" {
 		t.Fatalf("hair.nope = %d %q, want 400 bad hair", code, msg)
 	}
+	time.Sleep(2 * time.Millisecond) // the list orders by created_ms, token: two rows in one ms would tie
 	if code, _, row := create(map[string]string{"name": "Bald", "body": "char.player"}); code != 200 || row.Hair != store.DefaultHair {
 		t.Fatalf("create without hair = %d %+v", code, row)
 	}
