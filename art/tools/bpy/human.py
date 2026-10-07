@@ -81,7 +81,8 @@ COLONIST_FACE = {
     "eyes/l-eye-height2-incr": 0.45, "eyes/r-eye-height2-incr": 0.45,
     "eyes/l-eye-scale-incr": 0.15, "eyes/r-eye-scale-incr": 0.15,
     # lips together at rest (MakeHuman's default mouth is a little parted)
-    "expression/mouth-compression": 0.5,
+    "expression/mouth-compression": 0.55,
+    "mouth/mouth-upperlip-volume-decr": 0.1, "mouth/mouth-lowerlip-volume-decr": 0.1,
 }
 COLONIST_FACE_F = {
     "eyebrows/eyebrows-trans-forward": 0.25,
@@ -1063,7 +1064,23 @@ def cap(obj, open_at=()):
                 path = path[:i]
             path.append(v)
         fill(path)
-    new = bmesh.ops.triangulate(bm, faces=new, quad_method="BEAUTY", ngon_method="BEAUTY")["faces"]
+    # A ring far from planar (a decimated collar) can fill with a fold: cap
+    # triangles turned against the ring that show through the suit as a dark
+    # wedge. Such a cap is fanned from its centre instead.
+    rings = {f: (list(f.verts), f.normal.copy()) for f in new}
+    res = bmesh.ops.triangulate(bm, faces=new, quad_method="BEAUTY", ngon_method="BEAUTY")
+    by = {f: [] for f in rings}
+    for t in res["faces"]:
+        by[res["face_map"].get(t, t)].append(t)
+    new = []
+    for f0, tris in by.items():
+        verts, nrm = rings[f0]
+        if all(t.normal.dot(nrm) > 0.2 for t in tris):
+            new += tris
+            continue
+        bmesh.ops.delete(bm, geom=tris, context="FACES_ONLY")
+        f = bm.faces.new(verts)
+        new += bmesh.ops.poke(bm, faces=[f], center_mode="MEAN")["faces"]
     suit = next(i for i, m in enumerate(obj.data.materials) if m and m.name == "suit")
     for f in new:
         f.material_index = suit

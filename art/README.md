@@ -193,10 +193,12 @@ same 9000-tri ceiling.
   `eyebrows-trans-forward` (brow ridge), `cheek/*-cheek-bones-incr`,
   `chin-bones-incr`, `chin-prominent-incr`, small `nose-hump-incr`.
   The mouth is closed at rest (MakeHuman's default is a little parted):
-  `expression/mouth-compression` 0.5 M / 0.55 F, and the female lips a
-  little less full (`mouth-upperlip-volume-decr` 0.15,
-  `mouth-lowerlip-volume-decr` 0.25). It moves the lips ~2 mm, so the
-  Colonist hair pieces were refit (hair.py) after it.
+  `expression/mouth-compression` 0.55 on both, lip volume decr 0.1 / 0.1
+  (M) and 0.15 / 0.25 (F: a little less full). (M at 0.4-0.5 left the
+  inner lower lip glinting through the seam under the select stage's
+  light.) The lips' inner faces (deep AO, or normal turned away from the
+  front: a baked `nrm` layer) are painted dark. It moves the lips ~2 mm,
+  so the Colonist hair pieces were refit (hair.py) after it.
 - **Head-weighted decimation** (`lod`): the eyeballs come off first (they
   return as clean spheres), then one collapse pass with a vertex group:
   eyelids and lips 0.05, head 0.2, hands 0.6, everything else 1.0. Blender's

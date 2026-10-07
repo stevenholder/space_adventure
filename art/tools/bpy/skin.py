@@ -322,14 +322,25 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
     mid = (np.array(eyes[0]) + np.array(eyes[1])) / 2
     pos = co.reshape(-1, 3) - mid + 0.5               # positive: an emission colour
     aux2 = np.stack([m["red"], m["cool"], np.zeros(len(m["red"]))], -1)
-    res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux, "aux2": aux2, "pos": pos})
+    nrm = np.empty(len(h.data.vertices) * 3)
+    h.data.vertices.foreach_get("normal", nrm)
+    nrm = nrm.reshape(-1, 3) * 0.5 + 0.5               # 0..1: an emission colour
+    res = bake(h, skin, {"paint": paint_colours(m, base, female), "aux": aux, "aux2": aux2, "pos": pos, "nrm": nrm})
     emit, ao, aux = res["paint"], res["AO"], res["aux"]
     STATE["hi"] = res["_target"]          # the dense skin: normal_map()'s source
     # Crevices: darker and a little warmer (light scattering in the skin);
-    # not across the lips (their seam read as an open mouth).
-    occ = (1 - ao) * (1 - 0.7 * aux[..., 0])
+    # only lightly across the lips (with the mouth parted, their seam read
+    # as an open mouth; closed, a dark seam keeps the inner lip from glinting).
+    occ = (1 - ao) * (1 - 0.3 * aux[..., 0])
     shade = 1 - 0.8 * occ
     alb = emit * shade[..., None] * (1 + occ[..., None] * np.array([0.10, -0.05, -0.08]))
+    # Inside the closed lips (deep AO within the lip mask): dark, or the
+    # lower lip's upturned inner face glints through the seam under a key light.
+    # Also the lips' inner faces (turned away from the front, into the
+    # mouth): the closed lips' seam shows a sliver of them.
+    ny = res["nrm"][..., 1] * 2 - 1
+    seam = aux[..., 0] * np.maximum(smoothstep(0.45, 0.15, ao), smoothstep(0.35, 0.0, ny))
+    alb = alb * (1 - 0.85 * seam)[..., None]
     P = res["pos"] + mid - 0.5                        # each texel's surface position
     alb = mottle(alb, P, res["aux2"], 17 if female else 7)
     if hairline:
