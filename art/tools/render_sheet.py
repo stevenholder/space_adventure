@@ -17,7 +17,8 @@ Env: SHEET_ONLY=faces renders just the close-ups (front, three-quarter,
 side) in one row per group -- the texture pass's sheet; SHEET_VIEWS picks
 other close-ups (comma list of front, side, back, q34, scalp); SHEET_TILE (px, default 400); SHEET_FACE (close-up width, m, default
 0.34) and SHEET_FACE_DZ (its centre above the eye, default 0.02; SHEET_FACE_DX
-sideways, for a hand close-up).
+sideways, for a hand close-up; SHEET_FACE_DY front-back, e.g. 0.02 for an ear).
+SHEET_STRIP=albedo,normal unlinks those maps (to tell texture from geometry).
 """
 import math
 import os
@@ -75,6 +76,14 @@ for files in groups:
             if o.animation_data:
                 o.animation_data.action = None
     loaded.append(objs)
+# SHEET_STRIP=albedo,normal: unlink those maps (which of them a shading fault lives in)
+strip = set(filter(None, os.environ.get("SHEET_STRIP", "").split(",")))
+for m in bpy.data.materials if strip else ():
+    b = m.node_tree.nodes.get("Principled BSDF") if m.use_nodes else None
+    for name, key in (("Base Color", "albedo"), ("Normal", "normal")):
+        if b and key in strip:
+            for lk in list(b.inputs[name].links):
+                m.node_tree.links.remove(lk)
 bpy.context.view_layer.update()
 
 cam_data = bpy.data.cameras.new("cam")
@@ -123,7 +132,7 @@ for i, objs in enumerate(loaded):
         for name in os.environ.get("SHEET_VIEWS", "front,q34,side").split(","):
             p = f"{tmp}/{i}_face_{name}.png"
             floor.hide_render = True
-            shoot(p, (float(os.environ.get("SHEET_FACE_DX", "0")), 0.0, ez + float(os.environ.get("SHEET_FACE_DZ", "0.02"))), {**VIEWS, **EXTRA}[name],
+            shoot(p, (float(os.environ.get("SHEET_FACE_DX", "0")), float(os.environ.get("SHEET_FACE_DY", "0")), ez + float(os.environ.get("SHEET_FACE_DZ", "0.02"))), {**VIEWS, **EXTRA}[name],
                   float(os.environ.get("SHEET_FACE", "0.34")), T, T)
             faces.append(load(p))
         rows.append(np.concatenate(faces, axis=1))

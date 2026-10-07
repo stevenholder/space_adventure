@@ -675,11 +675,15 @@ def lod_decimate(h, eyes):
 
 
 def smooth_ears(h):
-    """The decimated concha is a few big triangles at odd angles (faceted
-    under a key light): relax the ear's inner vertices. The painted AO
-    carries the folds."""
+    """The decimated concha is a few big triangles at steep angles to their
+    smoothed normals: under a key light each self-shadows whole (the
+    shadow terminator) and shades as a dark triangle. Relax the ear's inner
+    vertices -- the outline seen from the side (vertices within EAR_RIM of
+    the side-view hull) stays put -- until the folds are gentle enough. The
+    painted AO (baked from the dense ear) carries the folds."""
     if "_ears" not in h.vertex_groups:
         return
+    from mathutils.geometry import convex_hull_2d
     gi = h.vertex_groups["_ears"].index
     bm = bmesh.new()
     bm.from_mesh(h.data)
@@ -687,13 +691,30 @@ def smooth_ears(h):
     ear = [bm.verts[v.index] for v in h.data.vertices
            if any(g.group == gi and g.weight > 0.6 for g in v.groups)]
     ear = [v for v in ear if not v.is_boundary]
-    for _ in range(EAR_SMOOTH):
-        bmesh.ops.smooth_vert(bm, verts=ear, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    for side in (1, -1):
+        vs = [v for v in ear if v.co.x * side > 0]
+        if len(vs) < 4:
+            continue
+        pts = [(v.co.y, v.co.z) for v in vs]
+        hull = [pts[i] for i in convex_hull_2d(pts)]
+        edges = list(zip(hull, hull[1:] + hull[:1]))
+
+        def to_hull(p):
+            best = 1e9
+            for (ay, az), (by, bz) in edges:
+                dy, dz = by - ay, bz - az
+                t = max(0.0, min(1.0, ((p[0] - ay) * dy + (p[1] - az) * dz) / max(dy * dy + dz * dz, 1e-12)))
+                best = min(best, math.hypot(p[0] - ay - t * dy, p[1] - az - t * dz))
+            return best
+        inner = [v for v, p in zip(vs, pts) if to_hull(p) > EAR_RIM]
+        for _ in range(EAR_SMOOTH):
+            bmesh.ops.smooth_vert(bm, verts=inner, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
     bm.to_mesh(h.data)
     bm.free()
 
 
-EAR_SMOOTH = 2
+EAR_SMOOTH = 12      # relax passes over the concha (2 left terminator triangles)
+EAR_RIM = 0.002      # m: the side-view outline kept
 COLLAR = (0.165, 0.25)     # under the eyes at the throat; rises this much per metre toward the nape
 
 

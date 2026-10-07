@@ -147,7 +147,7 @@ def masks(h, eyes, R, female, ball):
                         + 0.6 * near(surf(mid + np.array([0, 0.05, -0.125])), 0.014), 0, 1) * front.clip(0.6)
     # the hollows under the cheekbones and the temples: a shade darker
     m["hollow"] = np.clip(sum(0.8 * near(surf(e + np.array([np.sign(e[0] - mid[0]) * 0.022, 0.0, -0.06])), 0.016)
-                              + 0.5 * near(surf(e + np.array([np.sign(e[0] - mid[0]) * 0.035, -0.03, 0.025])), 0.016)
+                              + 0.85 * near(surf(e + np.array([np.sign(e[0] - mid[0]) * 0.035, -0.03, 0.025])), 0.018)
                               for e in (el, er)), 0, 1) * front.clip(0.6)
     m["red"] = np.clip(0.9 * near(nose, 0.011) + sum(0.7 * near(c, 0.018) for c in cheeks)
                        + 0.6 * m["ears"] + 0.25 * near(surf(mid + np.array([0, 0.05, -0.105])), 0.015), 0, 1) * front.clip(0.6)
@@ -165,6 +165,44 @@ def masks(h, eyes, R, female, ball):
     lash = smooth(rim.astype(float), edges, n, 4 if female else 3) * (~ball)
     lash = np.clip(lash / max(lash.max(), 1e-6) * 3.0, 0, 1)
     m["lash"] = lash * (0.35 + 0.65 * upper)
+    # Painted modelling (the Vanguard's face is hand-shaded darker in its
+    # hollows): surfaces turned down under the jaw and chin, with the throat
+    # below them in their shadow (darkest under the jaw, lighter toward the
+    # collar); the upper half of the eye socket under the brow ridge, deeper
+    # at the inner corner; the nasolabial fold, nose wing to mouth corner.
+    nr = np.empty(n * 3)
+    me.vertices.foreach_get("normal", nr)
+    nr = nr.reshape(-1, 3)
+    nz = nr[:, 2]
+    away = (np.linalg.norm(co - nose, axis=1) > 0.022) * (1 - m["lips"])
+    under = smoothstep(-0.1, -0.6, nz) * (rel[:, 2] < -0.06) * away
+    neck = smoothstep(-0.19, -0.115, rel[:, 2]) * smoothstep(-0.005, -0.03, rel[:, 1]) * (rel[:, 2] < -0.08)
+    m["under"] = np.clip(smooth(np.maximum(under, neck), edges, n, 4), 0, 1) * (rel[:, 1] > -0.11)
+    # the face turning away from the front toward the ears and the jaw's side
+    side = smoothstep(0.6, 0.1, nr[:, 1]) * smoothstep(-0.16, -0.12, rel[:, 2]) * smoothstep(0.05, 0.0, rel[:, 2])
+    m["side"] = smooth(side * (rel[:, 1] > -0.07) * (1 - m["ears"]) * away, edges, n, 3)
+    # painted top light: the face below the cheekbones a shade darker than the brow
+    m["low"] = smoothstep(-0.025, -0.095, rel[:, 2]) * (rel[:, 1] > -0.09) * (1 - 0.6 * m["lips"])
+    inner_up = sum(near(e + np.array([-np.sign(e[0] - mid[0]) * 0.008, 0.004, 0.009]), 0.007) for e in (el, er))
+    m["orbit"] = np.clip((1 - smoothstep(R + 0.002, R + 0.016, d)) * smoothstep(-0.001, 0.006, co[:, 2] - ez)
+                         * (0.6 + 0.6 * inner_up), 0, 1) * infront * (1 - m["lash"])
+    # Painted light, as on the Vanguard's hand-painted face: a lit centre
+    # panel (brow, nose, upper lip, chin) with the planes darker toward the
+    # sides. The crisp accents are painted per texel (accents()) from these
+    # landmarks.
+    facef = (rel[:, 1] > -0.05) * smoothstep(-0.16, -0.12, rel[:, 2]) * smoothstep(0.075, 0.05, rel[:, 2])
+    m["plane"] = smoothstep(0.016, 0.062, np.abs(rel[:, 0])) * facef * (1 - m["ears"])
+    # the nose's side walls (turned sideways, along the bridge to the tip)
+    top = mid + np.array([0.0, nose[1] - mid[1] - 0.012, -0.012])
+    ab = nose - top
+    t = np.clip(((co - top) @ ab) / (ab @ ab), 0, 1)
+    dseg = np.linalg.norm(co - (top + t[:, None] * ab), axis=1)
+    m["noseside"] = smooth(smoothstep(0.25, 0.7, np.abs(nr[:, 0])) * smoothstep(0.02, 0.011, dseg) * front, edges, n, 1)
+    lipw = group_weights(h, "_lips") > 0.5
+    lc = co[lipw] if lipw.any() else co[[np.argmax(co[:, 1])]]
+    m["_lm"] = {"mid": mid, "nose": nose,
+                "corners": [lc[np.argmax(lc[:, 0] * sd)] for sd in (1, -1)],
+                "low": lc[np.argmin(lc[:, 2] - 0.3 * np.abs(lc[:, 0] - mid[0]))]}
     if female:
         m["beard"] = np.zeros(n)
     else:
@@ -186,8 +224,51 @@ def paint_colours(m, base, female):
     mix((0.58, 0.42, 0.32), 0.30 * m["hollow"])
     mix((0.50, 0.45, 0.41), 0.30 * m["beard"])
     mix((0.72, 0.43, 0.37) if female else (0.66, 0.42, 0.35), (0.7 if female else 0.75) * m["lips"])
+    # modelling: darker, and warmer as skin shades (MODEL: weight per mask)
+    for k, w in MODEL.items():
+        col = col * (1 - w * m[k][:, None] * SHADE_TINT)
     mix((0.07, 0.05, 0.05), 0.92 * m["lash"])
     return col
+
+
+# Painted modelling (masks()): fraction darker at a mask's core.
+# Painted modelling: fraction darker at a mask's core -- per vertex
+# (masks()) and per texel (accents(); `bridge` is lighter).
+MODEL = {"under": 0.58, "side": 0.30, "orbit": 0.50, "hollow": 0.42, "low": 0.15, "plane": 0.20, "noseside": 0.28}
+ACCENT = {"naso": 0.40, "alar": 0.45, "sulcus": 0.40, "corners": 0.40, "bridge": -0.12}
+SHADE_TINT = np.array([0.82, 1.0, 1.08])   # skin shades warmer
+
+
+def accents(P, lm, lips):
+    """Per-texel masks from the baked surface position P (S, S, 3): the
+    nasolabial fold (nose wing to just outside the mouth corner), the nose
+    wings and the nostril shadow, the crease under the lower lip, the mouth
+    corners, the lit nose bridge."""
+    mid, nose = lm["mid"], lm["nose"]
+    rel = P - mid
+    front = smoothstep(-0.03, -0.01, rel[..., 1])
+    near = lambda p, sg: np.exp(-np.sum((P - p) ** 2, axis=-1) / (2 * sg * sg))
+    out = {k: np.zeros(P.shape[:2]) for k in ACCENT}
+    for sd, corner in zip((1, -1), lm["corners"]):
+        a = np.array([mid[0] + sd * 0.017, nose[1] - 0.012, nose[2] - 0.006])     # beside the nose wing
+        b = corner + np.array([sd * 0.007, 0.0, -0.004])                          # just outside the mouth corner
+        ab = b - a
+        t = np.clip(((P - a) @ ab) / (ab @ ab), 0, 1)
+        dist = np.linalg.norm(P - (a + t[..., None] * ab), axis=-1)
+        out["naso"] = np.maximum(out["naso"], np.exp(-(dist / 0.0036) ** 2) * (0.45 + 0.55 * (1 - t)))
+        out["alar"] = np.maximum(out["alar"], near(np.array([mid[0] + sd * 0.0135, nose[1] - 0.013, nose[2] - 0.009]), 0.0035))
+        out["corners"] = np.maximum(out["corners"], near(corner + np.array([sd * 0.0015, -0.001, 0.0]), 0.0028))
+    out["alar"] = np.maximum(out["alar"], 0.7 * near(nose + np.array([0, -0.010, -0.013]), 0.0035))
+    low = lm["low"]
+    d = P - np.array([mid[0], low[1] - 0.002, low[2] - 0.0055])
+    out["sulcus"] = np.exp(-(d[..., 0] / 0.011) ** 2 - (d[..., 2] / 0.0035) ** 2 - (d[..., 1] / 0.01) ** 2)
+    out["bridge"] = np.exp(-(rel[..., 0] / 0.0045) ** 2) * smoothstep(-0.004, -0.012, rel[..., 2]) \
+        * smoothstep(-0.05, -0.036, rel[..., 2]) * (rel[..., 1] > 0.0)
+    keep = 1 - smoothstep(0.3, 0.7, lips)
+    for k in ("naso", "sulcus", "alar"):
+        out[k] = out[k] * keep
+    return {k: v * front for k, v in out.items()}
+AO_WEIGHT = 0.95     # crevice darkening (1 - AO_WEIGHT x occlusion)
 
 
 # ---- baking -----------------------------------------------------------------------
@@ -332,7 +413,7 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
     # only lightly across the lips (with the mouth parted, their seam read
     # as an open mouth; closed, a dark seam keeps the inner lip from glinting).
     occ = (1 - ao) * (1 - 0.3 * aux[..., 0])
-    shade = 1 - 0.8 * occ
+    shade = 1 - AO_WEIGHT * occ
     alb = emit * shade[..., None] * (1 + occ[..., None] * np.array([0.10, -0.05, -0.08]))
     # Inside the closed lips (deep AO within the lip mask): dark, or the
     # lower lip's upturned inner face glints through the seam under a key light.
@@ -342,9 +423,12 @@ def paint(h, eyes, R, base, female, skin, ball, glove=None, glove_col=None, knuc
     seam = aux[..., 0] * np.maximum(smoothstep(0.45, 0.15, ao), smoothstep(0.35, 0.0, ny))
     alb = alb * (1 - 0.85 * seam)[..., None]
     P = res["pos"] + mid - 0.5                        # each texel's surface position
+    for k, v in accents(P, m["_lm"], aux[..., 0]).items():
+        w = ACCENT[k] * v[..., None]
+        alb = alb * (1 - w * (SHADE_TINT if ACCENT[k] > 0 else 1.0))
     alb = mottle(alb, P, res["aux2"], 17 if female else 7)
     if hairline:
-        alb = paint_hairline(alb, P, eyes, hairline)
+        alb = paint_hairline(alb, P, eyes, hairline, aux[..., 2])
     if brow:
         alb = paint_brows(alb, P, eyes, R, brow)
     STATE.update(alb=alb, ao=ao, lips=aux[..., 0], ears=aux[..., 2])
@@ -427,33 +511,34 @@ def mottle(alb, P, aux2, seed):
 # so `hair.none` reads shaved, not egg. The line is a height above the eyes'
 # midpoint per azimuth round the head (0 = front, 90 = over the ear, 180 =
 # nape), measured about a vertical axis `yc` behind the eyes (m).
-# It must sit UNDER every hair piece: the knots are the lower edge of the
-# cap-like pieces (buzzed, buzzed_female, simple_parted -- the strand pieces,
-# long and buns, cover more) found by horizontal rays from that axis on each
-# body, the highest of the three per azimuth, +3 mm, then rounded off; the
-# soft edge and its noise stay within that margin.
+# It sits where a hairline grows: the front ~60 mm above the eyes, a
+# temple recess, a sideburn to below the eye line, an arc over the ear, the
+# nape under the ear lobes. The hair pieces are made to cover it, not the
+# other way round: hair.py stretches every cap-like piece (hair.CAPS) down
+# until its edge is HAIR_MARGIN under this line -- change the line, refit
+# the hair.
 #   line     (azimuth deg, height m) knots, interpolated
 #   soft     the edge's feather (m); `edge` its irregularity (m)
 #   col      sRGB of the stubble; `density` its opacity at the core
 #   grain    stubble dots' cell (m): >= 2 texels (~0.18 mm)
 HAIR_M = {
     "yc": -0.078, "soft": 0.003, "edge": 0.0015, "col": (0.12, 0.10, 0.09), "density": 0.85, "grain": 0.0006,
-    "line": ((0, 0.082), (8, 0.079), (16, 0.080), (28, 0.082), (36, 0.077), (44, 0.071), (48, 0.066),
-             (52, 0.040), (56, 0.032), (60, 0.022), (64, 0.019), (68, 0.008), (72, -0.006), (76, -0.006),
-             (80, 0.015), (88, 0.022), (96, 0.024), (104, 0.020), (112, 0.015), (116, 0.010),
-             (120, -0.020), (128, -0.025), (140, -0.028), (160, -0.031), (180, -0.037)),
+    "line": ((0, 0.061), (8, 0.063), (16, 0.063), (24, 0.061), (30, 0.058), (36, 0.053), (44, 0.046), (50, 0.038),
+             (56, 0.026), (62, 0.012), (67, -0.002), (71, -0.014), (75, -0.014), (78, 0.000), (82, 0.014),
+             (88, 0.019), (96, 0.021), (104, 0.018), (110, 0.010), (116, -0.008), (122, -0.026),
+             (130, -0.038), (145, -0.047), (162, -0.053), (180, -0.056)),
 }
-# the female line: rounder at the temples (the pieces leave it no lower)
+# the female line: a touch lower and rounder (no temple recess), a shorter sideburn
 HAIR_F = {
     "yc": -0.078, "soft": 0.003, "edge": 0.0012, "col": (0.13, 0.10, 0.09), "density": 0.78, "grain": 0.0006,
-    "line": ((0, 0.080), (10, 0.078), (20, 0.080), (30, 0.081), (38, 0.076), (44, 0.069), (49, 0.058),
-             (53, 0.036), (57, 0.025), (61, 0.020), (65, 0.011), (69, -0.004), (73, -0.003), (77, 0.016),
-             (84, 0.021), (92, 0.023), (100, 0.018), (108, 0.011), (112, -0.008), (116, -0.022),
-             (124, -0.026), (140, -0.029), (160, -0.031), (180, -0.035)),
+    "line": ((0, 0.056), (10, 0.057), (20, 0.057), (28, 0.055), (34, 0.051), (42, 0.045), (49, 0.036), (55, 0.025),
+             (61, 0.012), (66, 0.001), (70, -0.007), (74, -0.007), (78, 0.004), (83, 0.014), (90, 0.018),
+             (98, 0.019), (106, 0.015), (112, 0.006), (118, -0.012), (124, -0.026), (132, -0.036),
+             (146, -0.044), (162, -0.049), (180, -0.051)),
 }
 
 
-def paint_hairline(alb, P, eyes, b):
+def paint_hairline(alb, P, eyes, b, ears=None):
     mid = (np.array(eyes[0]) + np.array(eyes[1])) / 2
     rel = P - mid
     az = np.degrees(np.arctan2(np.abs(rel[..., 0]), rel[..., 1] - b["yc"]))
@@ -462,6 +547,8 @@ def paint_hairline(alb, P, eyes, b):
     line = line + b["edge"] * (_vnoise3(P, 0.003, 31) - 0.5) + 0.5 * b["edge"] * (_vnoise3(P, 0.0012, 37) - 0.5)
     w = smoothstep(line - b["soft"], line + b["soft"], rel[..., 2])
     w = w * (rel[..., 2] > -0.2)
+    if ears is not None:                     # no stubble on the ear over which the line arcs
+        w = w * (1 - smoothstep(0.2, 0.6, ears))
     # two octaves at unrelated cells: no lattice squares
     grain = 0.6 * _vnoise3(P, b["grain"], 41) + 0.4 * _vnoise3(P, b["grain"] * 0.63, 43)
     dens = b["density"] * (0.8 + 0.3 * smoothstep(0.3, 0.7, grain))

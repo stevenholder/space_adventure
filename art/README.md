@@ -237,9 +237,14 @@ same 9000-tri ceiling.
   0.18 -- distinct, or import_pack's dedup() merges them and the head's
   surface list changes).
 - **Ears**: decimation weight 0.04 (`LOD_WEIGHT["ear"]`, MakeHuman's `ears`
-  group), then `smooth_ears()` relaxes the ear's inner vertices twice: the
-  decimated concha was a few big triangles that faceted under a key light.
-  The painted AO carries the folds.
+  group), then `smooth_ears()` relaxes the ear's inner vertices
+  `EAR_SMOOTH` (12) times, the outline seen from the side (vertices within
+  `EAR_RIM`, 2 mm, of the side-view hull) held still. The decimated concha
+  was a few big triangles steep to their smoothed normals: under a key
+  light each self-shadowed whole (the shadow terminator) and shaded as a
+  dark speckled triangle -- geometry, not texture (it showed with either
+  map unlinked: `SHEET_STRIP`). Two passes left them; twelve clear them and
+  make the bowl shallower. The painted AO carries the folds.
 - **Painted skin** (`tools/bpy/skin.py`, `lod` variants only): on the
   FULL-resolution mesh, before decimation, the skin faces' MakeHuman UV
   islands are packed alone into the unit square (decimation carries the
@@ -247,11 +252,23 @@ same 9000-tri ceiling.
   nose / cheeks / ears / chin (soft blobs round landmarks found from the
   eyes), eye sockets, the lid margin (skin resting on the eyeball inside the
   front cone, feathered over the lid: the lash line), a cooler forehead and
-  chin, darker cheek hollows and temples, a faint beard shadow on the male
-  -- are mixed into colour attributes and
+  chin, darker cheek hollows and temples, a faint beard shadow on the male,
+  and painted modelling (`MODEL`, fraction darker, warmer as skin shades:
+  surfaces turned down under the jaw and the throat below them, the face
+  turning toward the ears, the upper eye socket deeper at the inner
+  corner, the nose's side walls, a lit centre panel with the planes darker
+  toward the sides, the face below the cheekbones a shade darker than the
+  brow) -- are mixed into colour attributes and
   baked with Cycles (EMIT) into a 2048 px atlas, an ambient-occlusion bake
   (10 cm reach: nostrils, sockets, ear folds) multiplied in (not across the
-  lips: their seam read as an open mouth). Then `skin.mottle()`: value
+  lips: their seam read as an open mouth; `AO_WEIGHT` 0.95). Crisp accents
+  are painted per texel from the baked position (`skin.accents()`,
+  `ACCENT`): the nasolabial fold, the nose wings and nostril shadow, the
+  crease under the lower lip, the mouth corners, a lit nose bridge --
+  vertex masks are too coarse for them (a fold lands on 2-3 vertices).
+  Loop four matched the Vanguard's face value range on the sheet (front
+  close-up luminance p5/p50/p95: Colonist M 51/102/138 vs Vanguard 50/103/133).
+  Then `skin.mottle()`: value
   noise over each texel's baked 3D POSITION (no seams at island cuts) --
   30 / 10 mm tonal blotches, a red/yellow hue drift, pores (0.7 mm cell,
   ~4 texels at 0.18 mm/texel: never a comb), sparse freckles on the warm
@@ -260,13 +277,13 @@ same 9000-tri ceiling.
   painted hairline (`skin.paint_hairline`, `HAIR_M` / `HAIR_F`): a darker
   stubble band where hair grows, so `hair.none` reads shaved, not egg. The
   line is a height above the eyes per azimuth round a vertical axis behind
-  them; its knots are the lower edge of the cap-like hair pieces (buzzed,
-  buzzed_female, simple_parted: the highest of the three per 4 degrees,
-  found by horizontal rays from that axis on each body) + 3 mm, so it
-  always sits UNDER any piece (the strand pieces cover more). That puts it
-  higher than a natural line (front ~80 mm above the eyes, nape ~ -37 mm),
-  and the female's can be no lower -- only rounder at the temples. If a
-  hair piece's shape changes, re-measure. Then the painted eyebrows (above). A tangent-space normal map is baked from the dense skin
+  them, where a hairline grows: M front ~61-63 mm above the eyes with a
+  temple recess, a sideburn to -14 mm, an arc over the ear (no stubble on
+  the ear itself), the nape at -56 mm; F a touch lower and rounder (57 mm,
+  no recess, shorter sideburn, nape -51). The hair pieces are made to
+  cover it, not the other way round (hair.py `reach_down`, below); until
+  loop four the line sat 3 mm above the pieces' edges, ~80 mm, an undercut.
+  Then the painted eyebrows (above). A tangent-space normal map is baked from the dense skin
   onto the decimated head (selected-to-active, 2 mm cage), flattened on the
   lip seam and the ears (rays there hit the wrong fold). Both maps are JPEG
   (q90) in `build/tex/` and packed into the glb; the export writes tangents
@@ -307,7 +324,25 @@ MakeHuman build -> the unsuffixed `hair.<style>`, then `@char.player`,
    target's per axis, then `refit()` (reach 4 cm: buns and ponytails keep
    their shape, the inner surface follows the scalp), nothing closer than
    2 mm to the skin;
-4. one mesh `hair`, material `hair`, 100 % on `head`, exported with the
+4. on a body with a painted hairline (the Colonists), the cap-like
+   pieces (`CAPS`: buzzed, buzzed_female, simple_parted) reach down over
+   it (`reach_down`): horizontal rays from the hairline's axis find the
+   piece's lower edge per azimuth (only hair within `LIE`, 12 mm, of the
+   scalp counts -- a quiff's overhang does not hide the line under it;
+   volume further out is passed over), the drop is taken from the edge's
+   running maximum over +-8 deg (the ragged edge moves down whole, its
+   highest points onto the target) to `HAIR_MARGIN` (5 mm) under the
+   line, and the lower band is stretched down by it, fading out over
+   `BAND` (30 mm, at least twice the drop); each vertex keeps its height
+   off the scalp, and none is stretched below the line - `FLOOR` (8 mm)
+   unless it already was (a neighbouring azimuth's drop threw buzzed's
+   sideburn tips to the jaw: flaps beside the ears in game). `lift_faces` then lifts any face whose centre or edge
+   midpoints dip under the skin (the buzzed crown showed scalp slivers
+   through big triangles). Up to ~45 mm at the front; tris unchanged.
+   `long` and `buns` hang past the line (their partings and bangs show the
+   stubble as a hair root shadow); the beard is a face piece. Change the
+   line or a piece: refit;
+5. one mesh `hair`, material `hair`, 100 % on `head`, exported with the
    body's rig to `build/hair.<style>[@<body>].raw.glb`.
 
 Recipes `recipes/hair.<style>.json` (`bodies`) finish them to
