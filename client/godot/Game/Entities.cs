@@ -859,7 +859,7 @@ namespace SpaceAdventure.Game
         /// zero the rifle is placed by its SIGHTS on the eye line, not by the
         /// hands; the view model then pulls the arms to the gun.
         /// </summary>
-        public Func<(Transform3D eye, float w, float kick)?> Ads;
+        public Func<(Transform3D eye, float w, float kick, Basis sway)?> Ads;
 
         /// <summary>Eye to rear sight when aimed: a shouldered long gun 0.20 m, a pistol at arm's length.</summary>
         public float SightDistance = 0.20f;
@@ -898,7 +898,13 @@ namespace SpaceAdventure.Game
             // metres out -- shots leave the muzzle toward where the crosshair
             // says they go. A small turn: the hip pose already points ahead.
             Vector3 pivot = gripN.GlobalPosition;
-            Vector3 aimAt = eye.Origin + fwd * Converge;
+            // Converge along the ARMS' view (the eye turned by the sway), not the
+            // camera's: the hands lag a mouse turn by the sway angle, and a bore
+            // turned onto the crosshair left the fore-end hanging beside the
+            // left hand. Aimed (below), the sights go on the true eye line and
+            // the view model pulls the arms to the gun.
+            Vector3 armsFwd = -(eye.Basis * a.Value.sway).Z.Normalized();
+            Vector3 aimAt = eye.Origin + armsFwd * Converge;
             Vector3 bore = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
             Vector3 toAim = (aimAt - frontN.GlobalPosition).Normalized();
             Vector3 cax = bore.Cross(toAim);

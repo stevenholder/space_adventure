@@ -537,7 +537,7 @@ void fragment() {
                     Weapon = weapon, Hand = hand, Model = _fpModel, Blade = _cls.StartsWith("_melee"),
                     // Aiming: the barrel down the line of sight, so the front
                     // post sits on the crosshair whatever the arms manage.
-                    Ads = () => (_eye.GlobalTransform, _adsW, _kick),
+                    Ads = () => (_eye.GlobalTransform, _adsW, _kick, _sway3),
                     SightDistance = _cls == "_pistol" ? 0.42f : 0.20f,
                 });
                 _fpMuzzle = AssetRegistry.FindNode(weapon, "muzzle");
@@ -597,8 +597,19 @@ void fragment() {
             float kickPitch = kick / KickMetres * KickPitchDeg;
             Basis r = Basis.FromEuler(new Vector3(
                 Mathf.DegToRad(-swayDeg.Y + kickPitch), Mathf.DegToRad(-swayDeg.X), 0f));
+            _sway3 = r;
             _fp.Transform = FpHolder(r, bob + _ads + new Vector3(0f, 0f, kick));
         }
+
+        /// <summary>
+        /// The sway (and kick pitch) the arms holder carries this frame, in
+        /// the eye's frame. The hip converge (AlignToForearm.Aim) aims the
+        /// bore along the eye turned by THIS, not the raw camera: on a mouse
+        /// turn the arms lag the view by the sway, and a bore converged on the
+        /// crosshair swung the fore-end out of the left hand by that angle
+        /// (playtest 2026-10-06, -uiTurn reproduces it).
+        /// </summary>
+        private Basis _sway3 = Basis.Identity;
 
         /// <summary>
         /// Once a frame. `speed` is the body's actual speed from the

@@ -35,6 +35,8 @@
 //   -rigArmed               show the rig without a purchase
 //   -uiAim                  hold aim-down-sights for the shot
 //   -uiWalk                 walk forward through the shot
+//   -uiStrafe               step right through the shot
+//   -uiTurn <px>            turn right <px> mouse pixels a frame through the shot (arm sway)
 //   -uiFlinch <secs>        nearest body flinches; shot that far in
 //   -uiDie <secs>           nearest body plays its death; shot that far in
 //   -uiFaceHeight <m>       with -uiFace: aim that far above the target's feet
@@ -63,6 +65,7 @@ namespace SpaceAdventure.Game
         private bool _rigLamp;
         private bool _rigAutoParty; // accept any party invite
         private bool _rigBack;      // step backwards
+        private bool _rigStrafe;    // -uiStrafe: hold D through the shot
         private bool _rigArmed;
         private bool _rigAim;       // -uiAim: hold the aim (right mouse) for the shot
         private bool _rigLowered;   // -uiLowered: pretend a wall is in the way
@@ -86,6 +89,7 @@ namespace SpaceAdventure.Game
             if (_rigFire) li.FirePressed = true;
             if (_rigInteract) { li.InteractPressed = true; _rigInteract = false; }
             if (_rigBack) li.MoveY = -1;
+            if (_rigStrafe) li.MoveX = 1;   // -uiStrafe: step right, a walk not a sprint
         }
 
         /// <summary>
@@ -808,6 +812,12 @@ namespace SpaceAdventure.Game
             }
             // -uiWalk: hold W through the shot (gait / aimed-while-moving checks).
             if (Flag("-uiWalk")) { _rigWalk = true; await Wait(1.0); }
+            // -uiStrafe: hold D. -uiTurn <px>: turn right that many mouse pixels
+            // a frame through the shot (playtest 2026-10-06: the left hand left
+            // the gun on a mouse turn -- the sway lags the arms, the converge did not).
+            if (Flag("-uiStrafe")) { _rigStrafe = true; await Wait(1.0); }
+            if (Arg("-uiTurn") is string turnPx && float.TryParse(turnPx, NumberStyles.Float, CultureInfo.InvariantCulture, out float px))
+            { _fps.RigLook = new Vector2(px, 0f); await Wait(1.0); }
 
             // -uiSwing <secs>: swing what is in hand (a real `fire`), shoot that
             // far into the swing. -uiUse <item> uses/throws it and waits 0.6 s.
