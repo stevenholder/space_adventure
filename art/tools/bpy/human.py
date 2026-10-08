@@ -108,6 +108,8 @@ BUDGET = 9000      # body + arms + head for a `lod` variant (the Vanguard's ceil
 # hand mounts and contact-point grips are shared, so every body holds a gun
 # and wears armor the same way. Armor is authored on char.player's build;
 # variants that keep that build (gunner) can wear it, bigger ones (orc) not.
+SKIN_01 = (0.953, 0.851, 0.769)   # #F3D9C4, manifest palettes.skin[0].tone: the Colonist bakes at skin.01 (Phase 21; the client multiplies by `factor`)
+
 VARIANTS = {
     # The Colonist v2 (GDD "Faces and hair"): a slimmer, shorter build than
     # the Vanguard (eyes at 1.65), most of the 9000-tri budget spent on the
@@ -119,14 +121,14 @@ VARIANTS = {
         "targets": dict(COLONIST_FACE, **{"torso/measure-shoulder-dist-decr": 0.45, "torso/torso-vshape-decr": 0.25}),
         "eye": 1.65, "hair": False, "lod": True,
         "paint_brows": skinpaint.BROW_M, "hairline": skinpaint.HAIR_M,
-        "materials": {"skin": (0.73, 0.54, 0.37), "eye": (0.44, 0.32, 0.21)},
+        "materials": {"skin": SKIN_01, "eye": (0.44, 0.32, 0.21)},
     },
     "char.player.f": {                         # the player body, female (GDD "Bodies": COLONIST F)
         "macro": {"gender": 0.0, "muscle": 0.38, "weight": 0.42, "proportions": 0.8, "age": 0.5},
         "targets": dict(COLONIST_FACE_F, **{"torso/measure-shoulder-dist-decr": 0.25}),
         "eye": 1.65, "hair": False, "lod": True,
         "paint_brows": skinpaint.BROW_F, "hairline": skinpaint.HAIR_F,
-        "materials": {"skin": (0.75, 0.56, 0.39), "eye": (0.42, 0.46, 0.28)},
+        "materials": {"skin": SKIN_01, "eye": (0.42, 0.46, 0.28)},
     },
     "npc.shopkeeper": {                        # Quartermaster Vex: older, heavier, khaki
         "macro": {"age": 0.75, "weight": 0.72, "muscle": 0.45, "height": 0.45},
@@ -264,6 +266,7 @@ def ubc_human():
         if m and m.name.startswith("MI_Hair"):
             tex = next(n.image for n in m.node_tree.nodes if n.type == "TEX_IMAGE" and n.image and "Normal" not in n.image.name)
             h.data.materials[i] = hair_material(tex)
+    normalise_ubc_skin(h)
 
     # Leaf bones carry finger-tip weights: fold them into the parent, then drop them.
     parents = {b.name: b.parent.name for b in rig.data.bones if "leaf" in b.name}
@@ -800,6 +803,51 @@ def part_of(bone):
         return "legs"
     return "torso"
 
+
+
+def normalise_ubc_skin(h):
+    """The Vanguard's painted skin at skin.01 (GDD "Skin and suit colours
+    (Phase 21)"): one palette id must be one skin on both models, and the
+    client only ever multiplies by a factor <= 1, so the albedo's own tone
+    has to be the lightest. Per channel, the 90th percentile of the
+    skin-coloured texels (r > g > b, lit) is taken as the pack's base tone
+    and the whole map is scaled to put it on SKIN_01 (sRGB, as stored),
+    written beside the build output -- the vendored file is never touched.
+    The material is renamed `skin` and the eyes `eye`, so the manifest's
+    surfaces read as the Colonist's and the client finds them by name."""
+    import numpy as np
+    for m in h.data.materials:
+        if not m:
+            continue
+        if m.name.startswith("MI_Eyes"):
+            m.name = "eye"
+            continue
+        if not m.name.startswith("MI_Superhero"):
+            continue
+        node = next(n for n in m.node_tree.nodes
+                    if n.type == "TEX_IMAGE" and n.image and n.image.colorspace_settings.name == "sRGB")
+        img = node.image
+        w, hgt = img.size
+        px = np.array(img.pixels[:], dtype=np.float32).reshape(hgt, w, 4)
+        rgb = px[..., :3]
+        mask = (rgb[..., 0] > rgb[..., 1]) & (rgb[..., 1] > rgb[..., 2]) & (rgb[..., 0] > 0.3) & (px[..., 3] > 0.5)
+        base = np.percentile(rgb[mask], 90, axis=0)
+        scale = np.array(SKIN_01, dtype=np.float32) / base
+        rgb[...] = np.clip(rgb * scale, 0.0, 1.0)
+        after = np.percentile(rgb[mask], 90, axis=0)
+        print(f"ubc skin: base {tuple(round(float(b), 3) for b in base)} scale {tuple(round(float(x), 3) for x in scale)} "
+              f"-> {tuple(round(float(a), 3) for a in after)} ({int(mask.sum())} texels)")
+        out_dir = os.path.join(ART, "build", "tex")
+        os.makedirs(out_dir, exist_ok=True)
+        out = os.path.join(out_dir, ACTIVE["_id"] + "_skin.png")
+        new = bpy.data.images.new(os.path.basename(out), w, hgt, alpha=True)
+        new.colorspace_settings.name = "sRGB"
+        new.pixels = px.ravel().tolist()
+        new.filepath_raw = out
+        new.file_format = "PNG"
+        new.save()
+        node.image = new
+        m.name = "skin"
 
 def dress(h, eye_l, eye_r):
     """Material per face from its dominant bone and where it is. The

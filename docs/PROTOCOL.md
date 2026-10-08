@@ -232,6 +232,14 @@ Constants:
   to every peer, and after the join-time row a later joiner receives —
   and never as a change; a character with `hair.none` sends none. It is
   not an equip slot: an `equip` cmd naming it is `wrong_slot`.
+  Slots `skin` and `suit` (Phase 21) ride it the same way with `item` a
+  palette id (`skin.01`..`skin.08`, `suit.<colour>`; art/manifest.json
+  `palettes`, not items in `defs`): sent once each, right after the hair
+  frame (or the `spawn` row when there is none), in that order — on its own
+  socket, to every peer, and after the join-time row a later joiner
+  receives — and never as a change. A character always sends both, the
+  defaults (`skin.01`, `suit.slate`) included; a guest sends neither. Not
+  equip slots either: `equip` naming them is `wrong_slot`.
   And `0x0010` `attack` (mob library, 2026-10-03) — `entity_id` is an NPC
   that has just begun an attack and `data` is `u32 target_id`; or (melee) a
   player whose swing the server accepted, with `target_id` 0. Sent once per

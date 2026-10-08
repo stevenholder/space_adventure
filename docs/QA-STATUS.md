@@ -799,3 +799,25 @@ against kind and fixed (client, clip generator); no wire change.
 
 Sweep: `dotnet build` 0 warnings, `-selftest` PASS, `godot-gate`, `godot-test`,
 `npm --prefix art test` (import self-test + verify) green. No server change.
+
+# Phase 21 — skin and suit colours (2026-10-08)
+
+Three halves in one wave: server + harness (migration 007, API,
+two `worn` frames), client (palette parse, tint by surface, SKIN/SUIT
+rows), art (both models baked at `skin.01`). Proofs on a server built
+from the branch on a throwaway Postgres, with a stand-in character for
+the remote shots; the kind server was the old build.
+
+| # | Result | Evidence |
+|---|---|---|
+| C178 | PASS | `art/manifest.json` `palettes`: 8 skin (`tone` + `factor`, `skin.01` = `#FFFFFF`), 8 suit (`color`); `verify.mjs` `paletteProblems` (ids, hex shape, white first, non-rising luminance, `suit.slate`); `TestPalettesMatchManifest` keeps the Go tables equal; POST/PATCH with an unknown id → 400 `bad skin` / `bad suit`; migration 007 defaults `skin.01` / `suit.slate` on every existing row (`migrate_test`) |
+| C179 | PASS | `TestSpawn_ColourWornFrames` + `TestColoursAreNotEquipSlots` (+ `-race`); `t28` 91/91 on Postgres, guests and strict: create with skin.04 + suit.rust, GET returns both, frames on the own socket and two others at join, PATCH to skin.07/suit.teal carried by the next join, a guest gets neither; `Retag` passes both so a live save cannot undo a web edit |
+| C180 | PASS | `test/out/ui/p21-remote-teela.png` (Vanguard F, skin.06 + suit.teal + long hair, seen from a Colonist on the live server), `p21-remote-vanna.png` (skin.06 + suit.rust: a near-skin pairing, correct, not a good proof), `p21-doll-colin.png` (the sheet doll in skin.03 + teal from the own frames), `p21-own-body.png` (first-person legs in teal); the client agent's `p21-fp-tint.png`/`-control` (rust vs slate sleeve, nothing else differs). Sheets `p21-sheet-bodies.png`, `-faces-colonist.png`, `-faces-vanguard.png`: both models at `skin.01` read as the same tone with brows, lips and lashes intact. The Vanguard's UBC albedo is scaled per channel from its measured base (0.686, 0.518, 0.357) onto `#F3D9C4` and its materials renamed `skin`/`eye` (`normalise_ubc_skin`); the Colonist's feature tints follow the base (`skin.py`). First-person hands are the suit's gloves: no skin there, by design |
+| C181 | PASS | `p21-chars-create.png` / `-control.png` / `-edit.png`: SKIN and SUIT share a row under HAIR, swatch + name, the stage follows; edit mode lights SAVE on a change; `-selftest` +14 `palette:`/`tint:`/`chars:` checks (parse, white, no leak between bodies, no compounding, Cover interplay, shader `albedo` param, NextSkin/PrevSkin wrap, Dirty/CanSave, `BAD SUIT`) |
+| C182 | PASS | Go vet/test (+`-race` server/web), `make test-pg`, `dotnet build` 0 warnings, `-selftest`, `godot-gate`, `godot-codec` (9), `godot-test`, `npm --prefix art test` (278/278 + palettes); C153–C177 untouched (hair's frame unchanged; the two new frames follow it). Owed: t28 against kind after deploy; eyes on the Windows install |
+
+Suit colour note: the suit material is a white factor over a slate
+fabric texture, so a flat `color` factor went near black; the client
+sets factor = colour / the texture's mean (measured once), which keeps
+the seams and averages to the palette colour.
+

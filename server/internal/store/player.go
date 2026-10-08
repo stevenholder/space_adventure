@@ -43,7 +43,10 @@ type Player struct {
 	// Body is the character's model + gender id; "" saves as char.player.
 	Body string
 	// Hair is the character's hair piece id (Phase 17); "" saves as hair.none.
-	Hair      string
+	Hair string
+	// Skin and Suit are palette ids (Phase 21); "" saves as the default.
+	Skin      string
+	Suit      string
 	CreatedMs int64
 	UpdatedMs int64
 }
@@ -88,11 +91,18 @@ const DefaultBody = "char.player"
 // DefaultHair is no hair (Phase 17, migration 006's column default).
 const DefaultHair = "hair.none"
 
+// DefaultSkin and DefaultSuit are the bodies as baked (Phase 21,
+// migration 007's column defaults).
+const (
+	DefaultSkin = "skin.01"
+	DefaultSuit = "suit.slate"
+)
+
 // ErrNameTaken is the player_character_name index refusing a character name
 // another account-owned row already has (case-insensitive).
 var ErrNameTaken = errors.New("store: character name taken")
 
-const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms, body, hair`
+const playerColumns = `token, name, credits, inventory, equipped, missions, skills, pos_x, pos_y, pos_z, created_ms, updated_ms, body, hair, skin, suit`
 
 // playerSelect reads account_id last; NULL (a guest) scans as "".
 const playerSelect = `SELECT ` + playerColumns + `, COALESCE(account_id, '') FROM player`
@@ -118,7 +128,7 @@ func scanPlayer(row scanner) (*Player, error) {
 	var p Player
 	var inventory, equipped, missions, skillsCol string
 	err := row.Scan(&p.Token, &p.Name, &p.Credits, &inventory, &equipped, &missions, &skillsCol,
-		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs, &p.Body, &p.Hair, &p.AccountID)
+		&p.Pos[0], &p.Pos[1], &p.Pos[2], &p.CreatedMs, &p.UpdatedMs, &p.Body, &p.Hair, &p.Skin, &p.Suit, &p.AccountID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
@@ -193,19 +203,25 @@ func (s *Store) PutPlayer(ctx context.Context, p *Player) error {
 	if p.Hair == "" {
 		p.Hair = DefaultHair
 	}
+	if p.Skin == "" {
+		p.Skin = DefaultSkin
+	}
+	if p.Suit == "" {
+		p.Suit = DefaultSuit
+	}
 
 	// account_id is written on INSERT only, so a new character is created
 	// owned in one statement (the name index checks it there); the update
 	// arm leaves it alone, so a game save never orphans or re-homes a row.
 	_, err = s.DB.ExecContext(ctx,
 		`INSERT INTO player (`+playerColumns+`, account_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NULLIF($15, ''))
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NULLIF($17, ''))
 		 ON CONFLICT (token) DO UPDATE SET
 		   name = $2, credits = $3, inventory = $4, equipped = $5,
 		   missions = $6, skills = $7, pos_x = $8, pos_y = $9, pos_z = $10, updated_ms = $12,
-		   body = $13, hair = $14`,
+		   body = $13, hair = $14, skin = $15, suit = $16`,
 		p.Token, p.Name, p.Credits, string(inventory), string(equipped), string(missions), string(skillsCol),
-		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs, p.Body, p.Hair, p.AccountID)
+		p.Pos[0], p.Pos[1], p.Pos[2], p.CreatedMs, p.UpdatedMs, p.Body, p.Hair, p.Skin, p.Suit, p.AccountID)
 	if err != nil {
 		if isUnique(err) {
 			return ErrNameTaken

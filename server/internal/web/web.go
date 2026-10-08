@@ -59,6 +59,19 @@ var hairs = map[string]bool{
 	"hair.buzzed_female": true, "hair.long": true, "hair.simple_parted": true,
 }
 
+// skins and suits are the palette ids a character may pick (GDD "Skin and
+// suit colours (Phase 21)"): art/manifest.json's `palettes`, never free
+// RGB. TestPalettesMatchManifest fails when the two drift apart.
+var skins = map[string]bool{
+	"skin.01": true, "skin.02": true, "skin.03": true, "skin.04": true,
+	"skin.05": true, "skin.06": true, "skin.07": true, "skin.08": true,
+}
+
+var suits = map[string]bool{
+	"suit.slate": true, "suit.rust": true, "suit.olive": true, "suit.navy": true,
+	"suit.bone": true, "suit.charcoal": true, "suit.teal": true, "suit.maroon": true,
+}
+
 // Handler is the account site. Store is required; NewPlayer builds the
 // default player row for a freshly minted character (the server owns
 // what a new player starts with); Online reports live connections for the
@@ -71,9 +84,9 @@ type Handler struct {
 	// re-create the rows (server.Kick). Nil: no game server in-process.
 	Kick func(tokens []string)
 	// Retag points a live session of an edited character at its new name
-	// and hair so its saves do not write the old ones back (server.Retag).
+	// and looks so its saves do not write the old ones back (server.Retag).
 	// Nil: no game server in-process.
-	Retag func(token, name, hair string)
+	Retag func(token, name, hair, skin, suit string)
 
 	mu   sync.Mutex
 	rate map[string]*loginBucket
@@ -328,7 +341,7 @@ func (h *Handler) gameLogin(w http.ResponseWriter, r *http.Request) {
 // mintCharacter makes a character the way a guest starts (NewPlayer), owned
 // from its first INSERT: one PutPlayer with AccountID set, so a name the
 // index refuses leaves no orphan row. store.ErrNameTaken passes through.
-func (h *Handler) mintCharacter(ctx context.Context, acc *store.Account, name, body, hair string) (store.Player, error) {
+func (h *Handler) mintCharacter(ctx context.Context, acc *store.Account, name, body, hair, skin, suit string) (store.Player, error) {
 	token, err := randomHex()
 	if err != nil {
 		return store.Player{}, err
@@ -336,6 +349,7 @@ func (h *Handler) mintCharacter(ctx context.Context, acc *store.Account, name, b
 	p := h.NewPlayer(token, name)
 	p.Body = body
 	p.Hair = hair
+	p.Skin, p.Suit = skin, suit
 	p.AccountID = acc.ID
 	if err := h.Store.PutPlayer(ctx, &p); err != nil {
 		return store.Player{}, err
@@ -403,13 +417,15 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request, a accountCtx) {
 		Name      string        `json:"name"`
 		Body      string        `json:"body"`
 		Hair      string        `json:"hair"`
+		Skin      string        `json:"skin"`
+		Suit      string        `json:"suit"`
 		Credits   int64         `json:"credits"`
 		Inventory []store.Stack `json:"inventory"`
 		LastSeen  int64         `json:"last_seen_ms"`
 	}
 	views := make([]playerView, 0, len(players))
 	for _, p := range players {
-		views = append(views, playerView{Name: p.Name, Body: p.Body, Hair: p.Hair, Credits: p.Credits,
+		views = append(views, playerView{Name: p.Name, Body: p.Body, Hair: p.Hair, Skin: p.Skin, Suit: p.Suit, Credits: p.Credits,
 			Inventory: p.Inventory, LastSeen: p.UpdatedMs})
 	}
 	writeJSON(w, map[string]any{"email": acc.Email, "players": views})
@@ -421,13 +437,15 @@ type characterView struct {
 	Name     string `json:"name"`
 	Body     string `json:"body"`
 	Hair     string `json:"hair"`
+	Skin     string `json:"skin"`
+	Suit     string `json:"suit"`
 	Credits  int64  `json:"credits"`
 	LastSeen int64  `json:"last_seen_ms"`
 }
 
 func viewCharacter(p store.Player) characterView {
 	return characterView{Token: p.Token, Name: p.Name, Body: p.Body, Hair: p.Hair,
-		Credits: p.Credits, LastSeen: p.UpdatedMs}
+		Skin: p.Skin, Suit: p.Suit, Credits: p.Credits, LastSeen: p.UpdatedMs}
 }
 
 // characters is GET (list) and POST (create) on one path; POST keeps the
@@ -461,6 +479,8 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 		Name string `json:"name"`
 		Body string `json:"body"`
 		Hair string `json:"hair"` // optional: "" is hair.none
+		Skin string `json:"skin"` // optional: "" is skin.01
+		Suit string `json:"suit"` // optional: "" is suit.slate
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -480,6 +500,20 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 	}
 	if !hairs[req.Hair] {
 		http.Error(w, "bad hair", http.StatusBadRequest)
+		return
+	}
+	if req.Skin == "" {
+		req.Skin = store.DefaultSkin
+	}
+	if !skins[req.Skin] {
+		http.Error(w, "bad skin", http.StatusBadRequest)
+		return
+	}
+	if req.Suit == "" {
+		req.Suit = store.DefaultSuit
+	}
+	if !suits[req.Suit] {
+		http.Error(w, "bad suit", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
@@ -508,7 +542,7 @@ func (h *Handler) createCharacter(w http.ResponseWriter, r *http.Request, a acco
 		http.Error(w, "account lookup failed", http.StatusInternalServerError)
 		return
 	}
-	p, err := h.mintCharacter(ctx, acc, name, req.Body, req.Hair)
+	p, err := h.mintCharacter(ctx, acc, name, req.Body, req.Hair, req.Skin, req.Suit)
 	if errors.Is(err, store.ErrNameTaken) { // the index caught a racing create
 		http.Error(w, "name taken", http.StatusConflict)
 		return
@@ -554,13 +588,15 @@ func (h *Handler) ownCharacter(w http.ResponseWriter, r *http.Request, a account
 	return row
 }
 
-// editCharacter changes name and/or hair with create's rules; an omitted
+// editCharacter changes name, hair, skin and/or suit with create's rules; an omitted
 // or empty field is unchanged, and a character may keep (or re-case) its
 // own name. The body never changes.
 func (h *Handler) editCharacter(w http.ResponseWriter, r *http.Request, a accountCtx) {
 	var req struct {
 		Name string `json:"name"`
 		Hair string `json:"hair"`
+		Skin string `json:"skin"`
+		Suit string `json:"suit"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -570,7 +606,7 @@ func (h *Handler) editCharacter(w http.ResponseWriter, r *http.Request, a accoun
 		return
 	}
 	ctx := r.Context()
-	name, hair := row.Name, row.Hair
+	name, hair, skin, suit := row.Name, row.Hair, row.Skin, row.Suit
 	if req.Name != "" {
 		name = server.SanitizeName(req.Name, 0)
 		if !nameOK(name) || (name == server.SanitizeName("", 0) && strings.TrimSpace(req.Name) != name) {
@@ -585,6 +621,20 @@ func (h *Handler) editCharacter(w http.ResponseWriter, r *http.Request, a accoun
 		}
 		hair = req.Hair
 	}
+	if req.Skin != "" {
+		if !skins[req.Skin] {
+			http.Error(w, "bad skin", http.StatusBadRequest)
+			return
+		}
+		skin = req.Skin
+	}
+	if req.Suit != "" {
+		if !suits[req.Suit] {
+			http.Error(w, "bad suit", http.StatusBadRequest)
+			return
+		}
+		suit = req.Suit
+	}
 	if !strings.EqualFold(name, row.Name) {
 		taken, err := h.Store.CharacterNameTaken(ctx, name)
 		if err != nil {
@@ -596,7 +646,7 @@ func (h *Handler) editCharacter(w http.ResponseWriter, r *http.Request, a accoun
 			return
 		}
 	}
-	if err := h.Store.EditCharacter(ctx, row.Token, name, hair); err != nil {
+	if err := h.Store.EditCharacter(ctx, row.Token, name, hair, skin, suit); err != nil {
 		if errors.Is(err, store.ErrNameTaken) { // the index caught a racing edit
 			http.Error(w, "name taken", http.StatusConflict)
 			return
@@ -605,10 +655,10 @@ func (h *Handler) editCharacter(w http.ResponseWriter, r *http.Request, a accoun
 		return
 	}
 	if h.Retag != nil {
-		h.Retag(row.Token, name, hair)
+		h.Retag(row.Token, name, hair, skin, suit)
 		// A live save that snapshotted the old row may have landed after
 		// the edit; Retag waited it out, so write the edit once more.
-		if err := h.Store.EditCharacter(ctx, row.Token, name, hair); err != nil {
+		if err := h.Store.EditCharacter(ctx, row.Token, name, hair, skin, suit); err != nil {
 			log.Printf("web: edit sweep: %v", err)
 		}
 	}

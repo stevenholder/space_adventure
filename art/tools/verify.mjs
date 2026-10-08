@@ -437,6 +437,52 @@ for (const asset of selected) {
   for (const p of problems) failures.push(`${asset.id}: ${p}`);
 }
 
+// Palettes (Phase 21, GDD "Skin and suit colours"): skin tones and suit
+// colours by id. The client multiplies a body's baked `skin` surfaces by
+// `factor` (the Colonist bakes at skin.01's tone, so skin.01 is white) and
+// sets `suit` to `color`; the server holds the same ids. Eight of each,
+// skin lightest first (factor luminance never rises down the list).
+function paletteProblems(pal) {
+  const out = [];
+  const HEX = /^#[0-9A-F]{6}$/i;
+  const lum = (h) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  if (!pal || typeof pal !== "object") return ["palettes: missing"];
+  const skin = pal.skin, suit = pal.suit;
+  if (!Array.isArray(skin) || skin.length !== 8) out.push(`palettes.skin: want 8 entries, got ${Array.isArray(skin) ? skin.length : typeof skin}`);
+  else {
+    skin.forEach((e, i) => {
+      const want = `skin.${String(i + 1).padStart(2, "0")}`;
+      if (e?.id !== want) out.push(`palettes.skin[${i}]: id ${JSON.stringify(e?.id)}, want ${want}`);
+      for (const k of ["tone", "factor"])
+        if (typeof e?.[k] !== "string" || !HEX.test(e[k])) out.push(`palettes.skin[${i}] ${e?.id}: ${k} ${JSON.stringify(e?.[k])} is not #RRGGBB`);
+    });
+    if (skin[0]?.factor?.toUpperCase() !== "#FFFFFF") out.push(`palettes.skin: skin.01 factor ${skin[0]?.factor}, want #FFFFFF (the bake's own tone)`);
+    for (let i = 1; i < skin.length; i++) {
+      const a = skin[i - 1]?.factor, b = skin[i]?.factor;
+      if (HEX.test(a ?? "") && HEX.test(b ?? "") && lum(b) > lum(a))
+        out.push(`palettes.skin: ${skin[i].id} factor ${b} is lighter than ${skin[i - 1].id} ${a} (lightest first)`);
+    }
+  }
+  if (!Array.isArray(suit) || suit.length !== 8) out.push(`palettes.suit: want 8 entries, got ${Array.isArray(suit) ? suit.length : typeof suit}`);
+  else {
+    const ids = new Set();
+    suit.forEach((e, i) => {
+      if (typeof e?.id !== "string" || !e.id.startsWith("suit.")) out.push(`palettes.suit[${i}]: id ${JSON.stringify(e?.id)} is not suit.*`);
+      else if (ids.has(e.id)) out.push(`palettes.suit: duplicate id ${e.id}`);
+      ids.add(e?.id);
+      if (typeof e?.color !== "string" || !HEX.test(e.color)) out.push(`palettes.suit[${i}] ${e?.id}: color ${JSON.stringify(e?.color)} is not #RRGGBB`);
+    });
+    if (!ids.has("suit.slate")) out.push("palettes.suit: suit.slate (the default) missing");
+  }
+  return out;
+}
+const palFails = paletteProblems(manifest.palettes);
+for (const p of palFails) failures.push(p);
+
 console.log("asset verification (Three.js GLTFLoader)");
 console.log("-".repeat(58));
 for (const r of rows) {
@@ -451,4 +497,4 @@ if (failures.length) {
   for (const f of failures) console.error("  " + f);
   process.exit(1);
 }
-console.log(`PASS: ${rows.length}/${rows.length} assets load, match manifest, within budget`);
+console.log(`PASS: ${rows.length}/${rows.length} assets load, match manifest, within budget; palettes ok`);

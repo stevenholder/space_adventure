@@ -94,17 +94,17 @@ func TestRetag_EditSurvivesLiveSave(t *testing.T) {
 	if name := wantSeated(t, ws); name != "Kade" {
 		t.Fatalf("seated as %q", name)
 	}
-	if err := st.EditCharacter(ctx, owned, "Kadence", "hair.buns"); err != nil {
+	if err := st.EditCharacter(ctx, owned, "Kadence", "hair.buns", "skin.07", "suit.teal"); err != nil {
 		t.Fatal(err)
 	}
-	world.Retag(owned, "Kadence", "hair.buns")
-	if err := st.EditCharacter(ctx, owned, "Kadence", "hair.buns"); err != nil {
+	world.Retag(owned, "Kadence", "hair.buns", "skin.07", "suit.teal")
+	if err := st.EditCharacter(ctx, owned, "Kadence", "hair.buns", "skin.07", "suit.teal"); err != nil {
 		t.Fatal(err)
 	}
 	ws.conn.Close()
 	waitOffline(t, world)
 	p, err := st.GetPlayer(ctx, owned)
-	if err != nil || p == nil || p.Name != "Kadence" || p.Hair != "hair.buns" || p.AccountID != "acc1" {
+	if err != nil || p == nil || p.Name != "Kadence" || p.Hair != "hair.buns" || p.Skin != "skin.07" || p.Suit != "suit.teal" || p.AccountID != "acc1" {
 		t.Fatalf("row after disconnect save = %+v, %v", p, err)
 	}
 }

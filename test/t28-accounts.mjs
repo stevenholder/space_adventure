@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Phase 16 acceptance, live: C153, C154, C156, C157, C159; Phase 17: C163;
- * Phase 18: C166, C167, C168.
+ * Phase 18: C166, C167, C168; Phase 21: C179.
  *
  * Register → POST /api/game-login (the launcher's sign-in: a session in the
  * body, sent back as `Authorization: Bearer`) → GET /api/characters is []
@@ -37,6 +37,16 @@
  * spawn rows: her self spawn, the observer's broadcast row, and the join-time
  * row a third socket (pilot 3) gets. The hair.none character, and a guest,
  * get no hair frame anywhere.
+ *
+ * C179 (skin and suit, GDD "Skin and suit colours (Phase 21)"): pilot 3 is
+ * made in skin.04 + suit.rust, the rest omit both (skin.01 / suit.slate);
+ * replies and the list carry them; skin.09 / suit.neon are 400 `bad skin` /
+ * `bad suit` on POST and PATCH. On the wire every character's spawn row is
+ * followed by its `worn` frames, hair (if any) then `skin=` then `suit=`:
+ * pilot 3's own socket and the two sockets already in see skin.04/suit.rust,
+ * every socket sees the first character's defaults. PATCH pilot 3 to
+ * skin.07 + suit.teal → its next join carries those. A guest (default mode
+ * only; strict seats none) gets no skin or suit frame.
  *
  * Two run modes (GDD "The machines"):
  *   default      a server that seats guests (kind, SA_GUESTS=1): a made-up
@@ -124,7 +134,7 @@ function joinGame (token, name = 't28') {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(WS)
     ws.binaryType = 'arraybuffer'
-    const out = { id: 0, data: null, credits: null, close: null, spawns: 0, hair: 0 }
+    const out = { id: 0, data: null, credits: null, close: null, spawns: 0, hair: 0, looks: 0 }
     let done = false
     const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(out) } }
     const timer = setTimeout(() => { ws.close(); reject(new Error('join timeout')) }, 8000)
@@ -140,7 +150,9 @@ function joinGame (token, name = 't28') {
         }
       } else if (t === 0x0007) {
         const e = decodeEvent(Buffer.from(p))
-        if (e.eventId === EVENT.WORN && e.entityId === out.id && decodeWorn(e.data).slot === 'hair') out.hair++
+        const slot = e.eventId === EVENT.WORN && e.entityId === out.id ? decodeWorn(e.data).slot : ''
+        if (slot === 'hair') out.hair++
+        if (slot === 'skin' || slot === 'suit') out.looks++
       } else if (t === 0x000f && dv.getUint16(2 + 2, true) === 0x0004) {
         out.credits = JSON.parse(dec.decode(p.subarray(9)) || '{}').credits ?? null
         // Stay a beat so the autosave sees us, then leave.
@@ -205,6 +217,26 @@ async function nextAfterSpawn (g, id, ms = 3000) {
   }
   return null
 }
+// C179: the run of `worn` frames for id IMMEDIATELY after its first spawn
+// row on g's socket, as `slot=item` (waits until something else ends the
+// run; null if the spawn never arrives).
+async function looksAfterSpawn (g, id, ms = 3000) {
+  for (let t = 0; t <= ms; t += 50) {
+    const i = g.log.findIndex((f) => f.t === 0x0005 && f.id === id)
+    if (i >= 0) {
+      const run = []
+      let j = i + 1
+      for (; j < g.log.length; j++) {
+        const f = g.log[j]
+        if (!(f.t === 0x0007 && f.ev === EVENT.WORN && f.id === id)) break
+        run.push(`${f.worn.slot}=${f.worn.item}`)
+      }
+      if (j < g.log.length) return run
+    }
+    await sleep(50)
+  }
+  return null
+}
 const isHair = (f, id, item) => f?.t === 0x0007 && f.ev === EVENT.WORN && f.id === id && f.worn?.slot === 'hair' && f.worn?.item === item
 // Every hair `worn` frame for id a socket has seen.
 const hairFrames = (g, id) => g.log.filter((f) => f.t === 0x0007 && f.ev === EVENT.WORN && f.id === id && f.worn?.slot === 'hair')
@@ -240,6 +272,8 @@ const first = await json(r)
 check('C157 create the first character', r.status === 200 && first?.name === local && first?.body === 'char.player' &&
   HEX32.test(first?.token ?? ''), `status ${r.status}, ${JSON.stringify(first && [first.name, first.body])}`)
 check('C163 hair omitted at create is hair.none', first?.hair === 'hair.none', `hair ${JSON.stringify(first?.hair)}`)
+check('C179 skin and suit omitted at create are skin.01 / suit.slate', first?.skin === 'skin.01' && first?.suit === 'suit.slate',
+  JSON.stringify(first && [first.skin, first.suit]))
 
 // --- 2. C154: the token joins under the ROW's name ------------------------
 const j1 = await joinGame(first?.token ?? '', 'ignored-name')
@@ -285,7 +319,7 @@ check('C153 game-login needs X-Requested-With', r.status === 403, `status ${r.st
 // crashed run, so the second character is "Kade" plus a per-run tag.
 const tag = [0, 1, 2, 3].map((i) => String.fromCharCode(97 + Math.floor(run / 26 ** i) % 26)).join('')
 const kade = `Kade ${tag}`
-const create = (name, body, hair) => g('/api/characters', { method: 'POST', body: hair === undefined ? { name, body } : { name, body, hair } })
+const create = (name, body, hair, more = {}) => g('/api/characters', { method: 'POST', body: { name, body, ...(hair === undefined ? {} : { hair }), ...more } })
 r = await create(kade, 'char.ubc.f', 'hair.buns')
 const k = await json(r)
 check('C157 create a second character', r.status === 200 && k?.name === kade && k?.body === 'char.ubc.f' &&
@@ -309,16 +343,28 @@ r = await create(`Nope ${tag}`, 'char.player', 'hair.nope')
   const t = await text(r)
   check('C163 hair.nope refused 400 bad hair', r.status === 400 && t === 'bad hair', `status ${r.status} ${JSON.stringify(t)}`)
 }
+for (const [more, want] of [[{ skin: 'skin.09' }, 'bad skin'], [{ suit: 'suit.neon' }, 'bad suit']]) {
+  r = await create(`Nope ${tag}`, 'char.player', undefined, more)
+  const t = await text(r)
+  check(`C179 POST ${JSON.stringify(more)} refused 400 ${want}`, r.status === 400 && t === want, `status ${r.status} ${JSON.stringify(t)}`)
+}
 // Pilot 5 is char.player in hair.long: every style is valid on every body.
 const extra = [], pilots = []
-for (const [i, body, hair] of [[3, 'char.player.f'], [4, 'char.ubc'], [5, 'char.player', 'hair.long']]) {
-  r = await create(`${tag} pilot ${i}`, body, hair)
+// Pilot 3 is skin.04 + suit.rust (C179).
+for (const [i, body, hair, more] of [[3, 'char.player.f', undefined, { skin: 'skin.04', suit: 'suit.rust' }], [4, 'char.ubc'], [5, 'char.player', 'hair.long']]) {
+  r = await create(`${tag} pilot ${i}`, body, hair, more)
   extra.push(r.status)
   pilots.push(await json(r))
 }
 check('C157 up to five characters', extra.every((s) => s === 200), extra.join(' '))
 check('C163 hair.long on a char.player body is accepted', extra[2] === 200 && pilots[2]?.hair === 'hair.long' && pilots[2]?.body === 'char.player',
   `status ${extra[2]}, ${JSON.stringify(pilots[2] && [pilots[2].body, pilots[2].hair])}`)
+check('C179 the create reply carries skin.04 / suit.rust', pilots[0]?.skin === 'skin.04' && pilots[0]?.suit === 'suit.rust',
+  JSON.stringify(pilots[0] && [pilots[0].skin, pilots[0].suit]))
+chars = await json(await g('/api/characters'))
+check('C179 GET returns each skin and suit', chars?.length === 5 && chars[2]?.token === pilots[0]?.token &&
+  chars[2].skin === 'skin.04' && chars[2].suit === 'suit.rust' && chars[0].skin === 'skin.01' && chars[0].suit === 'suit.slate',
+JSON.stringify(chars?.map((c) => [c.skin, c.suit])))
 r = await create(`${tag} pilot 6`, 'char.player')
 check('C157 the sixth is refused (409 character limit)', r.status === 409 && (await text(r)) === 'character limit', `status ${r.status}`)
 r = await g('/api/me')
@@ -356,10 +402,24 @@ await sleep(500)
   const firstHair = [o1, o2, o3].map((s) => hairFrames(s, o1.id).length)
   const after = await Promise.all([o1, o2, o3].map((s) => nextAfterSpawn(s, o1.id)))
   check('C163 the hair.none character gets no hair frame on any socket', o1.id > 0 && firstHair.every((n) => n === 0) &&
-    after.every((f) => f && !(f.t === 0x0007 && f.ev === EVENT.WORN && f.id === o1.id)),
+    after.every((f) => f && !(f.t === 0x0007 && f.ev === EVENT.WORN && f.id === o1.id && f.worn?.slot === 'hair')),
   `hair frames ${firstHair.join('/')}, after its rows: ${after.map(desc).join(' | ')}`)
   const kadeHair = [o1, o2, o3].map((s) => hairFrames(s, o2.id).length)
   check('C163 Kade\'s hair frame arrives once per socket', kadeHair.every((n) => n === 1), `per socket ${kadeHair.join('/')}`)
+  // C179: pilot 3 (o3) on its own socket and on the two already in; the
+  // first character's defaults on every socket; Kade's behind her hair.
+  const p3 = ['skin=skin.04', 'suit=suit.rust'], dflt = ['skin=skin.01', 'suit=suit.slate']
+  const runs = await Promise.all([o3, o1, o2].map((s) => looksAfterSpawn(s, o3.id)))
+  check('C179 pilot 3: skin.04 + suit.rust right after its spawn on its own socket', JSON.stringify(runs[0]) === JSON.stringify(p3),
+    `run ${JSON.stringify(runs[0])}`)
+  check('C179 pilot 3: the same frames on the sockets already in', runs.slice(1).every((x) => JSON.stringify(x) === JSON.stringify(p3)),
+    `runs ${JSON.stringify(runs.slice(1))}`)
+  const firsts = await Promise.all([o1, o2, o3].map((s) => looksAfterSpawn(s, o1.id)))
+  check('C179 the first character: skin.01 + suit.slate on every socket', firsts.every((x) => JSON.stringify(x) === JSON.stringify(dflt)),
+    `runs ${JSON.stringify(firsts)}`)
+  const kades = await Promise.all([o1, o2, o3].map((s) => looksAfterSpawn(s, o2.id)))
+  check('C179 Kade: hair, then skin, then suit', kades.every((x) => JSON.stringify(x) === JSON.stringify(['hair=hair.buns', ...dflt])),
+    `runs ${JSON.stringify(kades)}`)
 }
 o3.leave(); o2.leave(); o1.leave()
 await sleep(1000)
@@ -397,6 +457,27 @@ for (const [req, code, msg] of [[{ name: pilots[0]?.name }, 409, 'name taken'], 
 chars = await list()
 check('C166 refused PATCHes changed nothing', rowOf(chars, k?.token)?.name === kadence && rowOf(chars, k?.token)?.hair === 'hair.buzzed',
   JSON.stringify(rowOf(chars, k?.token) && [rowOf(chars, k?.token).name, rowOf(chars, k?.token).hair]))
+// C179: PATCH pilot 3's colours (bad ids refused, nothing changed), then
+// its next join carries the new ones.
+{
+  const p3 = pilots[0]?.token ?? ''
+  for (const [req, msg] of [[{ skin: 'skin.09' }, 'bad skin'], [{ suit: 'suit.neon' }, 'bad suit']]) {
+    r = await one(p3, req)
+    const t = await text(r)
+    check(`C179 PATCH ${JSON.stringify(req)} refused 400 ${msg}`, r.status === 400 && t === msg, `status ${r.status} ${JSON.stringify(t)}`)
+  }
+  r = await one(p3, { skin: 'skin.07', suit: 'suit.teal' })
+  const pr = await json(r)
+  check('C179 PATCH skin.07 + suit.teal: 200 with the new values', r.status === 200 && pr?.skin === 'skin.07' && pr?.suit === 'suit.teal' &&
+    pr?.name === pilots[0]?.name, `status ${r.status}, ${JSON.stringify(pr && [pr.name, pr.skin, pr.suit])}`)
+  check('C179 the list reflects it', rowOf(await list(), p3)?.suit === 'suit.teal')
+  const e3 = await openGame(p3, 'pilot-three')
+  const run3 = await looksAfterSpawn(e3, e3.id)
+  check('C179 pilot 3\'s next join carries skin.07 + suit.teal', JSON.stringify(run3) === JSON.stringify(['skin=skin.07', 'suit=suit.teal']),
+    `entity ${e3.id}, run ${JSON.stringify(run3)}`)
+  e3.leave()
+  await sleep(1000)
+}
 // C166: PLAY joins under the new name wearing the new hair (the row's at join).
 {
   const e1 = await openGame(k?.token ?? '', 'not-kadence')
@@ -460,6 +541,7 @@ check('C166 refused PATCHes changed nothing', rowOf(chars, k?.token)?.name === k
     const d = await joinGame(p5, 'fresh-five')
     check('C167 guests: the deleted character\'s token joins as a fresh guest', d.id > 0 && d.data === 'fresh-five',
       `entity ${d.id}, data ${JSON.stringify(d.data)}, close ${d.close}`)
+    check('C179 a guest gets no skin or suit frame (nor hair)', d.id > 0 && d.looks === 0 && d.hair === 0, `looks ${d.looks}, hair ${d.hair}`)
   }
   const p4 = pilots[1]?.token ?? ''
   const live = await openGame(p4, 'pilot-four')

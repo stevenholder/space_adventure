@@ -182,13 +182,13 @@ func (id *identity) discard() {
 	id.saveMu.Unlock()
 }
 
-// retag sets the row's name and hair (a web edit, Phase 18) after waiting
-// out a save in flight, so every later save carries them; the live entity
-// keeps its old name and hair until the next join.
-func (id *identity) retag(name, hair string) {
+// retag sets the row's name and looks (a web edit, Phases 18 and 21) after
+// waiting out a save in flight, so every later save carries them; the live
+// entity keeps its old ones until the next join.
+func (id *identity) retag(name, hair, skin, suit string) {
 	id.saveMu.Lock()
 	defer id.saveMu.Unlock()
-	id.Mutate(func(p *store.Player) { p.Name, p.Hair = name, hair })
+	id.Mutate(func(p *store.Player) { p.Name, p.Hair, p.Skin, p.Suit = name, hair, skin, suit })
 }
 
 // Close stops the autosave loop and performs one final, synchronous save

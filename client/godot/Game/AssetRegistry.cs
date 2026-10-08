@@ -60,6 +60,87 @@ namespace SpaceAdventure.Game
     {
         public int version { get; set; }
         public ManifestAsset[] assets { get; set; }
+        public ManifestPalettes palettes { get; set; }
+    }
+
+    /// <summary>One palette row: a skin tone (`tone`, `factor`) or a suit colour (`color`).</summary>
+    internal class ManifestSwatch
+    {
+        public string id { get; set; }
+        public string name { get; set; }
+        public string tone { get; set; }
+        public string factor { get; set; }
+        public string color { get; set; }
+    }
+
+    internal class ManifestPalettes
+    {
+        public ManifestSwatch[] skin { get; set; }
+        public ManifestSwatch[] suit { get; set; }
+    }
+
+    /// <summary>A palette entry: `Tone` is what the swatch shows, `Albedo` what the body's surface gets.</summary>
+    public sealed class Swatch
+    {
+        public string Id, Name;
+        /// <summary>The swatch colour (a skin's tone, a suit's colour).</summary>
+        public Color Tone;
+        /// <summary>skin: the factor the baked albedo is multiplied by; suit: the colour the surface is set to.</summary>
+        public Color Albedo;
+    }
+
+    /// <summary>
+    /// Phase 21 (GDD "Skin and suit colours"): the manifest's `palettes`.
+    /// A `worn` frame in slot `skin` or `suit` carries one of these ids --
+    /// not an item, not an asset -- and the body's `skin`/`suit` surfaces
+    /// are tinted with it. Filled by the AssetRegistry's manifest load.
+    /// </summary>
+    public static class Palette
+    {
+        public const string DefaultSkin = "skin.01", DefaultSuit = "suit.slate";
+        public static readonly List<Swatch> Skin = new List<Swatch>();
+        public static readonly List<Swatch> Suit = new List<Swatch>();
+        private static readonly HashSet<string> Warned = new HashSet<string>();
+
+        /// <summary>The two worn slots that tint rather than hang a piece.</summary>
+        public static bool IsTintSlot(string slot) => slot == "skin" || slot == "suit";
+
+        /// <summary>A palette id is its own "asset" on the wire (hair's precedent).</summary>
+        public static bool IsPaletteId(string id) =>
+            id != null && (id.StartsWith("skin.", StringComparison.Ordinal) || id.StartsWith("suit.", StringComparison.Ordinal));
+
+        public static List<Swatch> For(string slot) => slot == "skin" ? Skin : slot == "suit" ? Suit : null;
+
+        /// <summary>The entry, or null (an unknown id warns once).</summary>
+        public static Swatch Find(string slot, string id)
+        {
+            List<Swatch> list = For(slot);
+            if (list == null || string.IsNullOrEmpty(id)) return null;
+            foreach (Swatch s in list) if (s.Id == id) return s;
+            if (Warned.Add(slot + "=" + id)) GD.PushWarning($"palette: unknown {slot} id {id}, left as baked");
+            return null;
+        }
+
+        /// <summary>The entry's index in its palette, 0 for an unknown id (it cycles from the default).</summary>
+        public static int IndexOf(string slot, string id)
+        {
+            List<Swatch> list = For(slot);
+            if (list != null) for (int i = 0; i < list.Count; i++) if (list[i].Id == id) return i;
+            return 0;
+        }
+
+        internal static void Load(ManifestPalettes p)
+        {
+            Skin.Clear();
+            Suit.Clear();
+            if (p == null) return;
+            foreach (ManifestSwatch m in p.skin ?? Array.Empty<ManifestSwatch>())
+                if (!string.IsNullOrEmpty(m.id) && Color.HtmlIsValid(m.tone ?? "") && Color.HtmlIsValid(m.factor ?? ""))
+                    Skin.Add(new Swatch { Id = m.id, Name = m.name ?? m.id, Tone = Color.FromHtml(m.tone), Albedo = Color.FromHtml(m.factor) });
+            foreach (ManifestSwatch m in p.suit ?? Array.Empty<ManifestSwatch>())
+                if (!string.IsNullOrEmpty(m.id) && Color.HtmlIsValid(m.color ?? ""))
+                    Suit.Add(new Swatch { Id = m.id, Name = m.name ?? m.id, Tone = Color.FromHtml(m.color), Albedo = Color.FromHtml(m.color) });
+        }
     }
 
     /// <summary>
@@ -213,6 +294,182 @@ namespace SpaceAdventure.Game
                     mi.SetSurfaceOverrideMaterial(i, _material);
                 }
             }
+        }
+
+        /// <summary>True when a manifest surface name is `surface`. Every body names its skin `skin` (the Vanguard's build renames the pack's material).</summary>
+        public static bool SurfaceIs(string name, string surface) => name == surface;
+
+        /// <summary>
+        /// Phase 21: a `skin` / `suit` worn frame on a body. `id` "" puts the
+        /// body back as baked; an unknown id is a no-op (one warning).
+        /// Returns the number of surfaces touched.
+        /// </summary>
+        public int TintSlot(Node3D model, string slot, string id)
+        {
+            if (!Palette.IsTintSlot(slot)) return 0;
+            if (string.IsNullOrEmpty(id)) return Tint(model, slot, null, false);
+            Swatch s = Palette.Find(slot, id);
+            if (s == null) return 0;
+            // The defaults ARE the bodies as baked (C178): nothing to tint.
+            if (id == (slot == "skin" ? Palette.DefaultSkin : Palette.DefaultSuit)) return Tint(model, slot, null, false);
+            return Tint(model, slot, s.Albedo, multiply: slot == "skin");
+        }
+
+        /// <summary>
+        /// Tints every surface of the BODY whose manifest name is `surface`
+        /// (the `surfaces` table: mesh name → surface names in surface order,
+        /// the same lookup Cover uses to hide what armor covers; the pieces
+        /// hung under the model have their own mesh names and never match).
+        /// `albedo` multiplies the untinted material's albedo (`multiply`,
+        /// a skin factor) or replaces it (a suit colour); null restores the
+        /// untinted material. The untinted one is remembered per surface
+        /// (`sa_tint_src_i`) the first time, so re-tinting never compounds;
+        /// the tinted one is a COPY (cached per source and colour), never the
+        /// source changed in place: materials are shared between instances.
+        /// A StandardMaterial3D gets `AlbedoColor`; a ShaderMaterial (the
+        /// first-person and near-cut twins ViewModel made at attach) gets its
+        /// `albedo` uniform. A surface Cover has hidden stays hidden: its
+        /// remembered base (`sa_base_i`) is what is tinted.
+        /// </summary>
+        public int Tint(Node3D model, string surface, Color? albedo, bool multiply)
+        {
+            if (model == null) return 0;
+            string wearer = model.HasMeta("asset") ? (string)model.GetMeta("asset") : null;
+            if (wearer == null) return 0;
+            int touched = 0;
+            foreach (MeshInstance3D mi in Descendants<MeshInstance3D>(model))
+            {
+                string[] names = Surfaces(wearer, mi.Name);
+                if (names == null || mi.Mesh == null) continue;
+                for (int i = 0; i < mi.Mesh.GetSurfaceCount() && i < names.Length; i++)
+                {
+                    if (!SurfaceIs(names[i], surface)) continue;
+                    string srcKey = "sa_tint_src_" + i, baseKey = "sa_base_" + i;
+                    if (!mi.HasMeta(srcKey))
+                    {
+                        Material untinted = mi.HasMeta(baseKey) ? MetaMaterial(mi, baseKey)
+                            : mi.GetSurfaceOverrideMaterial(i) ?? mi.Mesh.SurfaceGetMaterial(i);
+                        mi.SetMeta(srcKey, untinted != null ? (Variant)untinted : false);
+                    }
+                    Material src = MetaMaterial(mi, srcKey);
+                    if (src == null) continue;
+                    Material want = albedo is Color c ? Tinted(src, c, multiply) : src;
+                    if (want == null) continue;
+                    if (mi.HasMeta(baseKey))
+                    {
+                        // Cover's remembered base: hidden (the override is not
+                        // the base) stays hidden and uncovers to the tint.
+                        bool hidden = mi.GetSurfaceOverrideMaterial(i) != MetaMaterial(mi, baseKey);
+                        mi.SetMeta(baseKey, want);
+                        if (!hidden) mi.SetSurfaceOverrideMaterial(i, want);
+                    }
+                    else mi.SetSurfaceOverrideMaterial(i, want);
+                    touched++;
+                }
+            }
+            return touched;
+        }
+
+        private static Material MetaMaterial(GodotObject o, string key)
+        {
+            Variant v = o.GetMeta(key);
+            return v.VariantType == Variant.Type.Object ? v.As<Material>() : null;
+        }
+
+        private static readonly Dictionary<(Material, Color, bool), Material> TintCopies = new Dictionary<(Material, Color, bool), Material>();
+
+        /// <summary>A tinted copy of `src`, cached; null when `src` has no albedo to tint.</summary>
+        public static Material Tinted(Material src, Color albedo, bool multiply)
+        {
+            if (TintCopies.TryGetValue((src, albedo, multiply), out Material m)) return m;
+            // skin: the bake times the factor. suit: the colour itself -- the
+            // suit's albedo is a texture (fabric, seams) under a white factor,
+            // so the factor is the colour over the texture's mean (in linear,
+            // where the shader multiplies): the surface averages to the
+            // colour and keeps its detail.
+            Color Mix(Color was, Texture2D tex) => multiply
+                ? new Color(was.R * albedo.R, was.G * albedo.G, was.B * albedo.B, was.A)
+                : SetTo(albedo, tex, was.A);
+            switch (src)
+            {
+                case BaseMaterial3D bm:
+                {
+                    var dup = (BaseMaterial3D)bm.Duplicate();
+                    dup.AlbedoColor = Mix(bm.AlbedoColor, bm.AlbedoTexture);
+                    if (!multiply) dup.VertexColorUseAsAlbedo = false;   // the colour, not the bake's
+                    m = dup;
+                    break;
+                }
+                case ShaderMaterial sm when sm.Shader != null && HasUniform(sm.Shader, "albedo"):
+                {
+                    var dup = (ShaderMaterial)sm.Duplicate();
+                    Variant v = sm.GetShaderParameter("albedo");
+                    Color was = v.VariantType == Variant.Type.Color ? v.AsColor() : Colors.White;
+                    Variant t = sm.GetShaderParameter("albedo_tex");
+                    dup.SetShaderParameter("albedo", Mix(was, t.VariantType == Variant.Type.Object ? t.As<Texture2D>() : null));
+                    m = dup;
+                    break;
+                }
+                default:
+                    return null;   // the vertex-colour shaders carry no albedo: nothing to tint
+            }
+            TintCopies[(src, albedo, multiply)] = m;
+            return m;
+        }
+
+        /// <summary>The albedo factor that makes `tex` average to `color` (sRGB in, sRGB out).</summary>
+        private static Color SetTo(Color color, Texture2D tex, float alpha)
+        {
+            Color? mean = MeanLinear(tex);
+            if (mean is not Color mu) return new Color(color.R, color.G, color.B, alpha);
+            Color lin = color.SrgbToLinear();
+            var f = new Color(lin.R / Mathf.Max(mu.R, 1e-3f), lin.G / Mathf.Max(mu.G, 1e-3f), lin.B / Mathf.Max(mu.B, 1e-3f)).LinearToSrgb();
+            return new Color(f.R, f.G, f.B, alpha);
+        }
+
+        private static readonly Dictionary<Texture2D, Color?> Means = new Dictionary<Texture2D, Color?>();
+
+        /// <summary>
+        /// A texture's mean colour in linear space, or null (no texture, or
+        /// no image to read -- the headless renderer keeps none). Read once
+        /// per texture, from a 32×32 reduction.
+        /// </summary>
+        public static Color? MeanLinear(Texture2D tex)
+        {
+            if (tex == null) return null;
+            if (Means.TryGetValue(tex, out Color? known)) return known;
+            Color? mean = null;
+            try
+            {
+                Image img = tex.GetImage();
+                if (img != null && !img.IsEmpty())
+                {
+                    img = (Image)img.Duplicate();
+                    if (img.IsCompressed()) img.Decompress();
+                    img.Resize(32, 32, Image.Interpolation.Bilinear);
+                    float r = 0, g = 0, b = 0;
+                    for (int y = 0; y < 32; y++)
+                        for (int x = 0; x < 32; x++)
+                        {
+                            Color c = img.GetPixel(x, y).SrgbToLinear();
+                            r += c.R; g += c.G; b += c.B;
+                        }
+                    mean = new Color(r / 1024f, g / 1024f, b / 1024f);
+                }
+            }
+            catch (Exception e)
+            {
+                GD.PushWarning($"tint: texture unreadable ({e.Message}), suit colour set flat");
+            }
+            Means[tex] = mean;
+            return mean;
+        }
+
+        private static bool HasUniform(Shader shader, string name)
+        {
+            foreach (Godot.Collections.Dictionary u in shader.GetShaderUniformList())
+                if ((string)u["name"] == name) return true;
+            return false;
         }
 
         /// <summary>Every surface under `root` draws with `material` (first-person set).</summary>
@@ -403,6 +660,7 @@ namespace SpaceAdventure.Game
                 GD.PushWarning($"art manifest unreadable: {e.Message}");
                 return;
             }
+            Palette.Load(manifest?.palettes);
             if (manifest?.assets == null) return;
             foreach (ManifestAsset a in manifest.assets)
             {
@@ -410,7 +668,7 @@ namespace SpaceAdventure.Game
                 _paths[a.id] = Path.Combine(_root, a.file);
                 _rows[a.id] = a;
             }
-            GD.Print($"art manifest: {_paths.Count} assets");
+            GD.Print($"art manifest: {_paths.Count} assets, {Palette.Skin.Count} skin tones, {Palette.Suit.Count} suit colours");
         }
     }
 

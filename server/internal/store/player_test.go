@@ -215,3 +215,34 @@ func TestPlayerHair(t *testing.T) {
 		t.Fatalf("Hair = %q, want hair.buns", got.Hair)
 	}
 }
+
+// Skin and suit round-trip; "" saves as the defaults, a later save can
+// change them, and EditCharacter writes them without touching the rest.
+func TestPlayerColours(t *testing.T) {
+	s := openMigrated(t)
+	ctx := context.Background()
+
+	p := sample()
+	if err := s.PutPlayer(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetPlayer(ctx, p.Token)
+	if got.Skin != DefaultSkin || got.Suit != DefaultSuit {
+		t.Fatalf("default skin/suit = %q/%q, want %q/%q", got.Skin, got.Suit, DefaultSkin, DefaultSuit)
+	}
+	p.Skin, p.Suit = "skin.04", "suit.rust"
+	if err := s.PutPlayer(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetPlayer(ctx, p.Token)
+	if got.Skin != "skin.04" || got.Suit != "suit.rust" {
+		t.Fatalf("skin/suit = %q/%q, want skin.04/suit.rust", got.Skin, got.Suit)
+	}
+	if err := s.EditCharacter(ctx, p.Token, got.Name, got.Hair, "skin.07", "suit.teal"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetPlayer(ctx, p.Token)
+	if got.Skin != "skin.07" || got.Suit != "suit.teal" || got.Credits != p.Credits {
+		t.Fatalf("after edit = %q/%q credits %d", got.Skin, got.Suit, got.Credits)
+	}
+}

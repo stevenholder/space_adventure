@@ -20,6 +20,8 @@ namespace SpaceAdventure.Game.UI
     public sealed class CharacterRow
     {
         public string Token, Name, Body, Hair;
+        /// <summary>Phase 21 palette ids; an old server sends none (the defaults, the bodies as baked).</summary>
+        public string Skin = Palette.DefaultSkin, Suit = Palette.DefaultSuit;
         public long Credits, LastSeenMs;
     }
 
@@ -44,6 +46,8 @@ namespace SpaceAdventure.Game.UI
         public bool Female { get; private set; }
         public bool Vanguard { get; private set; }
         public string Hair { get; private set; } = DefaultHair;
+        public string Skin { get; private set; } = Palette.DefaultSkin;
+        public string Suit { get; private set; } = Palette.DefaultSuit;
 
         /// <summary>The row the form edits (Phase 18), null when it creates.</summary>
         public CharacterRow Editing { get; private set; }
@@ -87,6 +91,8 @@ namespace SpaceAdventure.Game.UI
             Female = false;
             Vanguard = false;
             Hair = DefaultHair;
+            Skin = Palette.DefaultSkin;
+            Suit = Palette.DefaultSuit;
             Reason = "";
             Now = State.Create;
         }
@@ -99,6 +105,50 @@ namespace SpaceAdventure.Game.UI
         public void NextHair() => Hair = HairStyles[(HairIndex(Hair) + 1) % HairStyles.Length].id;
         public void PrevHair() => Hair = HairStyles[(HairIndex(Hair) + HairStyles.Length - 1) % HairStyles.Length].id;
 
+        // SKIN and SUIT (Phase 21): cycles over the manifest's palettes, like HAIR.
+        /// <summary>Any id; an unknown one shows as itself and the server answers `bad skin`.</summary>
+        public void SetSkin(string id) => Skin = string.IsNullOrEmpty(id) ? Palette.DefaultSkin : id;
+        public void SetSuit(string id) => Suit = string.IsNullOrEmpty(id) ? Palette.DefaultSuit : id;
+        public void NextSkin() => Skin = Step("skin", Skin, +1);
+        public void PrevSkin() => Skin = Step("skin", Skin, -1);
+        public void NextSuit() => Suit = Step("suit", Suit, +1);
+        public void PrevSuit() => Suit = Step("suit", Suit, -1);
+
+        private static string Step(string slot, string id, int dir)
+        {
+            List<Swatch> list = Palette.For(slot);
+            if (list == null || list.Count == 0) return id;
+            int n = list.Count;
+            return list[((Palette.IndexOf(slot, id) + dir) % n + n) % n].Id;
+        }
+
+        /// <summary>The swatch's caption: "BROWN" for skin.06; an unknown id as itself.</summary>
+        public static string SwatchLabel(string slot, string id)
+        {
+            List<Swatch> list = Palette.For(slot);
+            if (list != null)
+                foreach (Swatch sw in list)
+                    if (sw.Id == id)
+                    {
+                        // "fair, warm (the bake's own tone)" → "FAIR, WARM"; the
+                        // suit's default reads by its colour, SLATE.
+                        string name = sw.Name ?? id;
+                        int paren = name.IndexOf(" (", StringComparison.Ordinal);
+                        if (paren > 0) name = name.Substring(0, paren);
+                        if (slot == "suit" && name.StartsWith("the ", StringComparison.Ordinal)) name = id.Substring(id.IndexOf('.') + 1);
+                        return name.ToUpperInvariant();
+                    }
+            return id ?? "";
+        }
+
+        /// <summary>The swatch's colour, or null for an unknown id.</summary>
+        public static Color? SwatchColor(string slot, string id)
+        {
+            List<Swatch> list = Palette.For(slot);
+            if (list != null) foreach (Swatch sw in list) if (sw.Id == id) return sw.Tone;
+            return null;
+        }
+
         /// <summary>EDIT on row i: the form, prefilled, in edit mode (the body rows hidden).</summary>
         public void Edit(int i)
         {
@@ -110,13 +160,19 @@ namespace SpaceAdventure.Game.UI
             Name = row.Name ?? "";
             (Female, Vanguard) = ParseBody(row.Body);
             Hair = string.IsNullOrEmpty(row.Hair) ? "hair.none" : row.Hair;
+            Skin = RowSkin(row);
+            Suit = RowSuit(row);
             Reason = "";
             Now = State.Create;
         }
 
-        /// <summary>Edit mode: the name or the hair differs from the row.</summary>
+        /// <summary>Edit mode: the name, the hair, the skin or the suit differs from the row.</summary>
         public bool Dirty => Editing != null &&
-            (Name != (Editing.Name ?? "") || Hair != (string.IsNullOrEmpty(Editing.Hair) ? "hair.none" : Editing.Hair));
+            (Name != (Editing.Name ?? "") || Hair != (string.IsNullOrEmpty(Editing.Hair) ? "hair.none" : Editing.Hair)
+             || Skin != RowSkin(Editing) || Suit != RowSuit(Editing));
+
+        private static string RowSkin(CharacterRow r) => string.IsNullOrEmpty(r?.Skin) ? Palette.DefaultSkin : r.Skin;
+        private static string RowSuit(CharacterRow r) => string.IsNullOrEmpty(r?.Suit) ? Palette.DefaultSuit : r.Suit;
 
         public void AskDelete() { if (Now == State.Create && Editing != null) Deleting = true; }
         public void KeepIt() => Deleting = false;
@@ -195,6 +251,8 @@ namespace SpaceAdventure.Game.UI
                 400 when b.Contains("bad name") => "BAD NAME",
                 400 when b.Contains("bad body") => "BAD BODY",
                 400 when b.Contains("bad hair") => "BAD HAIR",
+                400 when b.Contains("bad skin") => "BAD SKIN",
+                400 when b.Contains("bad suit") => "BAD SUIT",
                 401 => "SIGNED OUT",
                 404 => "NO SUCH CHARACTER",
                 _ => Editing != null ? "COULD NOT SAVE" : "COULD NOT CREATE",
@@ -302,6 +360,22 @@ namespace SpaceAdventure.Game.UI
             _ => null,
         };
 
+        /// <summary>The skin the stage shows with StageBody, or null.</summary>
+        public string StageSkin => Now switch
+        {
+            State.Create => Skin,
+            State.List when Selected >= 0 && Selected < _rows.Count => RowSkin(_rows[Selected]),
+            _ => null,
+        };
+
+        /// <summary>The suit the stage shows with StageBody, or null.</summary>
+        public string StageSuit => Now switch
+        {
+            State.Create => Suit,
+            State.List when Selected >= 0 && Selected < _rows.Count => RowSuit(_rows[Selected]),
+            _ => null,
+        };
+
         /// <summary>"just now", "N min ago", "N h ago", "N d ago"; "never" for no time.</summary>
         public static string Relative(long lastSeenMs, long nowMs)
         {
@@ -331,7 +405,8 @@ namespace SpaceAdventure.Game.UI
         private readonly Button _new, _edit, _play, _signOut;
         private readonly LineEdit _name;
         private readonly Button _male, _female, _colonist, _vanguard, _createBtn, _deleteBtn;
-        private readonly Label _createReason, _failReason, _hair, _confirmLine;
+        private readonly Label _createReason, _failReason, _hair, _confirmLine, _skin, _suit;
+        private readonly ColorRect _skinSwatch, _suitSwatch;
         private readonly Control _bodyRows, _formButtons, _confirm;
         private readonly Action _onCreate, _onSave;
         private Characters _model;
@@ -344,7 +419,8 @@ namespace SpaceAdventure.Game.UI
             Action onPlay, Action onNew, Action onCreate, Action onCancel, Action onSignOut, Action onRetry,
             Action<int> onSelect, Action<string> onName, Action<bool> onFemale, Action<bool> onVanguard,
             Action onHairPrev, Action onHairNext,
-            Action<int> onEdit, Action onSave, Action onDelete, Action onConfirmDelete, Action onKeep)
+            Action<int> onEdit, Action onSave, Action onDelete, Action onConfirmDelete, Action onKeep,
+            Action onSkinPrev = null, Action onSkinNext = null, Action onSuitPrev = null, Action onSuitNext = null)
         {
             _onSelect = onSelect;
             _onCreate = onCreate;
@@ -501,6 +577,14 @@ namespace SpaceAdventure.Game.UI
             hairs.AddChild(next);
             create.AddChild(hairs);
 
+            // SKIN and SUIT (Phase 21): HAIR's cycle with the colour itself
+            // between the arrows, side by side so the form still fits 1080.
+            create.AddChild(Styles.Gap(4));
+            var colours = Styles.Row(24);
+            create.AddChild(colours);
+            (_skin, _skinSwatch) = Cycle(colours, "SKIN", onSkinPrev, onSkinNext);
+            (_suit, _suitSwatch) = Cycle(colours, "SUIT", onSuitPrev, onSuitNext);
+
             create.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
             // The button row: CREATE (SAVE in edit mode), then CANCEL and,
             // in edit mode, a small Danger DELETE on the far right.
@@ -602,6 +686,10 @@ namespace SpaceAdventure.Game.UI
                     Face(_colonist, !model.Vanguard);
                     Face(_vanguard, model.Vanguard);
                     Txt(_hair, Characters.HairLabel(model.Hair));
+                    Txt(_skin, Characters.SwatchLabel("skin", model.Skin));
+                    Txt(_suit, Characters.SwatchLabel("suit", model.Suit));
+                    Swatch(_skinSwatch, Characters.SwatchColor("skin", model.Skin));
+                    Swatch(_suitSwatch, Characters.SwatchColor("suit", model.Suit));
                     Dis(_createBtn, editing ? !model.CanSave : !model.CanCreate);
                     Txt(_createReason, model.Reason);
                     break;
@@ -687,6 +775,49 @@ namespace SpaceAdventure.Game.UI
         private static void Vis(Control c, bool on) { if (c.Visible != on) c.Visible = on; }
         private static void Dis(BaseButton b, bool off) { if (b.Disabled != off) b.Disabled = off; }
         private static void Txt(Label l, string s) { s ??= ""; if (l.Text != s) l.Text = s; }
+
+        /// <summary>
+        /// A half-width colour cycle under `parent`: `SKIN  BROWN` over
+        /// ◀ [swatch] ▶. Returns the name label and the swatch.
+        /// </summary>
+        private static (Label, ColorRect) Cycle(Control parent, string label, Action onPrev, Action onNext)
+        {
+            var col = Styles.Column(12);
+            parent.AddChild(Styles.Grow(col));
+            var head = Styles.Row(14);
+            head.AddChild(FieldLabel(label));
+            var name = Styles.Display_("", 20, Styles.Cream);
+            name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            head.AddChild(Styles.Grow(name));
+            col.AddChild(head);
+            var row = Styles.Row(10);
+            Button prev = Toggle("◀", () => onPrev?.Invoke());
+            Button next = Toggle("▶", () => onNext?.Invoke());
+            prev.CustomMinimumSize = next.CustomMinimumSize = new Vector2(72, 56);
+            Face(prev, false);
+            Face(next, false);
+            // The swatch: the colour itself, framed so a dark suit still reads on slate.
+            var frame = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            var border = new StyleBoxFlat { BgColor = Styles.Ink, BorderColor = Styles.Steel };
+            border.SetBorderWidthAll(2);
+            border.ContentMarginLeft = border.ContentMarginRight = border.ContentMarginTop = border.ContentMarginBottom = 3;
+            frame.AddThemeStyleboxOverride("panel", border);
+            var swatch = new ColorRect { CustomMinimumSize = new Vector2(0, 48), MouseFilter = Control.MouseFilterEnum.Ignore };
+            frame.AddChild(swatch);
+            row.AddChild(prev);
+            row.AddChild(Styles.Grow(frame));
+            row.AddChild(next);
+            col.AddChild(row);
+            return (name, swatch);
+        }
+
+        private static void Swatch(ColorRect r, Color? c)
+        {
+            bool known = c.HasValue;
+            Color want = c ?? new Color(0, 0, 0, 0);
+            if (r.Color != want) r.Color = want;
+            if (r.GetParent() is Control f && f.Visible != known) f.Visible = known;
+        }
 
         private static Label FieldLabel(string text)
         {
@@ -777,7 +908,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Node3D _root, _turntable;
         private readonly Camera3D _camera;
         private Node3D _body;
-        private string _bodyId, _hairId;
+        private string _bodyId, _hairId, _skinId, _suitId;
         private int _generation;
         // The hair, worn exactly as a body in the world wears it (EntityViews.Dress).
         private readonly Dictionary<string, string> _worn = new(), _wornDrawn = new();
@@ -858,14 +989,18 @@ namespace SpaceAdventure.Game.UI
         /// Shows the stage with `bodyId` on it (null = empty) wearing `hairId`
         /// (null or hair.none = bald) and takes the camera.
         /// </summary>
-        public void Show(string bodyId, string hairId)
+        public void Show(string bodyId, string hairId, string skinId = null, string suitId = null)
         {
             _root.Visible = true;
             if (!_camera.Current) _camera.Current = true;
-            if (hairId != _hairId)
+            if (hairId != _hairId || skinId != _skinId || suitId != _suitId)
             {
                 _hairId = hairId;
+                _skinId = skinId;
+                _suitId = suitId;
                 _worn["hair"] = hairId ?? "";
+                _worn["skin"] = skinId ?? "";   // Phase 21: Dress tints these two
+                _worn["suit"] = suitId ?? "";
                 Dress();   // the body stays; only the piece is swapped
             }
             if (bodyId == _bodyId) return;   // an unknown or failed id is tried once, not every frame
@@ -927,7 +1062,7 @@ namespace SpaceAdventure.Game.UI
             _generation++;
             if (GodotObject.IsInstanceValid(_root)) _root.QueueFree();
             _body = null;
-            _bodyId = _hairId = null;
+            _bodyId = _hairId = _skinId = _suitId = null;
             _wornDrawn.Clear();
             _wornNodes.Clear();
         }
