@@ -215,13 +215,13 @@ func (s *Store) SetPlayerAccount(ctx context.Context, token, accountID string) e
 	return nil
 }
 
-// EditCharacter sets a character's name and hair (Phase 18), nothing
-// else: a live session's save must not be raced by a whole-row write of a
+// EditCharacter sets a character's name, hair, skin and suit (Phases 18
+// and 21), nothing else: a live session's save must not be raced by a whole-row write of a
 // copy read moments earlier. ErrNameTaken when the name index refuses.
-func (s *Store) EditCharacter(ctx context.Context, token, name, hair string) error {
+func (s *Store) EditCharacter(ctx context.Context, token, name, hair, skin, suit string) error {
 	if _, err := s.DB.ExecContext(ctx,
-		`UPDATE player SET name = $1, hair = $2, updated_ms = $3 WHERE token = $4`,
-		name, hair, time.Now().UnixMilli(), token); err != nil {
+		`UPDATE player SET name = $1, hair = $2, skin = $3, suit = $4, updated_ms = $5 WHERE token = $6`,
+		name, hair, skin, suit, time.Now().UnixMilli(), token); err != nil {
 		if isUnique(err) {
 			return ErrNameTaken
 		}

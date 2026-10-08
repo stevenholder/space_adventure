@@ -782,14 +782,30 @@ func playerSpawnData(e *entity) []byte {
 // that walks the armor slots ever touches it.
 const slotHair = "hair"
 
-// hairFrame is the `worn` event for e's hair, nil for a guest or a bald
-// (hair.none) character. Sent right after every spawn row of e, the way an
-// NPC's worn pieces follow its spawn.
-func hairFrame(e *entity) []byte {
-	if e.Hair == "" || e.Hair == store.DefaultHair {
-		return nil
+// slotSkin and slotSuit are hair's siblings (GDD "Skin and suit colours
+// (Phase 21)"): palette ids on the `worn` event, not equipment slots.
+const (
+	slotSkin = "skin"
+	slotSuit = "suit"
+)
+
+// lookFrames are the `worn` events for e's looks, in order hair, skin,
+// suit; none for a guest, no hair frame for a bald (hair.none) character.
+// Skin and suit go out even at their defaults: a character always has
+// both. Sent right after every spawn row of e, the way an NPC's worn
+// pieces follow its spawn.
+func lookFrames(e *entity) [][]byte {
+	var out [][]byte
+	if e.Hair != "" && e.Hair != store.DefaultHair {
+		out = append(out, wornFrame(e.ID, slotHair, e.Hair))
 	}
-	return wornFrame(e.ID, slotHair, e.Hair)
+	if e.Skin != "" {
+		out = append(out, wornFrame(e.ID, slotSkin, e.Skin))
+	}
+	if e.Suit != "" {
+		out = append(out, wornFrame(e.ID, slotSuit, e.Suit))
+	}
+	return out
 }
 
 // join registers c as a new player: allocates the entity and identity,
@@ -867,11 +883,12 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	s.nextID++
 	id := s.nextID
 	c.id = id
-	name, body, hair := SanitizeName(h.Name, id), "", ""
+	name, body, hair, skin, suit := SanitizeName(h.Name, id), "", "", "", ""
 	if owned {
 		// A character is named by its row; hello.name is a guest's say.
 		// Sanitized at creation already — again here, the row is input too.
 		name, body, hair = SanitizeName(row.Name, id), row.Body, row.Hair
+		skin, suit = row.Skin, row.Suit
 	}
 	spawnState := s.clearSpawn(0)
 	c.entity = &entity{
@@ -881,6 +898,8 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		Health: s.reg.Entities["player"].MaxHealth,
 		Body:   body,
 		Hair:   hair,
+		Skin:   skin,
+		Suit:   suit,
 	}
 	c.entity.PrevLook = c.entity.State.Facing
 	// Vitals must start at full health. Zero-valued Vitals means Health 0, and
@@ -922,7 +941,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 			EntityType: protocol.EntityTypePlayer,
 			Data:       playerSpawnData(oc.entity),
 		})})
-		if f := hairFrame(oc.entity); f != nil {
+		for _, f := range lookFrames(oc.entity) {
 			others = append(others, msg{data: f})
 		}
 	}
@@ -933,7 +952,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		EntityType: protocol.EntityTypePlayer,
 		Data:       playerSpawnData(c.entity),
 	})
-	selfHair := hairFrame(c.entity) // nil: no hair, nothing follows the spawn
+	selfLooks := lookFrames(c.entity) // none: a guest, nothing follows the spawn
 	c.send(msg{data: protocol.EncodeHelloAck(protocol.HelloAck{
 		ServerVer: protocol.VersionPhase2,
 		TickHz:    s.tickHz,
@@ -948,8 +967,8 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		c.send(m)
 	}
 	c.send(msg{data: self})
-	if selfHair != nil {
-		c.send(msg{data: selfHair})
+	for _, f := range selfLooks {
+		c.send(msg{data: f})
 	}
 
 	// Publish, then tell the existing clients a body appeared.
@@ -967,8 +986,8 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	for _, oc := range s.clients {
 		if oc != c {
 			oc.send(msg{data: self})
-			if selfHair != nil {
-				oc.send(msg{data: selfHair})
+			for _, f := range selfLooks {
+				oc.send(msg{data: f})
 			}
 		}
 	}
@@ -1042,11 +1061,11 @@ func (s *Server) Kick(tokens []string) {
 }
 
 // Retag points every live session of token at its edited row (Phase 18):
-// without it, the session's next save writes the old name and hair back
+// without it, the session's next save writes the old name and looks back
 // over the web edit. Blocks while an in-flight save finishes, so a save
 // that snapshotted the old values has landed by the time it returns; the
 // caller writes the edit once more after it.
-func (s *Server) Retag(token, name, hair string) {
+func (s *Server) Retag(token, name, hair, skin, suit string) {
 	if token == "" {
 		return
 	}
@@ -1059,7 +1078,7 @@ func (s *Server) Retag(token, name, hair string) {
 	}
 	s.mu.Unlock()
 	for _, c := range hit {
-		c.ident.retag(name, hair)
+		c.ident.retag(name, hair, skin, suit)
 	}
 }
 

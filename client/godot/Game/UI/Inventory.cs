@@ -306,6 +306,9 @@ namespace SpaceAdventure.Game.UI
             Defs defs = character.Defs;
             var worn = new Dictionary<string, string>();
             foreach (string slot in bodySlots) worn[slot] = character.Worn(slot);
+            // Phase 21: the doll in our own colours (Dress tints these two).
+            worn["skin"] = character.Skin;
+            worn["suit"] = character.Suit;
             string inHand = character.Held;
             string weapon = defs.ItemAsset(inHand);
             _assets.Attach("char.player", _turn, model =>

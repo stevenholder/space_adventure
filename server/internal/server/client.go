@@ -37,8 +37,12 @@ type entity struct {
 	// guest). Not on the wire yet (Phase 16 PR B).
 	Body string
 	// Hair is a character's hair piece id from its row ("" for a guest);
-	// it goes out as a `worn` event, slot hair, after each spawn (hairFrame).
-	Hair     string
+	// it goes out as a `worn` event, slot hair, after each spawn (lookFrames).
+	Hair string
+	// Skin and Suit are a character's palette ids ("" for a guest), slots
+	// skin and suit beside hair (Phase 21).
+	Skin     string
+	Suit     string
 	State    sim.State
 	PrevLook sim.Vec
 

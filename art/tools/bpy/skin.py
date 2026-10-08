@@ -212,24 +212,32 @@ def masks(h, eyes, R, female, ball):
 
 
 def paint_colours(m, base, female):
-    """Mix the masks into a linear RGB per vertex."""
+    """Mix the masks into a linear RGB per vertex. The feature tints are
+    written against TUNED (the tan they were drawn on) and follow `base` by
+    their sRGB offset from it, so a lighter bake keeps a flush, not a burn
+    (Phase 21: the Colonist bakes at skin.01, the client multiplies darker)."""
     lin = lambda c: srgb_to_lin(np.array(c))[None, :]
+    rel = lambda c: np.clip(np.array(base) + (np.array(c) - TUNED), 0, 1)
     col = np.repeat(lin(base), len(m["lips"]), axis=0)
     def mix(c, w):
         nonlocal col
         col = col * (1 - w[:, None]) + lin(c) * w[:, None]
-    mix((0.80, 0.49, 0.36), 0.50 * m["red"])           # warm: nose, cheeks, ears
-    mix((0.70, 0.56, 0.43), 0.40 * m["cool"])          # a shade less red: forehead, chin
-    mix((0.56, 0.42, 0.36), 0.45 * m["socket"])
-    mix((0.58, 0.42, 0.32), 0.30 * m["hollow"])
-    mix((0.50, 0.45, 0.41), 0.30 * m["beard"])
-    mix((0.72, 0.43, 0.37) if female else (0.66, 0.42, 0.35), (0.7 if female else 0.75) * m["lips"])
+    mix(rel((0.80, 0.49, 0.36)), 0.50 * m["red"])      # warm: nose, cheeks, ears
+    mix(rel((0.70, 0.56, 0.43)), 0.40 * m["cool"])     # a shade less red: forehead, chin
+    mix(rel((0.56, 0.42, 0.36)), 0.45 * m["socket"])
+    mix(rel((0.58, 0.42, 0.32)), 0.30 * m["hollow"])
+    mix(rel((0.50, 0.45, 0.41)), 0.30 * m["beard"])
+    # lips a shade rosier than the offset alone: on a fair base it left them grey-mauve
+    mix(rel((0.72, 0.43, 0.37) if female else (0.66, 0.42, 0.35)) * LIP_ROSE, (0.7 if female else 0.75) * m["lips"])
     # modelling: darker, and warmer as skin shades (MODEL: weight per mask)
     for k, w in MODEL.items():
         col = col * (1 - w * m[k][:, None] * SHADE_TINT)
     mix((0.07, 0.05, 0.05), 0.92 * m["lash"])
     return col
 
+
+TUNED = np.array([0.74, 0.55, 0.38])     # sRGB: the base the feature tints above were drawn on
+LIP_ROSE = np.array([1.0, 0.90, 0.90])
 
 # Painted modelling (masks()): fraction darker at a mask's core.
 # Painted modelling: fraction darker at a mask's core -- per vertex

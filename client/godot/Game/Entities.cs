@@ -263,9 +263,11 @@ namespace SpaceAdventure.Game
         /// A worn item's model id. Armor is an item (items.json names its
         /// asset); hair is not -- the `hair` slot's `hair.<style>` IS the
         /// manifest id (GDD "Faces and hair"), and `hair.none` has no file.
+        /// A `skin`/`suit` slot's palette id (Phase 21) passes through as
+        /// itself too: Dress tints with it instead of hanging anything.
         /// </summary>
         public static string WornAsset(Defs defs, string item) =>
-            item != null && item.StartsWith("hair.", StringComparison.Ordinal) ? item : defs.ItemAsset(item);
+            item != null && (item.StartsWith("hair.", StringComparison.Ordinal) || Palette.IsPaletteId(item)) ? item : defs.ItemAsset(item);
 
         /// <summary>
         /// The one dressing rule, shared with the local body (ViewModel).
@@ -286,6 +288,14 @@ namespace SpaceAdventure.Game
             {
                 drawn.TryGetValue(kv.Key, out string was);
                 if (was == kv.Value) continue;
+                // Phase 21: `skin` and `suit` are palette ids, not pieces:
+                // they tint the body's own surfaces (an unknown id: no-op).
+                if (Palette.IsTintSlot(kv.Key))
+                {
+                    drawn[kv.Key] = kv.Value;
+                    assets.TintSlot(model, kv.Key, kv.Value);
+                    continue;
+                }
                 changed = true;
                 if (nodes.TryGetValue(kv.Key, out Node3D old)) { old.QueueFree(); nodes.Remove(kv.Key); }
                 drawn[kv.Key] = kv.Value;

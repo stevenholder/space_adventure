@@ -40,8 +40,8 @@ func TestMigrate_SQLite(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 6 {
-		t.Fatalf("schema_version row count = %d, want 6 (001..006)", count)
+	if count != 7 {
+		t.Fatalf("schema_version row count = %d, want 7 (001..007)", count)
 	}
 }
 
@@ -84,8 +84,8 @@ func TestMigrate_Postgres(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 6 {
-		t.Fatalf("schema_version row count = %d, want 6 (001..006)", count)
+	if count != 7 {
+		t.Fatalf("schema_version row count = %d, want 7 (001..007)", count)
 	}
 }
 
@@ -93,7 +93,8 @@ func TestMigrate_Postgres(t *testing.T) {
 // every row gets the default body, guests keep clashing names, and
 // account-owned names that clash case-insensitively are made unique (oldest
 // keeps its name) before the index is built, instead of failing the boot.
-// 006 follows in the same Migrate: every existing row is hair.none.
+// 006 and 007 follow in the same Migrate: every existing row is hair.none,
+// skin.01 and suit.slate.
 func TestMigrate005OnExistingData(t *testing.T) {
 	s, err := Open("sqlite://" + filepath.Join(t.TempDir(), "world.db"))
 	if err != nil {
@@ -149,6 +150,9 @@ func TestMigrate005OnExistingData(t *testing.T) {
 		}
 		if p.Name != want || p.Body != DefaultBody || p.Hair != DefaultHair {
 			t.Errorf("%s = %q/%q/%q, want %q/%q/%q", tok, p.Name, p.Body, p.Hair, want, DefaultBody, DefaultHair)
+		}
+		if p.Skin != DefaultSkin || p.Suit != DefaultSuit {
+			t.Errorf("%s skin/suit = %q/%q, want %q/%q", tok, p.Skin, p.Suit, DefaultSkin, DefaultSuit)
 		}
 	}
 	if _, err := s.DB.ExecContext(ctx, `SELECT 1 FROM link_code`); err == nil {

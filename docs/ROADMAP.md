@@ -1969,9 +1969,16 @@ and nothing crashes.
 - **C177 Nothing else moved.** Sweep green incl. `godot-codec`; the fleet
   unchanged; C153–C173 hold.
 
-# Phase 21 — skin and suit colours (drafted 2026-10-07)
+# Phase 21 — skin and suit colours (2026-10-08)
 
-### Where Phase 21 stands (2026-10-07, drafted)
+### Where Phase 21 stands (2026-10-08, built)
+
+Built in one wave on `feat/phase21-colours`: C178–C182 recorded
+(docs/QA-STATUS.md "Phase 21"); both models bake at `skin.01` (the
+Vanguard's UBC albedo normalised onto it and its materials renamed
+`skin`/`eye`); the suit tint divides by the fabric texture's mean. Owed:
+t28 on kind after deploy, eyes on the Windows install.
+
 
 The Deferred row "more bodies, hair, skin and suit colours" has met its
 trigger: the playtests say the four bodies read samey. Colours first —
@@ -1983,8 +1990,9 @@ No new message: two more `worn` frames at spawn, slots `skin` and
 
 **Playable proof.** Create two characters on the same body with
 different SKIN and SUIT; stand them together: unmistakably two people.
-Look at your own hands: your tone. Put a chest plate on: the suit shows
-only where the plate does not. EDIT one of them to a new suit colour,
+Open the sheet: the doll is you. Put a chest plate on: the suit shows
+only where the plate does not (your first-person hands are the suit's
+gloves, so your tone shows on the stage, the doll and to others). EDIT one of them to a new suit colour,
 PLAY: it joined in it.
 
 ### Task list
@@ -2008,8 +2016,10 @@ PLAY: it joined in it.
   PATCH changes them; at spawn every client receives `worn` frames for
   slots `skin` and `suit` (`t28`, both sockets); a guest gets neither.
 - **C180 It draws.** Shot pairs on both models: remote body, stage, sheet
-  doll, own first-person hands and body; every tone distinguishable from
-  its neighbours side by side; helmet, hair, armor and eyes unchanged.
+  doll, own first-person sleeves and drawn body (suit); every tone
+  distinguishable from its neighbours side by side; helmet, hair, armor
+  and eyes unchanged. (The first-person arms carry the suit's gloves and
+  no skin surface, so the tone shows everywhere but there.)
 - **C181 The form.** SKIN and SUIT rows cycle with a swatch, the stage
   follows; EDIT + PLAY joins in the new colours.
 - **C182 Nothing else moved.** Sweep green incl. `godot-codec` (the frame
@@ -2180,7 +2190,7 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 |---|---|
 | Sharding, delta snapshots, multiple server processes | one process actually saturates — measure first |
 | OAuth / password reset email | Phase 16 made accounts the only door; reset needs SMTP that does not exist |
-| More bodies, hair, skin and suit colours | the four Phase 16 bodies feel samey; UBC's hairstyles pack is already vendored and rigs to the head bone |
+| More bodies and hair styles | colours landed in Phase 21; a new body is a third model, a style is one hair.py row — when the two models and six styles feel thin |
 | Managed/hosted Postgres, replicas, backups | deploying somewhere real — the DSN is already the only thing that changes |
 | Redis (cache, pub/sub, shared sessions) | a second server process needs to see the first one's state; until then the in-memory world is the cache and a function call is the bus |
 | Multiple planets / star systems | one planet has enough content to leave |

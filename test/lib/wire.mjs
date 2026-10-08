@@ -172,7 +172,7 @@ export function decodeEvent(p) {
   return { entityId, eventId, data: p.slice(10, 10 + dataLen) }
 }
 // A `worn` event's data is `slot=item` (item empty when the slot cleared);
-// slot `hair` since Phase 17.
+// slot `hair` since Phase 17, `skin` and `suit` since Phase 21.
 export function decodeWorn(data) {
   const s = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
   const i = s.indexOf('=')

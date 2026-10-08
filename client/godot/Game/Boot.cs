@@ -672,7 +672,7 @@ namespace SpaceAdventure.Game
         private CharactersView _charsView;
         private CanvasLayer _charsLayer;
         private CharacterStage _stage;
-        private string _stageBody, _stageHair;
+        private string _stageBody, _stageHair, _stageSkin, _stageSuit;
         private bool _selectUp;
         private bool _createBusy;
         /// <summary>The session came from the select: a 1008 before the first snapshot returns there.</summary>
@@ -717,13 +717,17 @@ namespace SpaceAdventure.Game
                 () => _ = SaveCharacter(),
                 () => _chars.AskDelete(),
                 () => _ = DeleteCharacter(),
-                () => _chars.KeepIt());
+                () => _chars.KeepIt(),
+                () => _chars.PrevSkin(),
+                () => _chars.NextSkin(),
+                () => _chars.PrevSuit(),
+                () => _chars.NextSuit());
             _charsView.Show(true);
             _stage = new CharacterStage(this, _assets);
             _charsView.OnStageDrag = dx => _stage?.Drag(dx);
             _charsView.OnExit = () => GetTree().Quit(0);
             _sun.Visible = false; // the world is not built; the Sun's shadow cascades only striped the stage
-            _stageBody = _stageHair = null;
+            _stageBody = _stageHair = _stageSkin = _stageSuit = null;
             _selectUp = true;
             GD.Print("select: open");
             if (!fake) _ = LoadCharacters();
@@ -735,11 +739,14 @@ namespace SpaceAdventure.Game
             _charsView.Set(_chars);
             string body = _chars.StageBody ?? "";   // "" = the empty stage (Loading, Failed)
             string hair = _chars.StageHair ?? "";
-            if (body != _stageBody || hair != _stageHair)
+            string skin = _chars.StageSkin ?? "", suit = _chars.StageSuit ?? "";
+            if (body != _stageBody || hair != _stageHair || skin != _stageSkin || suit != _stageSuit)
             {
                 _stageBody = body;
                 _stageHair = hair;
-                _stage.Show(body == "" ? null : StageAsset(body), hair == "" ? null : hair);
+                _stageSkin = skin;
+                _stageSuit = suit;
+                _stage.Show(body == "" ? null : StageAsset(body), hair == "" ? null : hair, skin, suit);
             }
             _stage.Frame(dt);
             // Rig: -uiSelectPlay <s> presses PLAY in the select once a row is
@@ -846,11 +853,13 @@ namespace SpaceAdventure.Game
             Name = (string)r["name"] ?? "",
             Body = string.IsNullOrEmpty((string)r["body"]) ? "char.player" : (string)r["body"],
             Hair = string.IsNullOrEmpty((string)r["hair"]) ? "hair.none" : (string)r["hair"],   // an old server sends none
+            Skin = string.IsNullOrEmpty((string)r["skin"]) ? Palette.DefaultSkin : (string)r["skin"],   // Phase 21; likewise
+            Suit = string.IsNullOrEmpty((string)r["suit"]) ? Palette.DefaultSuit : (string)r["suit"],
             Credits = (long?)r["credits"] ?? 0,
             LastSeenMs = (long?)r["last_seen_ms"] ?? 0,
         };
 
-        /// <summary>CREATE: POST /api/characters {name, body, hair}; 200 lists and selects it, 400/409 show the server's reason.</summary>
+        /// <summary>CREATE: POST /api/characters {name, body, hair, skin, suit}; 200 lists and selects it, 400/409 show the server's reason.</summary>
         private async System.Threading.Tasks.Task CreateCharacter()
         {
             if (_createBusy || !_chars.CanCreate) return;
@@ -864,6 +873,8 @@ namespace SpaceAdventure.Game
                     ["name"] = chars.Name,
                     ["body"] = Characters.BodyId(chars.Female, chars.Vanguard),
                     ["hair"] = chars.Hair,
+                    ["skin"] = chars.Skin,
+                    ["suit"] = chars.Suit,
                 }.ToString(Newtonsoft.Json.Formatting.None);
                 using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
                 using HttpRequestMessage req = AccountRequest(HttpMethod.Post, site + "/api/characters", json, Identity("session"));
@@ -879,7 +890,7 @@ namespace SpaceAdventure.Game
                 }
                 CharacterRow row = ParseRow(Newtonsoft.Json.Linq.JObject.Parse(text));
                 chars.Created(row);
-                GD.Print($"select: created {row.Name} ({row.Body}, {row.Hair})");
+                GD.Print($"select: created {row.Name} ({row.Body}, {row.Hair}, {row.Skin}, {row.Suit})");
             }
             catch (Exception e)
             {
@@ -893,8 +904,8 @@ namespace SpaceAdventure.Game
         }
 
         /// <summary>
-        /// SAVE in edit mode: PATCH /api/characters/&lt;token&gt; with both
-        /// {name, hair} (renaming to its own name is allowed, so sending the
+        /// SAVE in edit mode: PATCH /api/characters/&lt;token&gt; with all of
+        /// {name, hair, skin, suit} (renaming to its own name is allowed, so sending the
         /// unchanged one is harmless); 200 replaces the row, 400/404/409 show
         /// the server's reason under the form.
         /// </summary>
@@ -911,6 +922,8 @@ namespace SpaceAdventure.Game
                 {
                     ["name"] = chars.Name,
                     ["hair"] = chars.Hair,
+                    ["skin"] = chars.Skin,
+                    ["suit"] = chars.Suit,
                 }.ToString(Newtonsoft.Json.Formatting.None);
                 using var budget = new System.Threading.CancellationTokenSource(AccountBudgetMs);
                 using HttpRequestMessage req = AccountRequest(HttpMethod.Patch, site + "/api/characters/" + Uri.EscapeDataString(editing.Token), json, Identity("session"));
@@ -926,7 +939,7 @@ namespace SpaceAdventure.Game
                 }
                 CharacterRow row = ParseRow(Newtonsoft.Json.Linq.JObject.Parse(text));
                 chars.Saved(row);
-                GD.Print($"select: saved {row.Name} ({row.Hair})");
+                GD.Print($"select: saved {row.Name} ({row.Hair}, {row.Skin}, {row.Suit})");
             }
             catch (Exception e)
             {
@@ -1035,10 +1048,14 @@ namespace SpaceAdventure.Game
                     _chars.SetFemale(true);
                     _chars.SetVanguard(true);
                     _chars.SetHair(Arg("-uiHair") ?? "hair.buns");   // -uiHair <id>: the form's hair for a shot
+                    _chars.SetSkin(Arg("-uiSkin"));   // -uiSkin / -uiSuit <id>: its colours (Phase 21)
+                    _chars.SetSuit(Arg("-uiSuit"));
                     break;
                 case "edit":   // Phase 18: the form in edit mode on fake row 0
                     _chars.Loaded(rows);
                     _chars.Edit(0);
+                    if (Arg("-uiSkin") is string es) _chars.SetSkin(es);
+                    if (Arg("-uiSuit") is string eu) _chars.SetSuit(eu);
                     break;
                 case "delete": // Phase 18: the inline DELETE confirm
                     _chars.Loaded(rows);
@@ -1968,7 +1985,13 @@ namespace SpaceAdventure.Game
                             {
                                 string slot = data.Substring(0, eq), item = data.Substring(eq + 1);
                                 _views.OnWorn(ev.EntityId, slot, item);
-                                if (ev.EntityId == _net.EntityId) _viewModel.Wear(slot, string.IsNullOrEmpty(item) ? "" : EntityViews.WornAsset(_views.Defs, item));
+                                if (ev.EntityId == _net.EntityId)
+                                {
+                                    _viewModel.Wear(slot, string.IsNullOrEmpty(item) ? "" : EntityViews.WornAsset(_views.Defs, item));
+                                    // Phase 21: our colours, for the sheet doll.
+                                    if (slot == "skin") _character.Skin = item ?? "";
+                                    else if (slot == "suit") _character.Suit = item ?? "";
+                                }
                             }
                             break;
                         }
@@ -2097,6 +2120,14 @@ namespace SpaceAdventure.Game
             if (Arg("-rigWorn") is string worn)
                 foreach (string pair in worn.Split(',', StringSplitOptions.RemoveEmptyEntries))
                     if (pair.Split('=') is { Length: 2 } kv) _rigWorn.Add((kv[0].Trim(), kv[1].Trim()));
+            // -rigSkin <id> / -rigSuit <id> (Phase 21): our colours without a
+            // server frame, through the same path a `worn` frame takes.
+            foreach (var (flag, slot) in new[] { ("-rigSkin", "skin"), ("-rigSuit", "suit") })
+                if (Arg(flag) is string tint)
+                {
+                    _rigWorn.Add((slot, tint));
+                    if (slot == "skin") _character.Skin = tint; else _character.Suit = tint;
+                }
             _rigAim = Flag("-uiAim");
             _rigLowered = Flag("-uiLowered");
             // The sheet up front, so the first drip and the K panel already
@@ -2672,6 +2703,168 @@ namespace SpaceAdventure.Game
         /// display — the sign rules in Fps and the winding measure. Console
         /// runner, exits non-zero, same shape as SimDump --selftest.
         /// </summary>
+        /// <summary>
+        /// Phase 21 (GDD "Skin and suit colours"): the palettes parse, Tint
+        /// finds every surface the manifest names and nothing else, the
+        /// worn path tints without hanging a piece, an unknown id is a
+        /// no-op, and the form's SKIN/SUIT rows cycle and dirty an edit.
+        /// </summary>
+        private static void PaletteChecks(Action<string, bool> Check)
+        {
+            var reg = new AssetRegistry(new StandardMaterial3D { VertexColorUseAsAlbedo = true });
+            Check("palette: 8 skin tones and 8 suit colours parse", Palette.Skin.Count == 8 && Palette.Suit.Count == 8);
+            Check("palette: skin.01 is first, factor white (the bake)", Palette.Skin.Count > 0 && Palette.Skin[0].Id == "skin.01" && Palette.Skin[0].Albedo == Colors.White);
+            Check("palette: suit.slate is first, #333B45", Palette.Suit.Count > 0 && Palette.Suit[0].Id == "suit.slate" && Palette.Suit[0].Albedo == Color.FromHtml("#333B45"));
+            Check("palette: skin.06 tone #8A5433, factor #916342", Palette.Find("skin", "skin.06") is Swatch s6
+                && s6.Tone == Color.FromHtml("#8A5433") && s6.Albedo == Color.FromHtml("#916342"));
+
+            // What a suit surface shows on average: its factor times its texture's mean (linear).
+            static bool Shows(Color albedo, Texture2D tex, Color want)
+            {
+                Color shown = AssetRegistry.MeanLinear(tex) is Color mu
+                    ? new Color(albedo.SrgbToLinear().R * mu.R, albedo.SrgbToLinear().G * mu.G, albedo.SrgbToLinear().B * mu.B).LinearToSrgb()
+                    : albedo;
+                return Mathf.Abs(shown.R - want.R) < 0.01f && Mathf.Abs(shown.G - want.G) < 0.01f && Mathf.Abs(shown.B - want.B) < 0.01f;
+            }
+            var stage = new Node3D();
+            Node3D Load(string id) { Node3D m = null; reg.Attach(id, stage, x => m = x); return m; }
+            // What the manifest says one model carries, by surface name.
+            int Expected(string id, string surface)
+            {
+                int n = 0;
+                foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(Load(id) ?? new Node3D()))
+                {
+                    string[] names = reg.Surfaces(id, mi.Name);
+                    if (names != null) foreach (string nm in names) if (AssetRegistry.SurfaceIs(nm, surface)) n++;
+                }
+                return n;
+            }
+            // Every (mesh, surface index) of `model` named `surface`, with the material it draws with.
+            List<(MeshInstance3D mi, int i, Material m)> Named(Node3D model, string surface)
+            {
+                var list = new List<(MeshInstance3D, int, Material)>();
+                foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(model))
+                {
+                    string[] names = reg.Surfaces((string)model.GetMeta("asset"), mi.Name);
+                    if (names == null || mi.Mesh == null) continue;
+                    for (int i = 0; i < mi.Mesh.GetSurfaceCount() && i < names.Length; i++)
+                        if (AssetRegistry.SurfaceIs(names[i], surface)) list.Add((mi, i, mi.GetActiveMaterial(i)));
+                }
+                return list;
+            }
+
+            Node3D a = Load("char.player"), other = Load("char.player");
+            if (a == null || other == null) { Check("palette: char.player loads", false); stage.Free(); return; }
+            int wantSkin = Expected("char.player", "skin"), wantSuit = Expected("char.player", "suit");
+            var eyesBefore = Named(a, "eye");
+            var skinBefore = Named(a, "skin");
+            var otherSkin = Named(other, "skin");
+            int skinN = reg.TintSlot(a, "skin", "skin.06");
+            int suitN = reg.TintSlot(a, "suit", "suit.rust");
+            Check($"tint: skin.06 touches every `skin` surface the manifest lists ({skinN}/{wantSkin})", wantSkin > 0 && skinN >= wantSkin);
+            Check($"tint: suit.rust touches every `suit` surface the manifest lists ({suitN}/{wantSuit})", wantSuit > 0 && suitN >= wantSuit);
+            Color f6 = Palette.Find("skin", "skin.06").Albedo, rust = Color.FromHtml("#8C4A2F");
+            bool skinOk = true;
+            for (int k = 0; k < skinBefore.Count; k++)
+            {
+                var (mi, i, was) = skinBefore[k];
+                skinOk &= mi.GetActiveMaterial(i) is BaseMaterial3D now && was is BaseMaterial3D w && now != w
+                    && Mathf.IsEqualApprox(now.AlbedoColor.R, w.AlbedoColor.R * f6.R) && Mathf.IsEqualApprox(now.AlbedoColor.B, w.AlbedoColor.B * f6.B);
+            }
+            Check("tint: a skin surface's albedo is the bake's times the factor, on a copy", skinBefore.Count > 0 && skinOk);
+            GD.Print($"tint: suit texture mean readable here: {Named(a, "suit").Exists(x => x.m is BaseMaterial3D bm && AssetRegistry.MeanLinear(bm.AlbedoTexture) != null)}");
+            Check("tint: every suit surface shows the suit colour on average", Named(a, "suit").TrueForAll(x => x.m is BaseMaterial3D bm && Shows(bm.AlbedoColor, bm.AlbedoTexture, rust)));
+            Check("tint: the eyes are untouched", eyesBefore.Count > 0 && eyesBefore.TrueForAll(x => x.mi.GetActiveMaterial(x.i) == x.m));
+            Check("tint: another body's materials are untouched (no leak)", otherSkin.TrueForAll(x => x.mi.GetActiveMaterial(x.i) == x.m
+                && (x.m as BaseMaterial3D)?.AlbedoColor == (skinBefore[0].m as BaseMaterial3D)?.AlbedoColor));
+            var suitTinted = Named(a, "suit");
+            reg.TintSlot(a, "suit", "suit.slate");
+            Check("tint: suit.slate (the default) is the suit as built", Named(a, "suit").TrueForAll(x => x.m is BaseMaterial3D bm && bm.AlbedoColor == Colors.White)
+                && Named(a, "suit").TrueForAll(x => !suitTinted.Exists(t => t.m == x.m)));
+            reg.TintSlot(a, "suit", "suit.rust");
+            var tintedSkin = Named(a, "skin");
+            Check("tint: an unknown id is a no-op", reg.TintSlot(a, "skin", "skin.99") == 0
+                && tintedSkin.TrueForAll(x => x.mi.GetActiveMaterial(x.i) == x.m));
+            reg.TintSlot(a, "skin", "skin.08");
+            reg.TintSlot(a, "skin", "skin.06");
+            Check("tint: re-tinting never compounds (skin.08 then skin.06 = skin.06)", Named(a, "skin").TrueForAll(x => tintedSkin.Exists(t => t.mi == x.mi && t.i == x.i && t.m == x.m)));
+            reg.TintSlot(a, "skin", "");
+            Check("tint: \"\" puts the bake back", Named(a, "skin").TrueForAll(x => skinBefore.Exists(t => t.mi == x.mi && t.i == x.i && t.m == x.m)));
+
+            // The worn path: a `skin`/`suit` frame tints, hangs nothing; Cover's remembered base follows the tint.
+            Node3D b = Load("char.player");
+            var worn = new Dictionary<string, string> { ["feet"] = "armor.boots.scout", ["suit"] = "suit.teal" };
+            var drawn = new Dictionary<string, string>();
+            var nodes = new Dictionary<string, Node3D>();
+            EntityViews.Dress(reg, x => x, b, worn, drawn, nodes);
+            Color teal = Color.FromHtml("#2F6E8C");
+            Check("worn: a suit frame tints the body and hangs no piece", !nodes.ContainsKey("suit") && drawn["suit"] == "suit.teal"
+                && Named(b, "suit").TrueForAll(x => x.m is BaseMaterial3D bm && Shows(bm.AlbedoColor, bm.AlbedoTexture, teal)));
+            worn["feet"] = "";
+            EntityViews.Dress(reg, x => x, b, worn, drawn, nodes);
+            Check("worn: boots off, the suit keeps its colour (Cover restores the tinted base)",
+                Named(b, "suit").TrueForAll(x => x.m is BaseMaterial3D bm && Shows(bm.AlbedoColor, bm.AlbedoTexture, teal)) && Named(b, "boot").TrueForAll(x => x.m is BaseMaterial3D));
+            worn["feet"] = "armor.boots.scout";
+            EntityViews.Dress(reg, x => x, b, worn, drawn, nodes);
+            worn["suit"] = "suit.olive";
+            EntityViews.Dress(reg, x => x, b, worn, drawn, nodes);
+            Color olive = Color.FromHtml("#5A6B3A");
+            Check("worn: a suit change under boots tints, the covered boot surface stays hidden",
+                Named(b, "suit").TrueForAll(x => x.m is BaseMaterial3D bm && Shows(bm.AlbedoColor, bm.AlbedoTexture, olive)) && Named(b, "boot").TrueForAll(x => x.m is ShaderMaterial));
+            worn["feet"] = "";
+            EntityViews.Dress(reg, x => x, b, worn, drawn, nodes);
+            Check("worn: boots off again, the suit is still olive", Named(b, "suit").TrueForAll(x => x.m is BaseMaterial3D bm && Shows(bm.AlbedoColor, bm.AlbedoTexture, olive)));
+
+            // The first-person twin: the shader's `albedo` uniform carries the tint.
+            Node3D fp = Load("char.player");
+            ViewModel.FpOverride(fp);
+            reg.TintSlot(fp, "suit", "suit.rust");
+            Check("tint: on the first-person shader the suit's `albedo` is the colour", Named(fp, "suit").TrueForAll(x =>
+                x.m is ShaderMaterial sm && Shows(sm.GetShaderParameter("albedo").AsColor(), sm.GetShaderParameter("albedo_tex").As<Texture2D>(), rust)));
+            Node3D nc = Load("char.player");
+            if (AssetRegistry.FindNode(nc, "legs") is Node3D legs) ViewModel.NearCutOverride(legs);
+            reg.TintSlot(nc, "suit", "suit.rust");
+            Check("tint: the near-cut legs' suit is the colour", Named(nc, "suit").Exists(x => x.mi.Name == "legs"
+                && x.m is ShaderMaterial sm && Shows(sm.GetShaderParameter("albedo").AsColor(), sm.GetShaderParameter("albedo_tex").As<Texture2D>(), rust)));
+
+            Node3D ubc = Load("char.ubc");
+            int ubcWant = Expected("char.ubc", "skin");
+            Check($"tint: the Vanguard's skin (its pack's material name) is found ({ubcWant})", ubc != null && ubcWant > 0 && reg.TintSlot(ubc, "skin", "skin.06") >= ubcWant);
+            stage.Free();
+
+            // The form's SKIN and SUIT rows.
+            var cs = new Characters();
+            cs.Loaded(new List<CharacterRow> { new CharacterRow { Token = "t-k", Name = "Kade", Body = "char.ubc.f", Hair = "hair.long", Skin = "skin.03", Suit = "suit.navy" } });
+            Check("chars: List stages the row's skin and suit", cs.StageSkin == "skin.03" && cs.StageSuit == "suit.navy");
+            cs.NewCharacter();
+            Check("chars: NewCharacter is skin.01 / suit.slate, staged", cs.Skin == "skin.01" && cs.Suit == "suit.slate" && cs.StageSkin == "skin.01" && cs.StageSuit == "suit.slate");
+            cs.NextSkin();
+            Check("chars: NextSkin steps skin.01 → skin.02", cs.Skin == "skin.02");
+            cs.PrevSkin(); cs.PrevSkin();
+            Check("chars: PrevSkin wraps skin.01 → skin.08", cs.Skin == "skin.08");
+            cs.NextSkin();
+            Check("chars: NextSkin wraps skin.08 → skin.01", cs.Skin == "skin.01");
+            cs.PrevSuit();
+            Check("chars: PrevSuit wraps suit.slate → suit.maroon", cs.Suit == "suit.maroon");
+            for (int i = 0; i < 8; i++) cs.NextSuit();
+            Check("chars: a full lap of NextSuit comes home", cs.Suit == "suit.maroon");
+            Check("chars: swatch labels and colours", Characters.SwatchLabel("skin", "skin.06") == "BROWN" && Characters.SwatchLabel("suit", "suit.slate") == "SLATE"
+                && Characters.SwatchColor("suit", "suit.rust") == rust && Characters.SwatchColor("skin", "skin.99") == null);
+            cs.Edit(0);
+            Check("chars: Edit prefills the row's skin and suit, clean", cs.Skin == "skin.03" && cs.Suit == "suit.navy" && !cs.Dirty && !cs.CanSave);
+            cs.NextSkin();
+            Check("chars: a skin change is Dirty, SAVE lit, staged live", cs.Dirty && cs.CanSave && cs.StageSkin == "skin.04");
+            cs.PrevSkin();
+            Check("chars: skin back to the row's is clean again", !cs.Dirty && !cs.CanSave);
+            cs.NextSuit();
+            Check("chars: a suit change is Dirty, SAVE lit", cs.Dirty && cs.CanSave && cs.StageSuit == "suit.bone");
+            cs.CreateFailed(400, "bad suit");
+            Check("chars: CreateFailed(400, bad suit) is BAD SUIT", cs.Reason == "BAD SUIT");
+            Check("chars: a palette id is its own worn asset", EntityViews.WornAsset(Defs.Empty, "skin.06") == "skin.06" && EntityViews.WornAsset(Defs.Empty, "suit.rust") == "suit.rust");
+            Check("chars: an old server's row (no skin/suit) reads as the defaults",
+                new CharacterRow().Skin == Palette.DefaultSkin && new CharacterRow().Suit == Palette.DefaultSuit);
+        }
+
         private static int SelfTest()
         {
             int failed = 0;
@@ -2925,6 +3118,7 @@ namespace SpaceAdventure.Game
             Check("chars: Deleted on the only row opens Create", ed.Rows.Count == 0 && ed.Now == Characters.State.Create && ed.Editing == null && ed.Selected == -1);
             ed.NewCharacter();
             Check("chars: NewCharacter is not edit mode", ed.Editing == null && !ed.CanSave);
+            PaletteChecks(Check);
             Check("chars: a hair slot's item is its own asset, armor goes through items.json",
                 EntityViews.WornAsset(Defs.Empty, "hair.buns") == "hair.buns" && EntityViews.WornAsset(Defs.Empty, "armor.helmet.scout") == "");
             Check("chars: a player spawn's data splits on the first NUL",

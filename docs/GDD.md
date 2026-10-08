@@ -1788,7 +1788,8 @@ surface and a UI we do not want to draw).
 - **Client.** A `worn` frame for slot `skin`/`suit` tints every surface
   of that name on the body (the manifest's `surfaces` says which meshes
   carry it): the remote body, the stage, the sheet doll, the local
-  first-person hands (skin) and the drawn torso and legs (suit). Tinting
+  first-person sleeves and the drawn torso and legs (suit; the arms wear
+  the suit's own gloves, so no skin shows in first person). Tinting
   sets the material's albedo factor; the near-cut and first-person
   shader variants read the same factor. Helmet over hair, armor over
   suit: unchanged.

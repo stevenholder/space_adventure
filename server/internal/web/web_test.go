@@ -274,6 +274,8 @@ type charRow struct {
 	Name     string `json:"name"`
 	Body     string `json:"body"`
 	Hair     string `json:"hair"`
+	Skin     string `json:"skin"`
+	Suit     string `json:"suit"`
 	Credits  int64  `json:"credits"`
 	LastSeen int64  `json:"last_seen_ms"`
 }
@@ -528,7 +530,9 @@ func TestEditCharacter(t *testing.T) {
 	var kicked [][]string
 	h.Kick = func(tokens []string) { kicked = append(kicked, slices.Clone(tokens)) }
 	var retagged []string
-	h.Retag = func(token, name, hair string) { retagged = append(retagged, token+"|"+name+"|"+hair) }
+	h.Retag = func(token, name, hair, skin, suit string) {
+		retagged = append(retagged, token+"|"+name+"|"+hair+"|"+skin+"|"+suit)
+	}
 
 	login := func(email, ip string) (*site, string) {
 		jar, _ := newJar()
@@ -570,7 +574,7 @@ func TestEditCharacter(t *testing.T) {
 	if rows := listChars(t, c, sid); len(rows) != 2 || rows[0].Name != "Kadence" || rows[0].Hair != "hair.buns" {
 		t.Fatalf("list after patch = %+v", rows)
 	}
-	if !slices.Equal(retagged, []string{kade.Token + "|Kadence|hair.buns"}) {
+	if !slices.Equal(retagged, []string{kade.Token + "|Kadence|hair.buns|skin.01|suit.slate"}) {
 		t.Fatalf("retagged %v", retagged)
 	}
 	if p, _ := st.GetPlayer(ctx, kade.Token); p == nil || p.AccountID == "" || p.Credits != 1000 {
