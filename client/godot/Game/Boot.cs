@@ -1220,7 +1220,7 @@ namespace SpaceAdventure.Game
             _settings = new Settings();
             _settings.Load();
             _settingsView = new SettingsView(_ui.Root, _settings, ApplySettings);
-            _gameMenu = new GameMenuView(_ui.Root, () => GetTree().Quit(0), () => _settingsView.Show(true));
+            _gameMenu = new GameMenuView(_ui.Root, () => GetTree().Quit(0), () => _settingsView.Show(true), LeaveToSelect, CanLeaveToSelect);
             // The rig fixes its own window (--resolution, headless shots), so
             // the saved display mode is for a player's session only.
             // The launcher holds them back until PLAY.
@@ -2736,6 +2736,17 @@ namespace SpaceAdventure.Game
         /// </summary>
         private void Reconnect(string token)
         {
+            LeaveWorld();
+            _net.Connect(ResolveServerUrl(), System.Environment.MachineName ?? "player", token);
+        }
+
+        /// <summary>
+        /// The teardown half of Reconnect: the socket gone, a fresh client
+        /// waiting, everything derived from OUR identity reset. The world's
+        /// views stand -- the next session's spawns reuse them.
+        /// </summary>
+        private void LeaveWorld()
+        {
             _net.Dispose();
             _predictor.Reset();
             _rover.Reset();
@@ -2744,8 +2755,25 @@ namespace SpaceAdventure.Game
             _seat = 0;
             _seatVehicle = 0;
             _net = new NetClient();
-            _net.Connect(ResolveServerUrl(), System.Environment.MachineName ?? "player", token);
         }
+
+        /// <summary>
+        /// The menu's CHARACTERS (playtest ask 2026-10-08): leave the world and
+        /// open the select on the same session; its PLAY connects the chosen
+        /// row on the fresh client, exactly as the first PLAY did.
+        /// </summary>
+        private void LeaveToSelect()
+        {
+            if (_selectUp) return;
+            GD.Print("select: leaving the world for the select");
+            LeaveWorld();
+            _gotSnapshot = false;
+            _selectBorn = false;
+            OpenSelect(fake: false);
+        }
+
+        /// <summary>A select exists to go back to: a signed-in session, not a rig token (or the rig asks for the button).</summary>
+        private bool CanLeaveToSelect() => Flag("-uiMenuChars") || (Identity("session") != "" && Arg("-token") == null);
 
         // ---- launcher rig (-uiShot … -uiLauncher <state>) ----------------------
 

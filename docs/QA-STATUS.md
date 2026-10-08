@@ -865,3 +865,18 @@ drill's model. The icon renderer's depth test was inverted (farthest
 surface won): fixed, so all 38 icons re-rendered right-way-out. Forge
 and bench have no colliders (the Phase 12 convention).
 
+# Menu: CHARACTERS (2026-10-08)
+
+Playtest ask: a way back to the character select without quitting. The
+ESC menu gains CHARACTERS between SETTINGS and QUIT GAME, shown only when
+a select exists to go back to (a signed-in session; a rig token has
+none). It runs Reconnect's teardown half (`LeaveWorld`: socket disposed,
+a fresh client, predictor/rover/ship/timeline/seat reset — the world's
+views stand for the next session's spawns) and opens the select on the
+same session; its PLAY connects the chosen row exactly as the first PLAY
+did. `test/out/ui/menu-characters.png` (`-uiPanel menu -uiMenuChars`);
+`-uiLeave` on kind: `select: leaving the world for the select` → `select:
+open` → (no session on the rig) `session refused, signed out`, no
+exception. Owed: the round trip on the install (ESC → CHARACTERS → pick
+another → PLAY), two characters in one sitting.
+
