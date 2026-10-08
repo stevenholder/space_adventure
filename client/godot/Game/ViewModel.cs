@@ -176,7 +176,7 @@ void fragment() {
         /// 0.41 m and beyond, so this takes the shoulder bulk and leaves the
         /// forearms and hands.
         /// </summary>
-        public const float FpCut = 0.36f, FpCutBand = 0.06f;
+        public const float FpCut = 0.30f, FpCutBand = 0.05f;
 
         private const string NearCutCode = @"
 uniform float NearCut = 0.30;
