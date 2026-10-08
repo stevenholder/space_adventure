@@ -1748,14 +1748,29 @@ never free RGB (a palette is reviewable, a colour picker is a griefing
 surface and a UI we do not want to draw).
 
 - **Palettes.** `art/manifest.json` gains `palettes`: `skin` (eight
-  tones, `skin.01` lightest … `skin.08` deepest, warm and cool mixed so
-  neighbours differ in hue as well as value) and `suit` (eight:
-  `suit.slate` the default grey, `suit.rust`, `suit.olive`, `suit.navy`,
-  `suit.bone`, `suit.charcoal`, `suit.teal`, `suit.maroon`), each an sRGB
-  hex. The manifest is already the server's hair table; it is the colour
-  table the same way. Hex values live beside the ids here in the GDD
-  (Scrapyard Comic palette rules apply: no neon, nothing the rarity ramp
-  uses).
+  tones, lightest first, warm and cool mixed so neighbours differ in
+  hue as well as value) and `suit` (eight). The manifest is the hair
+  table's twin: the server holds the same ids in Go and a test keeps the
+  two equal. Scrapyard Comic rules apply (no neon, nothing the rarity
+  ramp uses).
+
+  | skin | tone | factor | | suit | colour |
+  |---|---|---|---|---|---|
+  | `skin.01` fair, warm — **default**, the bake's own tone | `#F3D9C4` | `#FFFFFF` | | `suit.slate` — **default**, as built | `#333B45` |
+  | `skin.02` fair, cool | `#E7C3A6` | `#F2E5D8` | | `suit.rust` | `#8C4A2F` |
+  | `skin.03` light tan | `#D4A882` | `#DEC5A9` | | `suit.olive` | `#5A6B3A` |
+  | `skin.04` tan | `#BD8A5E` | `#C6A27A` | | `suit.navy` | `#2B3A5C` |
+  | `skin.05` olive brown | `#A2693F` | `#AA7B52` | | `suit.bone` | `#C9C2B0` |
+  | `skin.06` brown | `#8A5433` | `#916342` | | `suit.charcoal` | `#2A2C30` |
+  | `skin.07` deep brown | `#6B3F27` | `#704A33` | | `suit.teal` | `#2F6E8C` |
+  | `skin.08` deepest | `#4A2C1C` | `#4E3424` | | `suit.maroon` | `#6B2434` |
+
+  A `factor` is the tone divided by `skin.01`'s, per channel: what the
+  client multiplies the baked albedo by. `skin.01` is therefore white —
+  the body as baked — and the **default**, so every existing row keeps
+  its look (the Colonist's bake moves to `skin.01`'s tone, a shade
+  lighter than today's; the Vanguard's painted albedo is its own
+  `skin.01`).
 - **Art.** A tone is a material *factor*, not a texture: the body's
   `skin` surfaces (Colonist: the painted albedo from `skin.py`; Vanguard:
   the UBC albedo) are baked at the LIGHTEST tone, neutral enough that
@@ -1763,7 +1778,7 @@ surface and a UI we do not want to draw).
   The `suit` surface is a flat material; its factor is the colour. Eyes,
   lips, brows, hair and every armor piece are untouched by either.
 - **The character's.** Two row fields, `skin` and `suit` (migration 007,
-  defaults `skin.03` / `suit.slate`, i.e. today's look); `POST` and
+  defaults `skin.01` / `suit.slate`, the bodies as baked); `POST` and
   `PATCH /api/characters` take them, `GET` returns them, an unknown id is
   400 `bad skin` / `bad suit`. Guests keep the defaults.
 - **Wire.** At spawn the server sends two more `worn` frames, slots

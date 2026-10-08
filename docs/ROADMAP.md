@@ -1991,7 +1991,7 @@ PLAY: it joined in it.
 
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
-| 1 | art | `palettes` in the manifest (skin ×8, suit ×8, hex from the GDD); skin albedos baked at the lightest tone, neutral; sheet of every tone × both models | `art/manifest.json`, `art/tools/bpy/skin.py`, `human.py` | `npm --prefix art test` (palette ids + hex shape); sheets |
+| 1 | art | `palettes` in the manifest (done in wave 0); the Colonist skin albedo baked at `skin.01`'s tone; `verify.mjs` checks the palette shape; a sheet of every tone × both models | `art/manifest.json`, `art/tools/bpy/skin.py`, `human.py` | `npm --prefix art test` (palette ids + hex shape); sheets |
 | 2 | 1 | Migration 007 `player.skin`/`player.suit` with defaults; store read/write; both in POST/PATCH/GET (400 `bad skin`/`bad suit` against the manifest); two `worn` frames at spawn (`hairFrame`'s sibling) | `server/internal/store/`, `web/web.go`, `server/server.go` | Go tests; `t28` |
 | 3 | 1 | Harness: `t28` creates with both, sees both frames on own and other socket; bad ids 400; PATCH changes the next join's frames | `test/t28-accounts.mjs` | kind |
 | 4 | 1 | Client: `Tint(model, surface, color)` over the manifest's `surfaces`; `worn` slot `skin`/`suit` → tint on remote bodies, the stage, the sheet doll, the local fp arms (skin) and body (suit); SKIN/SUIT rows (cycle + swatch) on create and edit | `Entities.cs`, `ViewModel.cs`, `UI/Characters.cs`, `UI/Inventory.cs` | shots `p21-*.png`; `-selftest` (Tint finds every surface; a tone id maps to its hex) |
@@ -2000,9 +2000,10 @@ PLAY: it joined in it.
 ### Acceptance criteria (C178–C182)
 
 - **C178 The palette is the contract.** Eight skin tones and eight suit
-  colours by id in the manifest with GDD hex; the server refuses any
-  other id (400); the defaults are today's look so every existing row is
-  unchanged.
+  colours by id in the manifest with the GDD's hex (a Go test keeps the
+  server's table equal to it); the server refuses any other id (400);
+  the defaults (`skin.01` white factor, `suit.slate`) are the bodies as
+  baked, so every existing row keeps its look.
 - **C179 It is the character's.** POST stores both, GET returns them,
   PATCH changes them; at spawn every client receives `worn` frames for
   slots `skin` and `suit` (`t28`, both sockets); a guest gets neither.

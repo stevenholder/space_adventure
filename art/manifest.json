@@ -7304,5 +7304,100 @@
       "source_url": "tools/bpy/hair.py",
       "author": "Space Adventure"
     }
-  ]
+  ],
+  "palettes": {
+    "$comment": "Phase 21: skin tones and undersuit colours by id (GDD 'Skin and suit colours'). The client multiplies a body's `skin` surfaces by `factor` (the albedo is baked at skin.01's tone, so skin.01 is white) and sets its `suit` surfaces to `color`. The server validates ids against this table (web.go palettes test).",
+    "skin": [
+      {
+        "id": "skin.01",
+        "name": "fair, warm (the bake's own tone)",
+        "tone": "#F3D9C4",
+        "factor": "#FFFFFF"
+      },
+      {
+        "id": "skin.02",
+        "name": "fair, cool",
+        "tone": "#E7C3A6",
+        "factor": "#F2E5D8"
+      },
+      {
+        "id": "skin.03",
+        "name": "light tan",
+        "tone": "#D4A882",
+        "factor": "#DEC5A9"
+      },
+      {
+        "id": "skin.04",
+        "name": "tan",
+        "tone": "#BD8A5E",
+        "factor": "#C6A27A"
+      },
+      {
+        "id": "skin.05",
+        "name": "olive brown",
+        "tone": "#A2693F",
+        "factor": "#AA7B52"
+      },
+      {
+        "id": "skin.06",
+        "name": "brown",
+        "tone": "#8A5433",
+        "factor": "#916342"
+      },
+      {
+        "id": "skin.07",
+        "name": "deep brown",
+        "tone": "#6B3F27",
+        "factor": "#704A33"
+      },
+      {
+        "id": "skin.08",
+        "name": "deepest",
+        "tone": "#4A2C1C",
+        "factor": "#4E3424"
+      }
+    ],
+    "suit": [
+      {
+        "id": "suit.slate",
+        "name": "the undersuit as built",
+        "color": "#333B45"
+      },
+      {
+        "id": "suit.rust",
+        "name": "rust",
+        "color": "#8C4A2F"
+      },
+      {
+        "id": "suit.olive",
+        "name": "olive",
+        "color": "#5A6B3A"
+      },
+      {
+        "id": "suit.navy",
+        "name": "navy",
+        "color": "#2B3A5C"
+      },
+      {
+        "id": "suit.bone",
+        "name": "bone",
+        "color": "#C9C2B0"
+      },
+      {
+        "id": "suit.charcoal",
+        "name": "charcoal",
+        "color": "#2A2C30"
+      },
+      {
+        "id": "suit.teal",
+        "name": "teal",
+        "color": "#2F6E8C"
+      },
+      {
+        "id": "suit.maroon",
+        "name": "maroon",
+        "color": "#6B2434"
+      }
+    ]
+  }
 }
