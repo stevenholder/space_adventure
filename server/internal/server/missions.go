@@ -59,7 +59,10 @@ func (s *Server) missionCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			return refuse("not_a_board")
 		}
 		offers := []defs.Mission{}
-		for _, m := range s.reg.Missions {
+		// File order (missions.json): the author picks what a new
+		// character reads first.
+		for _, id := range s.reg.MissionOrder {
+			m := s.reg.Missions[id]
 			if m.Type == "bounty" || !m.Board {
 				continue
 			}
@@ -67,14 +70,6 @@ func (s *Server) missionCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 				continue
 			}
 			offers = append(offers, m)
-		}
-		// Deterministic order for the panel (map iteration is not).
-		for i := 0; i < len(offers); i++ {
-			for j := i + 1; j < len(offers); j++ {
-				if offers[j].ID < offers[i].ID {
-					offers[i], offers[j] = offers[j], offers[i]
-				}
-			}
 		}
 		var state map[string]*store.MissionState
 		c.ident.Mutate(func(p *store.Player) { state = snapshotMissions(p) })

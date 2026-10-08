@@ -229,7 +229,7 @@ BG = (16, 20, 26)
 def render(tris, W, H, cam_pos, cam_dir, cam_up, fovy=50.0, near=0.02):
     d, r, u = look_basis(cam_dir, cam_up)
     f = (H / 2.0) / math.tan(math.radians(fovy) / 2.0)
-    depth = [1e30] * (W * H)
+    depth = [0.0] * (W * H)   # interpolated 1/z: larger is nearer
     img = bytearray(W * H * 3)
     for i in range(0, len(img), 3):
         img[i] = BG[0]; img[i + 1] = BG[1]; img[i + 2] = BG[2]
@@ -283,7 +283,7 @@ def render(tris, W, H, cam_pos, cam_dir, cam_up, fovy=50.0, near=0.02):
                    (u0 <= 0 and u1 <= 0 and u2 <= 0):
                     s = 1.0 / denom
                     z = (ai * u0 + bi * u1 + ci * u2) * s
-                    if z >= 0 and (not write_z or z < depth[row + x]):
+                    if z >= 0 and (not write_z or z > depth[row + x]):
                         if write_z:
                             depth[row + x] = z
                         i3 = (row + x) * 3

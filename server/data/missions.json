@@ -3,6 +3,16 @@
  "version": 1,
  "missions": [
   {
+   "id": "mission.first_scrap",
+   "type": "fetch",
+   "name": "First scrap",
+   "text": "The yard pays for scrap. Pull ten pieces off the wrecks and bring them in.",
+   "item": "mat.scrap",
+   "count": 10,
+   "reward": 180,
+   "board": true
+  },
+  {
    "id": "mission.cull",
    "type": "kill",
    "name": "Thin the herd",

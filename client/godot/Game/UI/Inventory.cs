@@ -613,7 +613,7 @@ namespace SpaceAdventure.Game.UI
         private readonly Func<ushort> _nextSeq;
         private readonly Action<byte[]> _send;
 
-        public BackpackView(Control root, Character character, Icons icons, Func<ushort> nextSeq, Action<byte[]> send, Interaction interact = null)
+        public BackpackView(Control root, Character character, Icons icons, Func<ushort> nextSeq, Action<byte[]> send, Interaction interact = null, SkillSheet skills = null)
             : base(root, "Backpack", 400, 0.18f, 0.80f) // right by default, beside the character
         {
             _character = character;
@@ -621,6 +621,24 @@ namespace SpaceAdventure.Game.UI
             _nextSeq = nextSeq;
             _send = send;
             _interact = interact;
+            if (skills != null)
+            {
+                Craft = new CraftList(character, skills, icons, nextSeq, send);
+                Craft.Crafted = (r, qty) => Rebuild();
+            }
+        }
+
+        /// <summary>Phase 22: the hands' recipes (station "hand", npc 0), the CRAFT tab.</summary>
+        public readonly CraftList Craft;
+        /// <summary>BAG or CRAFT.</summary>
+        public bool CraftTab { get; private set; }
+        /// <summary>The rig's and the key's tab switch.</summary>
+        public void ShowCraft(bool on) { CraftTab = on && Craft != null; if (Open) Rebuild(); }
+        /// <summary>The rig's press: CRAFT on a hand recipe's row.</summary>
+        public bool Press(string recipe, out string why)
+        {
+            why = "no craft list";
+            return Craft != null && Craft.Press(0, recipe, out why);
         }
 
         private readonly Interaction _interact;
@@ -638,6 +656,22 @@ namespace SpaceAdventure.Game.UI
         protected override void Fill(VBoxContainer body)
         {
             var head = Styles.Row(8);
+            if (Craft != null)
+            {
+                head.AddChild(Styles.Button("BAG", !CraftTab, () => ShowCraft(false)));
+                head.AddChild(Styles.Button("CRAFT", CraftTab, () => ShowCraft(true)));
+            }
+            if (CraftTab)
+            {
+                head.AddChild(Styles.Grow(new Control()));
+                head.AddChild(Styles.Display_(_character.Credits < 0 ? "— cr" : $"{_character.Credits} cr", 14, Styles.Amber));
+                body.AddChild(head);
+                body.AddChild(Styles.Gap(4));
+                Craft.Fill(body, "hand", 0, Rebuild);
+                body.AddChild(Styles.Gap(4));
+                Line(body, "B closes  ·  moving or a hit stops the work", Styles.Dust, 11);
+                return;
+            }
             head.AddChild(Styles.Grow(Styles.Display_($"{_character.UsedSlots} / {Character.InventorySlots} slots", 12, Styles.Dust)));
             head.AddChild(Styles.Display_(_character.Credits < 0 ? "— cr" : $"{_character.Credits} cr", 14, Styles.Amber));
             body.AddChild(head);

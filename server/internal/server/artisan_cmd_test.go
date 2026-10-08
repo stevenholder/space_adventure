@@ -21,7 +21,8 @@ func artisanWorld(p *store.Player, npc defs.NPC, nodeHealth int) cmdWorld {
 	w.Reg.Items["ammo.cell"] = defs.Item{ID: "ammo.cell", StackMax: 300}
 	w.Reg.Items["tool.drill"] = defs.Item{ID: "tool.drill", StackMax: 1, Slot: "tool"}
 	w.Reg.Items["tool.drill.mk2"] = defs.Item{ID: "tool.drill.mk2", StackMax: 1, Slot: "tool", Supersedes: "tool.drill"}
-	w.Reg.Recipes = map[string]defs.Recipe{"recipe.cells": {ID: "recipe.cells", Level: 1,
+	w.Reg.Skills = append(w.Reg.Skills, defs.Skill{ID: "chemistry"})
+	w.Reg.Recipes = map[string]defs.Recipe{"recipe.cells": {ID: "recipe.cells", Level: 1, Skill: "chemistry", Station: "bench", Seconds: 3,
 		Inputs: []defs.ItemQty{{Item: "mat.ore.iron", Qty: 2}, {Item: "mat.scrap", Qty: 1}},
 		Output: defs.ItemQty{Item: "ammo.cell", Qty: 30}}}
 	w.Reg.Synergies = []defs.Synergy{{Source: "scavenging", Target: "commerce", What: "sell_bonus", PerLevel: 0.001}}
@@ -89,15 +90,21 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 	}
 
 	lookAt(&w, benchAimHeight)
-	if st, m := run(w, protocol.OpCraft, `{"npc":2,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusOK || m["crafted"].(map[string]any)["qty"].(float64) != 30 {
+	var crafting []int
+	w.Craft = func(r defs.Recipe, qty, ticks int) bool { crafting = append(crafting, qty, ticks); return true }
+	if st, m := run(w, protocol.OpCraft, `{"npc":2,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusOK || m["duration"].(float64) != 3 || m["recipe"] != "recipe.cells" {
 		t.Fatalf("craft: status=%d body=%v", st, m)
 	}
-	if sim.CountItem(p, "mat.ore.iron") != 4 || sim.CountItem(p, "ammo.cell") != 30 {
-		t.Fatalf("craft aftermath: %v", p.Inventory)
+	// The first unit's inputs leave with the reply; the output lands later.
+	if sim.CountItem(p, "mat.ore.iron") != 4 || sim.CountItem(p, "ammo.cell") != 0 || len(crafting) != 2 || crafting[1] != 60 {
+		t.Fatalf("craft aftermath: %v started=%v", p.Inventory, crafting)
 	}
 	lookAt(&w, eyeHeightMeters)
-	if st, m := run(w, protocol.OpCraft, `{"npc":1,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusRefused || m["reason"] != "unknown_recipe" {
+	if st, m := run(w, protocol.OpCraft, `{"npc":1,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusRefused || m["reason"] != "wrong_station" {
 		t.Fatalf("craft at the shop: status=%d body=%v", st, m)
+	}
+	if st, m := run(w, protocol.OpCraft, `{"npc":0,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusRefused || m["reason"] != "wrong_station" {
+		t.Fatalf("bench recipe in the hands: status=%d body=%v", st, m)
 	}
 	lookAt(&w, benchAimHeight)
 	if st, m := run(w, protocol.OpCraft, `{"npc":2,"recipe":"recipe.cells","qty":1}`); st != protocol.StatusRefused || m["reason"] != "missing_materials" {
@@ -106,7 +113,7 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 
 	lookAt(&w, nodeAimHeight)
 	started := 0
-	w.Gather = func(node uint32, ticks int) bool { started++; return true }
+	w.Gather = func(node uint32, ticks int, hand bool) bool { started++; return true }
 	gatherOK := func(node int, wantDur float64) {
 		t.Helper()
 		st, m := run(w, protocol.OpGather, `{"node":`+string(rune('0'+node))+`}`)
@@ -121,14 +128,15 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 			t.Fatalf("gather node %d: status=%d body=%v, want %q", node, st, m, want)
 		}
 	}
-	gather(3, "no_tool")
+	gatherOK(3, 9.0) // the hands: ×3
+	gather(4, "no_tool")
 	p.Equipped["tool"] = "tool.drill"
 	gatherOK(3, 3.0)
 	gather(4, "no_tool")
 	p.Equipped["tool"] = "tool.drill.mk2"
 	gatherOK(3, 3.0) // mk2 supersedes the drill
 	gather(4, "locked")
-	if started != 2 {
+	if started != 3 {
 		t.Fatalf("channels started = %d, want 2", started)
 	}
 	w.Busy = func() bool { return true }
@@ -158,4 +166,53 @@ func TestHandleCmdPhase12Skeleton(t *testing.T) {
 	if st, _ := run(w, protocol.OpGatherCancel, `{}`); st != protocol.StatusOK {
 		t.Fatalf("cancel running: status=%d", st)
 	}
+}
+
+// TestHandleCmdPhase22Stations pins C186's station rule on the cmd: a forge
+// (id 5) takes a forge recipe and refuses a bench one, the bench refuses
+// a forge recipe, the hands take a hand recipe at npc 0 and ignore a bad
+// npc for it, and the recipe's skill gates it.
+func TestHandleCmdPhase22Stations(t *testing.T) {
+	p := &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 10}, {Item: "mat.scrap", Qty: 10}}, Equipped: map[string]string{}}
+	w := artisanWorld(p, shopNPC(), 5)
+	w.Reg.Skills = append(w.Reg.Skills, defs.Skill{ID: "smithing"})
+	w.Reg.Items["mat.ingot.iron"] = defs.Item{ID: "mat.ingot.iron", StackMax: 50}
+	w.Reg.Items["mat.parts"] = defs.Item{ID: "mat.parts", StackMax: 50}
+	w.Reg.Recipes["recipe.ingot"] = defs.Recipe{ID: "recipe.ingot", Level: 1, Skill: "smithing", Station: "forge", Seconds: 4,
+		Inputs: []defs.ItemQty{{Item: "mat.ore.iron", Qty: 2}}, Output: defs.ItemQty{Item: "mat.ingot.iron", Qty: 1}}
+	w.Reg.Recipes["recipe.parts"] = defs.Recipe{ID: "recipe.parts", Level: 1, Skill: "smithing", Station: "hand", Seconds: 1,
+		Inputs: []defs.ItemQty{{Item: "mat.scrap", Qty: 3}}, Output: defs.ItemQty{Item: "mat.parts", Qty: 1}}
+	w.Reg.Recipes["recipe.blade"] = defs.Recipe{ID: "recipe.blade", Level: 5, Skill: "smithing", Station: "forge", Seconds: 8,
+		Inputs: []defs.ItemQty{{Item: "mat.ore.iron", Qty: 1}}, Output: defs.ItemQty{Item: "mat.ingot.iron", Qty: 1}}
+	forge := defs.NPC{ID: "npc.forge", Kind: "forge"}
+	inner := w.FindNPC
+	w.FindNPC = func(id uint32) (defs.NPC, sim.Vec, bool) {
+		if id == 5 {
+			return forge, sim.Vec{2, planetSurfaceY, 0}, true
+		}
+		return inner(id)
+	}
+	w.Craft = func(r defs.Recipe, qty, ticks int) bool { return true }
+	lookAt(&w, benchAimHeight) // the forge's ledge is the bench's height
+	want := func(body, reason string) {
+		t.Helper()
+		st, m := run(w, protocol.OpCraft, body)
+		if reason == "" && st != protocol.StatusOK || reason != "" && (st != protocol.StatusRefused || m["reason"] != reason) {
+			t.Fatalf("%s: status=%d body=%v, want %q", body, st, m, reason)
+		}
+	}
+	want(`{"npc":5,"recipe":"recipe.ingot","qty":1}`, "")
+	want(`{"npc":5,"recipe":"recipe.cells","qty":1}`, "wrong_station")
+	want(`{"npc":2,"recipe":"recipe.ingot","qty":1}`, "wrong_station")
+	want(`{"npc":0,"recipe":"recipe.ingot","qty":1}`, "wrong_station")
+	want(`{"npc":5,"recipe":"recipe.blade","qty":1}`, "locked")
+	want(`{"npc":0,"recipe":"recipe.parts","qty":1}`, "")
+	want(`{"npc":99,"recipe":"recipe.parts","qty":1}`, "")
+	want(`{"npc":0,"recipe":"recipe.parts","qty":0}`, "bad_qty")
+	want(`{"npc":0,"recipe":"recipe.nope","qty":1}`, "unknown_recipe")
+	if sim.CountItem(p, "mat.ore.iron") != 8 || sim.CountItem(p, "mat.scrap") != 4 {
+		t.Fatalf("each started craft takes one unit: %v", p.Inventory)
+	}
+	lookAt(&w, eyeHeightMeters)
+	want(`{"npc":5,"recipe":"recipe.ingot","qty":1}`, "out_of_range")
 }

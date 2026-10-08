@@ -81,42 +81,56 @@ func TestSellAt(t *testing.T) {
 	}
 }
 
-// TestCraft pins C123: cells consume 2 ore + 1 scrap for 30 cells, a
-// shortage refuses with nothing consumed, the plate is locked below
-// Engineering 5, qty 3 is three crafts or none, and the mk2 recipe eats the
-// worn drill and clears its slot.
-func TestCraft(t *testing.T) {
+// TestCraftUnits pins the Phase 22 unit moves: CraftCheck refuses locked,
+// then missing_materials for one unit, then no_space; TakeUnit is all or
+// none and clears a consumed worn tool; LandUnit drops the bonus on a
+// stack_max 1 output; ReturnUnit puts a cancelled unit back.
+func TestCraftUnits(t *testing.T) {
 	reg := artisanReg()
-	p := &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 10}, {Item: "mat.scrap", Qty: 3}}}
+	cells := reg.Recipes["recipe.cells"]
+	p := &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 3}, {Item: "mat.scrap", Qty: 1}}}
 
-	made, err := Craft(p, reg.Recipes["recipe.cells"], 1, 1, reg, 0)
-	if err != nil || made != 30 || CountItem(p, "ammo.cell") != 30 || CountItem(p, "mat.ore.iron") != 8 || CountItem(p, "mat.scrap") != 2 {
-		t.Fatalf("cells: made=%d err=%v inv=%v", made, err, p.Inventory)
+	if err := CraftCheck(p, cells, 1, reg); err != nil {
+		t.Fatalf("check cells: %v", err)
 	}
-	if _, err := Craft(p, reg.Recipes["recipe.cells"], 3, 1, reg, 0); reason(err) != ReasonMissingMaterials || CountItem(p, "mat.ore.iron") != 8 {
-		t.Fatalf("qty 3 with 2 scrap: %q, ore=%d", reason(err), CountItem(p, "mat.ore.iron"))
+	if err := TakeUnit(p, cells); err != nil || CountItem(p, "mat.ore.iron") != 1 || CountItem(p, "mat.scrap") != 0 {
+		t.Fatalf("take: err=%v inv=%v", err, p.Inventory)
 	}
-	if _, err := Craft(p, reg.Recipes["recipe.cells"], 2, 1, reg, 0); err != nil || CountItem(p, "ammo.cell") != 90 {
-		t.Fatalf("qty 2: err=%v cells=%d", err, CountItem(p, "ammo.cell"))
+	if err := TakeUnit(p, cells); reason(err) != ReasonMissingMaterials || CountItem(p, "mat.ore.iron") != 1 {
+		t.Fatalf("second take: %q inv=%v", reason(err), p.Inventory)
 	}
-	p.Inventory = []store.Stack{{Item: "mat.ore.iron", Qty: 6}, {Item: "mat.scrap", Qty: 3}}
-	if _, err := Craft(p, reg.Recipes["recipe.plate.iron"], 1, 4, reg, 0); reason(err) != ReasonLocked {
+	if made, err := LandUnit(p, cells, 1, reg); err != nil || made != 31 || CountItem(p, "ammo.cell") != 31 {
+		t.Fatalf("land with bonus: made=%d err=%v", made, err)
+	}
+	ReturnUnit(p, cells, reg)
+	if CountItem(p, "mat.ore.iron") != 3 || CountItem(p, "mat.scrap") != 1 {
+		t.Fatalf("return: %v", p.Inventory)
+	}
+
+	plate := reg.Recipes["recipe.plate.iron"]
+	p = &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 6}, {Item: "mat.scrap", Qty: 3}}}
+	if err := CraftCheck(p, plate, 4, reg); reason(err) != ReasonLocked {
 		t.Fatalf("plate at 4: %q", reason(err))
 	}
-	// A bonus unit on a stack_max 1 output is dropped, not refused.
-	if made, err := Craft(p, reg.Recipes["recipe.plate.iron"], 1, 5, reg, 1); err != nil || made != 1 {
-		t.Fatalf("plate at 5 with bonus: made=%d err=%v", made, err)
+	if made, err := LandUnit(p, plate, 1, reg); err != nil || made != 1 {
+		t.Fatalf("plate bonus on a stack_max 1: made=%d err=%v", made, err)
 	}
-	if _, err := Craft(p, reg.Recipes["recipe.plate.iron"], 1, 5, reg, 0); reason(err) != ReasonMissingMaterials {
-		t.Fatalf("plate twice: %q", reason(err))
+	// A full bag: the plate needs a slot of its own once the inputs leave.
+	reg.InvSlots = 2
+	p.Inventory = []store.Stack{{Item: "mat.ore.iron", Qty: 7}, {Item: "mat.scrap", Qty: 4}}
+	if err := CraftCheck(p, plate, 5, reg); reason(err) != ReasonNoSpace {
+		t.Fatalf("plate into a full bag: %q", reason(err))
 	}
+	reg.InvSlots = 20
+
 	// mk2 eats the worn drill.
+	mk2 := reg.Recipes["recipe.drill.mk2"]
 	p = &store.Player{Inventory: []store.Stack{{Item: "mat.ore.iron", Qty: 8}, {Item: "mat.scrap", Qty: 6}, {Item: "tool.drill", Qty: 1}},
 		Equipped: map[string]string{"tool": "tool.drill"}}
-	if _, err := Craft(p, reg.Recipes["recipe.drill.mk2"], 1, 10, reg, 0); err != nil {
+	if err := TakeUnit(p, mk2); err != nil {
 		t.Fatalf("mk2: %v", err)
 	}
-	if CountItem(p, "tool.drill") != 0 || CountItem(p, "tool.drill.mk2") != 1 || p.Equipped["tool"] != "" {
-		t.Fatalf("mk2 aftermath: inv=%v equipped=%v", p.Inventory, p.Equipped)
+	if _, err := LandUnit(p, mk2, 0, reg); err != nil || CountItem(p, "tool.drill") != 0 || CountItem(p, "tool.drill.mk2") != 1 || p.Equipped["tool"] != "" {
+		t.Fatalf("mk2 aftermath: err=%v inv=%v equipped=%v", err, p.Inventory, p.Equipped)
 	}
 }

@@ -11,13 +11,17 @@
   {"id": "recon", "name": "Recon", "efficacy": {"kind": "discovery_range", "per_level": 0.005}},
   {"id": "mining", "name": "Mining", "efficacy": {"kind": "gather_speed", "per_level": 0.005}},
   {"id": "salvaging", "name": "Salvaging", "efficacy": {"kind": "gather_speed", "per_level": 0.005}},
-  {"id": "engineering", "name": "Engineering", "efficacy": {"kind": "craft_extra", "per_level": 0.003}}
+  {"id": "engineering", "name": "Engineering", "efficacy": {"kind": "craft_extra", "per_level": 0.003}},
+  {"id": "smithing", "name": "Smithing", "efficacy": {"kind": "craft_speed", "per_level": 0.005}},
+  {"id": "chemistry", "name": "Chemistry", "efficacy": {"kind": "craft_speed", "per_level": 0.005}},
+  {"id": "construction", "name": "Construction", "efficacy": {"kind": "craft_speed", "per_level": 0.005}}
  ],
  "synergies": [
   {"$note": "knowing the ground pays", "source": "recon", "target": "scavenging", "what": "loot_extra_roll", "per_level": 0.002, "where": "poi"},
   {"$note": "a fit body drives harder", "source": "athletics", "target": "driving", "what": "drive_grip", "per_level": 0.001},
   {"$note": "knowing what junk is worth", "source": "scavenging", "target": "commerce", "what": "sell_bonus", "per_level": 0.001},
-    {"$note": "Phase 12: a better hand with the drill", "source": "engineering", "target": "mining", "what": "gather_speed", "per_level": 0.001}
+    {"$note": "Phase 12: a better hand with the drill", "source": "engineering", "target": "mining", "what": "gather_speed", "per_level": 0.001},
+    {"$note": "Phase 22: a smith knows the parts", "source": "smithing", "target": "engineering", "what": "craft_speed", "per_level": 0.001}
  ],
  "awards": {
   "damage_xp_per_point": 2,

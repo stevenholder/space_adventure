@@ -1826,8 +1826,9 @@ luck, the shop is convenience at a markup, crafting is the sure road.
   you are away — background jobs belong to owned stations (Phase 23+).
 - **Stations are data.** A recipe names its `station`: `hand` (anywhere,
   nothing in range), `bench` (assembly), `forge` (heat). World stations:
-  the relay's workbench (Phase 12) and a **forge in the outpost scrapyard**
-  beside the wrecks, inside the guard. `craft` with `npc` 0 is the hands;
+  the relay's workbench (Phase 12) and a **forge at the spawn pad** beside
+  the ore field (smelt at home, assemble at the relay; the scrapyard keeps
+  the guarded wrecks). `craft` with `npc` 0 is the hands;
   a station recipe at the wrong kind is `wrong_station`. Rule of thumb:
   no heat, no heavy tooling → hands; heat → forge; fitting parts → bench.
 - **Work has a skill.** A recipe names its `skill`; its XP (`ceil(value
@@ -1866,9 +1867,9 @@ all of them, every one spills on death like every material.
 |---|---|---|---|---|
 | raw | `mat.ore.iron` | iron node (mining 1; drill, crude or hands) | — | — |
 | raw | `mat.ore.copper` | copper node (mining 10, drill mk2 only) | — | — |
-| raw | `mat.scrap` | wrecks (salvaging 1; cutter or hands), mobs | — | — |
+| raw | `mat.scrap` | wrecks (salvaging 1; cutter or hands) — one at the pad, two in the guarded scrapyard — and mobs | — | — |
 | raw | `mat.hide` | **new**: wildlife (`loot.wild.small` 60 %, `loot.wild.big` 100 %, ×2) | — | — |
-| raw | `mat.crystal` | **new**: `node.crystal` (mining 5; drill, crude or hands; 4 yields, 150 s) ×2 at the spawn rocks, ×2 at the relay | — | — |
+| raw | `mat.crystal` | **new**: `node.crystal` (mining 1; drill, crude or hands; 4 yields, 150 s) ×2 at the spawn rocks, ×2 at the relay | — | — |
 | refined | `mat.parts` | scrap ×3 → ×1 | hand / Smithing 1 | 1 |
 | refined | `mat.leather` | hide ×2 → ×1 | hand / Scavenging 1 | 2 |
 | refined | `mat.ingot.iron` | ore.iron ×2 → ×1 | forge / Smithing 1 | 4 |
@@ -1887,7 +1888,7 @@ rare 10, epic 15. XP `ceil(value / 2)` per unit to the recipe's skill.
 
 | kind (slot/class) | base recipe (common) | station / skill | s |
 |---|---|---|---|
-| weapon, pistol | plate 1, parts 2, wiring 1 | bench / Engineering | 12 |
+| weapon, pistol | plate 1, parts 3, crystal 1 (no wiring: the first gun must be reachable from the pad) | bench / Engineering | 12 |
 | weapon, rifle (smg, pulse, dmr) | plate 2, parts 2, wiring 2 | bench / Engineering | 15 |
 | melee, 1h | blade 1, leather 1 | bench / Engineering | 8 |
 | melee, 2h | blade 2, leather 1, plate 1 | bench / Engineering | 12 |
@@ -2249,9 +2250,10 @@ other (declared synergies), and the whole sheet is the character.
 
 ### The roster
 
-Ten skills. Seven train in Phase 11 against verbs the game already
+Thirteen skills. Seven train in Phase 11 against verbs the game already
 has; three were RESERVED (greyed at 1 on the panel) until Phase 12's
-artisan loop, contracted below, gave them verbs.
+artisan loop, contracted below, gave them verbs; three more arrive with
+Phase 22's refinery (Construction greyed until Phase 23).
 
 | skill | trains by | efficacy (per level, linear to 99) | unlocks (data-driven) |
 |---|---|---|---|
@@ -2264,7 +2266,10 @@ artisan loop, contracted below, gave them verbs.
 | **Recon** | first discovery of each POI (+250, permanent per player), scout missions (+100) | +0.5% compass discovery range | — |
 | **Mining** | Phase 12: node yields (node `xp`) | −0.5% channel time | nodes by `level` |
 | **Salvaging** | Phase 12: wreck yields (node `xp`) | −0.5% channel time | nodes by `level` |
-| **Engineering** | Phase 12: crafts (recipe `xp`) | +0.3% extra-output chance | recipes by `level` |
+| **Engineering** | Phase 12: bench crafts (recipe `xp`) | +0.3% extra-output chance | recipes by `level` |
+| **Smithing** | Phase 22: forge units and the crude drill (recipe `xp`) | −0.5% craft channel time | recipes by `level` |
+| **Chemistry** | Phase 22: hand units — cells, throwables, potions, medkits, charms (recipe `xp`) | −0.5% craft channel time | recipes by `level` |
+| **Construction** | Phase 23–24: stations, chests, sites, buildings, vehicles (recipe `xp`) | −0.5% craft channel time | recipes by `level` |
 
 ### The curve — RuneScape's, exactly
 

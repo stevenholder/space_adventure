@@ -169,6 +169,22 @@ const NODE_CONTRACTS = {
   "prop.target": { nodes: ["plate"] },
 };
 
+// Bounds contracts (Phase 22): the gatherable nodes and the crafting
+// stations. The client and server aim at fixed heights over their base
+// (Interact.cs / cmd.go aimHeight: a node at 0.6 m, a bench or forge at
+// 0.9 m), so each must stand on y=0 and stay inside its envelope: a node
+// a metre of rock (the client draws a depleted one at 0.6 scale), a
+// station inside its footprint and under the wrecks' skyline.
+const NODE_BOUNDS = { minTop: 0.9, maxTop: 1.05, halfX: 0.8, halfZ: 0.8 };
+const STATION_BOUNDS = { minTop: 0.9, maxTop: 1.6, halfX: 1.1, halfZ: 0.7 };
+const BOUNDS_CONTRACTS = {
+  "prop.node.ore.iron": NODE_BOUNDS,
+  "prop.node.ore.copper": NODE_BOUNDS,
+  "prop.node.crystal": NODE_BOUNDS,
+  "prop.bench": STATION_BOUNDS,
+  "prop.forge": STATION_BOUNDS,
+};
+
 // Optional id argument: verify one asset. Lets an asset be verified while its
 // siblings do not exist yet, so a generator task is not gated on the rest of
 // its wave.
@@ -376,6 +392,19 @@ for (const asset of selected) {
     problems.push(...rawColorProblems(asset.file));
     if (asset.height && b.max.y > asset.height)
       problems.push(`taller than declared: ${b.max.y.toFixed(2)} > ${asset.height}`);
+  }
+  const bounds = BOUNDS_CONTRACTS[asset.id];
+  if (bounds) {
+    const b = new Box3().setFromObject(gltf.scene);
+    const e = 0.005;
+    if (Math.abs(b.min.y) > e) problems.push(`base not at y=0: min y ${b.min.y.toFixed(3)}`);
+    if (b.max.y < bounds.minTop - e || b.max.y > bounds.maxTop + e)
+      problems.push(`top ${b.max.y.toFixed(2)} outside ${bounds.minTop}..${bounds.maxTop} m`);
+    if (Math.max(-b.min.x, b.max.x) > bounds.halfX + e || Math.max(-b.min.z, b.max.z) > bounds.halfZ + e)
+      problems.push(
+        `outside its ±${bounds.halfX} x ±${bounds.halfZ} m footprint: x [${b.min.x.toFixed(2)}, ${b.max.x.toFixed(2)}] ` +
+        `z [${b.min.z.toFixed(2)}, ${b.max.z.toFixed(2)}]`);
+    problems.push(...rawColorProblems(asset.file));
   }
   // Node names are checked against the original glTF JSON: three.js's
   // GLTFLoader sanitizes Object3D names on load (strips the dots in

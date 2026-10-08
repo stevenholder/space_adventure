@@ -90,11 +90,14 @@ type cmdWorld struct {
 	// FindNode resolves a resource node (Phase 12): its def, position and
 	// remaining yields. Nil in registries that place none.
 	FindNode func(entityID uint32) (node defs.Node, pos sim.Vec, health int, ok bool)
-	// Gather starts the channel (false = busy); CancelGather ends one
-	// (false = none running); Rand is the server RNG for craft_extra. All
-	// take s.mu themselves. Nil in fixtures that never gather or craft.
+	// Gather and Craft start a channel (false = busy; Craft's first unit
+	// inputs are already out of Player); CancelGather ends ANY channel and
+	// puts a craft unit's inputs back (false = none running); Rand is the
+	// server RNG. All take s.mu themselves. Nil in fixtures that never
+	// gather or craft.
 	Busy         func() bool
-	Gather       func(node uint32, ticks int) bool
+	Gather       func(node uint32, ticks int, hand bool) bool
+	Craft        func(r defs.Recipe, qty, ticks int) bool
 	CancelGather func() bool
 	Rand         func() float64
 	// Phase 13 (use.go): the connection's vitals and cooldowns live under
@@ -156,10 +159,11 @@ const (
 	benchAimHeight = 0.9
 )
 
-// aimHeight is where the cone check points on an NPC: a bench is aimed
-// at its top, anyone else at their own eye (a crawler's is not a person's).
+// aimHeight is where the cone check points on an NPC: a bench or a forge
+// (anvil and ledge at ~0.9 m) is aimed at its top, anyone else at their own
+// eye (a crawler's is not a person's).
 func aimHeight(npc defs.NPC) float64 {
-	if npc.Kind == "bench" {
+	if npc.Kind == "bench" || npc.Kind == "forge" {
 		return benchAimHeight
 	}
 	return npc.EyeHeight()
@@ -414,6 +418,10 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		}))
 
 	case protocol.OpCraft:
+		// Phase 22: a channel of qty units (craft.go). Order: the station in
+		// range (hand recipes need none and ignore npc), busy, the recipe,
+		// wrong_station, locked in its skill, the first unit's materials,
+		// room for its output.
 		var body struct {
 			NPC    uint32 `json:"npc"`
 			Recipe string `json:"recipe"`
@@ -422,32 +430,52 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !decodeStrict(req.Data, &body) {
 			return reply(protocol.StatusMalformed, nil)
 		}
-		npc, pos, ok := w.FindNPC(body.NPC)
-		if !ok {
-			return reply(protocol.StatusNotFound, nil)
+		r, known := w.Reg.Recipes[body.Recipe]
+		station := "hand"
+		if body.NPC != 0 && !(known && r.Station == "hand") {
+			npc, pos, ok := w.FindNPC(body.NPC)
+			if !ok {
+				return reply(protocol.StatusNotFound, nil)
+			}
+			if !inRangeAt(w, pos, aimHeight(npc)) {
+				return refuse("out_of_range")
+			}
+			station = npc.Kind
 		}
-		if !inRangeAt(w, pos, aimHeight(npc)) {
-			return refuse("out_of_range")
+		if w.Busy != nil && w.Busy() {
+			return refuse("busy")
 		}
-		if npc.Kind != "bench" {
+		if !known {
 			return refuse(sim.ReasonUnknownRecipe)
 		}
-		r, ok := w.Reg.Recipes[body.Recipe]
-		if !ok {
-			return refuse(sim.ReasonUnknownRecipe)
+		if r.Station != "hand" && r.Station != station {
+			return refuse("wrong_station")
 		}
-		// craft_extra: one roll per call for one bonus unit (GDD).
-		bonus := 0
-		if w.Rand != nil && w.Rand() < efficacyBonus(w.Reg, w.Player, "engineering") {
-			bonus = 1
+		if body.Qty < 1 || body.Qty > 100 {
+			return refuse(sim.ReasonBadQty)
 		}
-		made, err := sim.Craft(w.Player, r, body.Qty, skillLevel(w.Player, "engineering"), w.Reg, bonus)
-		if err != nil {
+		if err := sim.CraftCheck(w.Player, r, skillLevel(w.Player, r.Skill), w.Reg); err != nil {
 			return refuseErr(err)
 		}
+		if w.Craft == nil {
+			return refuse("busy")
+		}
+		// The first unit starts now: its inputs leave the bag with the reply.
+		equipped := make(map[string]string, len(w.Player.Equipped))
+		for k, v := range w.Player.Equipped {
+			equipped[k] = v
+		}
+		if err := sim.TakeUnit(w.Player, r); err != nil {
+			return refuseErr(err)
+		}
+		duration := craftDuration(w.Reg, w.Player, r)
+		if !w.Craft(r, body.Qty, craftTicks(duration)) {
+			sim.ReturnUnit(w.Player, r, w.Reg)
+			w.Player.Equipped = equipped
+			return refuse("busy")
+		}
 		return reply(protocol.StatusOK, encodeJSON(map[string]any{
-			"inventory": w.Player.Inventory,
-			"crafted":   map[string]any{"item": r.Output.Item, "qty": made},
+			"recipe": r.ID, "qty": body.Qty, "duration": duration,
 		}))
 
 	case protocol.OpGather:
@@ -472,8 +500,19 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if w.Busy != nil && w.Busy() {
 			return refuse("busy")
 		}
-		if !toolSatisfies(w.Reg, w.Player.Equipped["tool"], nd.Tool) {
+		// Phase 22: no worn tool means the hands (×3, one unit, half XP),
+		// except where the tool is the node's gate (copper's mk2).
+		worn := w.Player.Equipped["tool"]
+		hand := !toolSatisfies(w.Reg, worn, nd.Tool)
+		if hand && nd.Tool == handRefusedTool {
 			return refuse("no_tool")
+		}
+		mult := handGatherMult
+		if !hand {
+			mult = 1
+			if gm := w.Reg.Items[worn].GatherMult; gm > 0 {
+				mult = gm
+			}
 		}
 		if skillLevel(w.Player, nd.Skill) < nd.Level {
 			return refuse(sim.ReasonLocked)
@@ -487,11 +526,11 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if w.Gather == nil {
 			return refuse("busy")
 		}
-		duration := gatherDuration(w.Reg, w.Player, nd)
-		if !w.Gather(body.Node, int(math.Round(duration*sim.TickHz))) {
+		duration := gatherDuration(w.Reg, w.Player, nd, mult)
+		if !w.Gather(body.Node, int(math.Round(duration*sim.TickHz)), hand) {
 			return refuse("busy")
 		}
-		return reply(protocol.StatusOK, encodeJSON(map[string]any{"node": body.Node, "duration": duration}))
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{"node": body.Node, "duration": duration, "hand": hand}))
 
 	case protocol.OpUse:
 		var body struct {

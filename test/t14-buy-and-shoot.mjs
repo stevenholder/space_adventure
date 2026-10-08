@@ -105,6 +105,11 @@ console.log(`walked to ${Math.hypot(...sub(npcPos, me())).toFixed(2)} m from the
 
 ws.send(cmd(seq, 0x0001, { npc: npcId })); const list = await wait(() => results.find(r => r.op === 1))
 console.log('shop_list ->', list?.status === 0 ? JSON.stringify(list.body.stock) : `REFUSED ${JSON.stringify(list?.body)}`)
+// Prices and the start purse are data (Phase 22 moved both; a dev fleet funds
+// guests with SA_START): read them, never hard-code them.
+const priceOf = (item) => list?.body?.stock?.find(s => s.item === item)?.price
+ws.send(cmd(++seq, 0x0004, {})); const inv0 = await wait(() => results.find(r => r.op === 4))
+const purse = inv0?.body?.credits ?? 0
 ws.send(cmd(++seq, 0x0002, { npc: npcId, item: 'weapon.pulse', qty: 1 })); const buy = await wait(() => results.find(r => r.op === 2))
 console.log('shop_buy  ->', buy?.status === 0 ? `OK credits=${buy.body.credits} inv=${JSON.stringify(buy.body.inventory)}` : `REFUSED ${JSON.stringify(buy?.body)}`)
 ws.send(cmd(++seq, 0x0003, { slot: 'primary', item: 'weapon.pulse' })); const eq = await wait(() => results.find(r => r.op === 3))
@@ -153,7 +158,7 @@ console.log(`fire -> shot_fired=${shot} hit=${hits} target health ${before} -> $
 // recorded as a PASS — a test that cannot fail is not a test.
 const checks = [
   ['shop_list returned stock', list?.status === 0 && Array.isArray(list.body.stock) && list.body.stock.length > 0],
-  ['shop_buy granted the rifle', buy?.status === 0 && buy.body.credits === 750],
+  ['shop_buy granted the rifle', buy?.status === 0 && buy.body.credits === purse - priceOf('weapon.pulse')],
   ['equip set primary', eq?.status === 0 && eq.body.equipped?.primary === 'weapon.pulse'],
   ['equip set chest', eqArmor?.status === 0 && eqArmor.body.equipped?.chest === 'armor.suit.scout'],
   ['worn event announced the chest slot', !!worn],

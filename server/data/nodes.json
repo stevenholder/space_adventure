@@ -2,8 +2,57 @@
   "$comment": "Phase 12 resource nodes. Contract: docs/GDD.md 'Phase 12 - the artisan loop' -> 'Nodes'. Placed by zone files like NPCs ({type:'node', def, pos, yaw}); a node's snapshot health IS its remaining yields (0 = depleted). channel/respawn in seconds, xp per yield in `skill`, loot rolled once per yield.",
   "version": 1,
   "nodes": [
-    {"id": "node.ore.iron", "name": "Iron Node", "asset": "prop.node.ore.iron", "skill": "mining", "level": 1, "tool": "tool.drill", "channel": 3.0, "yields": 5, "respawn": 90, "loot": "loot.node.iron", "xp": 25},
-    {"id": "node.ore.copper", "name": "Copper Node", "asset": "prop.node.ore.copper", "skill": "mining", "level": 10, "tool": "tool.drill.mk2", "channel": 4.0, "yields": 4, "respawn": 120, "loot": "loot.node.copper", "xp": 60},
-    {"id": "node.wreck", "name": "Wreck", "asset": "prop.wreck", "skill": "salvaging", "level": 1, "tool": "tool.cutter", "channel": 3.0, "yields": 4, "respawn": 120, "loot": "loot.node.wreck", "xp": 30}
+    {
+      "id": "node.ore.iron",
+      "name": "Iron Node",
+      "asset": "prop.node.ore.iron",
+      "skill": "mining",
+      "level": 1,
+      "tool": "tool.drill.crude",
+      "channel": 3.0,
+      "yields": 5,
+      "respawn": 90,
+      "loot": "loot.node.iron",
+      "xp": 25
+    },
+    {
+      "id": "node.crystal",
+      "name": "Crystal Node",
+      "asset": "prop.node.crystal",
+      "skill": "mining",
+      "level": 1,
+      "tool": "tool.drill.crude",
+      "channel": 3.5,
+      "yields": 4,
+      "respawn": 150,
+      "loot": "loot.node.crystal",
+      "xp": 40
+    },
+    {
+      "id": "node.ore.copper",
+      "name": "Copper Node",
+      "asset": "prop.node.ore.copper",
+      "skill": "mining",
+      "level": 10,
+      "tool": "tool.drill.mk2",
+      "channel": 4.0,
+      "yields": 4,
+      "respawn": 120,
+      "loot": "loot.node.copper",
+      "xp": 60
+    },
+    {
+      "id": "node.wreck",
+      "name": "Wreck",
+      "asset": "prop.wreck",
+      "skill": "salvaging",
+      "level": 1,
+      "tool": "tool.cutter",
+      "channel": 3.0,
+      "yields": 4,
+      "respawn": 120,
+      "loot": "loot.node.wreck",
+      "xp": 30
+    }
   ]
 }

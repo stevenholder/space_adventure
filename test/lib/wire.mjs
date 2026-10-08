@@ -163,7 +163,7 @@ export function decodeSpawn(p) {
 }
 
 // event (0x0007): u32 entity_id | u16 event_id | u32 data_len | bytes data.
-export const EVENT = { EQUIPPED: 0x0006, WORN: 0x000f, CHAT: 0x0011 }
+export const EVENT = { EQUIPPED: 0x0006, SKILL_XP: 0x000d, GATHER_END: 0x000e, WORN: 0x000f, CHAT: 0x0011, CRAFT_END: 0x0012 }
 export function decodeEvent(p) {
   if (p.length < 10) throw new Error(`event: bad size ${p.length}`)
   const entityId = p.readUInt32LE(0)
@@ -186,8 +186,16 @@ export function decodeChat(data) {
   return i < 0 ? { name: s, text: '' } : { name: s.slice(0, i), text: s.slice(i + 1) }
 }
 
+// A `craft_end` event's data is JSON `{recipe, reason, item, qty}` (Phase 22):
+// one per finished unit (`done`, item/qty what landed) or the channel's
+// early end (the reason, item/qty the unit output that did NOT land).
+export function decodeCraftEnd(data) {
+  const o = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : Buffer.from(data).toString('utf8'))
+  return { recipe: o.recipe, reason: o.reason, item: o.item, qty: o.qty }
+}
+
 // cmd (0x000E) opcodes — docs/PROTOCOL.md "Constants" (only those a harness here names).
-export const OP = { CHAT: 0x0016 }
+export const OP = { INVENTORY: 0x0004, EQUIP: 0x0003, GATHER: 0x0010, GATHER_CANCEL: 0x0011, CRAFT: 0x0012, CHAT: 0x0016 }
 
 /** cmd: u16 seq | u16 opcode | u32 data_len | bytes data (UTF-8 JSON; a string/Buffer is sent as is). */
 export function encodeCmd(seq, opcode, body) {

@@ -2025,9 +2025,17 @@ PLAY: it joined in it.
 - **C182 Nothing else moved.** Sweep green incl. `godot-codec` (the frame
   is hair's shape); C153–C177 hold.
 
-# Phase 22 — the refinery: make everything, from nothing (drafted 2026-10-08)
+# Phase 22 — the refinery: make everything, from nothing (2026-10-08)
 
-### Where Phase 22 stands (2026-10-08, drafted)
+### Where Phase 22 stands (2026-10-08, built)
+
+Built on `feat/phase22-refinery`: C183–C189 recorded (docs/QA-STATUS.md
+"Phase 22"). Two calls made in the wave: the forge and a wreck stand at
+the spawn pad (the scrapyard's guard kills an unarmed hand-gatherer),
+crystal is Mining 1; `SA_START` seats dev fleets rich (kind) while prod
+starts from nothing. Owed: t43/t36 on kind after deploy, a new
+character on the install.
+
 
 The user's call (2026-10-07/08): step back from buying — a Palworld-shaped
 refinement arc, raw → refined → refined again or an item, timed work at
@@ -2045,9 +2053,9 @@ event (the gather_end shape); `gather_cancel` cancels any channel;
 **Playable proof.** A fresh character: 0 cr, empty bag. Pull iron and
 crystal from the spawn rocks by hand, scrap from a wreck by hand, sort
 the scrap in your hands (1 s a part), make a crude drill (Smithing 1),
-drill faster; smelt ingots and beat plates at the scrapyard forge (the
-bar reads `MAKING STEEL PLATE 2/4`); hand in 10 scrap at the board for
-the cutter money; at the relay bench assemble a sidearm and a Scout
+drill faster; smelt ingots and beat plates at the pad's forge (the bar
+reads `MAKING STEEL PLATE 2/4`); hand in 10 scrap at the board for the
+cutter money; at the relay bench assemble a sidearm and a Scout
 suit; load cells by hand; shoot. Open the shop: everything it sells, you
 could have made, and it costs more. Level Smithing to 15: the core
 recipe lights.
@@ -2057,7 +2065,7 @@ recipe lights.
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
 | 1 | 0 | `craft.json` rule table (base shapes per kind, rarity multipliers, seconds, skills, exceptions) and `tools/gen_recipes.py` → `recipes.json`; a Go test that regenerates and diffs | `server/data/craft.json`, `tools/gen_recipes.py`, `server/internal/defs/recipes_test.go` | `go test ./internal/defs` fails on a stale recipes.json |
-| 2 | 1 | Data: the eight refined mats + `mat.hide`, `mat.crystal`, `tool.drill.crude`; `node.crystal`; hide and refined drops in loot tables; `npc.forge` in the scrapyard; crystal nodes placed; `start_credits` 0, `start_items` []; `mission.first_scrap`; three skills rows + the synergy; shop prices ≥ 1.5× | `server/data/*.json`, `zones/*.json` | `go test ./...` (defs audit, wildlife audit, a new price-vs-recipe test) |
+| 2 | 1 | Data: the eight refined mats + `mat.hide`, `mat.crystal`, `tool.drill.crude`; `node.crystal`; hide and refined drops in loot tables; `npc.forge` at the spawn pad, a wreck at the pad; crystal nodes placed; `start_credits` 0, `start_items` []; `mission.first_scrap`; three skills rows + the synergy; shop prices ≥ 1.5× | `server/data/*.json`, `zones/*.json` | `go test ./...` (defs audit, wildlife audit, a new price-vs-recipe test) |
 | 3 | 1 | Server: the craft channel on the gather machinery (per-unit inputs out/back, output + XP per unit, cancel paths, `craft_end`); `station`/`skill`/`seconds` in defs; `npc` 0 = hands; `wrong_station`; hand-gathering (×3, one unit, half XP; copper refused `no_tool`); PROTOCOL rows | `server/internal/server/gather.go`, `cmd.go`, `sim/artisan.go`, `skillsengine.go`, `docs/PROTOCOL.md` | Go tests: a 3-unit craft lands three outputs at the right ticks, a cancel mid-unit refunds, the wrong station, hands on iron, hands refused on copper, XP to the recipe's skill |
 | 4 | 1 | Harness: `wire.mjs` `EVENT.CRAFT_END`; `t43-refinery.mjs`: the whole proof on a bare server from 0 cr; every item id has a recipe; refusals | `test/lib/wire.mjs`, `test/t43-refinery.mjs` | bare server + kind |
 | 5 | 1 | Client: `Recipe.station/skill/seconds` in Defs; station panel filters by the NPC's kind, rows show skill/level/seconds, CRAFT starts the channel, the gather bar reads `MAKING <item> n/m`, `craft_end` decode; CRAFT tab in the backpack for `hand`; `-uiCraft <recipe>` | `client/shared/Net/Defs.cs`, `UI/Craft*.cs`, `UI/Inventory.cs`, `Hud.cs`, `Interact.cs` | shots `p22-hand-craft.png`, `p22-forge-channel.png`; `-selftest` (filter, greying, bar text) |
@@ -2077,8 +2085,10 @@ recipe lights.
   it with the unit's inputs back in the bag; `gather_cancel` ends it.
 - **C186 The tree holds.** Hands (no NPC), forge, bench each accept
   their own recipes and refuse the others (`wrong_station`); `t43`
-  makes a sidearm and a Scout suit from ore, scrap, hide and crystal
-  with the shop untouched and 0 cr to start.
+  walks the road from 0 cr — hand scrap and crystal, parts, the crude
+  drill, ingots and a plate at the pad forge, the relay bench — with
+  the shop untouched (the sidearm and the suit themselves are hours of
+  play: a gun for hide, Engineering 5; the harness proves to the bench).
 - **C187 From nothing.** A new character has 0 cr and an empty bag; iron,
   scrap and crystal yield by hand (×3, one unit); copper by hand is
   `no_tool`; the crude drill crafts by hand and gathers faster;

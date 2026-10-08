@@ -123,7 +123,7 @@ namespace SpaceAdventure.Game.UI
             }
 
             // ---- Phase 12 channel bar, under the crosshair -------------------
-            _channel = Styles.Progress(0f, Styles.Amber, "", 160f);
+            _channel = Styles.Progress(0f, Styles.Amber, "", 260f); // Phase 22: wide enough for "MAKING STEEL PLATE 2/4"
             Styles.Pin(_channel, Control.LayoutPreset.Center, 0, 34);
             _channel.Visible = false;
             root.AddChild(_channel);
