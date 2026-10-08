@@ -159,10 +159,10 @@
         },
         {
           "item": "mat.parts",
-          "qty": 2
+          "qty": 3
         },
         {
-          "item": "mat.wiring",
+          "item": "mat.crystal",
           "qty": 1
         }
       ],

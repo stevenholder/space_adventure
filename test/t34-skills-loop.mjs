@@ -187,6 +187,11 @@ await walkTo(c.ents.get(shopId).pos, 2.4, 20000)
 console.log(`at the quartermaster: ${dist(c.ents.get(shopId).pos, me().pos).toFixed(1)} m`)
 
 const preShips = new Set([...c.spawns].filter(([, v]) => v.type === 2).map(([id]) => id))
+// Prices are data (Phase 22 moved them): Commerce pays 1 XP per whole 5 cr
+// of each purchase.
+const stock = (await sendCmd(0x0001, { npc: shopId }))?.body?.stock ?? []
+const priceOf = (item) => stock.find((s) => s.item === item)?.price ?? 0
+const commerceWant = ['weapon.pulse', 'ammo.cell', 'ship.v1'].reduce((n, it) => n + Math.floor(priceOf(it) / 5), 0)
 const buyGun = await sendCmd(0x0002, { npc: shopId, item: 'weapon.pulse', qty: 1 })
 const buyAmmo = await sendCmd(0x0002, { npc: shopId, item: 'ammo.cell', qty: 1 })
 const buyShip = await sendCmd(0x0002, { npc: shopId, item: 'ship.v1', qty: 1 })
@@ -196,8 +201,8 @@ const eq = await sendCmd(0x0003, { slot: 'primary', item: 'weapon.pulse' })
 const rl = await sendCmd(0x0005, {})
 check('armed', eq?.status === 0 && rl?.status === 0)
 
-await wait(() => lastXP('commerce') >= 170, 3000)
-check('Commerce: 851 cr moved = 170 XP', lastXP('commerce') === 170, `${lastXP('commerce')} xp`)
+await wait(() => lastXP('commerce') >= commerceWant, 3000)
+check(`Commerce: 1 XP per 5 cr moved = ${commerceWant} XP`, lastXP('commerce') === commerceWant, `${lastXP('commerce')} xp`)
 check('Athletics trained on the sprint', lastXP('athletics') > 0, `${lastXP('athletics')} xp`)
 
 // ---- act 2: fly the C34 arc as pilot -----------------------------------------

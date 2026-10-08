@@ -1,13 +1,8 @@
 {
   "$comment": "Item table. Contract: docs/GDD.md 'Items and currency' + 'Weapons'. Owned by the `game` agent. equip_slots is the character panel's slot set (Phase 11.7, GDD 'Equipment'). Shipped to clients in the `defs` message; never duplicated in the client.",
   "version": 1,
-  "start_credits": 1000,
-  "start_items": [
-    {
-      "item": "ammo.cell",
-      "qty": 120
-    }
-  ],
+  "start_credits": 0,
+  "start_items": [],
   "inv_slots": 20,
   "items": [
     {
@@ -501,6 +496,7 @@
       "slot": "tool",
       "stack_max": 1,
       "value": 15,
+      "gather_mult": 1.5,
       "desc": "Scrap and spite. Slow, but it bites iron."
     },
     {

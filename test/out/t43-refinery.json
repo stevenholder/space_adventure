@@ -1,0 +1,119 @@
+{
+ "when": "2026-10-08T17:36:01.314Z",
+ "roadMs": 715101,
+ "forgeLook": "0.88 m feet-to-feet, look at pos + up×0.9",
+ "checks": [
+  {
+   "n": "C187 a fresh guest has 0 cr",
+   "ok": true
+  },
+  {
+   "n": "C187 a fresh guest has an empty bag",
+   "ok": true
+  },
+  {
+   "n": "C183 every item past the raws is exactly one recipe's output",
+   "ok": true
+  },
+  {
+   "n": "defs recipes carry station/skill/seconds",
+   "ok": true
+  },
+  {
+   "n": "defs carries the forge with kind forge",
+   "ok": true
+  },
+  {
+   "n": "C186 the hands refuse a forge recipe (wrong_station)",
+   "ok": true
+  },
+  {
+   "n": "C186 the hands refuse a bench recipe (wrong_station)",
+   "ok": true
+  },
+  {
+   "n": "C187 copper by hand is no_tool",
+   "ok": true
+  },
+  {
+   "n": "C187 crystal by hand: one unit, ×3 channel",
+   "ok": true
+  },
+  {
+   "n": "C187 scrap by hand at the pad wreck: ×3, one unit",
+   "ok": true
+  },
+  {
+   "n": "C185 gather_cancel ends a craft `cancel`, the unit's inputs back",
+   "ok": true
+  },
+  {
+   "n": "C185 parts in the hands: duration = seconds, craft_end done",
+   "ok": true
+  },
+  {
+   "n": "C187 iron by hand: hand=true, channel ×3, lands when promised",
+   "ok": true
+  },
+  {
+   "n": "C187 one unit per yield by hand",
+   "ok": true
+  },
+  {
+   "n": "C186 the pad forge takes its own recipe (1.02 m feet-to-feet, look at pos + up×0.9)",
+   "ok": true
+  },
+  {
+   "n": "C185 stepping away ends it `moved`, the ore back",
+   "ok": true
+  },
+  {
+   "n": "C185 ingots at the forge: one duration per unit, a craft_end per unit",
+   "ok": true
+  },
+  {
+   "n": "C185 a craft past the ore ends missing_materials after the last output",
+   "ok": true
+  },
+  {
+   "n": "C187 the crude drill crafts in the hands",
+   "ok": true
+  },
+  {
+   "n": "the crude drill goes in TOOL",
+   "ok": true
+  },
+  {
+   "n": "C187 the crude drill gathers faster: channel × gather_mult (less Mining efficacy), the table's count",
+   "ok": true
+  },
+  {
+   "n": "C186 a steel plate beaten at the pad forge from nothing (11.9 min)",
+   "ok": true
+  },
+  {
+   "n": "C185 Smithing paid for the work (level ≥ 3)",
+   "ok": true
+  },
+  {
+   "n": "C187 hand gathering paid half XP (salvaging 1 unit = half the wreck)",
+   "ok": true
+  },
+  {
+   "n": "reached the relay bench",
+   "ok": true
+  },
+  {
+   "n": "C186 the bench refuses a forge recipe (wrong_station)",
+   "ok": true
+  },
+  {
+   "n": "C186 the bench takes the sidearm up to its materials (wiring owed)",
+   "ok": true
+  },
+  {
+   "n": "C186 the shop untouched: still 0 cr",
+   "ok": true
+  }
+ ]
+}

@@ -75,7 +75,9 @@
    ],
    "yaw": -155.0
   },
-    {"$note": "Phase 12 workbench, beside the dispatcher (GDD 'The workbench and recipes')", "type": "npc", "def": "npc.workbench", "pos": [-4.0, 0.0, 1.0], "yaw": -155.0}
+    {"$note": "Phase 12 workbench, beside the dispatcher (GDD 'The workbench and recipes')", "type": "npc", "def": "npc.workbench", "pos": [-4.0, 0.0, 1.0], "yaw": -155.0},
+    {"$note": "Phase 22 crystal pair, east of the mast past the tower (GDD 'The refinery')", "type": "node", "def": "node.crystal", "pos": [14.0, 0.0, 3.0], "yaw": 50.0},
+    {"type": "node", "def": "node.crystal", "pos": [11.5, 0.0, 8.5], "yaw": -110.0}
  ],
  "props": [
   {

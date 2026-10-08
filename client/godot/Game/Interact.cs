@@ -146,7 +146,7 @@ namespace SpaceAdventure.Game
                 // aim at those, not 1.7 m over them, and an NPC at its own
                 // eye (server cmd.go aimHeight).
                 float aim = v.Type == EntityType.Node ? 0.6f
-                    : v.Type == EntityType.Npc && v.Label == "npc.workbench" ? 0.9f
+                    : v.Type == EntityType.Npc && UI.CraftRules.StationOfNpc(_character.Defs, v.Label) != "" ? 0.9f
                     : v.Type == EntityType.Npc ? _character.Defs.Npc(v.Label).EyeHeight
                     : EyeHeight;
                 Vector3 targetEye = targetPos + targetPos.Normalized() * aim;
@@ -213,7 +213,12 @@ namespace SpaceAdventure.Game
             string verb = nd?.Skill == "salvaging" ? "cut" : "drill";
             if (v.Depleted) return $"{Nice(nd?.Name ?? v.Label)}  ·  depleted";
             if (nd != null && !_character.Defs.ToolSatisfies(_character.Worn("tool"), nd.Tool))
+            {
+                // Phase 22: every node but copper gives to bare hands, slower.
+                if (nd.Id != "node.ore.copper")
+                    return $"{InteractKey}  ·  {(nd.Skill == "salvaging" ? "pull at" : "dig at")} {nd.Name?.ToLowerInvariant() ?? v.Label} by hand";
                 return $"{InteractKey}  ·  {verb}  ·  needs {_character.Defs.ItemName(nd.Tool)}";
+            }
             return $"{InteractKey}  ·  {verb} {nd?.Name?.ToLowerInvariant() ?? v.Label}";
         }
 

@@ -178,10 +178,14 @@ console.log(`at the quartermaster: ${dist(ents.get(shopId).pos, me().pos).toFixe
 
 const list = await sendCmd(0x0001, { npc: shopId })
 check('shop_list returned stock', list?.status === 0 && list.body.stock?.length > 0)
+// Prices and the start purse are data (Phase 22; a dev fleet funds guests
+// with SA_START): read them, never hard-code them.
+const priceOf = (item) => list?.body?.stock?.find((s) => s.item === item)?.price
+const purse = (await sendCmd(0x0004, {}))?.body?.credits ?? 0
 const buyGun = await sendCmd(0x0002, { npc: shopId, item: 'weapon.pulse', qty: 1 })
-check('bought the rifle (1000 -> 750)', buyGun?.status === 0 && buyGun.body.credits === 750, `credits ${buyGun?.body?.credits}`)
+check(`bought the rifle (${purse} -> ${purse - priceOf('weapon.pulse')})`, buyGun?.status === 0 && buyGun.body.credits === purse - priceOf('weapon.pulse'), `credits ${buyGun?.body?.credits}`)
 const buyAmmo = await sendCmd(0x0002, { npc: shopId, item: 'ammo.cell', qty: 1 })
-check('bought a cell (750 -> 749)', buyAmmo?.status === 0 && buyAmmo.body.credits === 749, `credits ${buyAmmo?.body?.credits}`)
+check(`bought a cell (-${priceOf('ammo.cell')})`, buyAmmo?.status === 0 && buyAmmo.body.credits === purse - priceOf('weapon.pulse') - priceOf('ammo.cell'), `credits ${buyAmmo?.body?.credits}`)
 const eq = await sendCmd(0x0003, { slot: 'primary', item: 'weapon.pulse' })
 check('equipped the rifle', eq?.status === 0 && eq.body.equipped?.primary === 'weapon.pulse')
 const rl = await sendCmd(0x0005, {})

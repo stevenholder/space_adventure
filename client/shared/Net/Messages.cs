@@ -132,6 +132,7 @@ namespace SpaceAdventure.Net
         public const ushort Worn = 0x000F; // armor: "slot=item", item empty = cleared
         public const ushort Attack = 0x0010; // an attack starts (NPC wind-up or a melee swing): entity = attacker, data = u32 target (0 = none)
         public const ushort Chat = 0x0011; // Phase 20: entity = speaker, data = name + "\0" + text
+        public const ushort CraftEnd = 0x0012; // Phase 22: {recipe,reason,item,qty} — gather_end's shape, one per finished unit
     }
 
     /// <summary>collider kinds.</summary>
@@ -296,6 +297,44 @@ namespace SpaceAdventure.Net
         public uint EntityId;
         public ushort EventId;
         public byte[] Data;
+    }
+
+    /// <summary>
+    /// A channel's end, as gather_end (0x000E, `node`) and craft_end (0x0012,
+    /// `recipe`) carry it: JSON {node|recipe, reason, item, qty}. reason
+    /// "done" is a finished unit (a craft keeps running if more are owed);
+    /// anything else ends the channel. Fails soft: a body this client cannot
+    /// read is a blank end, never a throw in the message loop.
+    /// </summary>
+    public sealed class ChannelEnd
+    {
+        public string Node = "";
+        public string Recipe = "";
+        public string Reason = "";
+        public string Item = "";
+        public int Qty;
+
+        public static ChannelEnd Parse(byte[] data) =>
+            Parse(data == null ? "" : WireReader.Utf8.GetString(data));
+
+        public static ChannelEnd Parse(string json)
+        {
+            var e = new ChannelEnd();
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(string.IsNullOrEmpty(json) ? "{}" : json);
+                e.Node = o["node"]?.ToString() ?? "";
+                e.Recipe = (string)o["recipe"] ?? "";
+                e.Reason = (string)o["reason"] ?? "";
+                e.Item = (string)o["item"] ?? "";
+                e.Qty = (int?)o["qty"] ?? 0;
+            }
+            catch (Newtonsoft.Json.JsonException) { }
+            catch (FormatException) { }
+            catch (InvalidCastException) { }
+            catch (ArgumentException) { }
+            return e;
+        }
     }
 
     /// <summary>

@@ -68,6 +68,9 @@ type Item struct {
 	// (a node asking for tool.drill accepts tool.drill.mk2).
 	Value      int64  `json:"value,omitempty"`
 	Supersedes string `json:"supersedes,omitempty"`
+	// Phase 22: a worn tool's channel multiplier on the nodes it works
+	// (the crude drill's 1.5); 0 reads as 1.
+	GatherMult float64 `json:"gather_mult,omitempty"`
 	// Phase 13 (GDD "use", "Weapon mods"): what `use` does with the item,
 	// and the deltas a worn mod adds to the primary's weapon table.
 	Consumable *Consumable `json:"consumable,omitempty"`
@@ -128,16 +131,20 @@ type Node struct {
 	XP      int64   `json:"xp"`
 }
 
-// Recipe is one workbench recipe (server/data/recipes.json, Phase 12, GDD
-// "The workbench and recipes"): every input × qty is consumed, the output ×
-// qty granted, atomically; Level gates on Engineering.
+// Recipe is one generated recipe (server/data/recipes.json, GDD "The
+// refinery", Phase 22): one unit takes Inputs and Seconds of channel at
+// Station (hand|bench|forge) and lands Output; Level gates and XP lands in
+// Skill.
 type Recipe struct {
-	ID     string    `json:"id"`
-	Name   string    `json:"name"`
-	Level  int       `json:"level"`
-	Inputs []ItemQty `json:"inputs"`
-	Output ItemQty   `json:"output"`
-	XP     int64     `json:"xp"`
+	ID      string    `json:"id"`
+	Name    string    `json:"name"`
+	Level   int       `json:"level"`
+	Skill   string    `json:"skill"`
+	Station string    `json:"station"`
+	Seconds float64   `json:"seconds"`
+	Inputs  []ItemQty `json:"inputs"`
+	Output  ItemQty   `json:"output"`
+	XP      int64     `json:"xp"`
 }
 
 // ItemQty is an item id and a count.
@@ -376,15 +383,18 @@ type Registry struct {
 	// Equip validates against (items.json equip_slots, Phase 11.7).
 	EquipSlots []string
 	Missions   map[string]Mission
-	Skills     []Skill
-	Synergies  []Synergy
-	Awards     SkillAwards
-	Unlocks    []UnlockRequirement
-	Items      map[string]Item
-	Entities   map[string]EntityDef
-	NPCs       map[string]NPC
-	Zones      map[string]Zone
-	Loot       map[string][]LootEntry
+	// MissionOrder is missions.json's file order: the board lists in it
+	// (Phase 22 puts mission.first_scrap first).
+	MissionOrder []string
+	Skills       []Skill
+	Synergies    []Synergy
+	Awards       SkillAwards
+	Unlocks      []UnlockRequirement
+	Items        map[string]Item
+	Entities     map[string]EntityDef
+	NPCs         map[string]NPC
+	Zones        map[string]Zone
+	Loot         map[string][]LootEntry
 	// Phase 14: wildlife herds (wildlife.json), file order kept.
 	Herds []Herd
 	// Phase 12: nodes and recipes, indexed by id; the slices keep file order
@@ -501,6 +511,7 @@ func load(fsys fs.FS) (*Registry, error) {
 		}
 		for _, m := range mf.Missions {
 			reg.Missions[m.ID] = m
+			reg.MissionOrder = append(reg.MissionOrder, m.ID)
 		}
 	}
 	if raw, err := fs.ReadFile(fsys, "nodes.json"); err == nil {
@@ -586,6 +597,7 @@ type payloadNPC struct {
 	Name      string  `json:"name"`
 	Asset     string  `json:"asset"`
 	Verb      string  `json:"verb"`
+	Kind      string  `json:"kind,omitempty"` // Phase 22: the station panel filters recipes by it
 	Radius    float64 `json:"radius,omitempty"`
 	Height    float64 `json:"height,omitempty"`
 	EyeHeight float64 `json:"eye_height,omitempty"`
@@ -638,7 +650,7 @@ func buildPayload(reg *Registry) ([]byte, error) {
 		},
 	}
 	for id, n := range reg.NPCs {
-		p.NPCs[id] = payloadNPC{Name: n.Name, Asset: n.Asset, Verb: n.Verb,
+		p.NPCs[id] = payloadNPC{Name: n.Name, Asset: n.Asset, Verb: n.Verb, Kind: n.Kind,
 			Radius: n.RadiusM, Height: n.HeightM, EyeHeight: n.EyeHeightM}
 	}
 	b, err := json.Marshal(p)
@@ -677,6 +689,17 @@ func auditArtisan(reg *Registry) error {
 		}
 	}
 	for _, r := range reg.Recipes {
+		// The recipe generator and skills.json are two halves; a skill id
+		// that drifts must kill the server, not lock the recipe forever.
+		if !skill(r.Skill) {
+			return fmt.Errorf("defs: recipe %s: skill %q unknown", r.ID, r.Skill)
+		}
+		if r.Station != "hand" && r.Station != "bench" && r.Station != "forge" {
+			return fmt.Errorf("defs: recipe %s: station %q is not hand, bench or forge", r.ID, r.Station)
+		}
+		if r.Seconds <= 0 {
+			return fmt.Errorf("defs: recipe %s: seconds must be positive", r.ID)
+		}
 		for _, in := range append([]ItemQty{r.Output}, r.Inputs...) {
 			if _, ok := reg.Items[in.Item]; !ok {
 				return fmt.Errorf("defs: recipe %s: item %q unknown", r.ID, in.Item)

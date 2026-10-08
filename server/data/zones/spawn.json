@@ -2,7 +2,11 @@
   "$comment": "Spawn zone. Contract: docs/GDD.md 'Static colliders' (authoring frame). Local frame: +x east, +y up (height ABOVE the terrain surface), +z north; yaw in degrees about +y, 0 = facing +z. The spawn disc is already flat, so no flattening.",
   "version": 1,
   "id": "spawn",
-  "origin_dir": [0.0, 1.0, 0.0],
+  "origin_dir": [
+    0.0,
+    1.0,
+    0.0
+  ],
   "flatten_radius": 0.0,
   "flatten_falloff": 0.0,
   "colliders": [],
@@ -10,24 +14,116 @@
     {
       "type": "npc",
       "def": "npc.quartermaster",
-      "pos": [3.0, 0.0, 2.0],
+      "pos": [
+        3.0,
+        0.0,
+        2.0
+      ],
       "yaw": -124.0
     },
     {
       "type": "npc",
       "def": "npc.recruit",
-      "pos": [-3.0, 0.0, 2.0],
+      "pos": [
+        -3.0,
+        0.0,
+        2.0
+      ],
       "yaw": 124.0
     },
     {
       "type": "npc",
       "def": "npc.veteran",
-      "pos": [-4.5, 0.0, 0.5],
+      "pos": [
+        -4.5,
+        0.0,
+        0.5
+      ],
       "yaw": 124.0
     },
-    {"$note": "Phase 12 ore field, east of the pad inside the flat disc (GDD 'Nodes': iron x3, copper x1)", "type": "node", "def": "node.ore.iron", "pos": [16.0, 0.0, 4.0], "yaw": 20.0},
-    {"type": "node", "def": "node.ore.iron", "pos": [19.0, 0.0, -2.0], "yaw": 95.0},
-    {"type": "node", "def": "node.ore.iron", "pos": [14.5, 0.0, -6.0], "yaw": -40.0},
-    {"type": "node", "def": "node.ore.copper", "pos": [22.0, 0.0, 1.5], "yaw": 160.0}
+    {
+      "$note": "Phase 12 ore field, east of the pad inside the flat disc (GDD 'Nodes': iron x3, copper x1)",
+      "type": "node",
+      "def": "node.ore.iron",
+      "pos": [
+        16.0,
+        0.0,
+        4.0
+      ],
+      "yaw": 20.0
+    },
+    {
+      "type": "node",
+      "def": "node.ore.iron",
+      "pos": [
+        19.0,
+        0.0,
+        -2.0
+      ],
+      "yaw": 95.0
+    },
+    {
+      "type": "node",
+      "def": "node.ore.iron",
+      "pos": [
+        14.5,
+        0.0,
+        -6.0
+      ],
+      "yaw": -40.0
+    },
+    {
+      "type": "node",
+      "def": "node.ore.copper",
+      "pos": [
+        22.0,
+        0.0,
+        1.5
+      ],
+      "yaw": 160.0
+    },
+    {
+      "$note": "Phase 22 crystal pair, north of the ore field (GDD 'The refinery'): the route to the camp leaves south-east, these stand 17+ m off it",
+      "type": "node",
+      "def": "node.crystal",
+      "pos": [
+        17.0,
+        0.0,
+        9.0
+      ],
+      "yaw": 35.0
+    },
+    {
+      "type": "node",
+      "def": "node.crystal",
+      "pos": [
+        20.5,
+        0.0,
+        6.5
+      ],
+      "yaw": -70.0
+    },
+    {
+      "$note": "Phase 22: the pad's forge, north of the ore field toward the crystal pair -- smelt at home, assemble at the relay (GDD 'The refinery'); a fresh character cannot survive the scrapyard",
+      "type": "npc",
+      "def": "npc.forge",
+      "pos": [
+        11.0,
+        0.0,
+        9.5
+      ],
+      "yaw": 200.0
+    },
+    {
+      "$note": "Phase 22: one wreck at the pad, west side, so the first scrap needs no fight; the scrapyard's two stay the richer, guarded source",
+      "type": "node",
+      "def": "node.wreck",
+      "pos": [
+        -12.0,
+        0.0,
+        -5.0
+      ],
+      "yaw": 60.0
+    }
   ]
 }

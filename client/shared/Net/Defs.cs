@@ -57,6 +57,8 @@ namespace SpaceAdventure.Net
         // the lesser tool this one stands in for.
         [JsonProperty("value")] public long Value { get; set; }
         [JsonProperty("supersedes")] public string Supersedes { get; set; } = "";
+        /// <summary>Phase 22: a tool's gather channel multiplier (the crude drill ×1.5); 0 = absent.</summary>
+        [JsonProperty("gather_mult")] public double GatherMult { get; set; }
 
         // Phase 13: what `use` does with it, and a mod's deltas.
         [JsonProperty("consumable")] public ConsumableDef Consumable { get; set; }
@@ -131,12 +133,18 @@ namespace SpaceAdventure.Net
         [JsonProperty("qty")] public int Qty { get; set; }
     }
 
-    /// <summary>One workbench recipe (server/data/recipes.json, Phase 12).</summary>
+    /// <summary>One recipe (server/data/recipes.json, generated since Phase 22).</summary>
     public sealed class RecipeDef
     {
         [JsonProperty("id")] public string Id { get; set; } = "";
         [JsonProperty("name")] public string Name { get; set; } = "";
         [JsonProperty("level")] public int Level { get; set; }
+        // Phase 22: where it is made (hand|bench|forge), the skill that gates
+        // it and takes its XP, and one unit's base channel. An older server
+        // sends none of them; that reads as a Phase 12 bench recipe.
+        [JsonProperty("skill")] public string Skill { get; set; } = "";
+        [JsonProperty("station")] public string Station { get; set; } = "";
+        [JsonProperty("seconds")] public double Seconds { get; set; }
         [JsonProperty("inputs")] public List<ItemQtyDef> Inputs { get; set; } = new List<ItemQtyDef>();
         [JsonProperty("output")] public ItemQtyDef Output { get; set; } = new ItemQtyDef();
         [JsonProperty("xp")] public long XP { get; set; }
@@ -184,6 +192,8 @@ namespace SpaceAdventure.Net
         [JsonProperty("name")] public string Name { get; set; } = "";
         [JsonProperty("asset")] public string Asset { get; set; } = "";
         [JsonProperty("verb")] public string Verb { get; set; } = "";
+        /// <summary>The archetype's kind when the server ships it ("bench", "forge"); "" otherwise.</summary>
+        [JsonProperty("kind")] public string Kind { get; set; } = "";
         // Body size in metres; the server omits a default, which leaves a
         // standing person's (defs.go DefaultNPC*).
         [JsonProperty("radius")] public float Radius { get; set; } = 0.35f;

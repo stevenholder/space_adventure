@@ -68,8 +68,8 @@ func TestLoad(t *testing.T) {
 	// the placements the GDD names. Phase 22 generates the recipes
 	// (tools/gen_recipes.py, one per item past the raws): the count is
 	// TestRecipesAreGenerated's business, not a literal here.
-	if len(reg.Nodes) != 3 || len(reg.Recipes) < 8 {
-		t.Errorf("nodes=%d recipes=%d, want 3 and at least the Phase 12 eight", len(reg.Nodes), len(reg.Recipes))
+	if len(reg.Nodes) != 4 || len(reg.Recipes) < 8 {
+		t.Errorf("nodes=%d recipes=%d, want 4 (Phase 22 adds crystal) and at least the Phase 12 eight", len(reg.Nodes), len(reg.Recipes))
 	}
 	// Phase 13: the use verb's items and the mod slot.
 	if c := reg.Items["consumable.medkit"].Consumable; c == nil || c.Heal != 50 || c.Cooldown != 8 {
@@ -105,7 +105,7 @@ func TestLoad(t *testing.T) {
 			placed[e.Type+":"+e.Def]++
 		}
 	}
-	for def, want := range map[string]int{"node:node.ore.iron": 3, "node:node.ore.copper": 1, "node:node.wreck": 2, "npc:npc.workbench": 1} {
+	for def, want := range map[string]int{"node:node.ore.iron": 3, "node:node.ore.copper": 1, "node:node.wreck": 3, "npc:npc.workbench": 1, "npc:npc.forge": 1, "node:node.crystal": 4} {
 		if placed[def] != want {
 			t.Errorf("%s placed %d times, want %d", def, placed[def], want)
 		}

@@ -248,6 +248,24 @@ func efficacyBonus(reg *defs.Registry, p *store.Player, skillID string) float64 
 	return 0
 }
 
+// kindBonus is efficacyBonus only when the skill's efficacy is `kind`:
+// Engineering's craft_extra must not also speed its own channel.
+func kindBonus(reg *defs.Registry, p *store.Player, skillID, kind string) float64 {
+	for _, sk := range reg.Skills {
+		if sk.ID == skillID && sk.Efficacy.Kind == kind {
+			return efficacyBonus(reg, p, skillID)
+		}
+	}
+	return 0
+}
+
+// craftSpeed is the fraction a recipe's channel shrinks (Phase 22): the
+// skill's own craft_speed plus every craft_speed synergy aimed at it
+// (Smithing → Engineering).
+func craftSpeed(reg *defs.Registry, p *store.Player, skillID string) float64 {
+	return kindBonus(reg, p, skillID, "craft_speed") + synergyBonusFor(reg, p, "craft_speed", "", skillID)
+}
+
 // efficacyMult is 1 + efficacyBonus: exactly 1.0 untrained.
 func efficacyMult(reg *defs.Registry, p *store.Player, skillID string) float64 {
 	return 1 + efficacyBonus(reg, p, skillID)

@@ -130,8 +130,12 @@ await sleep(500)
 const byDef = (def) => [...c.spawns].filter(([, v]) => v.def === def).map(([id]) => id)
 const qm = byDef('npc.quartermaster')[0]
 await approach(qm, 2.2)
+// The purse and the price are data (Phase 22; SA_START funds a dev guest).
+const stock = (await sendCmd(0x0001, { npc: qm }))?.body?.stock ?? []
+const purse = (await sendCmd(OP.INV, {}))?.body?.credits ?? 0
+const kitPrice = stock.find((s) => s.item === 'consumable.medkit')?.price
 const buy = await sendCmd(OP.BUY, { npc: qm, item: 'consumable.medkit', qty: 2 })
-check('two medkits from the quartermaster (60 cr)', buy?.status === 0 && buy.body.credits === 940 && count(buy.body.inventory, 'consumable.medkit') === 2, JSON.stringify(buy?.body?.credits))
+check(`two medkits from the quartermaster (${2 * kitPrice} cr)`, buy?.status === 0 && buy.body.credits === purse - 2 * kitPrice && count(buy.body.inventory, 'consumable.medkit') === 2, JSON.stringify(buy?.body?.credits))
 const drill = await sendCmd(OP.BUY, { npc: qm, item: 'tool.drill', qty: 1 })
 const rifle = await sendCmd(OP.BUY, { npc: qm, item: 'weapon.pulse', qty: 1 })
 await sendCmd(OP.EQUIP, { slot: 'primary', item: 'weapon.pulse' })

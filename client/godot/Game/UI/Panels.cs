@@ -184,6 +184,7 @@ namespace SpaceAdventure.Game.UI
             Box.Visible = false;
             VBoxContainer stack = Styles.Body(Box);
             VBoxContainer header = Styles.Header(title);
+            _title = header.GetChild<Label>(0);
             stack.AddChild(header);
             // The header is the grip: drag the panel anywhere, and it stays
             // there across sessions (user://sa.cfg [panels]).
@@ -197,6 +198,10 @@ namespace SpaceAdventure.Game.UI
         }
 
         public bool Open => Box.Visible;
+
+        private readonly Label _title;
+        /// <summary>Renames the header (one panel serving two stations).</summary>
+        protected void SetTitle(string title) { if (_title != null) _title.Text = title.ToUpperInvariant(); }
 
         public void Show(bool on)
         {

@@ -49,20 +49,20 @@ func TestGatherChannel(t *testing.T) {
 	iron := defs.Node{Skill: "mining", Channel: 3.0}
 	wreck := defs.Node{Skill: "salvaging", Channel: 3.0}
 	p := &store.Player{}
-	if d := gatherDuration(reg, p, iron); d != 3.0 {
+	if d := gatherDuration(reg, p, iron, 1); d != 3.0 {
 		t.Fatalf("fresh: %v", d)
 	}
 	p.Skills.XP = map[string]int64{"mining": skills.PointsForLevel(21), "engineering": skills.PointsForLevel(11)}
 	// mining 21 → −10%, engineering 11 → −1% on mining only.
-	if d := gatherDuration(reg, p, iron); math.Abs(d-3.0*(1-0.10-0.01)) > 1e-9 {
+	if d := gatherDuration(reg, p, iron, 1); math.Abs(d-3.0*(1-0.10-0.01)) > 1e-9 {
 		t.Fatalf("mining 21 + engineering 11: %v", d)
 	}
-	if d := gatherDuration(reg, p, wreck); d != 3.0 {
+	if d := gatherDuration(reg, p, wreck, 1); d != 3.0 {
 		t.Fatalf("synergy leaked onto salvaging: %v", d)
 	}
 	// Mining 99 halves a 1.8 s node to 0.9 s, which the floor lifts to 1.0.
 	p.Skills.XP["mining"] = skills.PointsForLevel(99)
-	if d := gatherDuration(reg, p, defs.Node{Skill: "mining", Channel: 1.8}); d != gatherMinChannel {
+	if d := gatherDuration(reg, p, defs.Node{Skill: "mining", Channel: 1.8}, 1); d != gatherMinChannel {
 		t.Fatalf("floor: %v", d)
 	}
 }

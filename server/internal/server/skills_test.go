@@ -31,7 +31,10 @@ type xpEvent struct {
 }
 
 func TestSkillAwards(t *testing.T) {
-	_, url := newTestServer(t)
+	s, url := newTestServer(t)
+	if err := s.SetStart("credits=1000"); err != nil { // Phase 22: new characters start broke
+		t.Fatal(err)
+	}
 	a := joinPlayer(t, url, "A")
 
 	// Sprint a real distance first: the shop is 3.6 m from spawn, and
@@ -39,8 +42,7 @@ func TestSkillAwards(t *testing.T) {
 	// banks ~20 m before walking back to the counter.
 	qm := a.findSpawnByDef(t, "npc.quartermaster")
 
-	// Commerce first, on the proven pattern: walk in and buy (250 cr = 50
-	// XP at 1/5 cr).
+	// Commerce first, on the proven pattern: walk in and buy (1 XP per 5 cr).
 	walkToNPC(t, a, qm)
 	a.cmdOK(t, 1, protocol.OpShopBuy, fmt.Sprintf(`{"npc":%d,"item":"weapon.pulse","qty":1}`, qm))
 
@@ -75,8 +77,15 @@ func TestSkillAwards(t *testing.T) {
 	if ath.XP <= 0 {
 		t.Fatalf("athletics xp = %d, want > 0 (sprinted to the shop)", ath.XP)
 	}
-	if commerce.XP != 50 {
-		t.Fatalf("commerce xp = %d, want 50 (250 cr at 1/5)", commerce.XP)
+	// The price is data (Phase 22 moved it); 1 XP per 5 cr moved.
+	var price int64
+	for _, st := range s.reg.NPCs["npc.quartermaster"].Stock {
+		if st.Item == "weapon.pulse" {
+			price = st.Price
+		}
+	}
+	if want := price / 5; price == 0 || commerce.XP != want {
+		t.Fatalf("commerce xp = %d, want %d (%d cr at 1/5)", commerce.XP, want, price)
 	}
 	if ath.Level < 1 || ath.NextAt <= ath.XP {
 		t.Fatalf("athletics event shape: %+v", ath)
@@ -91,15 +100,15 @@ func TestSkillAwards(t *testing.T) {
 	if err := json.Unmarshal(r.Data, &sheet); err != nil {
 		t.Fatal(err)
 	}
-	if sheet.XP["commerce"] != 50 {
-		t.Fatalf("sheet commerce = %d, want 50", sheet.XP["commerce"])
+	if sheet.XP["commerce"] != commerce.XP {
+		t.Fatalf("sheet commerce = %d, want %d", sheet.XP["commerce"], commerce.XP)
 	}
 	// >=, not ==: a sweep can flush more sprint metres between the last
 	// event we read and the sheet query.
 	if sheet.XP["athletics"] < ath.XP {
 		t.Fatalf("sheet athletics = %d, below the %d we already saw", sheet.XP["athletics"], ath.XP)
 	}
-	if len(sheet.Levels) != 10 {
-		t.Fatalf("levels for %d skills, want all 10", len(sheet.Levels))
+	if len(sheet.Levels) != len(s.reg.Skills) {
+		t.Fatalf("levels for %d skills, want all %d", len(sheet.Levels), len(s.reg.Skills))
 	}
 }

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Generate the Phase 12 artisan-loop props and hand tools (ROADMAP task 11).
 
-Six files from one script, like gen_kit.py:
+Seven files from one script, like gen_kit.py:
 
     props/node_ore_iron.glb     prop.node.ore.iron   rock cluster, rust streaks
     props/node_ore_copper.glb   prop.node.ore.copper rock cluster, teal streaks
+    props/node_crystal.glb      prop.node.crystal    hex prisms out of a rock
     props/wreck.glb             prop.wreck           hull section, snapped strut
     props/bench.glb             prop.bench           workbench with vise + rack
     weapons/drill.glb           tool.drill           hand drill, grip/muzzle
@@ -37,6 +38,9 @@ ROCK_DARK = (0.22, 0.21, 0.23)
 ROCK_MID = (0.30, 0.29, 0.31)
 IRON = (0.74, 0.36, 0.13)        # rust-orange iron streak
 COPPER = (0.16, 0.64, 0.54)      # green-teal copper streak
+CRYSTAL_PALE = (0.66, 0.90, 0.96)    # pale cyan facet
+CRYSTAL_VIOLET = (0.62, 0.52, 0.90)  # violet facet
+CRYSTAL_CORE = (0.88, 0.98, 1.00)    # the lit core: the tips and the inner shard
 
 SCRAP = (0.52, 0.54, 0.57)
 SCRAP_DARK = (0.34, 0.36, 0.39)
@@ -146,6 +150,49 @@ COPPER_CHUNKS = [
     (0.40, -0.16, 0.25, 0.66, (0.10, -0.06)),
     (-0.36, -0.36, 0.16, 0.38, (-0.06, -0.04)),
 ]
+
+
+# Crystal node (Phase 22, node.crystal): a squat two-chunk rock base and
+# hex prisms leaning out of it -- (cx, cz, radius, height, lean_x, lean_z,
+# body colour). The tallest stands toward -Z, the face, like the ores'.
+CRYSTAL_BASE = [
+    (0.0, 0.02, 0.42, 0.40, (0.04, -0.02)),
+    (0.36, 0.26, 0.24, 0.26, (0.06, 0.05)),
+]
+CRYSTAL_PRISMS = [
+    (0.02, -0.08, 0.13, 1.00, 0.06, -0.14, CRYSTAL_PALE),
+    (-0.22, 0.06, 0.10, 0.78, -0.26, 0.02, CRYSTAL_VIOLET),
+    (0.22, -0.02, 0.09, 0.70, 0.24, -0.10, CRYSTAL_PALE),
+    (-0.06, 0.24, 0.09, 0.62, -0.06, 0.24, CRYSTAL_VIOLET),
+    (0.38, 0.28, 0.06, 0.44, 0.18, 0.12, CRYSTAL_PALE),
+]
+
+
+def prism(cx, cz, r, h, lx, lz, body):
+    """A six-sided crystal with a pointed tip, leaning by (lx, lz) at the
+    tip. Its foot is buried in the base, so no floor cap: 18 tris. The
+    facets alternate the body colour and the core colour -- the faint lit
+    core reads through every other face -- and the tip is the core."""
+    def ring(y, rad, ox, oz):
+        return [(cx + ox + rad * math.cos(0.3 + i * math.pi / 3.0), y,
+                 cz + oz + rad * math.sin(0.3 + i * math.pi / 3.0)) for i in range(6)]
+    base = ring(0.0, r, 0.0, 0.0)
+    shoulder = ring(h * 0.78, r * 0.92, lx * 0.78, lz * 0.78)
+    side = tube(base, shoulder, None)
+    side = [(a, b, c, CRYSTAL_CORE if (i // 2) % 3 == 1 else body)
+            for i, (a, b, c, _) in enumerate(side)]
+    tip = cap(shoulder, (cx + lx, h, cz + lz), (lx, 1.0, lz), CRYSTAL_CORE)
+    return outward(side + tip, (cx + lx * 0.4, h * 0.4, cz + lz * 0.4))
+
+
+def build_crystal():
+    rng = Rng(0x22C7)
+    tris = []
+    for (cx, cz, r, h, lean) in CRYSTAL_BASE:
+        tris += chunk(rng, cx, cz, r, h, lean, ROCK_MID)
+    for (cx, cz, r, h, lx, lz, col) in CRYSTAL_PRISMS:
+        tris += prism(cx, cz, r, h, lx, lz, col)
+    return tris
 
 
 def build_ore(chunks, streak, seed):
@@ -266,6 +313,7 @@ FILES = {
         lambda: _prop("prop.node.ore.iron", build_ore(IRON_CHUNKS, IRON, 0x1207)),
     "props/node_ore_copper.glb":
         lambda: _prop("prop.node.ore.copper", build_ore(COPPER_CHUNKS, COPPER, 0x12C0)),
+    "props/node_crystal.glb": lambda: _prop("prop.node.crystal", build_crystal()),
     "props/wreck.glb": lambda: _prop("prop.wreck", build_wreck()),
     "props/bench.glb": lambda: _prop("prop.bench", build_bench()),
     "weapons/drill.glb":

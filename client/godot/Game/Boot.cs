@@ -1209,7 +1209,7 @@ namespace SpaceAdventure.Game
             _hotbar.Load();
             _hotbarView = new HotbarView(_ui.Root, _hotbar, _character, _icons);
             _chatView = new ChatView(_ui.Root, SendChat) { Closed = () => _chat.Open = false };
-            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b), _interact);
+            _bagsView = new BackpackView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b), _interact, _skills);
             _sheetView = new CharacterView(_ui.Root, _character, _skills, _icons, _assets, NextCmdSeq, b => _net.Send(b));
             _promptView = new PromptView(_ui.Root);
             _journalView = new JournalView(_ui.Root, _missionLog, _partyState, NearestBoard, NextCmdSeq, b => _net.Send(b));
@@ -1563,12 +1563,8 @@ namespace SpaceAdventure.Game
                     // duration starts the bar, gather_end ends it.
                     _net.Send(Encode.Cmd(NextCmdSeq(), Op.Gather, $"{{\"node\":{_interact.Target}}}"));
                     break;
-                case EntityType.Npc when _views.TryGet(_interact.Target, out var bv) && bv.Label == "npc.workbench":
-                    _benchView.Bench = _interact.Target;
-                    _benchView.Status = "";
-                    _benchView.Show(true);
-                    _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
-                    _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
+                case EntityType.Npc when _views.TryGet(_interact.Target, out var bv) && UI.CraftRules.StationOfNpc(_character.Defs, bv.Label) != "":
+                    OpenStation(_interact.Target, UI.CraftRules.StationOfNpc(_character.Defs, bv.Label));
                     break;
                 case EntityType.Player:
                     // Look + E is the fast invite path (GDD "Parties").
@@ -1975,6 +1971,9 @@ namespace SpaceAdventure.Game
                         case EventId.GatherEnd:
                             OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;
+                        case EventId.CraftEnd:
+                            OnCraftEnd(ChannelEnd.Parse(ev.Data));
+                            break;
                         case EventId.Worn:
                         {
                             // "slot=item" (PROTOCOL event_id 0x000F); armor on
@@ -2049,11 +2048,7 @@ namespace SpaceAdventure.Game
                     if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.ShopBuyback || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
                     if (r.Opcode == Op.Gather) OnGatherResult(r);
                     if (r.Opcode == Op.Use) OnUseResult(r);
-                    if (r.Opcode == Op.Craft)
-                    {
-                        _benchView.Status = r.Ok ? "crafted" : Reason(r.Body);
-                        if (_benchView.Open) _benchView.Rebuild();
-                    }
+                    if (r.Opcode == Op.Craft) OnCraftResult(r);
                     if (r.Opcode == Op.Chat && !r.Ok)
                     {
                         _interact.Notice = r.StatusCode switch
@@ -2170,7 +2165,9 @@ namespace SpaceAdventure.Game
                 case "skills": ToggleSkills(); break;
                 case "debug": _hud.DebugOpen = true; break;
                 case "menu": _gameMenu.Show(true); break;
-                case "bench": _benchView.Bench = 0; _benchView.Show(true); break;
+                case "bench": _benchView.Bench = 0; _benchView.Station = "bench"; _benchView.Show(true); break;
+                case "forge": _benchView.Bench = 0; _benchView.Station = "forge"; _benchView.Show(true); break;
+                case "craft": _bagsView.ShowCraft(true); OpenPanel(_bagsView, _sheetView); _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}")); break;
                 case "settings": _settingsView.Show(true); break;
             }
         }
@@ -2554,6 +2551,113 @@ namespace SpaceAdventure.Game
             _channelLabel = nd?.Skill == "salvaging" ? "cutting" : "drilling";
         }
 
+        /// <summary>Phase 22: opens the station panel on a bench or forge NPC and refreshes what it counts against.</summary>
+        private void OpenStation(uint npc, string station)
+        {
+            _benchView.Bench = npc;
+            _benchView.Station = station;
+            _benchView.Status = "";
+            _benchView.Show(true);
+            _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+            _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
+        }
+
+        // Phase 22: the craft channel. The server runs `qty` units back to
+        // back; the reply's duration is ONE unit's (already skill-scaled),
+        // and each finished unit is a craft_end "done".
+        private string _craftRecipe = "", _craftItem = "";
+        private int _craftQty, _craftDone;
+        private double _craftUnit;
+
+        /// <summary>Phase 22: the craft reply — a duration starts the bar on unit 1, a refusal explains itself.</summary>
+        private void OnCraftResult(CmdResult r)
+        {
+            if (!r.Ok)
+            {
+                string why = Reason(r.Body);
+                _benchView.Status = why;
+                _interact.Notice = why;
+                _noticeUntil = Clock.Now + 2;
+                if (_benchView.Open) _benchView.Rebuild();
+                if (_bagsView.Open) _bagsView.Rebuild();
+                return;
+            }
+            string recipe = "";
+            int qty = 1;
+            double dur = 0;
+            try
+            {
+                var o = Newtonsoft.Json.Linq.JObject.Parse(r.Body ?? "{}");
+                recipe = (string)o["recipe"] ?? "";
+                qty = (int?)o["qty"] ?? 1;
+                dur = (double?)o["duration"] ?? 0;
+            }
+            catch (Exception e) when (e is Newtonsoft.Json.JsonException || e is FormatException || e is InvalidCastException || e is ArgumentException) { }
+            // The first unit's inputs left the bag as it started.
+            _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+            if (dur <= 0) { _benchView.Status = "crafted"; if (_benchView.Open) _benchView.Rebuild(); return; } // an instant (Phase 12) server
+            RecipeDef rd = _character.Defs.Recipes?.Find(x => x.Id == recipe);
+            _craftRecipe = recipe;
+            _craftItem = _character.Defs.ItemName(rd?.Output?.Item ?? recipe);
+            _craftQty = Math.Max(1, qty);
+            _craftDone = 0;
+            _craftUnit = dur;
+            StartCraftUnit();
+            _benchView.Status = "working…";
+            if (_benchView.Open) _benchView.Rebuild();
+        }
+
+        private void StartCraftUnit()
+        {
+            _channelStart = Clock.Now;
+            _channelEnd = Clock.Now + _craftUnit;
+            _channelLabel = UI.CraftRules.BarText(_craftItem, _craftDone + 1, _craftQty);
+        }
+
+        /// <summary>Phase 22: craft_end — a "done" advances n/m (or ends the run), anything else ends it with the reason.</summary>
+        private void OnCraftEnd(ChannelEnd e)
+        {
+            if (e.Reason == "done")
+            {
+                _craftDone++;
+                _interact.Notice = e.Qty > 0 ? $"+{e.Qty} {_character.Defs.ItemName(e.Item)}" : "nothing came out";
+                if (_craftRecipe != "" && _craftDone < _craftQty) StartCraftUnit();
+                else EndCraft();
+                _benchView.Status = _craftRecipe == "" ? "crafted" : _benchView.Status;
+            }
+            else
+            {
+                EndCraft();
+                _interact.Notice = EndWords(e.Reason);
+                _benchView.Status = _interact.Notice;
+            }
+            _noticeUntil = Clock.Now + 2;
+            // Each unit's output landed (or its inputs came back): recount.
+            _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+            if (_benchView.Open) _benchView.Rebuild();
+        }
+
+        private void EndCraft()
+        {
+            _craftRecipe = "";
+            _craftQty = _craftDone = 0;
+            _channelStart = _channelEnd = -1;
+        }
+
+        /// <summary>A channel's non-"done" end reason in the HUD's words (gather and craft).</summary>
+        private static string EndWords(string reason) => reason switch
+        {
+            "moved" => "you moved",
+            "hit" => "interrupted",
+            "died" => "",
+            "depleted" => "depleted",
+            "cancel" => "cancelled",
+            "missing_materials" => "out of materials",
+            "no_space" => "no room in the bag",
+            "disconnect" => "",
+            _ => (reason ?? "").Replace('_', ' '),
+        };
+
         /// <summary>Phase 12: gather_end — clear the bar, say why, refresh the bag on a yield.</summary>
         private void OnGatherEnd(string json)
         {
@@ -2573,15 +2677,7 @@ namespace SpaceAdventure.Game
                 _interact.Notice = qty > 0 ? $"+{qty} {_character.Defs.ItemName(item)}" : "nothing came out";
                 _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
             }
-            else _interact.Notice = reason switch
-            {
-                "moved" => "you moved",
-                "hit" => "interrupted",
-                "died" => "",
-                "depleted" => "depleted",
-                "cancel" => "cancelled",
-                _ => reason,
-            };
+            else _interact.Notice = EndWords(reason);
             _noticeUntil = Clock.Now + 2;
         }
 
@@ -2594,6 +2690,7 @@ namespace SpaceAdventure.Game
             return code switch
             {
                 "no_tool" => "needs the right tool in TOOL",
+                "wrong_station" => "not made here",
                 "locked" => "skill too low",
                 "depleted" => "depleted",
                 "busy" => "already working",
@@ -2865,6 +2962,71 @@ namespace SpaceAdventure.Game
                 new CharacterRow().Skin == Palette.DefaultSkin && new CharacterRow().Suit == Palette.DefaultSuit);
         }
 
+        /// <summary>
+        /// Phase 22 (GDD "The refinery", C188): the station filter, the
+        /// greying reasons and counts, the bar text, the craft_end decode.
+        /// </summary>
+        private static void CraftChecks(Action<string, bool> Check)
+        {
+            RecipeDef R(string id, string station, string skill, int level, params (string item, int qty)[] inputs)
+            {
+                var r = new RecipeDef { Id = id, Name = id, Station = station, Skill = skill, Level = level, Seconds = 6, Output = new ItemQtyDef { Item = "mat.plate.steel", Qty = 1 } };
+                foreach (var (item, qty) in inputs) r.Inputs.Add(new ItemQtyDef { Item = item, Qty = qty });
+                return r;
+            }
+            var recipes = new List<RecipeDef>
+            {
+                R("recipe.parts", "hand", "smithing", 1, ("mat.scrap", 3)),
+                R("recipe.plate", "forge", "smithing", 3, ("mat.ingot.iron", 2), ("mat.parts", 1)),
+                R("recipe.sidearm", "bench", "engineering", 1, ("mat.plate.steel", 2)),
+                R("recipe.ingot", "forge", "smithing", 1, ("mat.ore.iron", 2)),
+                new RecipeDef { Id = "recipe.old", Name = "old" }, // a Phase 12 server's row: no station
+            };
+            List<string> Ids(string st) => UI.CraftRules.For(recipes, st).ConvertAll(r => r.Id);
+            Check("craft: hand lists only hand recipes", string.Join(",", Ids("hand")) == "recipe.parts");
+            Check("craft: forge lists only forge recipes, in file order", string.Join(",", Ids("forge")) == "recipe.plate,recipe.ingot");
+            Check("craft: bench lists bench recipes and an old server's station-less row", string.Join(",", Ids("bench")) == "recipe.sidearm,recipe.old");
+            var defs = Defs.Parse("{\"npcs\":{\"npc.anvil\":{\"name\":\"Anvil\",\"kind\":\"forge\"},\"npc.grunt\":{\"kind\":\"melee\"}},\"skills\":[{\"id\":\"smithing\",\"name\":\"Smithing\"}]}");
+            Check("craft: a station NPC's kind (defs kind, else the world ids)",
+                UI.CraftRules.StationOfNpc(defs, "npc.anvil") == "forge" && UI.CraftRules.StationOfNpc(defs, "npc.workbench") == "bench"
+                && UI.CraftRules.StationOfNpc(defs, "npc.forge") == "forge" && UI.CraftRules.StationOfNpc(defs, "npc.grunt") == "");
+            var bag = new Dictionary<string, int> { ["mat.ingot.iron"] = 5, ["mat.parts"] = 1, ["mat.scrap"] = 2 };
+            int Held(string i) => bag.TryGetValue(i, out int n) ? n : 0;
+            string Name(string id) => UI.CraftRules.SkillName(defs, id);
+            var plate = recipes[1];
+            var lvl2 = UI.CraftRules.Check(plate, 1, Held, _ => 2, Name);
+            Check("craft: level short greys with NEEDS SMITHING 3", !lvl2.Ok && lvl2.Reason == "NEEDS SMITHING 3");
+            var ok1 = UI.CraftRules.Check(plate, 1, Held, _ => 3, Name);
+            Check("craft: level met and inputs held is live", ok1.Ok && ok1.Reason == "");
+            Check("craft: counts are have/need for qty 1", ok1.Inputs.Count == 2 && ok1.Inputs[0].Have == 5 && ok1.Inputs[0].Want == 2 && ok1.Inputs[1].Have == 1 && ok1.Inputs[1].Want == 1);
+            var ok2 = UI.CraftRules.Check(plate, 2, Held, _ => 3, Name);
+            Check("craft: qty 2 needs 4 ingots, 2 parts — parts short greys MISSING MATERIALS",
+                !ok2.Ok && ok2.Reason == "MISSING MATERIALS" && ok2.Inputs[0].Want == 4 && ok2.Inputs[1].Want == 2 && ok2.Inputs[1].Short && !ok2.Inputs[0].Short);
+            Check("craft: the input line reads have/need", UI.CraftRules.InputLine(null, ok2) == "5/4 mat.ingot.iron  ·  1/2 mat.parts");
+            var hand = UI.CraftRules.Check(recipes[0], 1, Held, _ => 1, Name);
+            Check("craft: scrap 2 of 3 greys the hand row", !hand.Ok && hand.Reason == "MISSING MATERIALS" && hand.Inputs[0].Have == 2 && hand.Inputs[0].Want == 3);
+            Check("craft: the level outranks the inputs", UI.CraftRules.Check(plate, 9, Held, _ => 1, Name).Reason == "NEEDS SMITHING 3");
+            Check("craft: an old row's skill is Engineering", UI.CraftRules.SkillOf(recipes[4]) == "engineering");
+            Check("craft: the skill label", UI.CraftRules.SkillLabel(Name("smithing"), 3) == "SMITHING 3");
+            Check("craft: the seconds", UI.CraftRules.Seconds(6) == "6 s" && UI.CraftRules.Seconds(1.5) == "1.5 s" && UI.CraftRules.Seconds(0) == "");
+            Check("craft: the bar reads MAKING STEEL PLATE 2/4", UI.CraftRules.BarText("Steel Plate", 2, 4) == "MAKING STEEL PLATE 2/4");
+            Check("craft: the cmd body clamps qty to 1–10, npc 0 is the hands",
+                UI.CraftRules.CmdBody(0, "recipe.parts", 14) == "{\"npc\":0,\"recipe\":\"recipe.parts\",\"qty\":10}");
+
+            // craft_end round trip through the event frame decoder.
+            byte[] json = WireReader.Utf8.GetBytes("{\"recipe\":\"recipe.plate\",\"reason\":\"done\",\"item\":\"mat.plate.steel\",\"qty\":1}");
+            byte[] frame = new WireWriter().U32(42).U16(EventId.CraftEnd).U32((uint)json.Length).Bytes(json).ToArray();
+            EventMsg ev = Decode.Event(new WireReader(frame));
+            ChannelEnd ce = ChannelEnd.Parse(ev.Data);
+            Check("craft_end: event 0x0012 decodes {recipe,reason,item,qty}", ev.EventId == 0x0012 && ev.EntityId == 42
+                && ce.Recipe == "recipe.plate" && ce.Reason == "done" && ce.Item == "mat.plate.steel" && ce.Qty == 1 && ce.Node == "");
+            var moved = ChannelEnd.Parse("{\"recipe\":\"recipe.plate\",\"reason\":\"moved\",\"item\":\"\",\"qty\":0}");
+            Check("craft_end: a cancel reason decodes with no item", moved.Reason == "moved" && moved.Item == "" && moved.Qty == 0);
+            Check("craft_end: a gather_end body reads its node, junk is a blank end",
+                ChannelEnd.Parse("{\"node\":\"node.ore.iron\",\"reason\":\"done\",\"item\":\"mat.ore.iron\",\"qty\":1}").Node == "node.ore.iron"
+                && ChannelEnd.Parse("not json").Reason == "" && ChannelEnd.Parse((byte[])null).Reason == "");
+        }
+
         private static int SelfTest()
         {
             int failed = 0;
@@ -2926,6 +3088,7 @@ namespace SpaceAdventure.Game
                 for (int i = 0; i + 1 < d.Length; i += 2) peak = Math.Max(peak, Math.Abs((int)(short)(d[i] | d[i + 1] << 8)));
                 return d.Length > 400 && peak > 25000 && peak < 32000;
             }));
+            CraftChecks(Check);
             // Phase 20: the chat log's model (GDD "Chat (Phase 20)", C176).
             var chat = new UI.ChatLog();
             Check("chat: an empty log is not visible", !chat.Visible && chat.Lines.Count == 0);

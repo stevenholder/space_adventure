@@ -821,3 +821,47 @@ fabric texture, so a flat `color` factor went near black; the client
 sets factor = colour / the texture's mean (measured once), which keeps
 the seams and averages to the palette colour.
 
+# Phase 22 — the refinery: make everything, from nothing (2026-10-08)
+
+Wave 0 by hand (the tree, `craft.json`, `tools/gen_recipes.py`, 50
+recipes, the diff test), then four halves in one wave: server + harness
+(the craft channel, hand gathering, `SA_START`, `t43`), data (nodes,
+loot, forge, skills, prices, the first mission, audits), client (station
+panel, CRAFT tab, the bar), art (forge, crystal node, contracts, icons).
+Proofs on a bare server built from the branch.
+
+Two placement calls made during the wave: the forge stands at the SPAWN
+pad (not the scrapyard) and one wreck joins it there, because a fresh
+unarmed character dies inside the outpost guard before a 9 s hand
+channel ends; crystal is Mining 1 (not 5) so cells are not gated behind
+sixteen iron yields. The GDD and ROADMAP say so now.
+
+| # | Result | Evidence |
+|---|---|---|
+| C183 | PASS | `TestRefineryEveryItemHasOneRecipe`: every item past the five raws and `ship.v1` is exactly one recipe's output, the raws none; `t43` repeats it over the wire from `defs` (50 recipes) |
+| C184 | PASS | `TestRecipesAreGenerated` runs `tools/gen_recipes.py --check` (python3 -I); `recipes.json` carries the GENERATED banner; the eight Phase 12 ids survive (`recipe.cells`, `recipe.plate.iron`, `recipe.drill.mk2`, …) with new inputs and times |
+| C185 | PASS | `t43`: `craft ×3` → `{"duration":1,"qty":3,"recipe":"recipe.mat.parts"}`, `busy` on a second, three `craft_end done` in 2966 ms, Smithing +15; moving 0.5 m ends it `moved` with the unit's inputs back; `gather_cancel` ends a craft `cancel`, inputs back; a 2-unit craft short of inputs → `done` then `missing_materials`. Go: `craft_test.go` (per-unit outputs at the right ticks, refunds on hit/death/disconnect, `craft_speed` scaling, `craft_extra` per unit) |
+| C186 | PASS (to the bench; the sidearm itself is hours of play) | hands refuse a forge and a bench recipe (`wrong_station`), the bench refuses a forge recipe, the forge its own with `missing_materials` (`TestHandleCmdPhase22Stations`); `t43` on ONE bare server with no `SA_START`, 28/28 in 11.9 min: 0 cr → crystal and scrap by hand → parts → iron by hand → crude drill → drilled iron (4.43 s) → ingots and a steel plate at the pad forge (Smithing 3) → the walk to the relay bench → a forge recipe `wrong_station`, the sidearm `missing_materials`, purse still 0. The sidearm and the Scout suit are not made in the run: the suit wants leather (wildlife, so a gun first) and Engineering 5. Found on the way: the pistol shape wanted wiring, i.e. copper (Mining 10, Smithing 10, the mk2 drill) for the FIRST gun — now plate 1, parts 3, crystal 1 (craft.json; sidearm 190 → 200 cr to keep the markup). Live: `test/out/ui/p22-forge-channel.png` (the pad forge, `MAKING IRON INGOT 2/4`, `WORKING…`, `+7 SMITHING`), `p22-hand-craft.png` (the backpack's CRAFT tab, `MAKING SORTED PARTS 2/3`, rows with have/need, skill, seconds, red reasons) |
+| C187 | PASS | `t43` on a server with no `SA_START`: a fresh guest has 0 cr and an empty bag; iron by hand `{"duration":9,"hand":true}` (×3, one unit, 12 of 25 XP); copper by hand `no_tool`; the crude drill crafts by hand and gathers at ×1.5 (`duration 4.5`); `mission.first_scrap` first on the board (file order), 10 scrap → 180 cr = a cutter. `TestRefineryStartsFromNothing` pins the data |
+| C188 | PASS | shots above; `-selftest` +`craft:` checks (station filter incl. station-less rows as bench, NPC kind, `NEEDS SMITHING 3`, have/need at qty 1 and 2, `MISSING MATERIALS`, level outranks inputs, bar text, cmd body with npc 0, `craft_end` round trip + junk); `-uiCraft <recipe> [-uiCraftQty n] [-uiCraftWait s]` walks to the station (2.6 m, settled, re-faced: the sprint slid past it and the look was 80° off at first) |
+| C189 | PASS | Go vet/test (+`-race` server 46 s), `dotnet build` 0 warnings, `-selftest`, `godot-gate`, `godot-codec` (9 — it has no event vectors; `craft_end` is covered by the self-test), `godot-test`, `npm --prefix art test` (280/280 + palettes + the new bounds contracts). Harness on fresh bare servers (sqlite store, `SA_GUESTS=1`, `SA_START=credits=3000,ammo.cell=120`): `t36-artisan` rewritten for channels and the prices (38 → 47 checks), t3, t14 (8), t16 (6), t17 (8), t19 (6), t21 (3), t24 (22), t26 (15), t29 (21), t34 (32), t37 (14), t40 (7), t41 (24) all PASS — t14/t29/t34/t37 now read prices and the purse at run time; the kind purse is 3000 because the Phase 22 prices put those shopping lists over 1000. A harness waiting on a 10 s channel must ping every 2 s (silent timeout). C153–C182 hold. **Owed:** t43/t36 on kind after deploy (kind carries `SA_START`), eyes on the install from a NEW character |
+
+**The shop after Phase 22** (`TestRefineryShopPriceVsRecipe`: every stocked
+item ≥ 1.5 × its recipe's material value, priced recursively to the raws):
+pulse 250 → 890, dune 520 → 1300, sidearm 120 → 190, smg 220 → 590,
+frost 420 → 890, dmr 480 → 1300, dagger 40 → 70, sword/axe 110 → 140,
+greatsword 280 → 590, greataxe 300 → 600, hammer 420 → 910, cell 1 → 2,
+scout helmet/gloves/boots → 90, scout suit 120 → 350, scout legs 60 →
+180, bulwark helmet/gloves/boots → 270, bulwark suit 640 → 820, bulwark
+legs 320 → 530, pack 80 → 170, drill 120 → 150; throwables, charm,
+cutter (180 = the first mission's pay), medkit, potion and the ship
+unchanged. Refined goods are dear by the tree: parts 24, plate 48,
+wiring 26, core 82 per unit. The shop is the markup, as designed.
+
+**Known / notes.** `craft_extra` (Engineering's +1) rolls only on recipes
+whose skill has that efficacy and stackable outputs; `craft_speed` is the
+skill's own plus synergies aimed at it. The crude drill shares the
+drill's model. The icon renderer's depth test was inverted (farthest
+surface won): fixed, so all 38 icons re-rendered right-way-out. Forge
+and bench have no colliders (the Phase 12 convention).
+

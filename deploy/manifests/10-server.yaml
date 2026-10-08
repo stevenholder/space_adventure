@@ -34,6 +34,11 @@ spec:
             # production never sets it (deploy/prod/20-server.yaml).
             - name: SA_GUESTS
               value: "1"
+            # Phase 22: a character starts with nothing (items.json). The
+            # harness fleet and the screenshot rig buy things, so the kind
+            # server seats them rich; production never sets it.
+            - name: SA_START
+              value: "credits=3000,ammo.cell=120"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
