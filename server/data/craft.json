@@ -1,0 +1,49 @@
+{
+  "$comment": "Phase 22 rule table (GDD 'The refinery -- make everything, from nothing'). tools/gen_recipes.py turns this plus items.json into recipes.json; a Go test (defs/recipes_test.go) refuses a stale recipes.json. Change a count here, never in recipes.json. `materials` are the tree (explicit); `shapes` are the base recipe per item kind at common, scaled by `scale[rarity]` on every input count and the seconds, gated by `gates[rarity]`; an epic adds `epic_core` mat.core. `items` are per-id exceptions: a legacy recipe id, an `extra` input (not scaled), a forced `shape`, an `xp`. `skip` never gets a recipe (raws, vehicles until Phase 24).",
+  "version": 1,
+  "gates": { "common": 1, "uncommon": 5, "rare": 10, "epic": 15 },
+  "scale": { "common": 1, "uncommon": 2, "rare": 3, "epic": 4 },
+  "epic_core": 1,
+  "xp_divisor": 2,
+  "materials": [
+    { "output": "mat.parts",        "qty": 1, "station": "hand",  "skill": "smithing",   "level": 1,  "seconds": 1,  "inputs": { "mat.scrap": 3 } },
+    { "output": "mat.leather",      "qty": 1, "station": "hand",  "skill": "scavenging", "level": 1,  "seconds": 2,  "inputs": { "mat.hide": 2 } },
+    { "output": "mat.ingot.iron",   "qty": 1, "station": "forge", "skill": "smithing",   "level": 1,  "seconds": 4,  "inputs": { "mat.ore.iron": 2 } },
+    { "output": "mat.ingot.copper", "qty": 1, "station": "forge", "skill": "smithing",   "level": 10, "seconds": 5,  "inputs": { "mat.ore.copper": 2 } },
+    { "output": "mat.plate.steel",  "qty": 1, "station": "forge", "skill": "smithing",   "level": 3,  "seconds": 6,  "inputs": { "mat.ingot.iron": 2, "mat.parts": 1 } },
+    { "output": "mat.wiring",       "qty": 2, "station": "forge", "skill": "smithing",   "level": 10, "seconds": 4,  "inputs": { "mat.ingot.copper": 1, "mat.parts": 1 } },
+    { "output": "mat.blade",        "qty": 1, "station": "forge", "skill": "smithing",   "level": 5,  "seconds": 8,  "inputs": { "mat.ingot.iron": 3 } },
+    { "output": "mat.core",         "qty": 1, "station": "forge", "skill": "smithing",   "level": 15, "seconds": 12, "inputs": { "mat.crystal": 3, "mat.wiring": 2 } }
+  ],
+  "shapes": {
+    "weapon.pistol": { "station": "bench", "skill": "engineering", "seconds": 12, "inputs": { "mat.plate.steel": 1, "mat.parts": 2, "mat.wiring": 1 } },
+    "weapon.rifle":  { "station": "bench", "skill": "engineering", "seconds": 15, "inputs": { "mat.plate.steel": 2, "mat.parts": 2, "mat.wiring": 2 } },
+    "melee.1h":      { "station": "bench", "skill": "engineering", "seconds": 8,  "inputs": { "mat.blade": 1, "mat.leather": 1 } },
+    "melee.2h":      { "station": "bench", "skill": "engineering", "seconds": 12, "inputs": { "mat.blade": 2, "mat.leather": 1, "mat.plate.steel": 1 } },
+    "armor.small":   { "station": "bench", "skill": "engineering", "seconds": 8,  "inputs": { "mat.plate.steel": 1, "mat.leather": 1 } },
+    "armor.big":     { "station": "bench", "skill": "engineering", "seconds": 10, "inputs": { "mat.plate.steel": 2, "mat.leather": 2 } },
+    "armor.back":    { "station": "bench", "skill": "engineering", "seconds": 8,  "inputs": { "mat.leather": 3, "mat.parts": 1 } },
+    "tool":          { "station": "bench", "skill": "engineering", "seconds": 10, "inputs": { "mat.plate.steel": 1, "mat.parts": 2 } },
+    "tool.crude":    { "station": "hand",  "skill": "smithing",    "seconds": 6,  "inputs": { "mat.scrap": 4, "mat.parts": 2 } },
+    "gadget":        { "station": "bench", "skill": "engineering", "seconds": 12, "inputs": { "mat.wiring": 2, "mat.parts": 1, "mat.crystal": 1 } },
+    "mod":           { "station": "bench", "skill": "engineering", "seconds": 12, "inputs": { "mat.wiring": 2, "mat.parts": 1, "mat.crystal": 1 } },
+    "throwable":     { "station": "hand",  "skill": "chemistry",   "seconds": 2,  "inputs": { "mat.parts": 1, "mat.crystal": 1 }, "qty": 5 },
+    "ammo":          { "station": "hand",  "skill": "chemistry",   "seconds": 3,  "inputs": { "mat.crystal": 1, "mat.parts": 1 }, "qty": 30 },
+    "medkit":        { "station": "hand",  "skill": "chemistry",   "seconds": 3,  "inputs": { "mat.leather": 1, "mat.parts": 1 }, "qty": 2 },
+    "potion":        { "station": "hand",  "skill": "chemistry",   "seconds": 3,  "inputs": { "mat.hide": 1, "mat.crystal": 1 }, "qty": 2 },
+    "accessory":     { "station": "hand",  "skill": "chemistry",   "seconds": 4,  "inputs": { "mat.leather": 1, "mat.crystal": 1 } }
+  },
+  "items": {
+    "ammo.cell":        { "id": "recipe.cells", "xp": 20 },
+    "consumable.medkit": { "id": "recipe.medkit" },
+    "armor.plate.iron": { "id": "recipe.plate.iron" },
+    "gadget.scanner":   { "id": "recipe.scanner" },
+    "tool.drill.mk2":   { "id": "recipe.drill.mk2", "extra": { "tool.drill": 1 } },
+    "tool.drill.crude": { "shape": "tool.crude" },
+    "mod.barrel":       { "id": "recipe.mod.barrel" },
+    "mod.mag":          { "id": "recipe.mod.mag" },
+    "mod.coil":         { "id": "recipe.mod.coil" },
+    "throw.acid":       { "extra": { "mat.scrap": 2 } }
+  },
+  "skip": [ "mat.ore.iron", "mat.ore.copper", "mat.scrap", "mat.hide", "mat.crystal", "ship.v1" ]
+}

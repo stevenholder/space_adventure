@@ -64,10 +64,12 @@ func TestLoad(t *testing.T) {
 		}
 	}
 
-	// Phase 12 data audit: the three nodes, three recipes, the bench, the
-	// tools in stock, and the placements the GDD names.
-	if len(reg.Nodes) != 3 || len(reg.Recipes) != 8 {
-		t.Errorf("nodes=%d recipes=%d, want 3/8", len(reg.Nodes), len(reg.Recipes))
+	// Phase 12 data audit: the nodes, the bench, the tools in stock, and
+	// the placements the GDD names. Phase 22 generates the recipes
+	// (tools/gen_recipes.py, one per item past the raws): the count is
+	// TestRecipesAreGenerated's business, not a literal here.
+	if len(reg.Nodes) != 3 || len(reg.Recipes) < 8 {
+		t.Errorf("nodes=%d recipes=%d, want 3 and at least the Phase 12 eight", len(reg.Nodes), len(reg.Recipes))
 	}
 	// Phase 13: the use verb's items and the mod slot.
 	if c := reg.Items["consumable.medkit"].Consumable; c == nil || c.Heal != 50 || c.Cooldown != 8 {

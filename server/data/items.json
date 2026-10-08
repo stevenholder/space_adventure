@@ -465,7 +465,8 @@
       "slot": "tool",
       "stack_max": 1,
       "value": 40,
-      "desc": "Drills iron out of ore nodes. Three seconds a bite."
+      "desc": "Drills iron out of ore nodes. Three seconds a bite.",
+      "supersedes": "tool.drill.crude"
     },
     {
       "id": "tool.cutter",
@@ -489,6 +490,18 @@
       "value": 150,
       "supersedes": "tool.drill",
       "desc": "Bites copper. Crafted, not sold."
+    },
+    {
+      "$comment": "Phase 22: the first tool is made, not bought (GDD 'From nothing'). Hand recipe from scrap; the real drill supersedes it.",
+      "id": "tool.drill.crude",
+      "name": "Crude Drill",
+      "kind": "tool",
+      "rarity": "common",
+      "asset": "tool.drill",
+      "slot": "tool",
+      "stack_max": 1,
+      "value": 15,
+      "desc": "Scrap and spite. Slow, but it bites iron."
     },
     {
       "$comment": "Phase 12 materials: stackable, sellable, and the ONLY things that spill on death (GDD 'Death spills the raw').",
@@ -520,6 +533,99 @@
       "stack_max": 50,
       "value": 8,
       "desc": "Cut from a wreck. Somebody's ship, once."
+    },
+    {
+      "$comment": "Phase 22 raws (GDD 'The refinery'): hide from wildlife, crystal from its own node. Stack 50, spill on death like every material.",
+      "id": "mat.hide",
+      "name": "Hide",
+      "kind": "material",
+      "rarity": "common",
+      "stack_max": 50,
+      "value": 5,
+      "desc": "Skinned off something that ran. Scrapes down to leather."
+    },
+    {
+      "id": "mat.crystal",
+      "name": "Crystal",
+      "kind": "material",
+      "rarity": "uncommon",
+      "asset": "prop.node.crystal",
+      "stack_max": 50,
+      "value": 10,
+      "desc": "Charge-holding crystal. Cells, cores and anything that burns."
+    },
+    {
+      "$comment": "Phase 22 refined materials: made, never found (mechs and raiders drop a few). Every item recipe is built from these (server/data/craft.json).",
+      "id": "mat.parts",
+      "name": "Sorted Parts",
+      "kind": "material",
+      "rarity": "common",
+      "stack_max": 50,
+      "value": 10,
+      "desc": "Scrap sorted by hand into things that still work."
+    },
+    {
+      "id": "mat.leather",
+      "name": "Leather",
+      "kind": "material",
+      "rarity": "common",
+      "stack_max": 50,
+      "value": 12,
+      "desc": "Hide scraped and stretched. Grips, straps, padding."
+    },
+    {
+      "id": "mat.ingot.iron",
+      "name": "Iron Ingot",
+      "kind": "material",
+      "rarity": "common",
+      "stack_max": 50,
+      "value": 14,
+      "desc": "Two ore in, one ingot out. The forge's first lesson."
+    },
+    {
+      "id": "mat.ingot.copper",
+      "name": "Copper Ingot",
+      "kind": "material",
+      "rarity": "uncommon",
+      "stack_max": 50,
+      "value": 30,
+      "desc": "Soft, bright, and the only way to wiring."
+    },
+    {
+      "id": "mat.plate.steel",
+      "name": "Steel Plate",
+      "kind": "material",
+      "rarity": "common",
+      "stack_max": 50,
+      "value": 34,
+      "desc": "Two ingots beaten flat over sorted parts. Armor starts here."
+    },
+    {
+      "id": "mat.wiring",
+      "name": "Wiring",
+      "kind": "material",
+      "rarity": "uncommon",
+      "stack_max": 50,
+      "value": 20,
+      "desc": "Copper drawn fine. Guns, gadgets, mods."
+    },
+    {
+      "id": "mat.blade",
+      "name": "Blade Blank",
+      "kind": "material",
+      "rarity": "uncommon",
+      "stack_max": 50,
+      "value": 45,
+      "desc": "Three ingots, one edge. Wants a grip."
+    },
+    {
+      "id": "mat.core",
+      "name": "Power Core",
+      "kind": "material",
+      "rarity": "epic",
+      "stack_max": 50,
+      "value": 90,
+      "desc": "Crystal wound in wiring. The epic tier's key."
     },
     {
       "id": "armor.plate.iron",
