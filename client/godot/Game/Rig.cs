@@ -33,6 +33,7 @@
 //   -uiLamp                 swing the sun onto whatever the camera ends up looking at
 //   -uiBoard [-uiSeat n]    after any -uiBuy/-uiWield: walk to the nearest rover and take seat n (default 1, the driver's)
 //   -rigArmed               show the rig without a purchase
+//   -rigBody <asset>        the local body for a shot (char.ubc, char.player.f, ...)
 //   -uiAim                  hold aim-down-sights for the shot
 //   -uiWalk                 walk forward through the shot
 //   -uiStrafe               step right through the shot

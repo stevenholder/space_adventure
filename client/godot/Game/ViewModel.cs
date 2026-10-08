@@ -98,11 +98,13 @@ uniform float metallic = 0.0;
 uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform float normal_scale = 0.0;
+" + NearCutCode + @"
 void vertex() {
     POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
     POSITION.z = (1.0 - (1.0 - POSITION.z / POSITION.w) * 0.02) * POSITION.w;
 }
 void fragment() {
+    near_cut(VERTEX, FRAGCOORD.xy);
     ALBEDO = albedo.rgb * texture(albedo_tex, UV).rgb;
     NORMAL_MAP = texture(normal_tex, UV).rgb;
     NORMAL_MAP_DEPTH = normal_scale;
@@ -132,6 +134,12 @@ void fragment() {
                         if (!FpCopies.TryGetValue(src, out fp))
                         {
                             var sm = new ShaderMaterial { Shader = FpPbrShader };
+                            // The cut takes the sleeves only: the hands ride
+                            // inside the band in the unarmed framing and went
+                            // grainy with it; skin and gloves never dissolve.
+                            bool sleeve = bm.ResourceName == "suit";
+                            sm.SetShaderParameter("NearCut", sleeve ? FpCut : 0f);
+                            sm.SetShaderParameter("NearCutBand", sleeve ? FpCutBand : 0.001f);
                             sm.SetShaderParameter("albedo", bm.AlbedoColor);
                             sm.SetShaderParameter("roughness", bm.Roughness);
                             sm.SetShaderParameter("metallic", bm.Metallic);
@@ -160,6 +168,15 @@ void fragment() {
         /// in it); the shadows-only parts and the 3PM pieces cast the figure.
         /// </summary>
         public const float NearCut = 0.30f, NearCutBand = 0.05f;
+
+        /// <summary>
+        /// The first-person arms' own cut: the Vanguard's thick upper arms
+        /// filled the frame's edges from inside 0.35 m (playtest 2026-10-08);
+        /// shoulders sit 0.30-0.33 m from the eye on both bodies, elbows at
+        /// 0.41 m and beyond, so this takes the shoulder bulk and leaves the
+        /// forearms and hands.
+        /// </summary>
+        public const float FpCut = 0.36f, FpCutBand = 0.06f;
 
         private const string NearCutCode = @"
 uniform float NearCut = 0.30;

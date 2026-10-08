@@ -41,6 +41,7 @@ namespace SpaceAdventure.Game
 
         /// <summary>-rigWorn pieces waiting for the local body to attach.</summary>
         private readonly List<(string slot, string asset)> _rigWorn = new List<(string, string)>();
+        private string _rigBody;   // -rigBody <asset>: applied once the registry has a body
 
         private static bool Flag(string name) => Array.IndexOf(OS.GetCmdlineUserArgs(), name) >= 0;
 
@@ -1493,6 +1494,15 @@ namespace SpaceAdventure.Game
             // -rigArmed: show the rig without a purchase (screenshot rig).
             // The server still drops the shots of an unarmed player.
             if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
+            // -rigBody <asset>: the local body (and its first-person arms) for a
+            // shot, before any -rigWorn piece hangs on it.
+            if (_rigBody != null && _viewModel.BodyReady)
+            {
+                SelfBody = _rigBody;
+                _viewModel.SetBody(_rigBody);
+                GD.Print($"rig: body {_rigBody}");
+                _rigBody = null;
+            }
             if (_rigWorn.Count > 0 && _viewModel.BodyReady)
             {
                 foreach (var (slot, asset) in _rigWorn)
@@ -2117,6 +2127,7 @@ namespace SpaceAdventure.Game
             _rigArmed = Flag("-rigArmed");
             // -rigWorn slot=asset,...: dress the local body for a shot (asset
             // ids, not items). Applied by the frame loop once the body is on.
+            _rigBody = Arg("-rigBody");
             if (Arg("-rigWorn") is string worn)
                 foreach (string pair in worn.Split(',', StringSplitOptions.RemoveEmptyEntries))
                     if (pair.Split('=') is { Length: 2 } kv) _rigWorn.Add((kv[0].Trim(), kv[1].Trim()));

@@ -821,3 +821,19 @@ fabric texture, so a flat `color` factor went near black; the client
 sets factor = colour / the texture's mean (measured once), which keeps
 the seams and averages to the palette colour.
 
+# Vanguard first-person arms (2026-10-08)
+
+Playtest: the Colonist's hands read right in first person, the Vanguard's
+came with pale slabs at both edges of the frame. Reproduced with the new
+rig flag `-rigBody char.ubc` (`test/out/ui/fp-vanguard-before.png`): the
+UBC's thick upper arms and deltoids sit inside ~0.35 m of the eye in
+every first-person pose (bone distances match the Colonist's — shoulders
+0.30–0.33 m, elbows 0.41+ — the bulk is the difference) and the
+first-person shader draws them always in front. Fix: the first-person
+pbr shader gains the body's near-eye dissolve (`FpCut` 0.36 m, 6 cm
+band) on the SUIT sleeves only — the hands ride inside the band in the
+unarmed framing and went grainy on a first try, so skin and gloves never
+dissolve. `fp-vanguard-unarmed.png` / `-armed.png`: shoulders gone, hands
+clean, the sleeve fades at the wrist edge; the Colonist is unchanged
+(its upper arms were never in frame). `-selftest` PASS, gate clean.
+
