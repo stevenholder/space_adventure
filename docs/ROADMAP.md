@@ -1969,6 +1969,208 @@ and nothing crashes.
 - **C177 Nothing else moved.** Sweep green incl. `godot-codec`; the fleet
   unchanged; C153–C173 hold.
 
+# Phase 21 — skin and suit colours (drafted 2026-10-07)
+
+### Where Phase 21 stands (2026-10-07, drafted)
+
+The Deferred row "more bodies, hair, skin and suit colours" has met its
+trigger: the playtests say the four bodies read samey. Colours first —
+they are the cheapest distinctness there is (a material factor and two
+row fields), they ride Phase 17's hair machinery end to end, and new
+bodies stay deferred. Contract: GDD "Skin and suit colours (Phase 21)".
+No new message: two more `worn` frames at spawn, slots `skin` and
+`suit`, the hair precedent.
+
+**Playable proof.** Create two characters on the same body with
+different SKIN and SUIT; stand them together: unmistakably two people.
+Look at your own hands: your tone. Put a chest plate on: the suit shows
+only where the plate does not. EDIT one of them to a new suit colour,
+PLAY: it joined in it.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | art | `palettes` in the manifest (skin ×8, suit ×8, hex from the GDD); skin albedos baked at the lightest tone, neutral; sheet of every tone × both models | `art/manifest.json`, `art/tools/bpy/skin.py`, `human.py` | `npm --prefix art test` (palette ids + hex shape); sheets |
+| 2 | 1 | Migration 007 `player.skin`/`player.suit` with defaults; store read/write; both in POST/PATCH/GET (400 `bad skin`/`bad suit` against the manifest); two `worn` frames at spawn (`hairFrame`'s sibling) | `server/internal/store/`, `web/web.go`, `server/server.go` | Go tests; `t28` |
+| 3 | 1 | Harness: `t28` creates with both, sees both frames on own and other socket; bad ids 400; PATCH changes the next join's frames | `test/t28-accounts.mjs` | kind |
+| 4 | 1 | Client: `Tint(model, surface, color)` over the manifest's `surfaces`; `worn` slot `skin`/`suit` → tint on remote bodies, the stage, the sheet doll, the local fp arms (skin) and body (suit); SKIN/SUIT rows (cycle + swatch) on create and edit | `Entities.cs`, `ViewModel.cs`, `UI/Characters.cs`, `UI/Inventory.cs` | shots `p21-*.png`; `-selftest` (Tint finds every surface; a tone id maps to its hex) |
+| 5 | 2 | Record: QA-STATUS "Phase 21"; Deferred row → "more bodies" | `docs/` | — |
+
+### Acceptance criteria (C178–C182)
+
+- **C178 The palette is the contract.** Eight skin tones and eight suit
+  colours by id in the manifest with GDD hex; the server refuses any
+  other id (400); the defaults are today's look so every existing row is
+  unchanged.
+- **C179 It is the character's.** POST stores both, GET returns them,
+  PATCH changes them; at spawn every client receives `worn` frames for
+  slots `skin` and `suit` (`t28`, both sockets); a guest gets neither.
+- **C180 It draws.** Shot pairs on both models: remote body, stage, sheet
+  doll, own first-person hands and body; every tone distinguishable from
+  its neighbours side by side; helmet, hair, armor and eyes unchanged.
+- **C181 The form.** SKIN and SUIT rows cycle with a swatch, the stage
+  follows; EDIT + PLAY joins in the new colours.
+- **C182 Nothing else moved.** Sweep green incl. `godot-codec` (the frame
+  is hair's shape); C153–C177 hold.
+
+# Phase 22 — the refinery: make everything, from nothing (drafted 2026-10-08)
+
+### Where Phase 22 stands (2026-10-08, drafted)
+
+The user's call (2026-10-07/08): step back from buying — a Palworld-shaped
+refinement arc, raw → refined → refined again or an item, timed work at
+stations where the work needs one and in the hands where it does not,
+several skills not one, **everything craftable** (drops stay), and a
+character that **starts with nothing**. Phase 12's loop (travel as the
+time cost, the gather channel, instant craft) is the seed; the channel
+is reused for the craft, the recipes are generated, the roster grows by
+three. Contract: GDD "The refinery — make everything, from nothing
+(Phase 22)". Wire: `recipe.station/skill/seconds` ride `defs`
+additively; `craft` gains a `duration` result and a `0x0012 craft_end`
+event (the gather_end shape); `gather_cancel` cancels any channel;
+`wrong_station`, `no_tool` by hand only for copper. Three ends.
+
+**Playable proof.** A fresh character: 0 cr, empty bag. Pull iron and
+crystal from the spawn rocks by hand, scrap from a wreck by hand, sort
+the scrap in your hands (1 s a part), make a crude drill (Smithing 1),
+drill faster; smelt ingots and beat plates at the scrapyard forge (the
+bar reads `MAKING STEEL PLATE 2/4`); hand in 10 scrap at the board for
+the cutter money; at the relay bench assemble a sidearm and a Scout
+suit; load cells by hand; shoot. Open the shop: everything it sells, you
+could have made, and it costs more. Level Smithing to 15: the core
+recipe lights.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 0 | `craft.json` rule table (base shapes per kind, rarity multipliers, seconds, skills, exceptions) and `tools/gen_recipes.py` → `recipes.json`; a Go test that regenerates and diffs | `server/data/craft.json`, `tools/gen_recipes.py`, `server/internal/defs/recipes_test.go` | `go test ./internal/defs` fails on a stale recipes.json |
+| 2 | 1 | Data: the eight refined mats + `mat.hide`, `mat.crystal`, `tool.drill.crude`; `node.crystal`; hide and refined drops in loot tables; `npc.forge` in the scrapyard; crystal nodes placed; `start_credits` 0, `start_items` []; `mission.first_scrap`; three skills rows + the synergy; shop prices ≥ 1.5× | `server/data/*.json`, `zones/*.json` | `go test ./...` (defs audit, wildlife audit, a new price-vs-recipe test) |
+| 3 | 1 | Server: the craft channel on the gather machinery (per-unit inputs out/back, output + XP per unit, cancel paths, `craft_end`); `station`/`skill`/`seconds` in defs; `npc` 0 = hands; `wrong_station`; hand-gathering (×3, one unit, half XP; copper refused `no_tool`); PROTOCOL rows | `server/internal/server/gather.go`, `cmd.go`, `sim/artisan.go`, `skillsengine.go`, `docs/PROTOCOL.md` | Go tests: a 3-unit craft lands three outputs at the right ticks, a cancel mid-unit refunds, the wrong station, hands on iron, hands refused on copper, XP to the recipe's skill |
+| 4 | 1 | Harness: `wire.mjs` `EVENT.CRAFT_END`; `t43-refinery.mjs`: the whole proof on a bare server from 0 cr; every item id has a recipe; refusals | `test/lib/wire.mjs`, `test/t43-refinery.mjs` | bare server + kind |
+| 5 | 1 | Client: `Recipe.station/skill/seconds` in Defs; station panel filters by the NPC's kind, rows show skill/level/seconds, CRAFT starts the channel, the gather bar reads `MAKING <item> n/m`, `craft_end` decode; CRAFT tab in the backpack for `hand`; `-uiCraft <recipe>` | `client/shared/Net/Defs.cs`, `UI/Craft*.cs`, `UI/Inventory.cs`, `Hud.cs`, `Interact.cs` | shots `p22-hand-craft.png`, `p22-forge-channel.png`; `-selftest` (filter, greying, bar text) |
+| 6 | art | `prop.forge` (anvil + crucible), `prop.node.crystal`, the crude drill (the drill with a scrap palette); icons | `art/tools/gen_props.py`, `gen_nodes.py`, `gen_weapon.py`/`gen_kit.py`, `gen_icons.py` | `npm --prefix art test` |
+| 7 | 2 | Record: QA-STATUS "Phase 22" with the craft-cost-vs-shop-price table; GDD numbers | `docs/` | — |
+
+### Acceptance criteria (C183–C189)
+
+- **C183 Everything has a recipe.** A Go test walks `items.json`: every
+  item past the five raws (vehicles excepted until Phase 24) is the
+  output of exactly one recipe.
+- **C184 Generated, not written.** `recipes.json` equals a fresh
+  `gen_recipes.py` run (Go test).
+- **C185 A craft is a channel.** `craft` ×3 returns `duration`; three
+  `craft_end`s land three outputs and three XP grants to the recipe's
+  skill at the recipe's seconds × the skill's speed; moving 0.5 m ends
+  it with the unit's inputs back in the bag; `gather_cancel` ends it.
+- **C186 The tree holds.** Hands (no NPC), forge, bench each accept
+  their own recipes and refuse the others (`wrong_station`); `t43`
+  makes a sidearm and a Scout suit from ore, scrap, hide and crystal
+  with the shop untouched and 0 cr to start.
+- **C187 From nothing.** A new character has 0 cr and an empty bag; iron,
+  scrap and crystal yield by hand (×3, one unit); copper by hand is
+  `no_tool`; the crude drill crafts by hand and gathers faster;
+  `mission.first_scrap` pays 180.
+- **C188 The panels.** The station panel shows only its station's
+  recipes with skill, level, seconds and counts against the bag; the
+  backpack's CRAFT tab runs a hand recipe with nothing in range; the bar
+  reads `MAKING <item> n/m` (shots + self-test).
+- **C189 Nothing else moved.** Sweep green incl. `godot-codec` (one new
+  event); C153–C182 hold; Phase 12/13 tests pass with the regenerated
+  recipes (the eight old ones keep their outputs; inputs and times may
+  change — recorded).
+
+# Phase 23 — placeable stations (drafted 2026-10-08)
+
+### Where Phase 23 stands (2026-10-08, drafted)
+
+The first persistent thing a player leaves in the world: a bench, a
+forge or a chest, crafted (Construction), carried, placed, picked up
+again by its owner, there after a restart. The world's stations stay.
+Contract: GDD "Placeable stations (Phase 23)". Wire: `entity_type`
+`0x0009` structure; cmds `0x0017 place`, `0x0018 chest_put`, `0x0019
+chest_take`; refusals `no_room`, `too_many`, `not_yours`, `no_account`.
+Store: table `structure`. Three ends.
+
+**Playable proof.** Make a bench by hand, walk to the crystal rocks,
+put it down, craft cells on it there. A friend walks up and crafts on
+it too. Put a chest beside it, drop your plates in; your party member
+takes them out. Restart the server: both are still there. Pick the
+bench up: it is in your bag; the friend cannot pick up the chest.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 0 | Structure defs (`structure.bench/forge/chest`, interact verbs, colliders), the three Construction recipes in `craft.json` | `server/data/items.json`, `craft.json` | regen test |
+| 2 | 1 | Store: migration 008 `structure`; load at boot, write on place/pick-up/chest change; cascade on character delete | `server/internal/store/` | store tests on Postgres (`make test-pg`) |
+| 3 | 1 | Server: `place` (flat + clearance checks, cap 5, guests refused), structure entities (spawn data, collider), interact pick-up channel (owner), `craft` on a structure, chest cmds with party access; PROTOCOL | `server/internal/server/`, `sim/`, `docs/PROTOCOL.md` | Go tests: placement refusals, cap, pick-up by owner only, craft on a placed forge, chest put/take, party access |
+| 4 | 1 | Harness: `t44-structures.mjs`: place, craft on it, chest, restart survival (store), refusals; `wire.mjs` entity type | `test/` | bare server with DATABASE_URL + kind |
+| 5 | 1 | Client: structure views (asset by id, owner nametag), place from the backpack (right-click → PLACE), interact prompts `E · use` / `E · open` / hold `E · pick up`, chest panel (two grids), `-uiPlace`, `-uiChest` | `Entities.cs`, `Interact.cs`, `UI/Inventory.cs`, `UI/Chest.cs` | shots; `-selftest` |
+| 6 | art | `prop.chest`; the bench and forge props reused as structure assets | `art/tools/gen_props.py` | `npm --prefix art test` |
+| 7 | 2 | Record QA-STATUS "Phase 23"; Deferred row "bases" → "plots, territory" | `docs/` | — |
+
+### Acceptance criteria (C190–C195)
+
+- **C190 It stands.** `place` puts the structure 2 m ahead on flat
+  ground, every client sees `spawn` type `0x0009` with the id and owner,
+  it has a collider; `no_room` on a slope or beside another, `too_many`
+  at six, `no_account` for a guest.
+- **C191 It works.** A placed bench and forge accept their station's
+  recipes from anyone (`craft` with the structure id); the hands and
+  world stations unchanged.
+- **C192 It is yours.** Pick-up returns the item to the owner; anyone
+  else gets `not_yours`; the chest opens for the owner and their party
+  only.
+- **C193 It stays.** Structures and chest contents survive a server
+  restart (`t44` against Postgres); deleting the character removes
+  them.
+- **C194 The panels.** PLACE from the backpack, the prompts, the chest's
+  two grids moving stacks both ways (shots + self-test).
+- **C195 Nothing else moved.** Sweep green incl. codec; C153–C189 hold.
+
+# Phase 24 — buildings and the dock (drafted 2026-10-08)
+
+### Where Phase 24 stands (2026-10-08, drafted)
+
+Buildings are built in place from a site and deliveries; the dock is the
+first, and vehicles move from the shop to it. Contract: GDD "Buildings
+and the dock (Phase 24)". Wire: `0x001A deliver`; site/dock/ghost as
+structure entities (type `0x0009`, data carries the progress);
+`recipe.station` `dock`; the craft's output is a spawned, owned vehicle.
+
+**Playable proof.** Place a dock site on the flat by the relay: a
+translucent dock with `DOCK 0 %` over it. Three trips with plates and
+wiring (a party member brings the cores): `DOCK 100 %`, the real dock.
+Stand at it, craft a rover (30 s): it appears on the pad, yours. The
+shop no longer lists the ship.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 0 | `site.dock` + `structure.dock` defs, the bill, the two vehicle recipes (`station: dock`), the ship out of Vex's stock | `server/data/*.json`, `craft.json` | regen test |
+| 2 | 1 | Server: site placement (6 m footprint, one per character), `deliver` (owner + party, bill accounting, completion swap, Construction XP), `craft` at a dock → the ship/rover spawn-and-own path, demolish; store rows carry the bill | `server/internal/server/`, `store/` | Go tests: footprint refusals, one per character, deliveries to zero → dock, a rover from the dock owned by the crafter, demolish |
+| 3 | 1 | Harness: `t45-dock.mjs`: site → deliveries → dock → rover; the shop lacks the ship | `test/` | bare + kind |
+| 4 | 1 | Client: ghost material (translucent + ink) with the progress nametag and thirds fill, the deliver panel (bag → bill), the dock's station panel, vehicle appears via the existing spawn path; `-uiSite`, `-uiDeliver` | `Entities.cs`, `UI/Deliver.cs`, `ViewModel.cs` | shots `p24-ghost-43.png`, `p24-dock-rover.png` |
+| 5 | art | `prop.dock` (pad + gantry, Scrapyard Comic) and its ghost variant | `art/tools/gen_props.py` | `npm --prefix art test` |
+| 6 | 2 | Record QA-STATUS "Phase 24" | `docs/` | — |
+
+### Acceptance criteria (C196–C200)
+
+- **C196 A site stands.** Placed on a 6 m flat footprint, one per
+  character; the ghost spawns with `DOCK 0 %`.
+- **C197 Deliveries build it.** `deliver` by the owner or a party member
+  moves stacks into the bill; the nametag and model follow; at zero the
+  entity becomes the dock, XP to the last deliverer.
+- **C198 Vehicles come from the dock.** The rover and ship recipes run as
+  channels at the dock and end with the vehicle spawned on the pad,
+  owned by the crafter (Phase 5's ownership); the shop no longer sells
+  the ship.
+- **C199 Demolish.** Owner only, materials lost, the slot frees.
+- **C200 Nothing else moved.** Sweep green; C153–C195 hold.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
@@ -1986,6 +2188,9 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Guilds | chat landed in Phase 20; a guild needs a reason to exist first (shared bases or territory) |
 | A persistent world players mutate (bases, territory) | Phase 6 candidate — the persistence layer from Phase 2 is the seed |
 | Rig + animation clips | procedural motion stops carrying the fidelity |
+| Timed crafting (a smelt that takes seconds) | a playtest says instant forging feels cheap; reuse the gather channel (`gather.go`), one knob |
+| Item quality / durability / named crafts | wire + store change (per-instance item data); only after everything is craftable (Phase 22) and the loop is fun |
+| Player-to-player trading | two players with different professions want to swap; needs a trade cmd pair and an escrow, after Phase 22 |
 | Pack aggro (one herd member waking the rest) | a playtest finds herds too easy to pick off one at a time; until then overlapping `aggro_radius` does it |
 | NPC flight (the `mob.flying.*` archetypes off the ground) | a herd that should be unreachable on foot is wanted; it needs an NPC airborne regime in steer.go |
 | Gear abilities in the movement sim (hover boots, a dash) | Phase 13's `use`/ability framework and hotbar exist; the first sim ability needs both sims stepped identically plus conformance cases, like Phase 11's multipliers — build it when a second ability wants the sim, not the first |

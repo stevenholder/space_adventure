@@ -1739,6 +1739,237 @@ are no guests.
   shows the same as anyone's. Rigs: `-uiChat` shows the log with three
   fake lines and the input open for a shot.
 
+### Skin and suit colours (Phase 21)
+
+Four bodies, two per model, read samey across a camp: same skin, same
+grey undersuit. This phase gives every character a **skin tone** and an
+**undersuit colour**, chosen like hair — from a short palette, by id,
+never free RGB (a palette is reviewable, a colour picker is a griefing
+surface and a UI we do not want to draw).
+
+- **Palettes.** `art/manifest.json` gains `palettes`: `skin` (eight
+  tones, `skin.01` lightest … `skin.08` deepest, warm and cool mixed so
+  neighbours differ in hue as well as value) and `suit` (eight:
+  `suit.slate` the default grey, `suit.rust`, `suit.olive`, `suit.navy`,
+  `suit.bone`, `suit.charcoal`, `suit.teal`, `suit.maroon`), each an sRGB
+  hex. The manifest is already the server's hair table; it is the colour
+  table the same way. Hex values live beside the ids here in the GDD
+  (Scrapyard Comic palette rules apply: no neon, nothing the rarity ramp
+  uses).
+- **Art.** A tone is a material *factor*, not a texture: the body's
+  `skin` surfaces (Colonist: the painted albedo from `skin.py`; Vanguard:
+  the UBC albedo) are baked at the LIGHTEST tone, neutral enough that
+  multiplying by `skin.NN` lands on each tone without a second texture.
+  The `suit` surface is a flat material; its factor is the colour. Eyes,
+  lips, brows, hair and every armor piece are untouched by either.
+- **The character's.** Two row fields, `skin` and `suit` (migration 007,
+  defaults `skin.03` / `suit.slate`, i.e. today's look); `POST` and
+  `PATCH /api/characters` take them, `GET` returns them, an unknown id is
+  400 `bad skin` / `bad suit`. Guests keep the defaults.
+- **Wire.** At spawn the server sends two more `worn` frames, slots
+  `skin` and `suit`, value the palette id — hair's precedent: not an
+  item, not an equipment slot, nothing new on the wire. A guest gets no
+  frame. The harness decodes them as it decodes hair.
+- **Client.** A `worn` frame for slot `skin`/`suit` tints every surface
+  of that name on the body (the manifest's `surfaces` says which meshes
+  carry it): the remote body, the stage, the sheet doll, the local
+  first-person hands (skin) and the drawn torso and legs (suit). Tinting
+  sets the material's albedo factor; the near-cut and first-person
+  shader variants read the same factor. Helmet over hair, armor over
+  suit: unchanged.
+- **The form.** SKIN and SUIT rows under HAIR on create and edit, each a
+  cycle with a swatch; the stage follows every change. A saved edit
+  changes the next join (Phase 18's rules).
+
+### The refinery — make everything, from nothing (Phase 22)
+
+Phase 12 made three raw materials, one bench and eight instant recipes,
+and the shop sells the rest. This phase turns that into a **profession
+arc** in the Palworld shape: raw → refined → refined again or an item,
+each step a timed piece of work at the station it needs (or in the
+hands when it needs none), skilled by the kind of work, until **every
+item in items.json has a recipe** — and a new character starts with
+**nothing** and gets there anyway. Drops and the shop stay: a drop is
+luck, the shop is convenience at a markup, crafting is the sure road.
+
+**Principles (binding).**
+
+- **Everything is a recipe; recipes are generated.** `recipes.json` is
+  written by `tools/gen_recipes.py` from `items.json` and a rule table
+  (`server/data/craft.json`), checked in, and a Go test refuses a server
+  whose committed recipes differ from a fresh run. Hand-tuned exceptions
+  live in the rule table, never in the output.
+- **A craft is a channel.** Exactly the gather channel (Phase 12): the
+  server times it, the player stands at the work holding it, moving
+  0.5 m, taking a hit, dying, disconnecting or `gather_cancel` (which
+  cancels *any* channel from this phase on) ends it. `qty` units run
+  back to back; a unit's inputs leave the bag when that unit starts and
+  come back if it is cancelled; each finished unit lands its output and
+  its XP. Duration per unit is the recipe's `seconds` × (1 − the
+  skill's `craft_speed` efficacy), floored at 0.5 s. Nothing runs while
+  you are away — background jobs belong to owned stations (Phase 23+).
+- **Stations are data.** A recipe names its `station`: `hand` (anywhere,
+  nothing in range), `bench` (assembly), `forge` (heat). World stations:
+  the relay's workbench (Phase 12) and a **forge in the outpost scrapyard**
+  beside the wrecks, inside the guard. `craft` with `npc` 0 is the hands;
+  a station recipe at the wrong kind is `wrong_station`. Rule of thumb:
+  no heat, no heavy tooling → hands; heat → forge; fitting parts → bench.
+- **Work has a skill.** A recipe names its `skill`; its XP (`ceil(value
+  / 2)` per unit) goes there; its `level` gates it there. Three new
+  roster rows (below). No tech points, no learning: a level unlocks.
+- **From nothing.** `start_credits` 0, `start_items` none. Every node
+  can be worked **by hand**: channel ×3, one unit per yield instead of
+  the node's loot quantity, except copper (the drill mk2 stays its gate).
+  The first tool is made, not bought: `tool.drill.crude` (hand, Smithing
+  1: scrap 4, parts 2; channel ×1.5 against the real drill, superseded
+  by it). The board's first mission, `mission.first_scrap` (deliver
+  10 scrap → 180 cr), pays a cutter. Ammo starts at zero; cells are a
+  hand recipe.
+- **No per-instance items.** A crafted sidearm is a sidearm. Quality,
+  durability, named crafts stay deferred.
+
+**Skills.** Three new rows in `skills.json`, the RuneScape curve, each
+with `craft_speed` −0.5 % channel per level (cap at 99 like the rest):
+
+| skill | the work | XP from |
+|---|---|---|
+| **Smithing** | forge: ingots, plates, wiring, cores, blades; the crude drill | every forge unit, the crude drill |
+| **Chemistry** | cells, throwables, potions, medkits, the charm | every hand unit of those |
+| **Construction** | stations, chests, sites, buildings, vehicles (Phases 23–24) | nothing in 22 (the row exists, level 1) |
+| Engineering (existing) | assembly at the bench: guns, melee, armor, tools, gadgets, mods; keeps `craft_extra` | every bench unit |
+| Mining / Salvaging (existing) | gathering; hand-gathering grants half XP | — |
+| Scavenging (existing) | pick-ups, **and** hide → leather | hand leather units |
+
+Synergy: Smithing → Engineering `craft_speed` +0.1 %/lvl (a smith knows
+the parts). `unlock_requirements` keeps `tool.drill.mk2` (Engineering 10).
+
+**Materials (the tree).** Five raws, eight refined. Stack 50, `value` on
+all of them, every one spills on death like every material.
+
+| tier | id | from | station / skill | s |
+|---|---|---|---|---|
+| raw | `mat.ore.iron` | iron node (mining 1; drill, crude or hands) | — | — |
+| raw | `mat.ore.copper` | copper node (mining 10, drill mk2 only) | — | — |
+| raw | `mat.scrap` | wrecks (salvaging 1; cutter or hands), mobs | — | — |
+| raw | `mat.hide` | **new**: wildlife (`loot.wild.small` 60 %, `loot.wild.big` 100 %, ×2) | — | — |
+| raw | `mat.crystal` | **new**: `node.crystal` (mining 5; drill, crude or hands; 4 yields, 150 s) ×2 at the spawn rocks, ×2 at the relay | — | — |
+| refined | `mat.parts` | scrap ×3 → ×1 | hand / Smithing 1 | 1 |
+| refined | `mat.leather` | hide ×2 → ×1 | hand / Scavenging 1 | 2 |
+| refined | `mat.ingot.iron` | ore.iron ×2 → ×1 | forge / Smithing 1 | 4 |
+| refined | `mat.ingot.copper` | ore.copper ×2 → ×1 | forge / Smithing 10 | 5 |
+| refined² | `mat.plate.steel` | ingot.iron ×2 + parts ×1 → ×1 | forge / Smithing 3 | 6 |
+| refined² | `mat.wiring` | ingot.copper ×1 + parts ×1 → ×2 | forge / Smithing 10 | 4 |
+| refined² | `mat.blade` | ingot.iron ×3 → ×1 | forge / Smithing 5 | 8 |
+| refined² | `mat.core` | crystal ×3 + wiring ×2 → ×1 (the epic key) | forge / Smithing 15 | 12 |
+
+Refined drops (killing is a shortcut, never the road): mechs drop wiring
+30 % ×2 and a core 3 %; human NPCs drop parts 25 % ×2.
+
+**Item recipes (the rule table).** Each kind has a base shape; the rarity
+scales it; epic adds a core. Level gates by rarity: common 1, uncommon 5,
+rare 10, epic 15. XP `ceil(value / 2)` per unit to the recipe's skill.
+
+| kind (slot/class) | base recipe (common) | station / skill | s |
+|---|---|---|---|
+| weapon, pistol | plate 1, parts 2, wiring 1 | bench / Engineering | 12 |
+| weapon, rifle (smg, pulse, dmr) | plate 2, parts 2, wiring 2 | bench / Engineering | 15 |
+| melee, 1h | blade 1, leather 1 | bench / Engineering | 8 |
+| melee, 2h | blade 2, leather 1, plate 1 | bench / Engineering | 12 |
+| armor head / hands / feet | plate 1, leather 1 | bench / Engineering | 8 |
+| armor chest / legs | plate 2, leather 2 | bench / Engineering | 10 |
+| armor back (pack) | leather 3, parts 1 | bench / Engineering | 8 |
+| tool | plate 1, parts 2 (`supersedes` input kept: mk2 eats the mk1) | bench / Engineering | 10 |
+| gadget / mod | wiring 2, parts 1, crystal 1 | bench / Engineering | 12 |
+| throwable (×5) | parts 1, crystal 1 (frag, fire); + scrap 2 (acid) | hand / Chemistry | 2 |
+| ammo.cell (×30) | crystal 1, parts 1 | hand / Chemistry | 3 |
+| medkit (×2) | leather 1, parts 1 | hand / Chemistry | 3 |
+| potion.heal (×2) | hide 1, crystal 1 | hand / Chemistry | 3 |
+| accessory (charm) | leather 1, crystal 1 | hand / Chemistry | 4 |
+| vehicle | — not in 22: the shop keeps the ship until the dock (Phase 24) | | |
+
+Rarity multiplies every input count and the seconds: uncommon ×2, rare
+×3, epic ×4 plus `mat.core` ×1. A styled variant (`.dune`, `.frost`) is
+the base gun's recipe at its own rarity. Raider armor (drop-only today)
+gets the armor recipe at uncommon.
+
+**Shop.** Vex sells tools, cells, bandages and gear at **≥ 1.5× the
+recipe's material value** (the markup is the convenience); buys
+everything with a `value`, materials included.
+
+**Client.** The station panel (Phase 12's bench panel) lists the
+station's recipes, greyed by level or inputs with counts against the
+bag, the skill and seconds on each row; CRAFT starts the channel and the
+gather bar shows `MAKING <item> 3/5`. The hands have the same panel as a
+**CRAFT tab in the backpack (B)**. `-uiCraft <recipe>` rigs it.
+
+**What this phase does not do.** Placeable stations, chests, docks,
+vehicles, timed background jobs, item quality, trading. Phases 23–24
+and the Deferred table.
+
+### Placeable stations — the first things you leave in the world (Phase 23)
+
+Craft a bench, carry it, put it down: the first **persistent structure**
+players mutate the world with (the Deferred "bases" row starting here).
+World stations stay as the free starter set; a placed one works the same.
+
+- **Structure items.** Kind `structure`, stack 1, Construction recipes:
+  `structure.bench` (hand, Construction 1: plate 4, parts 4, 20 s — so
+  the first bench needs no bench), `structure.forge` (bench, Construction
+  5: plate 8, ingot.iron 4, parts 4, 40 s), `structure.chest` (bench,
+  Construction 3: plate 2, parts 4, 15 s).
+- **Placing.** `cmd` `0x0017` `place` `{"item": "<structure id>"}`: the
+  server puts it 2 m ahead of the body on the terrain, facing the body,
+  if the ground within 1.5 m is flat enough (slope ≤ 15°) and nothing —
+  structure, NPC, node, prop collider — is within 1.5 m; else
+  `no_room`. **Cap 5 per character** (`too_many`). Guests cannot place
+  (`no_account`). The item leaves the bag.
+- **The entity.** `entity_type` `0x0009` structure, `spawn.data` =
+  `<structure id>\0<owner name>`; a static collider; interact verb from
+  the def (`Use` for stations, `Open` for a chest). Everyone sees it and
+  **anyone can use** a station. `craft`'s `npc` takes a structure id and
+  the server reads the station kind off it.
+- **Picking up.** Interact-hold (E, 1.5 s channel) by the **owner only**
+  returns the item to the bag (`not_yours`, `no_space`). No decay, no
+  durability, no damage.
+- **Persistence.** Table `structure` (id, owner token, item, pos,
+  facing, placed_ms; a chest's stacks as JSON) loaded at boot, written
+  on place, pick-up and every chest change. A deleted character's
+  structures go with it.
+- **Chest.** 20 stacks. `0x0018` `chest_put` / `0x0019` `chest_take`
+  `{"structure", "item", "qty"}`, result = both inventories; the owner
+  and their **party** may open it (`not_yours`); the chest panel is the
+  backpack grid beside the bag grid, drag or right-click moves a stack.
+- **Rig.** `-uiPlace <item>`, `-uiChest`.
+
+### Buildings and the dock — vehicles made, not bought (Phase 24)
+
+A dock is too big to carry. It is **built in place** the Palworld way:
+place a site, deliver materials over visits, it becomes the building.
+Vehicles are then **crafted at the dock** and leave the shop.
+
+- **Sites.** `site.dock` (bench, Construction 15: plate 10, parts 10,
+  60 s), placed like a structure with a 6 m flat footprint (slope ≤ 8°,
+  nothing within 6 m); **one dock per character**. It spawns as the
+  dock's ghost (the model translucent, the Scrapyard ink outline) with
+  a bill of materials: plate.steel 60, wiring 24, ingot.iron 20, core 4.
+- **Deliveries.** `0x001A` `deliver` `{"structure", "item", "qty"}` moves
+  from the bag into the site (owner or party); the result is the bill's
+  remaining counts; the ghost's nametag reads `DOCK 43 %` and the model
+  fills in by thirds. When the bill is zero the site becomes
+  `structure.dock` in place; Construction XP = the bill's value / 2 on
+  completion, to whoever delivered the last unit.
+- **Vehicles at the dock.** `recipe.station` `dock`: `vehicle.rover`
+  (Construction 10: plate 20, wiring 8, ingot 10; 30 s) and `ship.v1`
+  (Construction 20: plate 40, wiring 16, core 2; 60 s). The output is
+  not an item: the channel's end calls the same spawn-and-own path the
+  shop's ship purchase does (Phase 5 ownership), the vehicle appearing on
+  the dock's pad. The shop stops stocking the ship. The dock **is** the
+  landing pad.
+- **Demolish.** Owner only, interact-hold 3 s; materials are lost; the
+  slot frees.
+- **Not in 24.** Walls, plots, territory, more buildings; a second dock;
+  anyone else's vehicles on your pad.
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
