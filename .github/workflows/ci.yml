@@ -7,11 +7,19 @@ name: ci
 
 # Push runs main only (deploy.yml waits on that run). A feature branch is
 # checked by its pull request; pushing `feat/**` too ran every job twice
-# on the same commit.
+# on the same commit. Docs and markdown changes build nothing: a docs-only
+# push or PR skips every job, and a docs-only merge to main skips the deploy
+# (deploy.yml only follows a completed ci run).
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 jobs:
   server:
