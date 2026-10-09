@@ -143,6 +143,8 @@ type client struct {
 	lootExtraPOI float64
 	// gather is the Phase 12 channel, guarded by srv.mu (gather.go).
 	gather gatherState
+	// craft is the Phase 22 craft channel, guarded by srv.mu (craft.go).
+	craft craftState
 	// cooldowns is Phase 13's per-item ready-at map for `use`, guarded by
 	// srv.mu; per connection, never persisted.
 	cooldowns map[string]time.Time

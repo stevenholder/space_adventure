@@ -139,6 +139,15 @@ func runServer(args []string) error {
 		log.Printf("persistence: disabled (DATABASE_URL unset) — sessions are ephemeral")
 	}
 
+	// Phase 22: a new character starts with nothing; SA_START funds a dev
+	// fleet's (kind, bare-server harness) — never set it in prod.
+	if spec := os.Getenv("SA_START"); spec != "" {
+		if err := world.SetStart(spec); err != nil {
+			return fmt.Errorf("SA_START: %w", err)
+		}
+		log.Printf("start: overridden by SA_START (%s)", spec)
+	}
+
 	// Phase 16: a server with a store seats only account characters.
 	// SA_GUESTS=1 is the kind fleet's way back in (RUNBOOK "Who may join").
 	world.SetGuests(os.Getenv("SA_GUESTS") == "1")

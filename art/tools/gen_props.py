@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the world props that used to come from Kenney's Space Kit.
 
-Ten files from one script, in the style of gen_nodes.py / gen_kit.py:
+Eleven files from one script, in the style of gen_nodes.py / gen_kit.py:
 
     props/rock_a.glb       prop.rock.a        rounded boulder
     props/rock_b.glb       prop.rock.b        broken slab cluster
@@ -13,6 +13,7 @@ Ten files from one script, in the style of gen_nodes.py / gen_kit.py:
     props/dish.glb         prop.dish          comms dish on a tripod
     props/bones.glb        prop.bones         skull, ribs, long bones
     vehicles/rover.v1.glb  vehicle.rover.v1   open buggy with seat mounts
+    props/forge.glb        prop.forge         scrapyard forge: crucible, anvil
 
 Contract (art/README.md): base at the origin, up +Y, faces -Z, flat-shaded
 vertex colours under one white double-sided material. Rocks are exactly
@@ -52,6 +53,18 @@ LAMP = (1.0, 0.92, 0.65)
 BONE = (0.86, 0.82, 0.70)
 BONE_DARK = (0.62, 0.57, 0.47)
 SEAT = (0.20, 0.18, 0.17)
+# Scrapyard (GDD "World art style guide"): rust #8C4A2F, scorch #3A2E28,
+# hazard #D9A013, the flame-amber #FFAE19 glow.
+RUST = (0.55, 0.29, 0.18)
+RUST_DARK = (0.42, 0.21, 0.13)
+SCORCH = (0.23, 0.18, 0.16)
+HAZARD_SY = (0.85, 0.63, 0.07)
+FLAME = (1.0, 0.68, 0.10)
+EMBER = (1.0, 0.45, 0.08)
+ANVIL = (0.20, 0.21, 0.24)
+WOOD = (0.42, 0.29, 0.18)
+WOOD_DARK = (0.30, 0.20, 0.12)
+LEATHER = (0.36, 0.22, 0.14)
 
 
 # ---- shapes ----------------------------------------------------------------
@@ -319,6 +332,71 @@ def rover():
     return t
 
 
+# ---- forge -----------------------------------------------------------------
+def forge():
+    """Phase 22's scrapyard forge (npc.forge, kind `forge`). 2.2 x 1.4 m,
+    under 1.6 m: a brick crucible at -X with its glowing mouth on the -Z
+    face, a bellows on its +X flank, an anvil on a stump in front of the
+    work ledge at +X. Anvil face and ledge sit at ~0.9 m, the bench's slab
+    height, so the server's bench aim point (0.9 m) lands on the work. The
+    crooked thing: the scrap chimney leans off the crucible's back."""
+    t = []
+    # Scorched ground plate under the lot -- hides the seam with the dirt.
+    t += box(0.0, 0.02, 0.0, 2.16, 0.04, 1.36, SCORCH)
+    # Crucible: brick courses, each a touch off the last (hand-laid).
+    fx, fz = -0.52, 0.06
+    for i, (w, d, dx, col) in enumerate(((1.00, 0.96, 0.00, RUST),
+                                         (0.96, 0.92, 0.02, RUST_DARK),
+                                         (0.94, 0.90, -0.02, RUST),
+                                         (0.90, 0.86, 0.01, RUST_DARK))):
+        t += box(fx + dx, 0.04 + 0.11 + i * 0.22, fz, w, 0.22, d, col, angle=0.03 * (i - 1.5))
+    t += box(fx, 0.97, fz, 0.98, 0.06, 0.94, SCORCH)                 # coping
+    # The mouth on the -Z face: scorch arch, glowing heart, hazard sill.
+    mz = fz - 0.43
+    t += box(fx, 0.48, mz - 0.02, 0.58, 0.46, 0.04, SCORCH)
+    t += box(fx, 0.46, mz - 0.045, 0.42, 0.32, 0.02, FLAME)
+    t += box(fx, 0.38, mz - 0.06, 0.30, 0.10, 0.02, EMBER)          # coals
+    t += box(fx, 0.22, mz - 0.07, 0.62, 0.06, 0.12, HAZARD_SY)       # sill
+    # Crucible lip on top with molten metal.
+    t += cyl(fx, 1.00, fz - 0.08, 0.26, 0.12, 8, STEEL_DARK)
+    t += cyl(fx, 1.12, fz - 0.08, 0.21, 0.01, 8, FLAME)
+    # Chimney: a scrap pipe off the back corner, leaning back and out.
+    pipe = cyl(0, 0, 0, 0.12, 0.62, 8, RUST_DARK, top=SCORCH)
+    pipe += cyl(0, 0.40, 0, 0.135, 0.06, 8, STEEL_DARK)              # a strap
+    pipe = xform(pipe, lambda p: _rot_z(_rot_x(p, math.radians(12)), math.radians(14)))
+    t += shift(pipe, fx - 0.16, 0.95, fz + 0.30)
+    # Bellows on the crucible's +X flank: boards, leather, a nozzle.
+    bx = fx + 0.62
+    t += box(bx, 0.36, 0.20, 0.22, 0.04, 0.46, WOOD, angle=0.0)
+    t += box(bx, 0.52, 0.20, 0.20, 0.04, 0.44, WOOD)
+    t += box(bx, 0.44, 0.22, 0.18, 0.12, 0.36, LEATHER)
+    t += box(bx - 0.10, 0.44, 0.00, 0.10, 0.05, 0.05, STEEL_DARK)   # nozzle
+    t += box(bx, 0.20, 0.20, 0.10, 0.32, 0.10, WOOD_DARK)           # stand
+    # Anvil on a stump, front of the ledge.
+    ax, az = 0.52, -0.20
+    t += cyl(ax, 0.04, az, 0.22, 0.52, 8, WOOD, top=WOOD_DARK)
+    t += box(ax, 0.62, az, 0.34, 0.08, 0.24, ANVIL)                  # foot
+    t += box(ax, 0.72, az, 0.18, 0.12, 0.14, ANVIL)                  # waist
+    t += box(ax - 0.02, 0.84, az, 0.42, 0.12, 0.20, ANVIL)           # face
+    horn_base = [(0.0, 0.07 * math.cos(math.pi / 4 + k * math.pi / 2),
+                  0.07 * math.sin(math.pi / 4 + k * math.pi / 2)) for k in range(4)]
+    t += shift(cap(horn_base, (0.20, 0.0, 0.0), (1, 0, 0), ANVIL), ax + 0.19, 0.86, az)  # horn
+    t += box(ax + 0.05, 0.92, az, 0.20, 0.03, 0.03, STEEL)           # a hammer on it
+    t += box(ax + 0.14, 0.93, az, 0.06, 0.05, 0.06, STEEL_DARK)
+    # Work ledge along the back: a plank on two posts, an ingot, a plate.
+    lx, lz = 0.62, 0.46
+    for dx in (-0.36, 0.36):
+        t += box(lx + dx, 0.43, lz, 0.08, 0.86, 0.08, STEEL_DARK)
+    t += box(lx, 0.89, lz, 0.90, 0.06, 0.40, WOOD)
+    t += box(lx, 0.30, lz, 0.80, 0.04, 0.30, WOOD_DARK)              # low shelf
+    t += box(lx - 0.20, 0.95, lz, 0.18, 0.06, 0.08, RUST)            # ingot
+    t += box(lx + 0.18, 0.93, lz + 0.02, 0.28, 0.02, 0.22, STEEL, angle=0.2)  # plate
+    t += box(lx + 0.36, 0.33, lz, 0.14, 0.02, 0.18, HAZARD_SY)       # tongs on the shelf
+    # Quench bucket at the front corner.
+    t += cyl(0.98, 0.04, -0.48, 0.12, 0.30, 8, STEEL_DARK, top=(0.12, 0.16, 0.20))
+    return t
+
+
 def _prop(asset_id, tris, mounts=None):
     node = Node(asset_id)
     node.add("opaque", tris)
@@ -337,6 +415,7 @@ FILES = {
     "props/generator.glb": (lambda: _prop("prop.generator", generator()), 800),
     "props/dish.glb": (lambda: _prop("prop.dish", dish()), 800),
     "props/bones.glb": (lambda: _prop("prop.bones", bones()), 800),
+    "props/forge.glb": (lambda: _prop("prop.forge", forge()), 800),
     "vehicles/rover.v1.glb": (lambda: _prop("vehicle.rover.v1", rover(), ROVER_SEATS), 1500),
 }
 

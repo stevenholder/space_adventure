@@ -157,6 +157,7 @@ namespace SpaceAdventure.Game
                 "npc.quartermaster" => "shop",
                 "npc.dispatcher" => "board",
                 "npc.workbench" => "bench",
+                "npc.forge" => "bench",
                 _ => "hostile",
             },
             EntityType.Node => v.Label.Contains("copper") ? "copper" : v.Label.Contains("wreck") ? "wreck" : "iron",
@@ -175,7 +176,7 @@ namespace SpaceAdventure.Game
         private static string MapLabel(EntityView v) => v.Type switch
         {
             EntityType.Player => v.Label,
-            EntityType.Npc => v.Label switch { "npc.quartermaster" => "Quartermaster", "npc.dispatcher" => "Dispatcher", "npc.workbench" => "Workbench", _ => "" },
+            EntityType.Npc => v.Label switch { "npc.quartermaster" => "Quartermaster", "npc.dispatcher" => "Dispatcher", "npc.workbench" => "Workbench", "npc.forge" => "Forge", _ => "" },
             EntityType.Node => v.Label.Contains("copper") ? "Copper" : "",
             _ => "",
         };

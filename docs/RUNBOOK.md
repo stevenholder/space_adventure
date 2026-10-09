@@ -33,6 +33,9 @@ an account character; any other `hello` is closed `1008` and counted as
   is seated, every session ephemeral;
 - `SA_GUESTS=1`: the kind overlay sets it so the harness fleet (which
   joins with made-up tokens) and `make godot-run` keep working.
+- `SA_START=credits=3000,ammo.cell=120` (Phase 22): a character starts
+  with nothing; the kind overlay seats everyone rich so the fleet and the
+  rig can still buy. A bare server for a harness run wants the same.
 
 Production sets neither. If prod ever needs a guest for a test, port-
 forward and run the test against kind instead; do not set `SA_GUESTS`

@@ -62,50 +62,75 @@ func SellAt(p *store.Player, npc defs.NPC, item string, qty int, reg *defs.Regis
 	return paid, nil
 }
 
-// Craft validates a craft — recipe known, level, every input × qty owned,
-// the output fits once the inputs leave — then applies it atomically. qty
-// crafts happen as one transaction or none. bonus is extra output units
-// already rolled by the caller (craft_extra). Returns the units granted.
-func Craft(p *store.Player, r defs.Recipe, qty int, level int, reg *defs.Registry, bonus int) (int, error) {
-	if qty < 1 || qty > maxQty {
-		return 0, refuse(ReasonBadQty)
-	}
+// Phase 22 crafts are channels of units (docs/GDD.md "The refinery"): the
+// server takes one unit's inputs when the unit starts, lands its output
+// when it ends, and hands the inputs back if it is cancelled. These are
+// the three moves on the player row; the timing lives in the server.
+
+// CraftCheck refuses in the cmd's order — locked, missing_materials (for
+// one unit), no_space (the output once that unit's inputs are out).
+func CraftCheck(p *store.Player, r defs.Recipe, level int, reg *defs.Registry) error {
 	if level < r.Level {
-		return 0, refuse(ReasonLocked)
+		return refuse(ReasonLocked)
 	}
-	for _, in := range r.Inputs {
-		if CountItem(p, in.Item) < in.Qty*qty {
-			return 0, refuse(ReasonMissingMaterials)
-		}
+	scratch := store.Player{Inventory: p.Inventory}
+	if err := TakeUnit(&scratch, r); err != nil {
+		return err
 	}
 	outDef, ok := reg.Items[r.Output.Item]
 	if !ok {
-		return 0, refuse(ReasonUnknownItem)
+		return refuse(ReasonUnknownItem)
 	}
-	// Work on a scratch row so a no_space at the end costs nothing.
-	scratch := store.Player{Inventory: p.Inventory}
+	_, err := applyStack(scratch.Inventory, r.Output.Item, r.Output.Qty, outDef.StackMax, reg.InvSlots)
+	return err
+}
+
+// TakeUnit removes one unit's inputs, all or none (missing_materials).
+// A consumed input may have been worn (the old drill in the mk2 recipe):
+// a slot must not name an item the bag no longer holds.
+func TakeUnit(p *store.Player, r defs.Recipe) error {
 	for _, in := range r.Inputs {
-		if err := TakeItem(&scratch, in.Item, in.Qty*qty); err != nil {
-			return 0, err
+		if CountItem(p, in.Item) < in.Qty {
+			return refuse(ReasonMissingMaterials)
 		}
 	}
-	// The bonus unit only exists for stackables: a second chest plate has
-	// nowhere to go, so craft_extra never rolls on a stack_max 1 output.
-	if outDef.StackMax <= 1 {
-		bonus = 0
+	for _, in := range r.Inputs {
+		if err := TakeItem(p, in.Item, in.Qty); err != nil {
+			return err
+		}
 	}
-	made := r.Output.Qty*qty + bonus
-	newInv, err := applyStack(scratch.Inventory, r.Output.Item, made, outDef.StackMax, reg.InvSlots)
-	if err != nil {
-		return 0, err
-	}
-	p.Inventory = newInv
-	// A consumed input may have been worn (the old drill in recipe.drill.mk2):
-	// a slot must not name an item the bag no longer holds.
 	for slot, held := range p.Equipped {
 		if CountItem(p, held) == 0 {
 			delete(p.Equipped, slot)
 		}
 	}
+	return nil
+}
+
+// LandUnit adds one unit's output plus bonus (craft_extra) and returns how
+// many landed; no_space leaves p untouched. The bonus unit only exists for
+// stackables: a second chest plate has nowhere to go.
+func LandUnit(p *store.Player, r defs.Recipe, bonus int, reg *defs.Registry) (int, error) {
+	outDef, ok := reg.Items[r.Output.Item]
+	if !ok {
+		return 0, refuse(ReasonUnknownItem)
+	}
+	if outDef.StackMax <= 1 {
+		bonus = 0
+	}
+	made := r.Output.Qty + bonus
+	inv, err := applyStack(p.Inventory, r.Output.Item, made, outDef.StackMax, reg.InvSlots)
+	if err != nil {
+		return 0, err
+	}
+	p.Inventory = inv
 	return made, nil
+}
+
+// ReturnUnit hands a cancelled unit's inputs back, best effort: the slots
+// they left are free unless something landed in them since.
+func ReturnUnit(p *store.Player, r defs.Recipe, reg *defs.Registry) {
+	for _, in := range r.Inputs {
+		_ = AddItem(p, in.Item, in.Qty, reg)
+	}
 }

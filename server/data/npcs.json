@@ -12,51 +12,51 @@
    "stock": [
     {
      "item": "weapon.pulse",
-     "price": 250
+     "price": 890
     },
     {
      "item": "weapon.pulse.dune",
-     "price": 520
+     "price": 1300
     },
     {
      "item": "weapon.sidearm",
-     "price": 120
+     "price": 200
     },
     {
      "item": "weapon.smg",
-     "price": 220
+     "price": 590
     },
     {
      "item": "weapon.smg.frost",
-     "price": 420
+     "price": 890
     },
     {
      "item": "weapon.dmr",
-     "price": 480
+     "price": 1300
     },
     {
      "item": "melee.dagger",
-     "price": 40
+     "price": 70
     },
     {
      "item": "melee.sword",
-     "price": 110
+     "price": 140
     },
     {
      "item": "melee.axe",
-     "price": 110
+     "price": 140
     },
     {
      "item": "melee.greatsword",
-     "price": 280
+     "price": 590
     },
     {
      "item": "melee.greataxe",
-     "price": 300
+     "price": 600
     },
     {
      "item": "melee.hammer",
-     "price": 420
+     "price": 910
     },
     {
      "item": "throw.fire",
@@ -72,7 +72,7 @@
     },
     {
      "item": "ammo.cell",
-     "price": 1
+     "price": 2
     },
     {
      "item": "ship.v1",
@@ -80,47 +80,47 @@
     },
     {
      "item": "armor.helmet.scout",
-     "price": 40
+     "price": 90
     },
     {
      "item": "armor.suit.scout",
-     "price": 120
+     "price": 350
     },
     {
      "item": "armor.legs.scout",
-     "price": 60
+     "price": 180
     },
     {
      "item": "armor.gloves.scout",
-     "price": 25
+     "price": 90
     },
     {
      "item": "armor.boots.scout",
-     "price": 35
+     "price": 90
     },
     {
      "item": "armor.helmet.bulwark",
-     "price": 240
+     "price": 270
     },
     {
      "item": "armor.suit.bulwark",
-     "price": 640
+     "price": 820
     },
     {
      "item": "armor.legs.bulwark",
-     "price": 320
+     "price": 530
     },
     {
      "item": "armor.gloves.bulwark",
-     "price": 160
+     "price": 270
     },
     {
      "item": "armor.boots.bulwark",
-     "price": 200
+     "price": 270
     },
     {
      "item": "pack.scout",
-     "price": 80
+     "price": 170
     },
     {
      "item": "charm.rabbit",
@@ -128,7 +128,7 @@
     },
     {
      "item": "tool.drill",
-     "price": 120
+     "price": 150
     },
     {
      "item": "tool.cutter",
@@ -164,6 +164,14 @@
    "name": "Workbench",
    "asset": "prop.bench",
    "kind": "bench",
+   "verb": "Use"
+  },
+  {
+   "$comment": "Phase 22 forge (GDD 'The refinery'): the heat station. Shop-shaped like the workbench (no move_speed, no health, no stock); `craft` validates forge recipes against kind 'forge'. Stands in the outpost scrapyard beside the west wreck, inside the guard.",
+   "id": "npc.forge",
+   "name": "Scrapyard Forge",
+   "asset": "prop.forge",
+   "kind": "forge",
    "verb": "Use"
   },
   {

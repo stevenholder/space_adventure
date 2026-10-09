@@ -8,7 +8,6 @@ package server
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -104,6 +103,11 @@ type Server struct {
 	// pendingSpills are deaths whose material spill waits for the identity
 	// (gather.go); guarded by mu, drained by tick() after it unlocks.
 	pendingSpills []spill
+	// pendingRefunds are craft units cancelled inside the tick (a hit, a
+	// death, a step) whose inputs go back to the bag after it unlocks;
+	// craftGen numbers craft channels (craft.go). Both guarded by mu.
+	pendingRefunds []refund
+	craftGen       uint64
 	// pendingKills are thrown-charge kills (burstLocked, inside the tick)
 	// whose mission/bounty credit waits for s.mu to drop, like spills.
 	pendingKills []kill
@@ -152,6 +156,11 @@ func (s *Server) SetStore(st *store.Store) { s.store = st }
 // (SA_GUESTS=1: the kind fleet joins with made-up tokens). A storeless
 // server always does — there is nothing to log into. Call before serving.
 func (s *Server) SetGuests(on bool) { s.guests = on }
+
+// SetStart overrides what a new character starts with (SA_START, Phase 22:
+// prod starts from nothing, a dev fleet's harness buys). Call before
+// serving: the registry is read without a lock.
+func (s *Server) SetStart(spec string) error { return defs.ApplyStartOverride(s.reg, spec) }
 
 // Guests reports whether join seats tokens that own no character.
 func (s *Server) Guests() bool { return s.guests || s.store == nil }
@@ -559,6 +568,7 @@ func (s *Server) tick() {
 	s.stepNPCs(tick)
 	s.stepPlayerVitals()
 	yields := s.stepGathers()
+	crafts := s.stepCrafts()
 	spills := s.pendingSpills
 	s.pendingSpills = nil
 
@@ -668,8 +678,14 @@ func (s *Server) tick() {
 			c.send(msg{data: f})
 		}
 	}
+	refunds := s.pendingRefunds
+	s.pendingRefunds = nil
 	s.mu.Unlock()
 	s.drainYields(yields)
+	s.drainCrafts(crafts)
+	// Refunds before spills: a unit cut short by death comes back to the
+	// bag and falls with the rest of the materials.
+	s.drainRefunds(refunds)
 	s.drainSpills(spills)
 	s.payKills(kills)
 	step := time.Since(t0)
@@ -1090,6 +1106,7 @@ func (s *Server) leave(c *client) {
 	}
 	id := c.entity.ID
 	s.freeSeat(c)
+	_, owed := s.cancelChannel(c, "disconnect")
 	s.removeFromParty(c) // roster updates reach the survivors (GDD, Phase 10)
 	delete(s.clients, id)
 	s.history.Forget(id)
@@ -1101,6 +1118,10 @@ func (s *Server) leave(c *client) {
 	s.bountyClientGone(c)
 
 	if c.ident != nil {
+		if owed != nil {
+			// A craft cut short by the disconnect is in the final save.
+			c.ident.Mutate(func(p *store.Player) { sim.ReturnUnit(p, *owed, s.reg) })
+		}
 		c.ident.Close(context.Background())
 	}
 
@@ -1175,17 +1196,28 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			Busy: func() bool {
 				s.mu.Lock()
 				defer s.mu.Unlock()
-				return c.gather.node != 0
+				return s.channelling(c)
 			},
-			Gather: func(node uint32, ticks int) bool {
+			Gather: func(node uint32, ticks int, hand bool) bool {
 				s.mu.Lock()
 				defer s.mu.Unlock()
-				return s.startGather(c, node, ticks)
+				return s.startGather(c, node, ticks, hand)
 			},
+			Craft: func(r defs.Recipe, qty, ticks int) bool {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.startCraft(c, r, qty, ticks)
+			},
+			// Inside Mutate: a cancelled unit's inputs go straight back to
+			// p, so the cmd's reply already shows them.
 			CancelGather: func() bool {
 				s.mu.Lock()
-				defer s.mu.Unlock()
-				return s.cancelGather(c, "cancel")
+				ok, r := s.cancelChannel(c, "cancel")
+				s.mu.Unlock()
+				if r != nil {
+					sim.ReturnUnit(p, *r, s.reg)
+				}
+				return ok
 			},
 			Rand: func() float64 {
 				s.mu.Lock()
@@ -1257,21 +1289,6 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			s.mu.Lock()
 			c.awardLocked("commerce", moved/5*per)
 			s.mu.Unlock()
-		}
-	}
-	// Engineering trains per craft (Phase 12): the recipe's xp × qty.
-	if req.Opcode == protocol.OpCraft && result.Status == protocol.StatusOK {
-		var body struct {
-			NPC    uint32 `json:"npc"`
-			Recipe string `json:"recipe"`
-			Qty    int    `json:"qty"`
-		}
-		if json.Unmarshal(req.Data, &body) == nil {
-			if r, ok := s.reg.Recipes[body.Recipe]; ok && r.XP > 0 {
-				s.mu.Lock()
-				c.awardLocked("engineering", r.XP*int64(body.Qty))
-				s.mu.Unlock()
-			}
 		}
 	}
 	// The primary slot is on no entity row, so a change reaches the other

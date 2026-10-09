@@ -1,114 +1,47 @@
-// The workbench (Phase 12 task 14): one card per recipe, the bag's material
-// counts along the top. DUMB like the other panels: it reads Character and
-// SkillSheet, and hands finished `craft` cmd bytes to Send. Boot owns the
-// bench entity id and the refusal line, and sets them before Show.
+// The station panel (Phase 12's workbench, Phase 22's forge): the recipes
+// made at this station's kind, through the shared CraftList. DUMB like the
+// other panels: it reads Character and SkillSheet, and hands finished
+// `craft` cmd bytes to Send. Boot owns the station's entity id, its kind and
+// the refusal line, and sets them before Show.
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using Godot;
-using SpaceAdventure.Net;
 
 namespace SpaceAdventure.Game.UI
 {
-    /// <summary>The bench: recipe cards with inputs, level gate, CRAFT.</summary>
+    /// <summary>A station: its recipe cards with skill, level, seconds, have/need, QTY and CRAFT.</summary>
     public sealed class BenchView : ModalView
     {
-        private readonly Character _character;
-        private readonly SkillSheet _skills;
-        private readonly Icons _icons;
-        private readonly Func<ushort> _nextSeq;
-        private readonly Action<byte[]> _send;
-
-        /// <summary>The bench NPC's entity id; Boot sets it before Show.</summary>
+        /// <summary>The station NPC's entity id; Boot sets it before Show.</summary>
         public uint Bench;
+        /// <summary>"bench" or "forge": which recipes this station makes.</summary>
+        public string Station = "bench";
         /// <summary>A refusal or notice line from Boot; shown at the bottom when non-empty.</summary>
         public string Status = "";
 
-        private static readonly Color Short = new Color(0.9f, 0.3f, 0.3f);
-        private static readonly (string id, string name)[] Materials =
-        {
-            ("mat.ore.iron", "iron"),
-            ("mat.scrap", "scrap"),
-            ("mat.ore.copper", "copper"),
-        };
+        public readonly CraftList List;
 
         public BenchView(Control root, Character character, SkillSheet skills, Icons icons,
             Func<ushort> nextSeq, Action<byte[]> send)
-            : base(root, "Workbench", 460)
+            : base(root, "Workbench", 520)
         {
-            _character = character;
-            _skills = skills;
-            _icons = icons;
-            _nextSeq = nextSeq;
-            _send = send;
+            List = new CraftList(character, skills, icons, nextSeq, send);
+            // Phase 12 kept the panel open on CRAFT; so does this — the bar
+            // runs under it and the counts redraw as units land.
+            List.Crafted = (r, qty) => { Status = "working…"; Rebuild(); };
         }
 
-        /// <summary>How many of an item the bag holds, across stacks.</summary>
-        private int Held(string item)
-        {
-            int n = 0;
-            ItemStack[] inv = _character.Inventory;
-            if (inv == null) return 0;
-            foreach (ItemStack s in inv)
-                if (s != null && s.item == item) n += s.qty;
-            return n;
-        }
+        /// <summary>The rig's press: CRAFT on a recipe's row.</summary>
+        public bool Press(string recipe, out string why) => List.Press(Bench, recipe, out why);
 
         protected override void Fill(VBoxContainer body)
         {
-            Defs defs = _character.Defs;
-            var head = Styles.Row(8);
-            head.AddChild(Styles.Grow(Styles.Display_("recipes", 12, Styles.Dust)));
-            foreach (var (id, name) in Materials)
-            {
-                int qty = Held(id);
-                head.AddChild(Styles.Display_($"{qty} {name}", 12, qty > 0 ? Styles.Amber : Styles.Dust));
-            }
-            body.AddChild(head);
-            body.AddChild(Styles.Gap(4));
-
-            var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 360), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-            var list = Styles.Column(4);
-            list.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            scroll.AddChild(list);
-            int eng = _skills.Level("engineering");
-            foreach (RecipeDef r in defs.Recipes)
-            {
-                string id = r.Id;
-                string output = r.Output?.Item ?? "";
-                bool locked = eng < r.Level;
-                bool missing = false;
-                var sb = new StringBuilder();
-                foreach (ItemQtyDef input in r.Inputs)
-                {
-                    bool isShort = Held(input.Item) < input.Qty;
-                    missing |= isShort;
-                    if (sb.Length > 0) sb.Append(" · ");
-                    // have/need reads at a glance; a short input shows what is held.
-                    if (isShort) sb.Append(Held(input.Item)).Append('/');
-                    sb.Append(input.Qty).Append("× ").Append(defs.ItemName(input.Item));
-                }
-                var slot = new ItemSlot { Defs = defs, Icons = _icons, Static = true, Item = output, Qty = r.Output?.Qty ?? 0 };
-                var level = Styles.Display_($"ENG {r.Level}", 12, locked ? Styles.Dust : Styles.Amber);
-                level.CustomMinimumSize = new Vector2(48, 0);
-                level.HorizontalAlignment = HorizontalAlignment.Right;
-                Control craft = locked || missing
-                    ? Styles.Display_("—", 12, Styles.Dust)
-                    : Styles.Button("CRAFT", false, () =>
-                    {
-                        _send(Encode.Cmd(_nextSeq(), Op.Craft, $"{{\"npc\":{Bench},\"recipe\":\"{id}\",\"qty\":1}}"));
-                        Rebuild();
-                    });
-                Color rarity = Styles.Rarity(defs.ItemRarity(output));
-                list.AddChild(Styles.Card(rarity, slot, r.Name, rarity, sb.ToString(), level, craft));
-            }
-            body.AddChild(scroll);
-
+            SetTitle(Station == "forge" ? "Forge" : "Workbench");
+            List.Fill(body, Station, Bench, Rebuild);
             if (!string.IsNullOrEmpty(Status))
                 Line(body, Status, Styles.Dust);
             body.AddChild(Styles.Gap(4));
-            Line(body, "F closes  ·  materials spill on death", Styles.Dust, 11);
+            Line(body, "F closes  ·  moving or a hit stops the work  ·  materials spill on death", Styles.Dust, 11);
         }
     }
 }

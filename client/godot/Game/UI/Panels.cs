@@ -184,6 +184,7 @@ namespace SpaceAdventure.Game.UI
             Box.Visible = false;
             VBoxContainer stack = Styles.Body(Box);
             VBoxContainer header = Styles.Header(title);
+            _title = header.GetChild<Label>(0);
             stack.AddChild(header);
             // The header is the grip: drag the panel anywhere, and it stays
             // there across sessions (user://sa.cfg [panels]).
@@ -197,6 +198,10 @@ namespace SpaceAdventure.Game.UI
         }
 
         public bool Open => Box.Visible;
+
+        private readonly Label _title;
+        /// <summary>Renames the header (one panel serving two stations).</summary>
+        protected void SetTitle(string title) { if (_title != null) _title.Text = title.ToUpperInvariant(); }
 
         public void Show(bool on)
         {
@@ -395,12 +400,18 @@ namespace SpaceAdventure.Game.UI
     {
         private readonly System.Action _onQuit;
         private readonly System.Action _onSettings;
+        private readonly System.Action _onCharacters;
+        private readonly System.Func<bool> _hasCharacters;
 
-        public GameMenuView(Control root, System.Action onQuit, System.Action onSettings = null)
+        /// <param name="onCharacters">Leave the world for the character select (playtest ask 2026-10-08); shown only while <paramref name="hasCharacters"/> says a select exists to go back to (a signed-in session, not a rig token).</param>
+        public GameMenuView(Control root, System.Action onQuit, System.Action onSettings = null,
+                            System.Action onCharacters = null, System.Func<bool> hasCharacters = null)
             : base(root, "Menu", 260, 0.30f)
         {
             _onQuit = onQuit;
             _onSettings = onSettings;
+            _onCharacters = onCharacters;
+            _hasCharacters = hasCharacters;
         }
 
         protected override void Fill(VBoxContainer body)
@@ -411,6 +422,11 @@ namespace SpaceAdventure.Game.UI
             if (_onSettings != null)
             {
                 body.AddChild(Styles.Button("SETTINGS", false, () => { Show(false); _onSettings(); }));
+                body.AddChild(Styles.Gap(4));
+            }
+            if (_onCharacters != null && (_hasCharacters?.Invoke() ?? true))
+            {
+                body.AddChild(Styles.Button("CHARACTERS", false, () => { Show(false); _onCharacters(); }));
                 body.AddChild(Styles.Gap(4));
             }
             body.AddChild(Styles.Button("QUIT GAME", true, _onQuit));

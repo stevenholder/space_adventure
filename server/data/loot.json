@@ -32,6 +32,11 @@
     "item": "melee.axe",
     "qty": 1,
     "chance": 0.04
+   },
+   {
+    "item": "mat.parts",
+    "qty": 2,
+    "chance": 0.25
    }
   ],
   "loot.gunner": [
@@ -49,11 +54,23 @@
     "item": "melee.dagger",
     "qty": 1,
     "chance": 0.05
+   },
+   {
+    "item": "mat.parts",
+    "qty": 2,
+    "chance": 0.25
    }
   ],
   "loot.node.iron": [
    {
     "item": "mat.ore.iron",
+    "qty": 2,
+    "chance": 1.0
+   }
+  ],
+  "loot.node.crystal": [
+   {
+    "item": "mat.crystal",
     "qty": 2,
     "chance": 1.0
    }
@@ -87,6 +104,11 @@
     "item": "armor.suit.raider",
     "qty": 1,
     "chance": 1.0
+   },
+   {
+    "item": "mat.parts",
+    "qty": 2,
+    "chance": 0.25
    }
   ],
   "loot.wild.small": [
@@ -94,6 +116,11 @@
     "item": "mat.scrap",
     "qty": 2,
     "chance": 1.0
+   },
+   {
+    "item": "mat.hide",
+    "qty": 2,
+    "chance": 0.6
    },
    {
     "item": "consumable.potion.heal",
@@ -110,6 +137,11 @@
    {
     "item": "mat.scrap",
     "qty": 5,
+    "chance": 1.0
+   },
+   {
+    "item": "mat.hide",
+    "qty": 2,
     "chance": 1.0
    },
    {
@@ -143,6 +175,16 @@
     "item": "ammo.cell",
     "qty": 10,
     "chance": 0.6
+   },
+   {
+    "item": "mat.wiring",
+    "qty": 2,
+    "chance": 0.3
+   },
+   {
+    "item": "mat.core",
+    "qty": 1,
+    "chance": 0.03
    }
   ]
  }

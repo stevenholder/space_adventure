@@ -72,6 +72,10 @@ func sendCmd(t *testing.T, ws *wsClient, seq uint16, opcode uint16, body string)
 // the ship persists across a reconnect on the same token.
 func TestShipPurchaseSpawnsAndPersists(t *testing.T) {
 	s, url := newTestServer(t)
+	// Phase 22 starts a character with nothing; this one needs the money.
+	if err := s.SetStart("credits=1000"); err != nil {
+		t.Fatal(err)
+	}
 
 	token := fmt.Sprintf("ship-owner-%d", time.Now().UnixNano())
 	a := dialWS(t, url)

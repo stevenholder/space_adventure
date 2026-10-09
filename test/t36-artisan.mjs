@@ -2,20 +2,23 @@
 /**
  * t36 — C120–C126: the artisan loop, over the wire.
  *
- * One fresh player at the pad: buys a drill, is refused at the ore for
- * lack of a worn tool, wears it, channels — the yield lands when the
- * server said it would, never before — is cut off by stepping away, drills
- * the node dark, sells the ore back (Commerce moves, ammo is unsellable),
- * walks the 107 m to the relay bench and is refused for level and for
- * materials with nothing consumed, then reconnects and finds Mining where
- * it left it. Copper refuses for the tool it lacks.
+ * One funded player at the pad (Phase 22 starts a character with nothing;
+ * this one needs SA_START="credits=3000,ammo.cell=120"): buys a drill,
+ * finds the ore answers bare hands with the ×3 channel, wears the drill,
+ * channels — the yield lands when the server said it would, never before
+ * — is cut off by stepping away, drills the node dark, sells the ore back
+ * (Commerce moves, ammo is unsellable), cuts scrap at the pad wreck, sorts
+ * parts and loads cells IN THE HANDS (channels, craft_end), walks the
+ * 107 m to the relay bench and is refused for level, materials and
+ * station with nothing consumed, then reconnects and finds Mining where it
+ * left it. Copper refuses for the tool it lacks.
  *
- * Crafting a thing and the death spill are asserted in Go (TestCraft,
- * TestDeathSpillsMaterials, TestLootExpires): scrap lies inside the
- * guarded outpost 258 m away, and a scripted death there is not a test.
+ * The death spill is asserted in Go (TestDeathSpillsMaterials,
+ * TestLootExpires); the whole from-nothing road is t43.
  *
- * Run: node test/t36-artisan.mjs   (needs a live server; SA_SERVER_URL
- * points it elsewhere than the kind stack on :18080)
+ * Run: node test/t36-artisan.mjs   (needs a live server started with
+ * SA_START="credits=3000,ammo.cell=120"; SA_SERVER_URL points it
+ * elsewhere than the kind stack on :18080)
  */
 import { writeFileSync } from 'node:fs'
 
@@ -47,12 +50,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const tangent = (d, up) => { const k = dot(d, up); return [d[0] - up[0] * k, d[1] - up[1] * k, d[2] - up[2] * k] }
 
 const OP = { BUY: 0x0002, EQUIP: 0x0003, INV: 0x0004, SKILLS: 0x000e, SELL: 0x000f, GATHER: 0x0010, CANCEL: 0x0011, CRAFT: 0x0012 }
-const EV_SKILL_XP = 0x000d, EV_GATHER_END = 0x000e, TYPE_NODE = 8, TYPE_NPC = 3
+const EV_SKILL_XP = 0x000d, EV_GATHER_END = 0x000e, EV_CRAFT_END = 0x0012, TYPE_NODE = 8, TYPE_NPC = 3
 
 function connect (name, token) {
   const ws = new WebSocket(process.env.SA_SERVER_URL ?? 'ws://127.0.0.1:18080/ws')
   ws.binaryType = 'arraybuffer'
-  const c = { ws, id: 0, ents: new Map(), spawns: new Map(), results: [], events: [], xp: [], ends: [], seq: 1 }
+  const c = { ws, id: 0, ents: new Map(), spawns: new Map(), results: [], events: [], xp: [], ends: [], crafts: [], seq: 1 }
   ws.addEventListener('open', () => ws.send(hello(name, token)))
   ws.addEventListener('message', (ev) => {
     const dv = new DataView(ev.data), t = dv.getUint16(0, true)
@@ -73,6 +76,7 @@ function connect (name, token) {
       const e = { id: pv.getUint32(0, true), ev: pv.getUint16(4, true), at: Date.now() }
       if (e.ev === EV_SKILL_XP) c.xp.push({ ...JSON.parse(dec.decode(p.subarray(10))), at: e.at })
       if (e.ev === EV_GATHER_END) c.ends.push({ ...JSON.parse(dec.decode(p.subarray(10))), at: e.at })
+      if (e.ev === EV_CRAFT_END) c.crafts.push({ ...JSON.parse(dec.decode(p.subarray(10))), at: e.at })
       c.events.push(e)
     } else if (t === 0x000f) {
       c.results.push({ seq: pv.getUint16(0, true), op: pv.getUint16(2, true), status: pv.getUint8(4), body: JSON.parse(dec.decode(p.subarray(9)) || '{}') })
@@ -135,29 +139,39 @@ await wait(() => c.id && me() && c.spawns.size > 3, 10000)
 await sleep(500)
 const byDef = (def) => [...c.spawns].filter(([, v]) => v.def === def).map(([id]) => id)
 const nodes = (def) => byDef(def).filter((id) => c.ents.has(id)).sort((a, b) => dist(c.ents.get(a).pos, me().pos) - dist(c.ents.get(b).pos, me().pos))
-const iron = nodes('node.ore.iron'), copper = nodes('node.ore.copper'), wrecks = byDef('node.wreck')
-check('C120 nodes spawn as type 8', iron.length === 3 && copper.length === 1 && wrecks.length === 2 && [...iron, ...copper].every((id) => c.spawns.get(id).type === TYPE_NODE), `iron ${iron.length} copper ${copper.length} wreck ${wrecks.length}`)
+const iron = nodes('node.ore.iron'), copper = nodes('node.ore.copper'), wrecks = byDef('node.wreck'), crystal = nodes('node.crystal')
+// Phase 22: a third wreck at the pad, crystal ×2 at the pad and ×2 at the relay.
+check('C120 nodes spawn as type 8', iron.length === 3 && copper.length === 1 && wrecks.length === 3 && crystal.length === 4 && [...iron, ...copper, ...wrecks, ...crystal].every((id) => c.spawns.get(id).type === TYPE_NODE), `iron ${iron.length} copper ${copper.length} wreck ${wrecks.length} crystal ${crystal.length}`)
 check('C120 iron health = yields (5)', iron.every((id) => c.ents.get(id).health === 5), iron.map((id) => c.ents.get(id).health).join(','))
 const qm = byDef('npc.quartermaster')[0], bench = byDef('npc.workbench')[0]
 check('the bench stands in the world', !!bench && c.spawns.get(bench).type === TYPE_NPC)
 
 // ---- act 1: the shop, then the ore without a tool --------------------------------
 await approach(qm, 2.2)
+const stock = (await sendCmd(0x0001, { npc: qm }))?.body?.stock ?? []
+const price = (item) => stock.find((s) => s.item === item)?.price
+const inv0 = await sendCmd(OP.INV, {})
+const purse = inv0?.body?.credits ?? 0
+check('a funded start (SA_START, enough for a drill and a cutter)', purse >= price('tool.drill') + price('tool.cutter'), `${purse}`)
 const buy = await sendCmd(OP.BUY, { npc: qm, item: 'tool.drill', qty: 1 })
-check('buy a drill (120 cr)', buy?.status === 0 && buy.body.credits === 880, JSON.stringify(buy?.body?.credits))
+const base = purse - price('tool.drill')
+check(`buy a drill (${price('tool.drill')} cr)`, buy?.status === 0 && buy.body.credits === base, JSON.stringify(buy?.body?.credits))
 const node = iron[0]
 await approach(node, 2.0, NODE_AIM)
+let endsBefore = c.ends.length
 const bare = await sendCmd(OP.GATHER, { node })
-check('C121 no tool worn refuses no_tool', bare?.status === 3 && bare.body.reason === 'no_tool', JSON.stringify(bare?.body))
+check('C121 no tool worn: the hands, channel ×3 (Phase 22)', bare?.status === 0 && bare.body.hand === true && bare.body.duration === 9, JSON.stringify(bare?.body))
+await sendCmd(OP.CANCEL, {})
+await wait(() => c.ends.length > endsBefore, 2000)
 const eq = await sendCmd(OP.EQUIP, { slot: 'tool', item: 'tool.drill' })
 check('the drill goes in TOOL', eq?.status === 0 && eq.body.equipped?.tool === 'tool.drill')
 
 // ---- act 2: the channel ---------------------------------------------------------
 await faceAt(c.ents.get(node).pos, NODE_AIM)
-let endsBefore = c.ends.length
+endsBefore = c.ends.length
 const t0 = Date.now()
 const g = await sendCmd(OP.GATHER, { node })
-check('C121 gather answers a duration', g?.status === 0 && g.body.duration === 3, JSON.stringify(g?.body))
+check('C121 gather answers a duration', g?.status === 0 && g.body.duration === 3 && g.body.hand === false, JSON.stringify(g?.body))
 const busy = await sendCmd(OP.GATHER, { node })
 check('C121 a second gather is busy', busy?.status === 3 && busy.body.reason === 'busy', JSON.stringify(busy?.body))
 const end = await wait(() => c.ends.length > endsBefore ? c.ends.at(-1) : null, 6000)
@@ -216,7 +230,7 @@ check('C121 copper refuses the hand drill (no_tool)', cu?.status === 3 && cu.bod
 await approach(qm, 2.2)
 const comBefore = lastXP('commerce')
 const sell = await sendCmd(OP.SELL, { npc: qm, item: 'mat.ore.iron', qty: 4 })
-check('C122 four iron → 12 cr at sell_rate 0.5', sell?.status === 0 && sell.body.credits === 892 && count(sell.body.inventory, 'mat.ore.iron') === 6, JSON.stringify(sell?.body?.credits))
+check('C122 four iron → 12 cr at sell_rate 0.5', sell?.status === 0 && sell.body.credits === base + 12 && count(sell.body.inventory, 'mat.ore.iron') === 6, JSON.stringify(sell?.body?.credits))
 await wait(() => lastXP('commerce') > comBefore, 2500)
 check('C122 Commerce moved on the sale', lastXP('commerce') > comBefore, `${comBefore} → ${lastXP('commerce')}`)
 const ammo = await sendCmd(OP.SELL, { npc: qm, item: 'ammo.cell', qty: 1 })
@@ -227,24 +241,56 @@ check('C122 the worn drill refuses equipped', worn?.status === 3 && worn.body.re
 const listed = await sendCmd(0x0001, { npc: qm })
 check('C138 shop_list carries the sale as buyback', listed?.status === 0 && listed.body.buyback?.length === 1 && listed.body.buyback[0].item === 'mat.ore.iron' && listed.body.buyback[0].qty === 4 && listed.body.buyback[0].price === 12, JSON.stringify(listed?.body?.buyback))
 const back = await sendCmd(0x0014, { npc: qm, item: 'mat.ore.iron' })
-check('C138 buyback returns the stack for the same 12 cr', back?.status === 0 && back.body.credits === 880 && count(back.body.inventory, 'mat.ore.iron') === 10, JSON.stringify(back?.body?.credits))
+check('C138 buyback returns the stack for the same 12 cr', back?.status === 0 && back.body.credits === base && count(back.body.inventory, 'mat.ore.iron') === 10, JSON.stringify(back?.body?.credits))
 const none = await sendCmd(0x0014, { npc: qm, item: 'mat.ore.iron' })
 check('C138 a second buyback refuses no_buyback', none?.status === 3 && none.body.reason === 'no_buyback', JSON.stringify(none?.body))
 const resell = await sendCmd(OP.SELL, { npc: qm, item: 'mat.ore.iron', qty: 4 })
-check('sold again for the bench act', resell?.status === 0 && resell.body.credits === 892)
+check('sold again for the bench act', resell?.status === 0 && resell.body.credits === base + 12)
+
+// ---- act 3b: the hands (Phase 22) — scrap at the pad wreck, parts, cells ----------
+const buyCut = await sendCmd(OP.BUY, { npc: qm, item: 'tool.cutter', qty: 1 })
+check(`buy a cutter (${price('tool.cutter')} cr)`, buyCut?.status === 0 && buyCut.body.credits === base + 12 - price('tool.cutter'), JSON.stringify(buyCut?.body?.credits))
+await sendCmd(OP.EQUIP, { slot: 'tool', item: 'tool.cutter' })
+const padWreck = nodes('node.wreck')[0]
+await approach(padWreck, 2.0, NODE_AIM)
+endsBefore = c.ends.length
+const cut = await sendCmd(OP.GATHER, { node: padWreck })
+const scrapEnd = await wait(() => c.ends.length > endsBefore ? c.ends.at(-1) : null, 6000)
+check('the pad wreck yields scrap to the cutter', cut?.status === 0 && scrapEnd?.reason === 'done' && scrapEnd.item === 'mat.scrap' && scrapEnd.qty === 3, JSON.stringify(scrapEnd))
+let craftsBefore = c.crafts.length
+const parts = await sendCmd(OP.CRAFT, { npc: 0, recipe: 'recipe.mat.parts', qty: 1 })
+const partsEnd = await wait(() => c.crafts.length > craftsBefore ? c.crafts.at(-1) : null, 4000)
+check('C123 parts are sorted in the hands (a channel, craft_end done)', parts?.status === 0 && parts.body.duration === 1 && partsEnd?.reason === 'done' && partsEnd.item === 'mat.parts' && partsEnd.qty === 1, `${JSON.stringify(parts?.body)} ${JSON.stringify(partsEnd)}`)
+await sendCmd(OP.EQUIP, { slot: 'tool', item: 'tool.drill' })
+const rock = nodes('node.crystal')[0]
+await approach(rock, 2.0, NODE_AIM)
+endsBefore = c.ends.length
+await sendCmd(OP.GATHER, { node: rock })
+const crysEnd = await wait(() => c.ends.length > endsBefore ? c.ends.at(-1) : null, 6000)
+check('the drill pulls crystal', crysEnd?.reason === 'done' && crysEnd.item === 'mat.crystal' && crysEnd.qty === 2, JSON.stringify(crysEnd))
+craftsBefore = c.crafts.length
+const load = await sendCmd(OP.CRAFT, { npc: 0, recipe: 'recipe.cells', qty: 1 })
+const cellsEnd = await wait(() => c.crafts.length > craftsBefore ? c.crafts.at(-1) : null, 6000)
+check('C123 cells are a hand recipe: crystal + parts → 30 cells after 3 s', load?.status === 0 && load.body.duration === 3 && cellsEnd?.reason === 'done' && cellsEnd.item === 'ammo.cell' && cellsEnd.qty >= 30, `${JSON.stringify(load?.body)} ${JSON.stringify(cellsEnd)}`)
+const invCells = await sendCmd(OP.INV, {})
+check('C123 the cells landed, the inputs went', count(invCells?.body?.inventory, 'ammo.cell') === count(inv0?.body?.inventory, 'ammo.cell') + cellsEnd?.qty && count(invCells?.body?.inventory, 'mat.parts') === 0 && count(invCells?.body?.inventory, 'mat.crystal') === 1, JSON.stringify(invCells?.body?.inventory))
+await wait(() => lastXP('chemistry') > 0, 2500)
+check('C123 the cells paid Chemistry, the parts Smithing', lastXP('chemistry') > 0 && lastXP('smithing') > 0, `chemistry ${lastXP('chemistry')} smithing ${lastXP('smithing')}`)
 
 // ---- act 4: the bench at the relay ------------------------------------------------
 const walked = await approach(bench, 2.2, BENCH_AIM)
 check('reached the workbench (107 m)', walked <= 2.5, `${walked.toFixed(1)} m`)
 const far = c.results.length
 const plate = await sendCmd(OP.CRAFT, { npc: bench, recipe: 'recipe.plate.iron', qty: 1 })
-check('C123 the plate is locked below Engineering 5', plate?.status === 3 && plate.body.reason === 'locked', JSON.stringify(plate?.body))
-const cells = await sendCmd(OP.CRAFT, { npc: bench, recipe: 'recipe.cells', qty: 1 })
-check('C123 cells without scrap refuse missing_materials', cells?.status === 3 && cells.body.reason === 'missing_materials', JSON.stringify(cells?.body))
+check('C123 the iron chest plate is locked below its Engineering level', plate?.status === 3 && plate.body.reason === 'locked', JSON.stringify(plate?.body))
+const side = await sendCmd(OP.CRAFT, { npc: bench, recipe: 'recipe.weapon.sidearm', qty: 1 })
+check('C123 a sidearm without plate/wiring refuses missing_materials', side?.status === 3 && side.body.reason === 'missing_materials', JSON.stringify(side?.body))
+const ingotHere = await sendCmd(OP.CRAFT, { npc: bench, recipe: 'recipe.mat.ingot.iron', qty: 1 })
+check('C186 the bench refuses a forge recipe (wrong_station)', ingotHere?.status === 3 && ingotHere.body.reason === 'wrong_station', JSON.stringify(ingotHere?.body))
 const inv3 = await sendCmd(OP.INV, {})
 check('C123 a refused craft consumed nothing', count(inv3?.body?.inventory, 'mat.ore.iron') === 6)
-const atShop = await sendCmd(OP.CRAFT, { npc: qm, recipe: 'recipe.cells', qty: 1 })
-check('the quartermaster is no bench', atShop?.status === 3 && ['out_of_range', 'unknown_recipe'].includes(atShop.body.reason), JSON.stringify(atShop?.body))
+const atShop = await sendCmd(OP.CRAFT, { npc: qm, recipe: 'recipe.weapon.sidearm', qty: 1 })
+check('the quartermaster is no bench', atShop?.status === 3 && ['out_of_range', 'wrong_station'].includes(atShop.body.reason), JSON.stringify(atShop?.body))
 
 // ---- act 5: reconnect ------------------------------------------------------------
 const sheet = await sendCmd(OP.SKILLS, {})
@@ -253,7 +299,7 @@ await sleep(400)
 c = connect('artisan', token)
 await wait(() => c.id && me(), 8000)
 const again = await sendCmd(OP.SKILLS, {})
-check('C125 Mining survives reconnect', again?.status === 0 && again.body.xp?.mining === 125 && JSON.stringify(again.body.xp) === JSON.stringify(sheet?.body?.xp), JSON.stringify(again?.body?.xp))
+check('C125 Mining survives reconnect', again?.status === 0 && again.body.xp?.mining === 125 + (crysEnd ? 40 : 0) && JSON.stringify(again.body.xp) === JSON.stringify(sheet?.body?.xp), JSON.stringify(again?.body?.xp))
 const inv4 = await sendCmd(OP.INV, {})
 check('the ore survives reconnect', count(inv4?.body?.inventory, 'mat.ore.iron') === 6 && inv4.body.equipped?.tool === 'tool.drill')
 c.ws.close()

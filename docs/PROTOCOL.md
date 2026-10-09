@@ -155,11 +155,18 @@ Constants:
   the mirror of `shop_buy`; pays `floor(qty × value × sell_rate × (1 +
   sell_bonus))`;
   `0x0010` `gather` `{"node": <entity_id>}` — starts the server-timed
-  channel on a node; result `{"node", "duration"}` (seconds, after
-  efficacy); the outcome arrives as a `gather_end` event;
+  channel on a node; result `{"node", "duration", "hand"}` (seconds, after
+  efficacy); the outcome arrives as a `gather_end` event. Phase 22: with
+  no tool worn that the node accepts, the hands work it — `hand: true`,
+  the channel ×3, ONE unit per yield instead of the loot table's count,
+  half the node's XP — except a node whose tool is `tool.drill.mk2`
+  (copper), refused `no_tool`. A worn tool with `gather_mult` (the crude
+  drill, 1.5) multiplies its channel;
   `0x0011` `gather_cancel` `{}` — ends the channel with nothing granted;
+  from Phase 22 it cancels ANY channel, a craft included (the running
+  unit's inputs are back in the bag by the reply);
   `0x0012` `craft` `{"npc": <entity_id>, "recipe": "<id>", "qty": <n>}` —
-  at the workbench (`npc.workbench`), instant and atomic.
+  Phase 22: a CHANNEL of `qty` (1–100) units, see the cmd table.
   Phase 13 (GDD "Phase 13 — use, modify, and the hotbar"):
   `0x0013` `use` `{"item": "<id>"}` — a carried consumable (one unit
   leaves the bag) or a worn item with an `ability`; result
@@ -210,6 +217,14 @@ Constants:
   channelling player; `reason` is `done` — then `item`/`qty` are the yield —
   or `moved` / `hit` / `died` / `cancel` / `depleted`, with `item`/`qty`
   absent; `entity_id` is the player);
+  Phase 22: `0x0012` `craft_end` `{"recipe","reason","item","qty"}` (to
+  the crafting player, `entity_id` the player) — one per finished unit
+  with `reason` `done` and `item`/`qty` what landed (a `craft_extra`
+  bonus included), and one when the channel ends early with the reason
+  — `moved` / `hit` / `died` / `cancel` / `missing_materials` (the next
+  unit's inputs were gone) / `no_space` (the unit's output did not fit;
+  its inputs are back) — and `item`/`qty` the unit output that did NOT
+  land. The last unit's `done` is the end; no separate event follows;
   and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the body whose item IN HAND changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Since melee
@@ -450,10 +465,10 @@ Bodies per opcode:
 | `inventory` | `{}` | `{"credits":750,"inventory":[…],"equipped":{…}}` |
 | `reload` | `{}` | `{"magazine":30,"reserve":90}` |
 | `shop_sell` (Phase 12) | `{"npc": <entity_id>, "item":"mat.ore.iron", "qty":4}` | `{"credits":762,"inventory":[…]}` — same shape as `shop_buy` |
-| `gather` (Phase 12) | `{"node": <entity_id>}` | `{"node":1048577,"duration":2.85}` |
-| `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) |
+| `gather` (Phase 12) | `{"node": <entity_id>}` | `{"node":1048577,"duration":2.85,"hand":false}` — `hand` (Phase 22) is the bare-hands channel |
+| `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) — Phase 22: ends a craft too |
 | `use` (Phase 13) | `{"item":"consumable.medkit"}` | `{"item":"consumable.medkit","effect":{"health":100},"cooldown":8}` |
-| `craft` (Phase 12) | `{"npc": <entity_id>, "recipe":"recipe.cells", "qty":1}` | `{"inventory":[…],"crafted":{"item":"ammo.cell","qty":30}}` — `qty` includes any `craft_extra` bonus |
+| `craft` (Phase 22) | `{"npc": <entity_id> \| 0, "recipe":"recipe.mat.parts", "qty":3}` | `{"recipe":"recipe.mat.parts","qty":3,"duration":1}` — `duration` is ONE unit's seconds × (1 − the recipe skill's `craft_speed` and its synergies), floored at 0.5. Units run back to back: a unit's inputs leave the bag when it starts (the first with this reply), its output and the recipe's `xp` (in the recipe's `skill`) land when it ends, each as a `craft_end` event; a stackable output may land one extra (`craft_extra`, Engineering). Moving 0.5 m, a hit, death, disconnecting or `gather_cancel` ends it, the running unit's inputs returned. Refusals in order: `out_of_range` (a `bench`/`forge` recipe: the NPC must be in reach; status 5 if `npc` names nothing; a `hand` recipe ignores `npc`), `busy` (any channel running), `unknown_recipe`, `wrong_station` (the recipe's `station` is not the NPC's kind, or `npc` 0 for a station recipe), `bad_qty`, `locked` (below `level` in the recipe's `skill`), `missing_materials` (for the first unit), `no_space` (its output, once its inputs are out) |
 | `chat` (Phase 20) | `{"text":"over here"}` | `{}` — refusals: status 3 `{"reason":"empty"}` (nothing left after strip + trim), status 2 (over 200 bytes after the strip), status 4 (the chat bucket: burst 3, 1 per s) |
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
@@ -464,6 +479,7 @@ the node's `level` or a `craft` below the recipe's). Phase 12 adds
 `unsellable`, `equipped`, `not_owned`, `bad_qty` (`shop_sell`); `busy`,
 `no_tool`, `depleted`, `no_space` (`gather`); `not_gathering`
 (`gather_cancel`); `unknown_recipe`, `missing_materials` (`craft`).
+Phase 22 adds `wrong_station` and `busy` (`craft`).
 Phase 13 adds `unusable`, `dead`, `no_effect` and `cooldown` (`use`; a
 `cooldown` refusal carries `"ready_in": <s>` beside the reason) and
 `no_buyback` (`shop_buyback`). The
@@ -486,6 +502,13 @@ prompts, models and the locked/no-tool hint from it), `recipes` (the
 `recipes.json` table verbatim), `constants.sell_rate`, and per item
 `value` (absent = unsellable) and `supersedes` (on a tool). `npcs[]`
 gains the workbench with `verb: "Use"`.
+
+Phase 22 adds, additively: per recipe `skill` (a `skills` id), `station`
+(`hand` \| `bench` \| `forge`) and `seconds` (one unit's channel before
+efficacy); per item `gather_mult` (a tool's channel multiplier, absent =
+1); per NPC `kind` (absent for none — `bench`, `forge`, `shop`, … — the
+station panel filters recipes by it); the skills roster's
+`craft_speed` efficacy kind.
 
 Phase 13 adds, additively: per item `consumable: {heal, cooldown}`,
 `ability: {id, range, cooldown}`, `mod: {damage, magazine, max_range,

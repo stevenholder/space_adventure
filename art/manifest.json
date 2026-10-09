@@ -680,6 +680,14 @@
       "description": "Phase 12 copper ore node. Base at origin, up +Y, faces -Z. Three angular rock chunks in a different arrangement from the iron node, ~1.25 m wide, 0.96 m tall, dark rock with green-teal facets for the copper streaks."
     },
     {
+      "id": "prop.node.crystal",
+      "file": "props/node_crystal.glb",
+      "tris": 162,
+      "license": "CC0",
+      "source": "tools/gen_nodes.py",
+      "description": "Phase 22 crystal node (node.crystal). Base at origin, up +Y, faces -Z (the tallest prism leans toward -Z). A squat two-chunk dark rock base with five six-sided prisms leaning out of it, ~1.2 m wide and 1.0 m tall like the ore nodes; pale cyan and violet facets, every third face and every tip in a near-white core colour, the faint lit core. One state: the client scales it 0.6 and darkens it when depleted."
+    },
+    {
       "id": "prop.wreck",
       "file": "props/wreck.glb",
       "tris": 120,
@@ -694,6 +702,14 @@
       "license": "CC0",
       "source": "tools/gen_nodes.py",
       "description": "Phase 12 workbench (npc.workbench). Base at origin, up +Y, faces -Z: a 1.6 x 0.7 m steel slab at 0.9 m on two dark-blue block legs with a shelf, a vise block at the +X end on the -Z edge, and a tool rack post with a pegged bar at the -X end rising to 1.24 m."
+    },
+    {
+      "id": "prop.forge",
+      "file": "props/forge.glb",
+      "tris": 520,
+      "license": "CC0",
+      "source": "tools/gen_props.py",
+      "description": "Phase 22 scrapyard forge (npc.forge, kind forge). Base at origin, up +Y, faces -Z; 2.2 x 1.4 m on a scorched ground plate, 1.58 m to the chimney top. Scrapyard: a rust brick crucible at -X, its courses laid a touch off true, with a flame-amber mouth, ember coals and a hazard sill on the -Z face and molten metal in a steel lip on top; a leather bellows on its +X flank; an anvil (horn to +X, a hammer on the face) on a wooden stump at the front; a plank work ledge at ~0.9 m along the back with an ingot, a steel plate and tongs on the low shelf; a quench bucket at the front corner. The crooked thing: the scrap chimney leans back and out off the crucible. Anvil face and ledge sit at the bench's 0.9 m aim height."
     },
     {
       "id": "tool.drill",

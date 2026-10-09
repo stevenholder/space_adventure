@@ -8,7 +8,9 @@
 // so a `await Wait(s)` is a `yield return new WaitForSeconds(s)`.
 //
 //   -uiShot <path>          save a PNG once the scene settles (after -uiShotAfter s, default 8)
-//   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug first
+//   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug|menu first
+//   -uiMenuChars            with -uiPanel menu: show the CHARACTERS button without a session
+//   -uiLeave                with -uiPanel menu: press CHARACTERS (leave the world for the select)
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
 //   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rover|rock|mast
@@ -47,6 +49,10 @@
 //   -uiSwing <secs>         swing what is in hand; shoot that far into it
 //   -uiUse <item>           use / throw it (-uiUseWait <secs>, default 0.6)
 //   -uiChat                 three fake chat lines and the input line open (Phase 20)
+//   -uiCraft <recipe> [-uiCraftQty n] [-uiCraftWait s]  Phase 22: a hand recipe opens the backpack's
+//                           CRAFT tab; a bench/forge recipe walks to the nearest station of that kind
+//                           and opens it; presses CRAFT, waits s (default 1.5) so the shot shows the bar
+//   -uiPanel craft          the backpack on its CRAFT tab
 
 using System;
 using System.Collections.Generic;
@@ -675,6 +681,78 @@ namespace SpaceAdventure.Game
                 await Wait(0.2);
             }
 
+            // -uiCraft <recipe>: the Phase 22 shots. The hands need nothing in
+            // range; a station recipe walks to the nearest NPC of its kind
+            // (like -uiFace npc -uiApproach 2) and opens that panel. Then
+            // CRAFT is pressed the way the button does it, and the rig waits
+            // into the channel so the shot carries the bar.
+            if (Arg("-uiCraft") is string craftId)
+            {
+                RecipeDef cr = null;
+                for (double waited = 0; cr == null && waited < 10; waited += 0.25)
+                {
+                    cr = _character.Defs.Recipes?.Find(x => x.Id == craftId);
+                    if (cr == null) await Wait(0.25);
+                }
+                int cq = int.TryParse(Arg("-uiCraftQty"), out int q) ? Math.Clamp(q, 1, UI.CraftRules.MaxQty) : 1;
+                string station = cr == null ? "" : UI.CraftRules.StationOf(cr);
+                bool ok = false;
+                string why = cr == null ? "unknown recipe (not in defs)" : "";
+                _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+                _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));
+                if (station == "hand")
+                {
+                    _bagsView.ShowCraft(true);
+                    OpenPanel(_bagsView, _sheetView);
+                    await Wait(1.0); // the bag and the sheet arrive
+                    _bagsView.Craft.Qty = cq;
+                    ok = _bagsView.Press(craftId, out why);
+                }
+                else if (station != "")
+                {
+                    EntityView at = null;
+                    float atD = float.MaxValue;
+                    for (double waited = 0; at == null && waited < 12; waited += 0.25)
+                    {
+                        foreach (EntityView v in _views.All)
+                        {
+                            if (v.Root == null || v.Type != EntityType.Npc) continue;
+                            if (UI.CraftRules.StationOfNpc(_character.Defs, v.Label) != station) continue;
+                            float d = (v.Root.GlobalPosition - Eye).LengthSquared();
+                            if (d < atD) { atD = d; at = v; }
+                        }
+                        if (at == null) await Wait(0.25);
+                    }
+                    if (at == null) why = $"no {station} in view";
+                    else
+                    {
+                        GD.Print($"ui: craft station {station} {at.Id} at {Mathf.Sqrt(atD):F0} m");
+                        Vector3 goal = at.Root.GlobalPosition;
+                        // 2.6 m, not 2: a station's aim point is 0.9 m up, and from a
+                        // 1.7 m eye at 2 m that is 22 degrees down -- outside the
+                        // 20 degree interaction cone (cmd.go inRangeAt). 2.6 m is 17.
+                        await ApproachTo(goal, 2.6f);
+                        // The sprint slides on after the loop breaks; face the
+                        // station once the body has settled, and again right
+                        // before pressing, or the look is at where it WAS.
+                        await Wait(0.7);
+                        _fps.FaceToward(Eye, goal + goal.Normalized() * 0.9f);
+                        OpenStation(at.Id, station);
+                        await Wait(1.0);
+                        _benchView.List.Qty = cq;
+                        _benchView.Rebuild();
+                        Vector3 aimPt = goal + goal.Normalized() * 0.9f;
+                        _fps.FaceToward(Eye, aimPt);
+                        await Wait(0.2);
+                        GD.Print($"ui: craft geometry: eye-feet {(goal - Eye).Length():F2} m, eye-aim {(aimPt - Eye).Length():F2} m, look·aim {CameraForward.Dot((aimPt - Eye).Normalized()):F3}");
+                        ok = _benchView.Press(craftId, out why);
+                    }
+                }
+                GD.Print($"ui: craft {craftId} x{cq} at {(station == "" ? "?" : station)}: {(ok ? "pressed" : "not pressed: " + why)}");
+                await Wait(double.Parse(Arg("-uiCraftWait") ?? "1.5", CultureInfo.InvariantCulture));
+                GD.Print($"ui: craft bar \"{(_channelEnd > 0 ? _channelLabel : "")}\" status \"{_benchView.Status}\"");
+            }
+
             // -uiPanel: open that panel LAST, so the gallery can capture the
             // modals without simulated key presses -- and after any -uiBuy,
             // since a modal blocks the E that opens the shop. Shop is
@@ -684,6 +762,9 @@ namespace SpaceAdventure.Game
             {
                 foreach (string one in panel.Split(',')) OpenUiPanel(one); // a comma list opens several
                 await Wait(1.0); // refresh round trip
+                // -uiLeave: press the menu's CHARACTERS (the world torn down, the
+                // select up on the saved session -- or its empty-session error).
+                if (Flag("-uiLeave")) { LeaveToSelect(); await Wait(1.5); GD.Print($"ui: left for the select: selectUp={_selectUp} net={_net.State}"); }
 
                 // -uiDragDemo: grab the open panel by its header and drag it
                 // 300 px right, 120 px down through Godot's own input path,

@@ -127,6 +127,7 @@ const (
 	EventWorn            uint16 = 0x000F // armor: data = "slot=item" UTF-8 (item empty = cleared), broadcast + replayed at join
 	EventAttack          uint16 = 0x0010 // an NPC starts an attack (its wind-up) or a body swings a melee weapon: entity = attacker, data = u32 target id (0 = a player swing, no target); broadcast
 	EventChat            uint16 = 0x0011 // Phase 20: entity = speaker, data = name "\x00" text (UTF-8); broadcast to all, speaker included
+	EventCraftEnd        uint16 = 0x0012 // Phase 22: {recipe,reason,item,qty} per crafted unit or the channel's end, unicast
 )
 
 // collider kinds (PROTOCOL.md `colliders`).
