@@ -880,3 +880,29 @@ open` → (no session on the rig) `session refused, signed out`, no
 exception. Owed: the round trip on the install (ESC → CHARACTERS → pick
 another → PLAY), two characters in one sitting.
 
+# Vanguard first-person arms (2026-10-08)
+
+Playtest: the Colonist's hands read right in first person, the Vanguard's
+came with pale slabs at both edges of the frame. Reproduced with the new
+rig flag `-rigBody char.ubc` (`test/out/ui/fp-vanguard-before.png`): the
+UBC's thick upper arms and deltoids sit inside ~0.35 m of the eye in
+every first-person pose (bone distances match the Colonist's — shoulders
+0.30–0.33 m, elbows 0.41+ — the bulk is the difference) and the
+first-person shader draws them always in front. Fix: the first-person
+pbr shader gains the body's near-eye dissolve (`FpCut` 0.30 m, the
+body's own) on the SUIT sleeves only — the hands ride inside the band in
+the unarmed framing and went grainy on a first try, so skin and gloves
+never dissolve; a first 0.36 m cut took the forearm with the shoulders in
+the rifle hold (the elbow sits at 0.41 m). Second finding in the armed
+shot: the Vanguard's support arm is 7 cm short of the rifle's fore-end
+from the shared `FP_HOLD` grip point, so the client seated the gun on
+the right fist and the fore-end floated past an open left hand (hands
+0.226 m apart against the gun's 0.30). `rifle()` in human.py now pulls
+the hold back along the barrel by the measured shortfall, one step (an
+iterated walk overshot to 17 cm and dropped the support hand under the
+frame): both Vanguards 0.28–0.30 m, both hands on the gun, rebuilt and
+re-imported (8993 / 8992 tris). `fp-vanguard-unarmed.png`, `-armed.png`,
+`-f-armed.png`: shoulders gone, the left hand wrapping the fore-end, the
+sleeve to the frame edge; the Colonist is unchanged. `-selftest` PASS,
+gate clean, `npm --prefix art test` 278/278.
+

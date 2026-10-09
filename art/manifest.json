@@ -78,7 +78,7 @@
     {
       "id": "char.ubc",
       "file": "chars/ubc.glb",
-      "tris": 8992,
+      "tris": 8993,
       "license": "CC0",
       "source": "recipes/char.ubc.json",
       "description": "Spike body: Quaternius Universal Base Characters Superhero male (CC0), imported and dressed by tools/bpy/human.py variant char.ubc on the same game-engine bone names, clips and hand mounts as char.player. Worn by npc.veteran at spawn for review. Faces -Z, eye at 1.7 m.",

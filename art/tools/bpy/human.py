@@ -1399,15 +1399,29 @@ def rifle(rig, G, forward, pole_r=(0.6, -0.3, -0.8), pole_l=(-0.7, 0.2, -0.7)):
     up = Vector((0, 0, 1))
     up = (up - f * up.dot(f)).normalized()
     right = f.cross(up)
-    F = Vector(G) + f * FORE_ALONG + up * FORE_UP
-    # Right: knuckles forward and down the raked grip, palm in toward the gun.
-    # The pistol grip runs (nearly) vertically through the fist: knuckles
-    # point forward, a little down, so the hand's width lines up with it.
-    grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
-         fingers=(15, 80, 85, 85), thumb=70)
-    # Left: fingers forward and a little across, palm up under the fore-end.
-    grip(rig, "l", F, (f + right * 0.35).normalized(), up, pole_l,
-         fingers=(40, 45, 45, 45), thumb=25)
+    # A body whose support arm cannot reach the fore-end from G (the
+    # Vanguard: 7 cm short, so the client seated the gun on the right
+    # fist and the fore-end floated past an open left hand) gets the
+    # whole hold pulled back along the barrel until it can -- both hands
+    # on the gun, a little nearer the eye, rather than one.
+    # One measured step, not a walk: the IK's shortfall is linear in the
+    # pull-back, and every centimetre nearer the eye drops the support hand
+    # further under the frame (an 8-step walk took 17 cm and lost it).
+    G = Vector(G)
+    for _ in range(2):
+        F = G + f * FORE_ALONG + up * FORE_UP
+        # Right: knuckles forward and down the raked grip, palm in toward the gun.
+        # The pistol grip runs (nearly) vertically through the fist: knuckles
+        # point forward, a little down, so the hand's width lines up with it.
+        grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
+             fingers=(15, 80, 85, 85), thumb=70)
+        # Left: fingers forward and a little across, palm up under the fore-end.
+        grip(rig, "l", F, (f + right * 0.35).normalized(), up, pole_l,
+             fingers=(40, 45, 45, 45), thumb=25)
+        miss = (F - mount_at(rig, "l")).length
+        if miss < 0.012:
+            break
+        G = G - f * miss
     # Thumbs lie ALONG the gun, not up its side (seen end-on, an upright
     # thumb read far too long): the support thumb runs forward beside the
     # fore-end, the trigger-hand thumb wraps across the left of the grip.
