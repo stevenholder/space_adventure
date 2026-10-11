@@ -126,7 +126,8 @@ namespace SpaceAdventure.Game
                 if (v.Root == null || !v.Root.Visible) continue;
                 if (v.Type != EntityType.Npc && v.Type != EntityType.Loot &&
                     v.Type != EntityType.Vehicle && v.Type != EntityType.Ship &&
-                    v.Type != EntityType.Player && v.Type != EntityType.Node) continue;
+                    v.Type != EntityType.Player && v.Type != EntityType.Node &&
+                    v.Type != EntityType.Structure) continue;
                 if (v.Type == EntityType.Player && v.Id == _selfId) continue;
 
                 // A corpse is not a conversation. This used to be implied by
@@ -145,7 +146,7 @@ namespace SpaceAdventure.Game
                 // A node is a metre of rock and the bench a slab at 0.9 m:
                 // aim at those, not 1.7 m over them, and an NPC at its own
                 // eye (server cmd.go aimHeight).
-                float aim = v.Type == EntityType.Node ? 0.6f
+                float aim = v.Type == EntityType.Node || v.Type == EntityType.Structure ? 0.6f
                     : v.Type == EntityType.Npc && UI.CraftRules.StationOfNpc(_character.Defs, v.Label) != "" ? 0.9f
                     : v.Type == EntityType.Npc ? _character.Defs.Npc(v.Label).EyeHeight
                     : EyeHeight;
@@ -171,9 +172,34 @@ namespace SpaceAdventure.Game
                     EntityType.Ship => $"{InteractKey}  ·  fly",
                     EntityType.Player => $"{InteractKey}  ·  invite {v.Label} to party",
                     EntityType.Node => NodePrompt(v),
+                    EntityType.Structure => StructurePrompt(InteractKey, _character.Defs, v.Def, v.Label, IsMine(v)),
                     _ => $"{InteractKey}  ·  {Verb(v.Label)} {Nice(v.Label)}",
                 };
             }
+        }
+
+        /// <summary>
+        /// Phase 23: is this structure mine? The wire carries the owner's
+        /// NAME (the server keys on the token); a name match is enough for a
+        /// prompt -- the server refuses anyone else's pick_up with not_yours.
+        /// </summary>
+        public bool IsMine(EntityView v) =>
+            v != null && v.Type == EntityType.Structure && v.Label != "" &&
+            _views.LabelOf(_selfId) == v.Label;
+
+        /// <summary>
+        /// Phase 23: `F  ·  use workbench (Kade's)`, `F  ·  open chest (Kade's)`;
+        /// my own: `F  ·  use workbench  ·  hold to pick up`. Verb and name
+        /// come from the structure's item def.
+        /// </summary>
+        public static string StructurePrompt(string key, Defs defs, string item, string owner, bool mine)
+        {
+            ItemDef it = defs?.Item(item ?? "");
+            string verb = (it?.Verb ?? "").Trim().ToLowerInvariant();
+            if (verb == "") verb = string.IsNullOrEmpty(it?.Station) ? "open" : "use";
+            string name = string.IsNullOrEmpty(it?.Name) ? (item ?? "") : it.Name.ToLowerInvariant();
+            if (mine) return $"{key}  ·  {verb} {name}  ·  hold to pick up";
+            return string.IsNullOrEmpty(owner) ? $"{key}  ·  {verb} {name}" : $"{key}  ·  {verb} {name} ({owner}'s)";
         }
 
         /// <summary>Own entity id, so the cone never offers self-invites.</summary>

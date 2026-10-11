@@ -53,6 +53,11 @@
 //                           CRAFT tab; a bench/forge recipe walks to the nearest station of that kind
 //                           and opens it; presses CRAFT, waits s (default 1.5) so the shot shows the bar
 //   -uiPanel craft          the backpack on its CRAFT tab
+//   -uiPlace <item> [-uiPickUp]  Phase 23: place a structure item from the bag (the server's
+//                           SA_START must give it, e.g. structure.bench=1), face it, report the
+//                           prompt; -uiPickUp then holds F on it so the shot carries the bar
+//   -uiChest                Phase 23: place a structure.chest (SA_START), open it, move the
+//                           first three bag stacks in, shoot the panel
 
 using System;
 using System.Collections.Generic;
@@ -751,6 +756,64 @@ namespace SpaceAdventure.Game
                 GD.Print($"ui: craft {craftId} x{cq} at {(station == "" ? "?" : station)}: {(ok ? "pressed" : "not pressed: " + why)}");
                 await Wait(double.Parse(Arg("-uiCraftWait") ?? "1.5", CultureInfo.InvariantCulture));
                 GD.Print($"ui: craft bar \"{(_channelEnd > 0 ? _channelLabel : "")}\" status \"{_benchView.Status}\"");
+            }
+
+            // -uiPlace <item> / -uiChest: the Phase 23 shots. The bag must hold
+            // the item (a bare server's SA_START), since the rig gives nothing
+            // the server did not. Place goes 2 m ahead; the rig then looks at
+            // it the way a player would and reads the prompt back.
+            string placeId = Arg("-uiPlace") ?? (Flag("-uiChest") ? "structure.chest" : null);
+            if (placeId != null)
+            {
+                _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+                for (double waited = 0; _character.Count(placeId) == 0 && waited < 6; waited += 0.25) await Wait(0.25);
+                if (_character.Count(placeId) == 0)
+                    GD.Print($"ui: place {placeId}: not in the bag (start the server with SA_START=...,{placeId}=1)");
+                else
+                {
+                    _lastPlaced = 0;
+                    _net.Send(UI.StructureRules.PlaceCmd(NextCmdSeq(), placeId));
+                    EntityView sv = null;
+                    for (double waited = 0; sv == null && waited < 6; waited += 0.25)
+                    {
+                        if (_lastPlaced != 0) _views.TryGet(_lastPlaced, out sv);
+                        if (sv?.Root == null) { sv = null; await Wait(0.25); }
+                    }
+                    GD.Print($"ui: place {placeId}: {(sv == null ? "no structure (" + _interact.Notice + ")" : $"structure {sv.Id} def={sv.Def} owner={sv.Label}")}");
+                    if (sv != null)
+                    {
+                        Vector3 at = sv.Root.GlobalPosition;
+                        Vector3 aimPt = at + at.Normalized() * 0.6f;
+                        _fps.FaceToward(Eye, aimPt);
+                        await Wait(0.4);
+                        GD.Print($"ui: structure prompt \"{_interact.Prompt}\" mine={_interact.IsMine(sv)}");
+                        if (Flag("-uiChest") && sv.Def == "structure.chest")
+                        {
+                            _chestView.OpenOn(sv.Id);
+                            _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+                            await Wait(1.0);
+                            int moved = 0;
+                            if (_character.Inventory != null)
+                                foreach (var st in (ItemStack[])_character.Inventory.Clone())
+                                {
+                                    if (moved >= 3) break;
+                                    if (!string.IsNullOrEmpty(_character.SlotHolding(st.item))) continue;
+                                    if (_chestView.Move(true, st.item, st.qty)) moved++;
+                                    await Wait(0.3);
+                                }
+                            await Wait(1.0);
+                            GD.Print($"ui: chest {sv.Id}: moved {moved}, chest holds {(_chestView.Stacks == null ? "?" : _chestView.Stacks.Count.ToString())} stacks, status \"{_chestView.Status}\"");
+                        }
+                        else if (Flag("-uiPickUp"))
+                        {
+                            _holdTarget = sv.Id;
+                            _holdStart = Clock.Now;
+                            _rigHoldF = true;
+                            await Wait(0.9);
+                            GD.Print($"ui: pick-up bar \"{(_channelEnd > 0 ? _channelLabel : "")}\"");
+                        }
+                    }
+                }
             }
 
             // -uiPanel: open that panel LAST, so the gallery can capture the

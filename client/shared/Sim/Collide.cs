@@ -73,6 +73,10 @@ namespace SpaceAdventure.Sim
                 ["prop.generator"] = (new Vec3(-1.00, 0, -0.45), new Vec3(1.12, 1.34, 0.43)),
                 ["prop.dish"] = (new Vec3(-0.95, 0, -0.93), new Vec3(0.95, 2.09, 0.66)),
                 ["prop.loot.crate"] = (new Vec3(-0.22, 0, -0.17), new Vec3(0.22, 0.50, 0.17)),
+                // Phase 23: placed structures (contract boxes, not GLB-measured).
+                ["prop.bench"] = (new Vec3(-1.0, 0, -0.5), new Vec3(1.0, 0.95, 0.5)),
+                ["prop.forge"] = (new Vec3(-0.9, 0, -0.6), new Vec3(0.9, 1.5, 0.6)),
+                ["prop.chest"] = (new Vec3(-0.75, 0, -0.4), new Vec3(0.75, 0.75, 0.4)),
             };
 
         /// <summary>A solid prop as a box (props.go PropCollider); false for walk-through dressing.</summary>

@@ -51,6 +51,7 @@ namespace SpaceAdventure.Net
         public const ushort Loot = 0x0006;
         public const ushort Projectile = 0x0007;
         public const ushort Node = 0x0008;      // Phase 12: ore/wreck node; health = yields left
+        public const ushort Structure = 0x0009; // Phase 23: a placed bench/forge/chest; def = item id, data = item id "\0" owner name
     }
 
     /// <summary>action_mask bits.</summary>
@@ -98,6 +99,11 @@ namespace SpaceAdventure.Net
         public const ushort ShopBuyback = 0x0014; // Phase 13: re-buy a sale at what the shop paid
         public const ushort Wield = 0x0015; // {"slot":"primary"|"melee"}: which weapon is in hand
         public const ushort Chat = 0x0016; // Phase 20: {"text":"..."}, one world channel
+        // Phase 23 (PROTOCOL.md): placeable stations. 0x001A is Phase 24's deliver.
+        public const ushort Place = 0x0017;     // {"item"} -> {"structure","inventory"}
+        public const ushort ChestPut = 0x0018;  // {"structure","item","qty"} -> {"inventory","chest"}
+        public const ushort ChestTake = 0x0019; // same body and result
+        public const ushort PickUp = 0x001B;    // {"structure"} -> {"seconds"}; the channel ends with pick_up_end
     }
 
     /// <summary>cmd_result status codes.</summary>
@@ -133,6 +139,7 @@ namespace SpaceAdventure.Net
         public const ushort Attack = 0x0010; // an attack starts (NPC wind-up or a melee swing): entity = attacker, data = u32 target (0 = none)
         public const ushort Chat = 0x0011; // Phase 20: entity = speaker, data = name + "\0" + text
         public const ushort CraftEnd = 0x0012; // Phase 22: {recipe,reason,item,qty} — gather_end's shape, one per finished unit
+        public const ushort PickUpEnd = 0x0013; // Phase 23: {structure,ok,inventory} or {structure,ok:false,reason}
     }
 
     /// <summary>collider kinds.</summary>

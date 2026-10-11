@@ -29,6 +29,8 @@ namespace SpaceAdventure.Game
         public uint Id;
         public ushort Type;
         public string Label;
+        /// <summary>Phase 23: a structure's item id (Label is then its owner's name); "" otherwise.</summary>
+        public string Def = "";
         public Node3D Root;
         public ushort Health;
         public bool Dead;
@@ -90,7 +92,7 @@ namespace SpaceAdventure.Game
         public float HealthFraction => MaxHealth == 0 ? 1f : Mathf.Clamp((float)Health / MaxHealth, 0f, 1f);
 
         /// <summary>Health bars are for the wounded; a full bar is noise. A node's health is yields, not wounds.</summary>
-        public bool ShowHealthBar => !IsSelf && Type != EntityType.Node && !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
+        public bool ShowHealthBar => !IsSelf && Type != EntityType.Node && Type != EntityType.Structure && !Dead && MaxHealth > 0 && Health > 0 && Health < MaxHealth;
 
         /// <summary>Phase 12: a node with no yields left (snapshot health 0).</summary>
         public bool Depleted => Type == EntityType.Node && Health == 0;
@@ -165,6 +167,7 @@ namespace SpaceAdventure.Game
             EntityType.Vehicle => "rover",
             EntityType.Ship => "ship",
             EntityType.Target => "target",
+            EntityType.Structure => v.Def == "structure.chest" ? "" : "bench",
             _ => "",
         };
 
@@ -185,6 +188,15 @@ namespace SpaceAdventure.Game
         public Sfx Sfx;
 
         public bool TryGet(uint id, out EntityView view) => _views.TryGetValue(id, out view);
+
+        /// <summary>
+        /// The name a spawn gave this id. Our own body is predicted and never
+        /// gets a view (Render skips it), so the self name lives only in the
+        /// pending map the spawn filled; Phase 23's "mine" check needs it.
+        /// </summary>
+        public string LabelOf(uint id) =>
+            _views.TryGetValue(id, out var v) && v.Label != "" ? v.Label
+            : _pendingLabels.TryGetValue(id, out var l) ? l : "";
 
         /// <summary>A `hit` event named this body as the victim: flinch.</summary>
         public void OnHit(uint victim)
@@ -210,8 +222,25 @@ namespace SpaceAdventure.Game
                 if (body != null) _pendingBodies[spawn.EntityId] = body;
                 else _pendingBodies.Remove(spawn.EntityId);
             }
+            else if (spawn.EntityType == EntityType.Structure)
+            {
+                // Phase 23: `item id\0owner name` -- the item draws it, the owner labels it.
+                var (item, owner) = SplitStructureData(data);
+                _pendingDefs[spawn.EntityId] = item;
+                _pendingLabels[spawn.EntityId] = owner;
+            }
             else _pendingLabels[spawn.EntityId] = data;
         }
+
+        /// <summary>A structure spawn's data: the item id, and the owner's name after the first NUL ("" when absent).</summary>
+        public static (string item, string owner) SplitStructureData(string data)
+        {
+            var (item, owner) = SplitPlayerData(data);
+            return (item, owner ?? "");
+        }
+
+        /// <summary>Structures' item ids, for the row that follows the spawn.</summary>
+        private readonly Dictionary<uint, string> _pendingDefs = new Dictionary<uint, string>();
 
         /// <summary>A player spawn's data: the name, and the body id after the first NUL (null when absent).</summary>
         public static (string name, string body) SplitPlayerData(string data)
@@ -235,6 +264,7 @@ namespace SpaceAdventure.Game
             }
             _pendingTypes.Remove(id);
             _pendingLabels.Remove(id);
+            _pendingDefs.Remove(id);
             _pendingBodies.Remove(id);
             _pendingEquipped.Remove(id);
             _pendingWorn.Remove(id);
@@ -750,6 +780,7 @@ namespace SpaceAdventure.Game
         {
             _pendingTypes.TryGetValue(id, out ushort type);
             _pendingLabels.TryGetValue(id, out string label);
+            _pendingDefs.TryGetValue(id, out string def);
 
             var root = new Node3D { Name = $"entity-{id}" };
             _parent.AddChild(root);
@@ -761,7 +792,7 @@ namespace SpaceAdventure.Game
             // missing .glb is never an error — worst case, an entity is boxes.
             MeshInstance3D box = BoxMesh.Attach(root, "model", MeshFor(type, label), _material, 0);
 
-            var view = new EntityView { Id = id, Type = type, Label = label ?? "", Root = root };
+            var view = new EntityView { Id = id, Type = type, Label = label ?? "", Def = def ?? "", Root = root };
             if (_pendingEquipped.TryGetValue(id, out string held)) { view.EquippedItem = held; _pendingEquipped.Remove(id); }
             if (_pendingWorn.TryGetValue(id, out var wornEarly))
             {
@@ -769,7 +800,7 @@ namespace SpaceAdventure.Game
                 _pendingWorn.Remove(id);
             }
 
-            string asset = AssetFor(type, label);
+            string asset = AssetFor(type, type == EntityType.Structure ? def : label);
             if (type == EntityType.Player && _pendingBodies.TryGetValue(id, out string body))
             {
                 // The body the row names; its "asset" meta is this id, so the
@@ -829,6 +860,7 @@ namespace SpaceAdventure.Game
             EntityType.Loot => "prop.loot.crate",
             EntityType.Node => Defs.NodeAsset(def),
             EntityType.Projectile => Defs.ItemAsset(def ?? ""),   // a thrown charge flies as its item; a round stays a box
+            EntityType.Structure => Defs.ItemAsset(def ?? ""),    // Phase 23: a placed bench/forge/chest is drawn as its item
             _ => "",
         };
 

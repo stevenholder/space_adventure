@@ -210,6 +210,7 @@ namespace SpaceAdventure.Game
         private CombatFeed _combatFeed;
         private ShopView _shopView;
         private BenchView _benchView; // Phase 12
+        private ChestView _chestView; // Phase 23
         private Settings _settings;
         private SettingsView _settingsView;
         private Hotbar _hotbar; // Phase 13
@@ -240,7 +241,8 @@ namespace SpaceAdventure.Game
             (_sheetView?.Open ?? false) ||
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
             (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
-            (_benchView?.Open ?? false) || (_settingsView?.Open ?? false);
+            (_benchView?.Open ?? false) || (_settingsView?.Open ?? false) ||
+            (_chestView?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -1206,6 +1208,7 @@ namespace SpaceAdventure.Game
             _icons = new Icons(_assets.Root);
             _shopView = new ShopView(_ui.Root, _character, _interact, _icons, NextCmdSeq, b => _net.Send(b));
             _benchView = new BenchView(_ui.Root, _character, _skills, _icons, NextCmdSeq, b => _net.Send(b));
+            _chestView = new ChestView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
             _hotbar = new Hotbar();
             _hotbar.Load();
             _hotbarView = new HotbarView(_ui.Root, _hotbar, _character, _icons);
@@ -1475,10 +1478,12 @@ namespace SpaceAdventure.Game
             // `ui_close_dist`): the shop and the bench are somebody's counter.
             if (_interact.ShopOpen && OutOfCounterRange(_interact.ShopNpc)) { _interact.CloseShop(); _shopView.Show(false); }
             if (_benchView.Open && _benchView.Bench != 0 && OutOfCounterRange(_benchView.Bench)) _benchView.Show(false);
+            else if (_chestView.Open && _chestView.Chest != 0 && OutOfCounterRange(_chestView.Chest)) _chestView.Show(false);
             else if (Clock.Now > _noticeUntil) _interact.Notice = "";
             // After the clear above, or the hint is wiped the frame it is set.
             if (_seat != 0 && Clock.Now > _noticeUntil) _interact.Notice = SeatKind == EntityType.Ship ? "F  ·  exit ship" : "F  ·  exit rover";
             if (li.InteractPressed && !_map.Open && !(_bagsView.Open || _sheetView.Open)) OnInteract();
+            UpdateStructureHold(li.InteractHeld || _rigHoldF);
 
             _timeline.OneWaySeconds = _net.RttMs > 0 ? _net.RttMs / 2000.0 : 0.0;
             _views.Render(_timeline, _net.EntityId);
@@ -1565,6 +1570,7 @@ namespace SpaceAdventure.Game
             }
             if (_interact.ShopOpen) { _interact.CloseShop(); _shopView.Show(false); return; }
             if (_benchView.Open) { _benchView.Show(false); return; }
+            if (_chestView.Open) { _chestView.Show(false); return; }
             if (_interact.Target == 0) return;
             switch (_interact.TargetType)
             {
@@ -1572,6 +1578,12 @@ namespace SpaceAdventure.Game
                     // Phase 12: the channel is the server's; the reply's
                     // duration starts the bar, gather_end ends it.
                     _net.Send(Encode.Cmd(NextCmdSeq(), Op.Gather, $"{{\"node\":{_interact.Target}}}"));
+                    break;
+                case EntityType.Structure when _views.TryGet(_interact.Target, out var sv):
+                    // Phase 23: my own waits to see if F is held (a pick-up);
+                    // anyone else's opens now.
+                    if (_interact.IsMine(sv)) { _holdTarget = sv.Id; _holdStart = Clock.Now; }
+                    else OpenStructure(sv);
                     break;
                 case EntityType.Npc when _views.TryGet(_interact.Target, out var bv) && UI.CraftRules.StationOfNpc(_character.Defs, bv.Label) != "":
                     OpenStation(_interact.Target, UI.CraftRules.StationOfNpc(_character.Defs, bv.Label));
@@ -1981,6 +1993,9 @@ namespace SpaceAdventure.Game
                         case EventId.GatherEnd:
                             OnGatherEnd(WireReader.Utf8.GetString(ev.Data));
                             break;
+                        case EventId.PickUpEnd:
+                            OnPickUpEnd(WireReader.Utf8.GetString(ev.Data));
+                            break;
                         case EventId.CraftEnd:
                             OnCraftEnd(ChannelEnd.Parse(ev.Data));
                             break;
@@ -2055,7 +2070,9 @@ namespace SpaceAdventure.Game
                 {
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
-                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.ShopBuyback || r.Opcode == Op.Craft)) _character.OnWallet(r.Body);
+                    if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.ShopBuyback || r.Opcode == Op.Craft
+                        || r.Opcode == Op.Place || r.Opcode == Op.ChestPut || r.Opcode == Op.ChestTake)) _character.OnWallet(r.Body);
+                    if (r.Opcode == Op.Place || r.Opcode == Op.ChestPut || r.Opcode == Op.ChestTake || r.Opcode == Op.PickUp) OnStructureResult(r);
                     if (r.Opcode == Op.Gather) OnGatherResult(r);
                     if (r.Opcode == Op.Use) OnUseResult(r);
                     if (r.Opcode == Op.Craft) OnCraftResult(r);
@@ -2091,6 +2108,7 @@ namespace SpaceAdventure.Game
                     if (_shopView.Open) _shopView.Rebuild();
                     if (_bagsView.Open) _bagsView.Rebuild();
                     if (_sheetView.Open) _sheetView.Rebuild();
+                    if (_chestView.Open) _chestView.Rebuild();
                     if (_journalView.Open) _journalView.Rebuild();
                     if (_partyView.Open) _partyView.Rebuild();
                     break;
@@ -2323,6 +2341,13 @@ namespace SpaceAdventure.Game
                     Quaternion q = v.Root.GlobalBasis.GetRotationQuaternion();
                     var quat = new Quat(q.X, q.Y, q.Z, q.W);
                     _moving.Add(v.Type == EntityType.Vehicle ? Sim.Collide.RoverCollider(pos, quat) : Sim.Collide.ShipCollider(pos, quat));
+                }
+                else if (v.Type == EntityType.Structure)
+                {
+                    // Phase 23: a placed bench/forge/chest is its asset's prop box (props.go PropBoxes).
+                    Quaternion q = v.Root.GlobalBasis.GetRotationQuaternion();
+                    if (Sim.Collide.PropCollider(_views.Defs.ItemAsset(v.Def), pos, new Quat(q.X, q.Y, q.Z, q.W), 1, out var sc))
+                        _moving.Add(sc);
                 }
                 else if ((v.Type == EntityType.Player || v.Type == EntityType.Npc) && !v.Dead && v.ParentId == 0)
                     _moving.Add(Sim.Collide.BodyCollider(pos, v.Type == EntityType.Npc ? _views.Defs.Npc(v.Label).Radius : Sim.Collide.BodyRadius));
@@ -2562,6 +2587,121 @@ namespace SpaceAdventure.Game
             _channelLabel = nd?.Skill == "salvaging" ? "cutting" : "drilling";
         }
 
+        // Phase 23: hold F on my own structure to pick it up. _holdTarget is
+        // the structure F went down on (its use waits for the release);
+        // _pickUp is the structure whose pick_up went out, until its end.
+        private uint _holdTarget, _pickUp;
+        private double _holdStart;
+        private bool _pickUpChannel;
+        /// <summary>The last place reply's structure id (the rig faces it).</summary>
+        private uint _lastPlaced;
+        /// <summary>Rig: F reads as held (-uiPickUp).</summary>
+        private bool _rigHoldF;
+
+        private void UpdateStructureHold(bool held)
+        {
+            if (_holdTarget != 0)
+            {
+                if (_seat != 0 || !_views.TryGet(_holdTarget, out var hv)) { _holdTarget = 0; return; }
+                if (held && Clock.Now - _holdStart >= StructureRules.HoldSeconds)
+                {
+                    // A pick-up: no panel stays open over a thing that is leaving.
+                    _holdTarget = 0;
+                    if (_benchView.Open) _benchView.Show(false);
+                    if (_chestView.Open) _chestView.Show(false);
+                    _pickUp = hv.Id;
+                    _pickUpChannel = false;
+                    _net.Send(StructureRules.PickUpCmd(NextCmdSeq(), hv.Id));
+                }
+                else if (!held)
+                {
+                    // A tap: the ordinary use.
+                    _holdTarget = 0;
+                    OpenStructure(hv);
+                }
+                return;
+            }
+            if (_pickUp != 0 && !held)
+            {
+                // Let go before the end: cancel the channel (gather_cancel ends any channel).
+                _net.Send(Encode.Cmd(NextCmdSeq(), Op.GatherCancel, "{}"));
+                _pickUp = 0;
+                _pickUpChannel = false;
+                _channelStart = _channelEnd = -1;
+            }
+        }
+
+        /// <summary>F on a structure: a station opens the craft panel on it, a chest the chest panel.</summary>
+        private void OpenStructure(EntityView v)
+        {
+            string station = UI.CraftRules.StationOfStructure(_character.Defs, v.Def);
+            if (station != "") { OpenStation(v.Id, station); return; }
+            _chestView.OpenOn(v.Id);
+            _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+        }
+
+        /// <summary>Phase 23: place / chest_put / chest_take / pick_up replies.</summary>
+        private void OnStructureResult(CmdResult r)
+        {
+            if (!r.Ok)
+            {
+                string why = Reason(r.Body);
+                if (r.Opcode == Op.PickUp) { _pickUp = 0; _pickUpChannel = false; }
+                // The panel's own peek (qty 0) is not worth a line.
+                if ((r.Opcode == Op.ChestPut || r.Opcode == Op.ChestTake) && _chestView.Open)
+                {
+                    _chestView.OnChest(StructureRules.ParseChest(r.Body));
+                    if (!r.Body.Contains("bad_qty")) { _chestView.Status = why; _chestView.Rebuild(); }
+                    return;
+                }
+                _interact.Notice = why;
+                _noticeUntil = Clock.Now + 2;
+                return;
+            }
+            switch (r.Opcode)
+            {
+                case Op.Place:
+                    try { _lastPlaced = (uint?)Newtonsoft.Json.Linq.JObject.Parse(r.Body)["structure"] ?? 0; }
+                    catch (Newtonsoft.Json.JsonException) { }
+                    _interact.Notice = "placed";
+                    _noticeUntil = Clock.Now + 2;
+                    if (_bagsView.Open) _bagsView.Rebuild();
+                    break;
+                case Op.ChestPut:
+                case Op.ChestTake:
+                    _chestView.Status = "";
+                    _chestView.OnChest(StructureRules.ParseChest(r.Body));
+                    if (_chestView.Open) _chestView.Rebuild();
+                    break;
+                case Op.PickUp:
+                    if (_pickUp == 0) break; // released before the reply; the cancel is on its way
+                    double secs = StructureRules.PickUpSeconds(r.Body);
+                    _pickUpChannel = true;
+                    _channelStart = Clock.Now;
+                    _channelEnd = Clock.Now + secs;
+                    _channelLabel = "picking up";
+                    break;
+            }
+        }
+
+        /// <summary>Phase 23: pick_up_end — the item is back in the bag, or why not.</summary>
+        private void OnPickUpEnd(string json)
+        {
+            var (_, ok, reason) = StructureRules.ParsePickUpEnd(json);
+            if (_pickUpChannel || _pickUp != 0) _channelStart = _channelEnd = -1;
+            _pickUp = 0;
+            _pickUpChannel = false;
+            if (ok)
+            {
+                _character.OnWallet(json); // carries `inventory`
+                _interact.Notice = "picked up";
+                if (_bagsView.Open) _bagsView.Rebuild();
+            }
+            else _interact.Notice = reason is "moved" or "hit" or "died" or "cancel" or "disconnect"
+                ? EndWords(reason) : Reason(Newtonsoft.Json.JsonConvert.SerializeObject(new { reason }));
+            _noticeUntil = Clock.Now + 2;
+        }
+
         /// <summary>Phase 22: opens the station panel on a bench or forge NPC and refreshes what it counts against.</summary>
         private void OpenStation(uint npc, string station)
         {
@@ -2717,6 +2857,13 @@ namespace SpaceAdventure.Game
                 "no_effect" => "no need",
                 "no_buyback" => "nothing to buy back",
                 "dead" => "you are dead",
+                // Phase 23: placeable stations.
+                "no_room" => "no flat ground here",
+                "too_many" => "five is the limit",
+                "not_yours" => "not yours",
+                "no_account" => "guests cannot place",
+                "not_empty" => "empty it first",
+                "not_found" => "it is gone",
                 "" => "refused",
                 _ => code.Replace('_', ' '),
             };
@@ -2724,7 +2871,7 @@ namespace SpaceAdventure.Game
 
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView, _chestView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();
@@ -3066,6 +3213,65 @@ namespace SpaceAdventure.Game
                 && ChannelEnd.Parse("not json").Reason == "" && ChannelEnd.Parse((byte[])null).Reason == "");
         }
 
+        /// <summary>
+        /// Phase 23 (GDD "Placeable stations"): the wire numbers, the item
+        /// def's station/verb, the prompts and owner suffix, the spawn data
+        /// split, the cmd bodies, the result and pick_up_end parses.
+        /// </summary>
+        private static void StructureChecks(Action<string, bool> Check)
+        {
+            Check("structure: wire numbers (type 0x0009, ops 0x0017-0x0019 + 0x001B, event 0x0013)",
+                EntityType.Structure == 0x0009 && Op.Place == 0x0017 && Op.ChestPut == 0x0018 && Op.ChestTake == 0x0019
+                && Op.PickUp == 0x001B && EventId.PickUpEnd == 0x0013);
+            var defs = Defs.Parse("{\"items\":{" +
+                "\"structure.bench\":{\"id\":\"structure.bench\",\"name\":\"Workbench\",\"kind\":\"structure\",\"asset\":\"prop.bench\",\"station\":\"bench\",\"verb\":\"Use\"}," +
+                "\"structure.forge\":{\"id\":\"structure.forge\",\"name\":\"Forge\",\"kind\":\"structure\",\"asset\":\"prop.forge\",\"station\":\"forge\",\"verb\":\"Use\"}," +
+                "\"structure.chest\":{\"id\":\"structure.chest\",\"name\":\"Chest\",\"kind\":\"structure\",\"asset\":\"prop.chest\",\"verb\":\"Open\"}," +
+                "\"mat.parts\":{\"id\":\"mat.parts\",\"name\":\"Parts\",\"kind\":\"material\"}}}");
+            Check("structure: ItemDef parses station and verb (absent = \"\")",
+                defs.Item("structure.bench")?.Station == "bench" && defs.Item("structure.bench")?.Verb == "Use"
+                && defs.Item("structure.chest")?.Station == "" && defs.Item("structure.chest")?.Verb == "Open"
+                && defs.Item("mat.parts")?.Station == "" && defs.Item("mat.parts")?.Verb == "");
+            Check("structure: station of a structure (bench/forge; a chest is none)",
+                UI.CraftRules.StationOfStructure(defs, "structure.bench") == "bench" && UI.CraftRules.StationOfStructure(defs, "structure.forge") == "forge"
+                && UI.CraftRules.StationOfStructure(defs, "structure.chest") == "" && UI.CraftRules.StationOfStructure(defs, "nope") == "");
+            Check("structure: prompts use/open + the owner's name",
+                Interaction.StructurePrompt("F", defs, "structure.bench", "Kade", false) == "F  ·  use workbench (Kade's)"
+                && Interaction.StructurePrompt("F", defs, "structure.forge", "Kade", false) == "F  ·  use forge (Kade's)"
+                && Interaction.StructurePrompt("F", defs, "structure.chest", "Kade", false) == "F  ·  open chest (Kade's)");
+            Check("structure: my own reads hold to pick up, no owner suffix",
+                Interaction.StructurePrompt("F", defs, "structure.bench", "Kade", true) == "F  ·  use workbench  ·  hold to pick up"
+                && Interaction.StructurePrompt("F", defs, "structure.chest", "Kade", true) == "F  ·  open chest  ·  hold to pick up");
+            Check("structure: spawn data splits item \\0 owner",
+                EntityViews.SplitStructureData("structure.chest\0Kade") == ("structure.chest", "Kade")
+                && EntityViews.SplitStructureData("structure.bench") == ("structure.bench", ""));
+            Check("structure: place body", UI.StructureRules.PlaceBody("structure.bench") == "{\"item\":\"structure.bench\"}");
+            Check("structure: chest move body {structure,item,qty}",
+                UI.StructureRules.MoveBody(12, "mat.parts", 4) == "{\"structure\":12,\"item\":\"mat.parts\",\"qty\":4}");
+            Check("structure: pick_up body", UI.StructureRules.PickUpBody(7) == "{\"structure\":7}");
+            byte[] put = UI.StructureRules.MoveCmd(3, true, 12, "mat.parts", 4), take = UI.StructureRules.MoveCmd(3, false, 12, "mat.parts", 4);
+            Check("structure: put and take differ only in the opcode", put.Length == take.Length && !put.AsSpan().SequenceEqual(take));
+            var chest = UI.StructureRules.ParseChest("{\"inventory\":[],\"chest\":[{\"item\":\"mat.parts\",\"qty\":4},{\"item\":\"mat.scrap\",\"qty\":9}]}");
+            Check("structure: a chest result reads its stacks; no chest key is null",
+                chest != null && chest.Count == 2 && chest[1].item == "mat.scrap" && chest[1].qty == 9
+                && UI.StructureRules.ParseChest("{\"inventory\":[]}") == null && UI.StructureRules.ParseChest("junk") == null);
+            Check("structure: pick_up seconds (1.5 default)",
+                UI.StructureRules.PickUpSeconds("{\"seconds\":1.5}") == 1.5 && UI.StructureRules.PickUpSeconds("{}") == 1.5);
+            Check("structure: pick_up_end ok and refused",
+                UI.StructureRules.ParsePickUpEnd("{\"structure\":9,\"ok\":true,\"inventory\":[]}") == (9u, true, "")
+                && UI.StructureRules.ParsePickUpEnd("{\"structure\":9,\"ok\":false,\"reason\":\"no_space\"}") == (9u, false, "no_space")
+                && UI.StructureRules.ParsePickUpEnd("junk") == (0u, false, ""));
+            Check("structure: refusals in words",
+                Reason("{\"reason\":\"no_room\"}") == "no flat ground here" && Reason("{\"reason\":\"too_many\"}") == "five is the limit"
+                && Reason("{\"reason\":\"not_yours\"}") == "not yours" && Reason("{\"reason\":\"no_account\"}") == "guests cannot place"
+                && Reason("{\"reason\":\"not_empty\"}") == "empty it first");
+            Check("structure: the chest is a solid box, turned with the structure",
+                Sim.Collide.PropCollider("prop.chest", new Vec3(0, 100, 0), new Quat(0, 0.7071067811865476, 0, 0.7071067811865476), 1, out var cc)
+                && Math.Abs(cc.Half.X - 0.75) < 1e-6 && Math.Abs(cc.Half.Y - 0.375) < 1e-6 && Math.Abs(cc.Center.Y - 100.375) < 1e-4
+                && Sim.Collide.PropCollider("prop.bench", Vec3.Zero, new Quat(0, 0, 0, 1), 1, out _)
+                && Sim.Collide.PropCollider("prop.forge", Vec3.Zero, new Quat(0, 0, 0, 1), 1, out _));
+        }
+
         private static int SelfTest()
         {
             int failed = 0;
@@ -3128,6 +3334,7 @@ namespace SpaceAdventure.Game
                 return d.Length > 400 && peak > 25000 && peak < 32000;
             }));
             CraftChecks(Check);
+            StructureChecks(Check);
             // Phase 20: the chat log's model (GDD "Chat (Phase 20)", C176).
             var chat = new UI.ChatLog();
             Check("chat: an empty log is not visible", !chat.Visible && chat.Lines.Count == 0);
