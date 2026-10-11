@@ -40,8 +40,8 @@ func TestMigrate_SQLite(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 7 {
-		t.Fatalf("schema_version row count = %d, want 7 (001..007)", count)
+	if count != 8 {
+		t.Fatalf("schema_version row count = %d, want 8 (001..008)", count)
 	}
 }
 
@@ -61,6 +61,7 @@ func TestMigrate_Postgres(t *testing.T) {
 
 	t.Cleanup(func() {
 		s.DB.ExecContext(ctx, `DROP TABLE IF EXISTS player`)
+		s.DB.ExecContext(ctx, `DROP TABLE IF EXISTS structure`)
 		s.DB.ExecContext(ctx, `DROP TABLE IF EXISTS schema_version`)
 	})
 
@@ -84,8 +85,8 @@ func TestMigrate_Postgres(t *testing.T) {
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("counting schema_version: %v", err)
 	}
-	if count != 7 {
-		t.Fatalf("schema_version row count = %d, want 7 (001..007)", count)
+	if count != 8 {
+		t.Fatalf("schema_version row count = %d, want 8 (001..008)", count)
 	}
 }
 

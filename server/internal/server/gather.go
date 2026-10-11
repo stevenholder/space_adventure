@@ -79,7 +79,7 @@ func (s *Server) startGather(c *client, node uint32, ticks int, hand bool) bool 
 // channelling reports whether c holds any channel, gather or craft. Under
 // s.mu.
 func (s *Server) channelling(c *client) bool {
-	return c.gather.node != 0 || c.craft.active()
+	return c.gather.node != 0 || c.craft.active() || c.pickup.structure != 0
 }
 
 // endGather clears c's channel and tells them why. items is the yield on
@@ -107,6 +107,10 @@ func (s *Server) cancelChannel(c *client, reason string) (ok bool, refund *defs.
 	}
 	if c.craft.active() {
 		return true, s.endCraft(c, reason)
+	}
+	if c.pickup.structure != 0 {
+		s.endPickUp(c, reason, nil)
+		return true, nil
 	}
 	return false, nil
 }

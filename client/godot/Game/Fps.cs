@@ -34,6 +34,8 @@ namespace SpaceAdventure.Game
         public int ActionMask;
         public bool FirePressed;
         public bool InteractPressed;
+        /// <summary>Phase 23: F is down this frame (hold F on your own structure picks it up).</summary>
+        public bool InteractHeld;
     }
 
     /// <summary>
@@ -129,6 +131,7 @@ namespace SpaceAdventure.Game
             if (_input.Held(Key.Space)) result.ActionMask |= Net.Action.Jump;
             // F interacts (Phase 13 keybinds); E is a hotbar key.
             result.InteractPressed = _input.Pressed(Key.F);
+            result.InteractHeld = _input.Held(Key.F);
             // A click with the cursor free is a UI click (a journal button, a
             // shop row), never a shot -- claiming a mission used to fire the
             // rifle. Captured pointer = the world has the mouse.

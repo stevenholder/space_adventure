@@ -145,6 +145,9 @@ type client struct {
 	gather gatherState
 	// craft is the Phase 22 craft channel, guarded by srv.mu (craft.go).
 	craft craftState
+	// pickup is the Phase 23 pick-up channel, guarded by srv.mu
+	// (structures.go).
+	pickup pickUpState
 	// cooldowns is Phase 13's per-item ready-at map for `use`, guarded by
 	// srv.mu; per connection, never persisted.
 	cooldowns map[string]time.Time

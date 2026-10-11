@@ -115,7 +115,7 @@ func LandUnit(p *store.Player, r defs.Recipe, bonus int, reg *defs.Registry) (in
 	if !ok {
 		return 0, refuse(ReasonUnknownItem)
 	}
-	if outDef.StackMax <= 1 {
+	if outDef.StackMax <= 1 || outDef.Kind == "structure" { // a second bench from one bench's inputs is not a bonus
 		bonus = 0
 	}
 	made := r.Output.Qty + bonus

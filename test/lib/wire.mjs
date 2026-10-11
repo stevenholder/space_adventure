@@ -163,7 +163,7 @@ export function decodeSpawn(p) {
 }
 
 // event (0x0007): u32 entity_id | u16 event_id | u32 data_len | bytes data.
-export const EVENT = { EQUIPPED: 0x0006, SKILL_XP: 0x000d, GATHER_END: 0x000e, WORN: 0x000f, CHAT: 0x0011, CRAFT_END: 0x0012 }
+export const EVENT = { EQUIPPED: 0x0006, SKILL_XP: 0x000d, GATHER_END: 0x000e, WORN: 0x000f, CHAT: 0x0011, CRAFT_END: 0x0012, PICK_UP_END: 0x0013 }
 export function decodeEvent(p) {
   if (p.length < 10) throw new Error(`event: bad size ${p.length}`)
   const entityId = p.readUInt32LE(0)
@@ -194,8 +194,26 @@ export function decodeCraftEnd(data) {
   return { recipe: o.recipe, reason: o.reason, item: o.item, qty: o.qty }
 }
 
+// A `pick_up_end` event's data is JSON (Phase 23): `{structure, ok: true,
+// inventory}` or `{structure, ok: false, reason}` — the end of the owner's
+// 1.5 s pick-up channel.
+export function decodePickUpEnd(data) {
+  const o = JSON.parse(Buffer.isBuffer(data) ? data.toString('utf8') : Buffer.from(data).toString('utf8'))
+  return { structure: o.structure, ok: o.ok === true, inventory: o.inventory ?? null, reason: o.reason ?? null }
+}
+
 // cmd (0x000E) opcodes — docs/PROTOCOL.md "Constants" (only those a harness here names).
-export const OP = { INVENTORY: 0x0004, EQUIP: 0x0003, GATHER: 0x0010, GATHER_CANCEL: 0x0011, CRAFT: 0x0012, CHAT: 0x0016 }
+export const OP = {
+  INVENTORY: 0x0004, EQUIP: 0x0003, PARTY_INVITE: 0x0006, PARTY_RESPOND: 0x0007, PARTY_LEAVE: 0x0008,
+  GATHER: 0x0010, GATHER_CANCEL: 0x0011, CRAFT: 0x0012, CHAT: 0x0016,
+  // Phase 23 placeable stations (0x001A is reserved for Phase 24 `deliver`).
+  PLACE: 0x0017, CHEST_PUT: 0x0018, CHEST_TAKE: 0x0019, PICK_UP: 0x001b,
+}
+
+// entity_type values a harness here names (docs/PROTOCOL.md "Constants").
+export const TYPE_NPC = 3
+export const TYPE_NODE = 8
+export const TYPE_STRUCTURE = 9 // Phase 23: spawn data = `<item id>\0<owner name>`
 
 /** cmd: u16 seq | u16 opcode | u32 data_len | bytes data (UTF-8 JSON; a string/Buffer is sent as is). */
 export function encodeCmd(seq, opcode, body) {

@@ -76,6 +76,11 @@ type Item struct {
 	Consumable *Consumable `json:"consumable,omitempty"`
 	Ability    *Ability    `json:"ability,omitempty"`
 	Mod        *Mod        `json:"mod,omitempty"`
+	// Phase 23 (GDD "Placeable stations"): a `structure` item is placed in
+	// the world. Station is the craft station it serves (bench|forge; empty
+	// for a chest); Verb is the interact prompt's word ("Use", "Open").
+	Station string `json:"station,omitempty"`
+	Verb    string `json:"verb,omitempty"`
 }
 
 // Consumable is a one-shot: one unit leaves the bag, Heal lands, the item
@@ -713,6 +718,15 @@ func auditArtisan(reg *Registry) error {
 	// mod must change something, and both live on items of the right kind
 	// and slot; the mod slot must be declared.
 	for _, it := range reg.Items {
+		// Phase 23: a structure stacks (a bag holds up to the cap), is drawn from its
+		// asset, and serves a station the craft path knows (or none: a chest).
+		if it.Kind == "structure" && (it.StackMax < 1 || it.Asset == "" || it.Verb == "" ||
+			(it.Station != "" && it.Station != "bench" && it.Station != "forge")) {
+			return fmt.Errorf("defs: item %s: a structure needs a positive stack_max, an asset, a verb and a station of bench, forge or none", it.ID)
+		}
+		if it.Kind != "structure" && it.Station != "" {
+			return fmt.Errorf("defs: item %s: only a structure serves a station", it.ID)
+		}
 		if it.Consumable != nil && (it.Consumable.Cooldown <= 0 || it.Kind != "consumable") {
 			return fmt.Errorf("defs: item %s: a consumable needs kind consumable and a positive cooldown", it.ID)
 		}

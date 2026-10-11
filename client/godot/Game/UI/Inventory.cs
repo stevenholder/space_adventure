@@ -64,6 +64,13 @@ namespace SpaceAdventure.Game.UI
         public System.Action<string, string> OnDrop;
         /// <summary>Right-click.</summary>
         public System.Action OnAlt;
+        /// <summary>
+        /// Phase 23: the chest panel's two grids ("bag"/"chest"; "" anywhere
+        /// else). A pooled cell only takes a drop from the OTHER pool, and
+        /// hands the receiver the dragged stack's (item, qty).
+        /// </summary>
+        public string Pool = "";
+        public System.Action<string, int> OnDropStack;
 
         private Panel _box;
         private TextureRect _icon;
@@ -162,7 +169,7 @@ namespace SpaceAdventure.Game.UI
             if (Static || string.IsNullOrEmpty(Item)) return default;
             var preview = new ItemSlot { Item = Item, Qty = Qty, Defs = Defs, Icons = Icons, Modulate = new Color(1, 1, 1, 0.85f) };
             SetDragPreview(preview);
-            return new Godot.Collections.Dictionary { { "item", Item }, { "from", SlotName } };
+            return new Godot.Collections.Dictionary { { "item", Item }, { "from", SlotName }, { "pool", Pool }, { "qty", Qty } };
         }
 
         public override bool _CanDropData(Vector2 at, Variant data)
@@ -170,6 +177,8 @@ namespace SpaceAdventure.Game.UI
             if (Static || data.VariantType != Variant.Type.Dictionary) return false;
             var d = data.AsGodotDictionary();
             string item = d["item"].AsString();
+            string pool = d.ContainsKey("pool") ? d["pool"].AsString() : "";
+            if (Pool != "" || pool != "") return Pool != "" && pool != "" && pool != Pool; // chest <-> bag only
             if (SlotName == "") return true; // the bag takes anything back
             return Defs.SlotAccepts(Defs.SlotOf(item), SlotName);
         }
@@ -177,6 +186,7 @@ namespace SpaceAdventure.Game.UI
         public override void _DropData(Vector2 at, Variant data)
         {
             var d = data.AsGodotDictionary();
+            if (Pool != "") { OnDropStack?.Invoke(d["item"].AsString(), d.ContainsKey("qty") ? d["qty"].AsInt32() : 1); return; }
             OnDrop?.Invoke(d["item"].AsString(), d["from"].AsString());
         }
 
@@ -214,7 +224,11 @@ namespace SpaceAdventure.Game.UI
                 desc.CustomMinimumSize = new Vector2(240, 0);
                 body.AddChild(desc);
             }
-            if (!Static) body.AddChild(Styles.Display_(SlotName == "" ? "right-click: equip  ·  drag to a slot" : "right-click: unequip  ·  drag to the bag", 12, Styles.Dust));
+            if (!Static) body.AddChild(Styles.Display_(
+                Pool != "" ? (Pool == "chest" ? "right-click or drag: to the bag" : "right-click or drag: into the chest")
+                : SlotName != "" ? "right-click: unequip  ·  drag to the bag"
+                : def?.Kind == "structure" ? "right-click: place it 2 m ahead"
+                : "right-click: equip  ·  drag to a slot", 12, Styles.Dust));
             return panel;
         }
     }
@@ -706,6 +720,8 @@ namespace SpaceAdventure.Game.UI
                         _send(_interact.SellCmd(_nextSeq(), item, Input.IsKeyPressed(Key.Shift) ? qty : 1));
                         return;
                     }
+                    // Phase 23: a bench, forge or chest goes down 2 m ahead.
+                    if (_character.Defs.Item(item)?.Kind == "structure") { _send(StructureRules.PlaceCmd(_nextSeq(), item)); return; }
                     if (_character.Defs.Item(item)?.Consumable != null) { _send(Character.UseCmd(_nextSeq(), item)); return; }
                     string slot = TargetSlot(item);
                     if (!string.IsNullOrEmpty(slot)) _send(_character.EquipCmd(_nextSeq(), slot, item));
@@ -720,7 +736,7 @@ namespace SpaceAdventure.Game.UI
             body.AddChild(Styles.Gap(4));
             Line(body, _interact != null && _interact.ShopOpen
                 ? "right-click sells one  ·  shift right-click sells the stack  ·  B closes"
-                : "B closes  ·  right-click equips or uses  ·  drag onto the character (C) or the bar", Styles.Dust, 11);
+                : "B closes  ·  right-click equips, uses or places  ·  drag onto the character (C) or the bar", Styles.Dust, 11);
         }
     }
 }

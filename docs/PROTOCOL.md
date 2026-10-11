@@ -94,7 +94,11 @@ Constants:
   (Phase 4); `0x0006` loot drop (Phase 3); `0x0007` projectile (Phase 3);
   `0x0008` node (Phase 12 — `spawn.data` is the node def id, e.g.
   `node.ore.iron`; the snapshot `health` is yields remaining, `0` =
-  depleted).
+  depleted); `0x0009` structure (Phase 23 — a placed bench, forge or
+  chest: `spawn.data` is `item id NUL owner name`, e.g.
+  `structure.chest\0Kade`; the client draws the item's `asset` and
+  labels it with the owner; `quat` is yaw only, the front toward where the
+  placer stood; health and flags 0; solid as the asset's prop box).
 - `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
   boost (mode 1, Phase 5). Other bits ignored.
 - **`input`'s mode byte is trailing and optional** (landed in Phase 3.5;
@@ -191,7 +195,10 @@ Constants:
   4 and never parsed. Success is `{}`, and the line goes out as event
   `0x0011` `chat` to every client, the speaker included. Nothing is
   stored or logged; the server counts lines (`space_adventure_chat_total`).
-  `0x0017`+ still reserved.
+  Phase 23 (GDD "Placeable stations"): `0x0017` `place`, `0x0018`
+  `chest_put`, `0x0019` `chest_take`, `0x001B` `pick_up` — bodies in the
+  cmd table. `0x001A` is reserved for Phase 24 `deliver`; `0x001C`+
+  still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -225,6 +232,14 @@ Constants:
   unit's inputs were gone) / `no_space` (the unit's output did not fit;
   its inputs are back) — and `item`/`qty` the unit output that did NOT
   land. The last unit's `done` is the end; no separate event follows;
+  Phase 23: `0x0013` `pick_up_end` (to the owner, `entity_id` the player)
+  — `{"structure": <id>, "ok": true, "inventory": [...]}` when the
+  structure is back in the bag (and gone from the world), or
+  `{"structure": <id>, "ok": false, "reason": "<code>"}` when the channel
+  ended without it: `moved` / `died` / `cancel` / `disconnect` (the
+  gather rules), `no_space` (the bag filled during the channel; the
+  structure stays), `not_empty` (a party member filled the chest
+  mid-channel), `not_found` (it went away);
   and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the body whose item IN HAND changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Since melee
@@ -469,6 +484,10 @@ Bodies per opcode:
 | `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) — Phase 22: ends a craft too |
 | `use` (Phase 13) | `{"item":"consumable.medkit"}` | `{"item":"consumable.medkit","effect":{"health":100},"cooldown":8}` |
 | `craft` (Phase 22) | `{"npc": <entity_id> \| 0, "recipe":"recipe.mat.parts", "qty":3}` | `{"recipe":"recipe.mat.parts","qty":3,"duration":1}` — `duration` is ONE unit's seconds × (1 − the recipe skill's `craft_speed` and its synergies), floored at 0.5. Units run back to back: a unit's inputs leave the bag when it starts (the first with this reply), its output and the recipe's `xp` (in the recipe's `skill`) land when it ends, each as a `craft_end` event; a stackable output may land one extra (`craft_extra`, Engineering). Moving 0.5 m, a hit, death, disconnecting or `gather_cancel` ends it, the running unit's inputs returned. Refusals in order: `out_of_range` (a `bench`/`forge` recipe: the NPC must be in reach; status 5 if `npc` names nothing; a `hand` recipe ignores `npc`), `busy` (any channel running), `unknown_recipe`, `wrong_station` (the recipe's `station` is not the NPC's kind, or `npc` 0 for a station recipe), `bad_qty`, `locked` (below `level` in the recipe's `skill`), `missing_materials` (for the first unit), `no_space` (its output, once its inputs are out) |
+| `place` (Phase 23) | `{"item":"structure.bench"}` | `{"structure":<entity_id>,"inventory":[…]}` — the structure lands 2 m ahead along the body's facing, on the ground, facing the placer; one leaves the bag. Refusals in order: `unknown_item` (not a `structure` item), `not_owned` (none in the bag), `no_account` (a guest — no owning account or no token), `too_many` (5 already placed by this character), `no_room` (slope over 15° at the point or 1.5 m out along ±facing/±right; or a structure, NPC, node, target, vehicle, ship or other body within 1.5 m horizontally, or a wall, rock or solid prop within 1.5 m of its surface; or seated/dead). Nothing is taken on a refusal |
+| `chest_put` (Phase 23) | `{"structure":<entity_id>,"item":"mat.parts","qty":7}` | `{"inventory":[…],"chest":[…]}` — bag → chest. Status 5 if `structure` names none. Refusals in order: `out_of_range` (aim height 0.6), `wrong_station` (a bench or forge, not a chest), `not_yours` (neither the owner nor the owner online in your party), `bad_qty` (1–1000), `not_owned` (the bag lacks it), `no_space` (the chest's 20 stacks / the item's `stack_max`). An item that leaves the bag entirely is unworn |
+| `chest_take` (Phase 23) | `{"structure":<entity_id>,"item":"mat.parts","qty":2}` — `"item":"", "qty":0` is a PEEK (the panel opening): no transfer | `{"inventory":[…],"chest":[…]}` — chest → bag. Refusals as `chest_put`, `not_owned` meaning the chest lacks it and `no_space` the bag is full; a peek is subject to `out_of_range`, `wrong_station` and `not_yours` only |
+| `pick_up` (Phase 23) | `{"structure":<entity_id>}` | `{"seconds":1.5}` — starts a 1.5 s channel; it ends with event `pick_up_end`. Moving 0.5 m, death, disconnecting or `gather_cancel` breaks it. Status 5 if `structure` names none. Refusals in order: `out_of_range`, `not_yours` (owner only), `busy` (any channel running), `not_empty` (a chest with anything in it), `no_space` (the bag cannot take the item — checked again at the end) |
 | `chat` (Phase 20) | `{"text":"over here"}` | `{}` — refusals: status 3 `{"reason":"empty"}` (nothing left after strip + trim), status 2 (over 200 bytes after the strip), status 4 (the chat bucket: burst 3, 1 per s) |
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
@@ -480,6 +499,10 @@ the node's `level` or a `craft` below the recipe's). Phase 12 adds
 `no_tool`, `depleted`, `no_space` (`gather`); `not_gathering`
 (`gather_cancel`); `unknown_recipe`, `missing_materials` (`craft`).
 Phase 22 adds `wrong_station` and `busy` (`craft`).
+Phase 23 adds `no_account`, `too_many`, `no_room` (`place`); `not_yours`,
+`wrong_station` (`chest_put`/`chest_take`); `not_yours`, `not_empty`
+(`pick_up`). `craft`'s `npc` may name a placed structure: a bench or
+forge serves its `station` to anyone, a chest is `wrong_station`.
 Phase 13 adds `unusable`, `dead`, `no_effect` and `cooldown` (`use`; a
 `cooldown` refusal carries `"ready_in": <s>` beside the reason) and
 `no_buyback` (`shop_buyback`). The
@@ -509,6 +532,12 @@ efficacy); per item `gather_mult` (a tool's channel multiplier, absent =
 1); per NPC `kind` (absent for none — `bench`, `forge`, `shop`, … — the
 station panel filters recipes by it); the skills roster's
 `craft_speed` efficacy kind.
+
+Phase 23 adds, additively: items of kind `structure` (`structure.bench`,
+`structure.forge`, `structure.chest`) with per item `station` (`bench` \|
+`forge`; absent for a chest) and `verb` (the prompt's word, `Use` /
+`Open`); `entities.structure` (hitbox for interaction; `asset` empty —
+each structure's asset is its item's).
 
 Phase 13 adds, additively: per item `consumable: {heal, cooldown}`,
 `ability: {id, range, cooldown}`, `mod: {damage, magazine, max_range,

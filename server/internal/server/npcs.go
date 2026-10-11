@@ -560,7 +560,7 @@ func (s *Server) syncWorldEnts() {
 			s.broadcast(protocol.EncodeSpawn(protocol.Spawn{
 				EntityID:   e.ID,
 				EntityType: uint16(e.Kind),
-				Data:       []byte(e.Def),
+				Data:       spawnData(e),
 			}))
 		}
 	}
@@ -575,7 +575,7 @@ func (s *Server) syncWorldEnts() {
 	// learns the shot happened (the hit event alone names no projectile).
 	for _, e := range s.fresh {
 		if !live[e.ID] {
-			s.broadcast(protocol.EncodeSpawn(protocol.Spawn{EntityID: e.ID, EntityType: uint16(e.Kind), Data: []byte(e.Def)}))
+			s.broadcast(protocol.EncodeSpawn(protocol.Spawn{EntityID: e.ID, EntityType: uint16(e.Kind), Data: spawnData(e)}))
 			s.broadcast(protocol.EncodeDespawn(protocol.Despawn{EntityID: e.ID}))
 		}
 	}

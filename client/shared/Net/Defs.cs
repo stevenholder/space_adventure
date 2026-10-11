@@ -65,6 +65,11 @@ namespace SpaceAdventure.Net
         [JsonProperty("ability")] public AbilityDef Ability { get; set; }
         [JsonProperty("mod")] public ModDef Mod { get; set; }
 
+        // Phase 23: a structure item's station kind ("bench"/"forge"; "" for a
+        // chest) and the interact verb its placed entity shows ("Use"/"Open").
+        [JsonProperty("station")] public string Station { get; set; } = "";
+        [JsonProperty("verb")] public string Verb { get; set; } = "";
+
         /// <summary>Phase 13: something `use` accepts — a consumable or worn gear with an ability.</summary>
         public bool Usable => Consumable != null || Ability != null;
     }

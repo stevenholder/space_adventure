@@ -107,6 +107,8 @@ func (s *Store) DeleteAccount(ctx context.Context, accountID string) ([]string, 
 	rows.Close()
 
 	for _, q := range []string{
+		// Phase 23: the characters' placed structures go with them.
+		`DELETE FROM structure WHERE owner IN (SELECT token FROM player WHERE account_id = $1)`,
 		`DELETE FROM player WHERE account_id = $1`,
 		`DELETE FROM web_session WHERE account_id = $1`,
 		`DELETE FROM account WHERE id = $1`,
@@ -230,14 +232,25 @@ func (s *Store) EditCharacter(ctx context.Context, token, name, hair, skin, suit
 	return nil
 }
 
-// DeletePlayer removes one character's row (Phase 18). The player row is
-// all DeleteAccount's cascade removes per character, so it is all this
-// removes. Absent is not an error: the caller sweeps twice.
+// DeletePlayer removes one character's row (Phase 18) and, in the same
+// transaction, the structures it placed (Phase 23) — what DeleteAccount's
+// cascade removes per character. Absent is not an error: the caller sweeps
+// twice.
 func (s *Store) DeletePlayer(ctx context.Context, token string) error {
-	if _, err := s.DB.ExecContext(ctx, `DELETE FROM player WHERE token = $1`, token); err != nil {
-		return fmt.Errorf("store: deleting player: %w", err)
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: begin: %w", err)
 	}
-	return nil
+	defer tx.Rollback()
+	for _, q := range []string{
+		`DELETE FROM structure WHERE owner = $1`,
+		`DELETE FROM player WHERE token = $1`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, token); err != nil {
+			return fmt.Errorf("store: deleting player: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 // CountPlayers is the landing page's public statistic.

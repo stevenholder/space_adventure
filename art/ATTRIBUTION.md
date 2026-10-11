@@ -15,6 +15,7 @@ the mob library listed below. The last Kenney Space Kit props were replaced by
 | `mob.dungeon.imp`, `mob.dungeon.puglin` | Quaternius, Bestiary - Dungeon Monsters Kit, Standard | Quaternius Asset License v1.0: free for use in games; the assets themselves may not be redistributed |
 | The clips on `mob.dungeon.*` (retargeted onto them) | Quaternius, Universal Animation Library, Standard | CC0 |
 | Hand weapons and flasks (`melee.*`, `throw.fire`, `throw.acid`, `potion.heal`; `items/`), recoloured and re-framed by `tools/bpy/rpg_items.py` | Quaternius, Ultimate RPG pack (quaternius.com/packs/ultimaterpg.html; FBX unpacked into gitignored `vendor/ultimate-rpg`) | CC0 |
+| World props (`prop.chest`; `props/`), re-framed by `tools/bpy/props_vendor.py` (front to -Z, base at y=0, lid frozen off its bone onto a hinge pivot, textures capped at 1024) | Quaternius, Modular SciFi MegaKit, Standard (quaternius.com/packs/modularscifimegakit.html; glTF unpacked into gitignored `vendor/scifi-megakit`): `glTF/Props/Prop_Chest.gltf` + `Textures/T_Trim_01/02_*_Red` | CC0 |
 
 ## Generators
 
@@ -25,6 +26,7 @@ the mob library listed below. The last Kenney Space Kit props were replaced by
 | `weapon.*` | `tools/gen_weapon.py` |
 | `throw.frag` | `tools/bpy/rpg_items.py` (primitives) |
 | `tool.*`, `prop.node.*`, `prop.wreck`, `prop.bench` | `tools/gen_nodes.py` |
+| `prop.chest` (from the MegaKit) | `tools/bpy/props_vendor.py` + `tools/props_vendor.mjs` (`npm run props:vendor`) |
 | `prop.rock.*`, `prop.loot.crate`, `prop.barrel(s)`, `prop.generator`, `prop.dish`, `prop.bones`, `vehicle.rover.v1` | `tools/gen_props.py` |
 | `struct.*` | `tools/gen_struct.py`, `tools/gen_kit.py` |
 | `ship.v1`, `prop.target` | `tools/gen_ship.py`, `tools/gen_target.py` |

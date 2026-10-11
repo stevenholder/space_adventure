@@ -43,6 +43,16 @@ namespace SpaceAdventure.Game.UI
             };
         }
 
+        /// <summary>
+        /// Phase 23: what station a placed structure is -- its item def's
+        /// `station` ("bench"/"forge"); "" for a chest or anything else.
+        /// </summary>
+        public static string StationOfStructure(Defs defs, string itemId)
+        {
+            string st = defs?.Item(itemId ?? "")?.Station ?? "";
+            return st == "bench" || st == "forge" ? st : "";
+        }
+
         /// <summary>The recipes made at `station`, in file order.</summary>
         public static List<RecipeDef> For(IEnumerable<RecipeDef> recipes, string station)
         {
