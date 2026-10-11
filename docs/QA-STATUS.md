@@ -934,7 +934,7 @@ no overhead nametags in the client, none added.
 | C192 | PASS | `t44`: B `pick_up` on A's bench `not_yours`; A `pick_up` → `{"seconds":1.5}` then `pick_up_end ok` with the bench back in the bag and B's despawn; B `chest_take` `not_yours` until A's party invite lands, then 2 of 3 plates move; after the restart (party gone) B's peek is `not_yours` again. Go: owner-only, `not_empty`, the channel breaks on a 0.5 m move, `gather_cancel` cancels it |
 | C193 | PASS | `t44`: SIGTERM, restart on the same `DATABASE_URL`, rejoin: all 5 structures respawn with the same `item\0owner` data at the same positions (0.000 m), the chest still holds its 1 plate; store tests on sqlite and Postgres 17 (`make test-pg`): put/list/delete, `DeletePlayer` and `DeleteAccount` cascade the owner's rows; `Kick` drops the entities and the rows |
 | C194 | PASS | `test/out/ui/p23-place.png` (`F · use workbench · hold to pick up` reported, mine=True), `p23-pickup.png` (the `PICKING UP` bar over the bench, hold F), `p23-chest.png` (CHEST panel: BAG 2/20 left, CHEST 3/20 right, three stacks moved by right-click, the MegaKit chest below it). `-selftest` +15 `structure:` checks (wire numbers, ItemDef station/verb, prompts, spawn split, the four bodies, peek/put/take parsing, pick_up_end ok + refused, refusals in words, the collider box). Backpack right-click on a structure stack places it |
-| C195 | PASS | Go vet/test (store on sqlite + Postgres), `dotnet build` 0 warnings, `-selftest`, `godot-gate`, `godot-test`, `godot-codec` (9), `godot-conformance`, `t13` (13), `t35` (6), `npm --prefix art test` 281/281; `t44` 84 checks in 155 s. C153–C189 hold. **Owed:** t44 is bare-server only by design (it owns its server); on kind the Phase 23 proof is the rig shots after deploy |
+| C195 | PASS | Go vet/test (store on sqlite + Postgres), `dotnet build` 0 warnings, `-selftest`, `godot-gate`, `godot-test`, `godot-codec` (9), `godot-conformance`, `t13` (13), `t35` (6), `npm --prefix art test` 281/281; `t44` 84 checks in 155 s. C153–C189 hold. t44 is bare-server only by design (it owns its server). **On kind after the merge** (`make up`, build `68f77e1`, accounts registered over HTTP, kind's `SA_START` extended by hand with the structure items): `test/out/ui/p23-kind-place.png` (`structure 1048634 def=structure.bench owner=Kade23a`, prompt `F · use workbench · hold to pick up` mine=True, PLACED toast), `p23-kind-pickup.png` (PICKING UP bar, the bench gone from the table after), `p23-kind-chest.png` (CHEST 3/20, the MegaKit chest below); `rollout restart deploy/server` → `structures: loaded 2`, the chest row still `[ammo.cell 120, structure.bench 2, structure.chest 1]` in Postgres |
 
 **Found on the way.** My own body never gets an entity view (predicted),
 so "is this structure mine" first compared against a view that did not
@@ -948,4 +948,9 @@ the Phase 25 question (how kit PBR reads at night) — noted there.
 "mine" is a name match, the server decides. Party access to a chest is
 session-only (an offline owner's chest opens for nobody else). Peek
 writes the chest row once per open (harmless). `SetStore` now returns
-an error: a store that cannot list structures fails the boot.
+an error: a store that cannot list structures fails the boot. On a
+persistent server every character places from the same spawn-ahead
+spot, so the second rig placement is `no_room` unless `-uiPitch 0
+-uiYaw <deg>` turns it first (`-uiYaw` needs `-uiPitch` present). A
+refusal shows for 2 s; the rig used to read the notice after its 6 s
+wait and log it empty — it now catches it as it lands.

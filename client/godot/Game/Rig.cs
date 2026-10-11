@@ -774,12 +774,15 @@ namespace SpaceAdventure.Game
                     _lastPlaced = 0;
                     _net.Send(UI.StructureRules.PlaceCmd(NextCmdSeq(), placeId));
                     EntityView sv = null;
-                    for (double waited = 0; sv == null && waited < 6; waited += 0.25)
+                    // A refusal shows for 2 s, shorter than this wait: catch it as it lands.
+                    string refused = "";
+                    for (double waited = 0; sv == null && refused == "" && waited < 6; waited += 0.25)
                     {
                         if (_lastPlaced != 0) _views.TryGet(_lastPlaced, out sv);
+                        if (_lastPlaced == 0 && _interact.Notice != "") refused = _interact.Notice;
                         if (sv?.Root == null) { sv = null; await Wait(0.25); }
                     }
-                    GD.Print($"ui: place {placeId}: {(sv == null ? "no structure (" + _interact.Notice + ")" : $"structure {sv.Id} def={sv.Def} owner={sv.Label}")}");
+                    GD.Print($"ui: place {placeId}: {(sv == null ? "no structure (" + refused + ")" : $"structure {sv.Id} def={sv.Def} owner={sv.Label}")}");
                     if (sv != null)
                     {
                         Vector3 at = sv.Root.GlobalPosition;
