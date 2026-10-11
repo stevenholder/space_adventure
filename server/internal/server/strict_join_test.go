@@ -32,7 +32,9 @@ func newStrictWorld(t *testing.T, st *store.Store, guests bool) (*Server, string
 		t.Fatal(err)
 	}
 	if st != nil {
-		world.SetStore(st)
+		if err := world.SetStore(st); err != nil {
+			t.Fatal(err)
+		}
 	}
 	world.SetGuests(guests)
 	mux := http.NewServeMux()

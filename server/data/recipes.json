@@ -1211,6 +1211,79 @@
         "qty": 1
       },
       "xp": 80
+    },
+    {
+      "id": "recipe.structure.bench",
+      "name": "Workbench",
+      "level": 1,
+      "skill": "construction",
+      "station": "hand",
+      "seconds": 20,
+      "inputs": [
+        {
+          "item": "mat.plate.steel",
+          "qty": 4
+        },
+        {
+          "item": "mat.parts",
+          "qty": 4
+        }
+      ],
+      "output": {
+        "item": "structure.bench",
+        "qty": 1
+      },
+      "xp": 60
+    },
+    {
+      "id": "recipe.structure.forge",
+      "name": "Forge",
+      "level": 5,
+      "skill": "construction",
+      "station": "bench",
+      "seconds": 40,
+      "inputs": [
+        {
+          "item": "mat.plate.steel",
+          "qty": 8
+        },
+        {
+          "item": "mat.ingot.iron",
+          "qty": 4
+        },
+        {
+          "item": "mat.parts",
+          "qty": 4
+        }
+      ],
+      "output": {
+        "item": "structure.forge",
+        "qty": 1
+      },
+      "xp": 160
+    },
+    {
+      "id": "recipe.structure.chest",
+      "name": "Chest",
+      "level": 3,
+      "skill": "construction",
+      "station": "bench",
+      "seconds": 15,
+      "inputs": [
+        {
+          "item": "mat.plate.steel",
+          "qty": 2
+        },
+        {
+          "item": "mat.parts",
+          "qty": 4
+        }
+      ],
+      "output": {
+        "item": "structure.chest",
+        "qty": 1
+      },
+      "xp": 40
     }
   ]
 }

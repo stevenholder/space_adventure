@@ -112,6 +112,17 @@ type cmdWorld struct {
 	StartCooldown func(item string, secs float64)
 	Scan          func(rng float64) []map[string]any
 
+	// Phase 23 (structures.go): placed structures. FindStructure resolves
+	// one for this requester (ownership and party access included); Place
+	// runs the cap/ground/clearance checks, then take, then adds it;
+	// ChestMove runs f on the chest's contents under the world lock and
+	// saves them; PickUp starts the pick-up channel ("" or a refusal). All
+	// take s.mu themselves. Nil in fixtures without structures.
+	FindStructure func(id uint32) (structureInfo, bool)
+	Place         func(item string, take func() error) (id uint32, reason string)
+	ChestMove     func(id uint32, f func(chest *store.Player) error) ([]store.Stack, error)
+	PickUp        func(id uint32) string
+
 	// Ent is the requester's own server-side entity, for the rounds
 	// currently in the magazine. The magazine lives on the connection
 	// rather than on the stored player row: it is per-life state, not
@@ -121,6 +132,14 @@ type cmdWorld struct {
 	// so the magazine has one owner however `fire` and cmds are dispatched.
 	// Nil in fixtures: f then runs bare.
 	EntLock func(f func())
+}
+
+// findStructure is FindStructure, false when the fixture has none.
+func (w cmdWorld) findStructure(id uint32) (structureInfo, bool) {
+	if w.FindStructure == nil {
+		return structureInfo{}, false
+	}
+	return w.FindStructure(id)
 }
 
 // withEnt runs f on the requester's entity under EntLock.
@@ -433,14 +452,24 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		r, known := w.Reg.Recipes[body.Recipe]
 		station := "hand"
 		if body.NPC != 0 && !(known && r.Station == "hand") {
-			npc, pos, ok := w.FindNPC(body.NPC)
-			if !ok {
+			if npc, pos, ok := w.FindNPC(body.NPC); ok {
+				if !inRangeAt(w, pos, aimHeight(npc)) {
+					return refuse("out_of_range")
+				}
+				station = npc.Kind
+			} else if st, ok := w.findStructure(body.NPC); ok {
+				// Phase 23: anyone may craft at anyone's placed bench or
+				// forge; a chest serves no recipe.
+				if !inRangeAt(w, st.Pos, structureAimHeight) {
+					return refuse("out_of_range")
+				}
+				station = st.Item.Station
+				if station == "" {
+					station = "chest"
+				}
+			} else {
 				return reply(protocol.StatusNotFound, nil)
 			}
-			if !inRangeAt(w, pos, aimHeight(npc)) {
-				return refuse("out_of_range")
-			}
-			station = npc.Kind
 		}
 		if w.Busy != nil && w.Busy() {
 			return refuse("busy")
@@ -540,6 +569,135 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 			return reply(protocol.StatusMalformed, nil)
 		}
 		return handleUse(w, body.Item, reply, refuse)
+
+	case protocol.OpPlace:
+		var body struct {
+			Item string `json:"item"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		if it, ok := w.Reg.Items[body.Item]; !ok || it.Kind != "structure" {
+			return refuse(sim.ReasonUnknownItem)
+		}
+		if sim.CountItem(w.Player, body.Item) < 1 {
+			return refuse(sim.ReasonNotOwned)
+		}
+		// A structure outlives the session: only an account character's
+		// (a real token, an owning account) can own one.
+		if w.Player.AccountID == "" || w.Player.Token == "" {
+			return refuse("no_account")
+		}
+		if w.Place == nil {
+			return refuse(reasonNoRoom)
+		}
+		id, why := w.Place(body.Item, func() error { return sim.TakeItem(w.Player, body.Item, 1) })
+		if why != "" {
+			return refuse(why)
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"structure": id, "inventory": w.Player.Inventory,
+		}))
+
+	case protocol.OpChestPut, protocol.OpChestTake:
+		var body struct {
+			Structure uint32 `json:"structure"`
+			Item      string `json:"item"`
+			Qty       int    `json:"qty"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		st, ok := w.findStructure(body.Structure)
+		if !ok || w.ChestMove == nil {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRangeAt(w, st.Pos, structureAimHeight) {
+			return refuse("out_of_range")
+		}
+		if st.Item.Station != "" {
+			return refuse("wrong_station") // a bench or forge holds nothing
+		}
+		if !st.Mine && !st.Party {
+			return refuse("not_yours")
+		}
+		put := req.Opcode == protocol.OpChestPut
+		// chest_take with no item and qty 0 is a peek (the panel opening):
+		// the same access checks, no transfer.
+		peek := !put && body.Item == "" && body.Qty == 0
+		if !peek && (body.Qty < 1 || body.Qty > 1000) {
+			return refuse(sim.ReasonBadQty)
+		}
+		chest, err := w.ChestMove(body.Structure, func(chest *store.Player) error {
+			if peek {
+				return nil
+			}
+			from, to := w.Player, chest
+			if !put {
+				from, to = chest, w.Player
+			}
+			if sim.CountItem(from, body.Item) < body.Qty {
+				return sim.RefusalError{Reason: sim.ReasonNotOwned}
+			}
+			// Take first: a failed add puts the stack straight back, so a
+			// refusal never leaves one side moved.
+			if err := sim.TakeItem(from, body.Item, body.Qty); err != nil {
+				return err
+			}
+			if err := sim.AddItem(to, body.Item, body.Qty, w.Reg); err != nil {
+				_ = sim.AddItem(from, body.Item, body.Qty, w.Reg)
+				return err
+			}
+			// Whatever left the bag entirely is no longer worn (TakeUnit's
+			// rule).
+			for slot, held := range w.Player.Equipped {
+				if sim.CountItem(w.Player, held) == 0 {
+					delete(w.Player.Equipped, slot)
+				}
+			}
+			return nil
+		})
+		if errors.Is(err, errStructureGone) {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if err != nil {
+			return refuseErr(err)
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"inventory": w.Player.Inventory, "chest": chest,
+		}))
+
+	case protocol.OpPickUp:
+		var body struct {
+			Structure uint32 `json:"structure"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		st, ok := w.findStructure(body.Structure)
+		if !ok || w.PickUp == nil {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRangeAt(w, st.Pos, structureAimHeight) {
+			return refuse("out_of_range")
+		}
+		if !st.Mine {
+			return refuse("not_yours")
+		}
+		if w.Busy != nil && w.Busy() {
+			return refuse("busy")
+		}
+		if !st.Empty {
+			return refuse("not_empty")
+		}
+		scratch := store.Player{Inventory: w.Player.Inventory}
+		if err := sim.AddItem(&scratch, st.Item.ID, 1, w.Reg); err != nil {
+			return refuseErr(err)
+		}
+		if why := w.PickUp(body.Structure); why != "" {
+			return refuse(why)
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{"seconds": pickUpSeconds}))
 
 	case protocol.OpGatherCancel:
 		var body struct{}

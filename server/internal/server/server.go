@@ -124,6 +124,9 @@ type Server struct {
 	// row before the delete but publishes after Kick is refused at publish.
 	// Guarded by mu.
 	kicked map[string]time.Time
+	// structWriteMu serialises structure store writes (structures.go
+	// persistStructure); never held with s.mu across a store call.
+	structWriteMu sync.Mutex
 
 	upgrader websocket.Upgrader
 	gate     *gatekeeper
@@ -150,7 +153,22 @@ type Server struct {
 // a nil store stays a supported mode rather than a special case: without it
 // every session is ephemeral, which is exactly what an empty token already
 // means (docs/PROTOCOL.md, "Identity token"). Call before serving.
-func (s *Server) SetStore(st *store.Store) { s.store = st }
+//
+// Phase 23: it also loads every placed structure into the world; a store
+// that cannot list them fails the boot rather than serving a world that
+// is missing them (and would overwrite their rows on the next change).
+func (s *Server) SetStore(st *store.Store) error {
+	s.store = st
+	if st == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := s.loadStructures(ctx); err != nil {
+		return fmt.Errorf("loading structures: %w", err)
+	}
+	return nil
+}
 
 // SetGuests lets a server WITH a store seat any token, as before Phase 16
 // (SA_GUESTS=1: the kind fleet joins with made-up tokens). A storeless
@@ -388,6 +406,8 @@ func entityDefKind(k sim.EntityKind) string {
 		return "ship"
 	case protocol.EntityTypeNode:
 		return "node"
+	case protocol.EntityTypeStructure:
+		return "structure"
 	default:
 		return "player"
 	}
@@ -529,6 +549,12 @@ func (s *Server) tick() {
 		case e.Kind == sim.EntityKind(protocol.EntityTypeNPC) && e.Health > 0:
 			s.dynColliders = append(s.dynColliders, sim.BodyCollider(sim.Vec(e.Pos), s.reg.NPCs[e.Def].Radius()))
 			s.dynOwners = append(s.dynOwners, e.ID)
+		case e.Kind == sim.EntityKind(protocol.EntityTypeStructure):
+			// Phase 23: a placed bench, forge or chest is solid.
+			if col, ok := s.structureCollider(e); ok {
+				s.dynColliders = append(s.dynColliders, col)
+				s.dynOwners = append(s.dynOwners, e.ID)
+			}
 		}
 	}
 	for _, c := range s.clients {
@@ -569,6 +595,7 @@ func (s *Server) tick() {
 	s.stepPlayerVitals()
 	yields := s.stepGathers()
 	crafts := s.stepCrafts()
+	pickUps := s.stepPickUps()
 	spills := s.pendingSpills
 	s.pendingSpills = nil
 
@@ -683,6 +710,7 @@ func (s *Server) tick() {
 	s.mu.Unlock()
 	s.drainYields(yields)
 	s.drainCrafts(crafts)
+	s.drainPickUps(pickUps)
 	// Refunds before spills: a unit cut short by death comes back to the
 	// bag and falls with the rest of the materials.
 	s.drainRefunds(refunds)
@@ -936,7 +964,7 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 		others = append(others, msg{data: protocol.EncodeSpawn(protocol.Spawn{
 			EntityID:   e.ID,
 			EntityType: uint16(e.Kind),
-			Data:       []byte(e.Def),
+			Data:       spawnData(e),
 		})})
 		// An NPC archetype can wear armor (npcs.json `worn`): same event as
 		// a player's, right after the spawn it belongs to.
@@ -1074,6 +1102,10 @@ func (s *Server) Kick(tokens []string) {
 		log.Printf("kick: entity %d (account deleted)", c.id)
 		c.refuse()
 	}
+	// Phase 23: the character's structures leave the world with it (the
+	// web handler's delete already took the rows; this sweeps any write
+	// that raced it).
+	s.removeOwnedStructures(want)
 }
 
 // Retag points every live session of token at its edited row (Phase 18):
@@ -1272,6 +1304,12 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 				defer s.mu.Unlock()
 				return s.scanLocked(c, rng)
 			},
+			FindStructure: func(id uint32) (structureInfo, bool) { return s.structureFor(c, id) },
+			Place: func(item string, take func() error) (uint32, string) {
+				return s.placeStructure(c, item, take)
+			},
+			ChestMove: s.chestMove,
+			PickUp:    func(id uint32) string { return s.startPickUp(c, id) },
 		})
 		after = heldItem(p.Equipped, c.wieldMelee.Load())
 		wornAfter = wornOf(p.Equipped)

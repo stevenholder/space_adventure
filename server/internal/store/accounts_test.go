@@ -137,7 +137,7 @@ func eachEngine(t *testing.T, f func(t *testing.T, s *Store)) {
 			t.Fatalf("Open: %v", err)
 		}
 		drop := func() {
-			for _, tbl := range []string{"player", "account", "web_session", "link_code", "schema_version"} {
+			for _, tbl := range []string{"player", "account", "web_session", "link_code", "structure", "schema_version"} {
 				s.DB.Exec(`DROP TABLE IF EXISTS ` + tbl)
 			}
 		}

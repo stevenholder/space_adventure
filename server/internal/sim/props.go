@@ -14,6 +14,12 @@ var PropBoxes = map[string][2]Vec{
 	"prop.generator":  {{-1.00, 0, -0.45}, {1.12, 1.34, 0.43}},
 	"prop.dish":       {{-0.95, 0, -0.93}, {0.95, 2.09, 0.66}},
 	"prop.loot.crate": {{-0.22, 0, -0.17}, {0.22, 0.50, 0.17}},
+	// Phase 23 placed structures (StructureCollider). No zone places these
+	// as dressing; the world-station NPCs that share prop.forge stay
+	// collider-less.
+	"prop.bench": {{-1.0, 0, -0.5}, {1.0, 0.95, 0.5}},
+	"prop.forge": {{-0.9, 0, -0.6}, {0.9, 1.5, 0.6}},
+	"prop.chest": {{-0.75, 0, -0.4}, {0.75, 0.75, 0.4}},
 }
 
 // PropCollider is a solid prop as a box collider; false for dressing a body

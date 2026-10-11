@@ -264,6 +264,13 @@ func nearestBox(c Vec, radius float64, col protocol.Collider, up Vec) (hit bool,
 	return true, diff.Scale(1 / dist), radius - dist
 }
 
+// ColliderWithin reports whether point p is within r of col's surface (or
+// inside it) — the Phase 23 placement clearance.
+func ColliderWithin(p Vec, r float64, col protocol.Collider) bool {
+	hit, _, _ := nearest(p, r, col, terrain.Normalize(p))
+	return hit
+}
+
 func clampf(x, lo, hi float64) float64 {
 	if x < lo {
 		return lo

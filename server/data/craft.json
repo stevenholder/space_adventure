@@ -106,6 +106,43 @@
         "mat.crystal": 3,
         "mat.wiring": 2
       }
+    },
+    {
+      "output": "structure.bench",
+      "qty": 1,
+      "station": "hand",
+      "skill": "construction",
+      "level": 1,
+      "seconds": 20,
+      "inputs": {
+        "mat.plate.steel": 4,
+        "mat.parts": 4
+      }
+    },
+    {
+      "output": "structure.forge",
+      "qty": 1,
+      "station": "bench",
+      "skill": "construction",
+      "level": 5,
+      "seconds": 40,
+      "inputs": {
+        "mat.plate.steel": 8,
+        "mat.ingot.iron": 4,
+        "mat.parts": 4
+      }
+    },
+    {
+      "output": "structure.chest",
+      "qty": 1,
+      "station": "bench",
+      "skill": "construction",
+      "level": 3,
+      "seconds": 15,
+      "inputs": {
+        "mat.plate.steel": 2,
+        "mat.parts": 4
+      }
     }
   ],
   "shapes": {

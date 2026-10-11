@@ -51,6 +51,7 @@ const (
 	EntityTypeLoot       uint16 = 0x0006 // Phase 3
 	EntityTypeProjectile uint16 = 0x0007 // Phase 3
 	EntityTypeNode       uint16 = 0x0008 // Phase 12: ore/wreck node; health = yields left
+	EntityTypeStructure  uint16 = 0x0009 // Phase 23: a placed bench/forge/chest; spawn data = item id NUL owner name
 )
 
 // action_mask bits (PROTOCOL.md constants).
@@ -95,6 +96,12 @@ const (
 	OpShopBuyback  uint16 = 0x0014 // Phase 13: re-buy something sold this session, at what the shop paid
 	OpWield        uint16 = 0x0015 // melee: {"slot":"primary"|"melee"} picks the weapon in hand
 	OpChat         uint16 = 0x0016 // Phase 20: {"text":"..."}, broadcast as EventChat
+	// Phase 23 (PROTOCOL.md): placeable stations. 0x001A is reserved for
+	// Phase 24 `deliver`.
+	OpPlace     uint16 = 0x0017 // {"item"}: put a structure item down in front of you
+	OpChestPut  uint16 = 0x0018 // {"structure","item","qty"}: bag -> chest
+	OpChestTake uint16 = 0x0019 // {"structure","item","qty"}: chest -> bag
+	OpPickUp    uint16 = 0x001B // {"structure"}: a 1.5 s channel, ends with EventPickUpEnd
 )
 
 // cmd_result status codes (PROTOCOL.md constants).
@@ -128,6 +135,7 @@ const (
 	EventAttack          uint16 = 0x0010 // an NPC starts an attack (its wind-up) or a body swings a melee weapon: entity = attacker, data = u32 target id (0 = a player swing, no target); broadcast
 	EventChat            uint16 = 0x0011 // Phase 20: entity = speaker, data = name "\x00" text (UTF-8); broadcast to all, speaker included
 	EventCraftEnd        uint16 = 0x0012 // Phase 22: {recipe,reason,item,qty} per crafted unit or the channel's end, unicast
+	EventPickUpEnd       uint16 = 0x0013 // Phase 23: {structure,ok,inventory} or {structure,ok:false,reason}, unicast
 )
 
 // collider kinds (PROTOCOL.md `colliders`).

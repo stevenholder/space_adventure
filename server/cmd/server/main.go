@@ -132,7 +132,10 @@ func runServer(args []string) error {
 			st.Close()
 			return fmt.Errorf("migrating store: %w", err)
 		}
-		world.SetStore(st)
+		if err := world.SetStore(st); err != nil {
+			st.Close()
+			return err
+		}
 		defer st.Close()
 		log.Printf("persistence: enabled (%s)", st.Dialect)
 	} else {
