@@ -1987,6 +1987,29 @@ Vehicles are then **crafted at the dock** and leave the shop.
 - **Not in 24.** Walls, plots, territory, more buildings; a second dock;
   anyone else's vehicles on your pad.
 
+### The kit swap — the world in the Quaternius kits (Phase 25)
+
+Phase 9's box kit did its job (no more stretched boxes); Phase 25
+replaces it piece for piece with the three kits the style guide now
+names, cell for cell, so **no zone JSON and no collider changes**.
+
+- **Structures.** Each `art/structs/<role>.<faction>.glb` is rebuilt by
+  an assembly recipe (`art/kit/<role>.<faction>.json`: a list of kit
+  glTFs with cell offsets and yaw) that `tools/gen_kit.py` composes
+  into one GLB at the same footprint, ink outline and skirt included.
+  The verify gate's cell-bounds check is the contract that the swap is
+  invisible to the server.
+- **Props.** `barrel(s)`, `loot_crate`, `dish`, `generator` become
+  Essentials props at their old mount points and budgets; `bones`,
+  `wreck`, `target` stay own art (nothing in the kits).
+- **Nature.** `rock_a/b/c` and the three ore/crystal nodes become
+  Nature MegaKit rocks and crystals; the per-placement tint and pebble
+  rules carry over; node silhouettes must still differ at 20 m (the
+  Phase 11 discovery read).
+- **Not in 25.** New POIs, interiors, the dock (24), trees as
+  obstacles (the planet stays open; trees are dressing with no
+  collider until a playtest wants cover from them).
+
 ### Character panel and backpack (Phase 11.7)
 
 WoW's paper doll in this book's ink. **C** opens the character: the
@@ -2048,16 +2071,34 @@ it here first — the UI style guide's contract, extended to the world.
 ### The two builders
 
 Everything standing on the planet was built by one of two hands, and the
-difference must read at silhouette range:
+difference must read at silhouette range. Since 2026-10-11 the hands
+reach into the same three Quaternius kits (all CC0, vendored under
+`art/vendor/`, never committed): the **Modular SciFi MegaKit**
+(`scifi-megakit`: walls, platforms, columns, doors, decals — module
+4 m, walls 3 m, columns 5 m), the **Sci-Fi Essentials Kit**
+(`scifi-essentials`: crates, barrels, desks, lockers, shelves, chest,
+dish) and the **Stylized Nature MegaKit** (`stylized-nature`: rocks,
+trees, crystals). The three share the `T_Trim_01/02/03` trim sheets, so
+anything from any of them sits beside anything else. A faction is read
+off WHICH pieces its builder reaches for:
 
 | | **Scrapyard** (hostile) | **Colony** (civilised) |
 |---|---|---|
 | who | raiders, squatters, the camp | the quartermaster, spawn, future vendors |
-| shapes | leaning, asymmetric, welded-on | level, modular, repeated |
-| edges | jagged toplines, exposed frames | clean copings, closed corners |
-| color | rust `#8C4A2F`, scorch `#3A2E28`, hazard `#D9A013` stripes | hull `#B8BDC4`, panel `#5E6A75`, trim `#2F6E8C` |
-| light | flame-amber `#FFAE19` point glows | cool white `#CFE8F2` strips |
+| pieces | MegaKit `*_Broken`, `DarkMetal*`, `DarkPlastic*`, `MetalPlates*`, `TopCables_*_Hanging`, `Column_Pipes`; Essentials `Prop_Crate_Tarp*`, open barrels, `Prop_Mine` | MegaKit `Simple*`, `WhitePlate*`, `Astra*`, `AccentStrip*`, `WallWindow*`, `Column_Astra`; Essentials closed crates, lockers, shelves, `Prop_SatelliteDish` |
+| shapes | leaning, asymmetric, welded-on; broken toplines, hanging cables | level, modular, repeated; clean copings, closed corners |
+| colour | the `_Red` trim sheets; own art in rust `#8C4A2F`, scorch `#3A2E28`, hazard `#D9A013` | the default trim sheets; own art in hull `#B8BDC4`, panel `#5E6A75`, trim `#2F6E8C` |
+| light | flame-amber `#FFAE19` glows, `Prop_Light_Floor` | cool white `#CFE8F2` strips, `Prop_Light_Wide` / `_Corner` |
 | tell | one thing is always CROOKED | one thing is always SYMMETRIC |
+
+**Own art rule.** A thing the kits do not have (the bench, the forge,
+the dock, a ship) is modelled to stand beside them without a seam:
+low-poly and flat-shaded like the kits, at kit scale (a 4 m cell, a
+0.9 m desk top, a 3 m wall), textured from the trim sheets where a
+sheet fits so the palette matches by construction, otherwise vertex
+colours sampled from the sheets' swatches (the hexes above are those
+samples). No piece gets a look the kits could not have shipped. The
+`ink #10131A` outline goes on both.
 
 Shared planet palette stays beneath both. The ground is flat-shaded
 per triangle from the sampled height, in bands: crater dust
@@ -2070,11 +2111,12 @@ world seed, client-side only) picks between each band's two colours, a
 per-triangle ±6 % value jitter keeps a plain faceted, and the map draws
 the same palette (`TerrainMesh.Shade`). `ink #10131A` outlines on
 everything built (the comic line weight the UI already committed to).
-Flat-shaded, vertex colors only, no textures — color changes happen at
-polygon edges, which is what keeps tri budgets honest. Rocks: the 400
-contract placements each get a warm-to-cool tint and 0–3 seated
-pebbles from a second seeded stream, so the same three models do not
-read as the same three rocks.
+The terrain is flat-shaded vertex colour, no textures; built things
+carry the kits' PBR trim sheets (2048², `pbr: true`, drawn as authored)
+and own art follows the own-art rule above. Rocks: the 400 contract
+placements each get a warm-to-cool tint and 0–3 seated pebbles from a
+second seeded stream, so the same few models do not read as the same
+few rocks (Nature MegaKit rocks from Phase 25; own `rock_a/b/c` until).
 
 ### Silhouette and the 23 m horizon
 
@@ -2096,28 +2138,38 @@ that cannot be seen over the curve does not exist as gameplay. So:
 
 ### The kit of parts (no more stretched boxes)
 
-The camp's walls today are ONE unit box scaled to 32 m — bands smear,
-corners interpenetrate, geometry clips. The kit replaces stretching
-with **tiling**:
+The camp's walls once were ONE unit box scaled to 32 m — bands smeared,
+corners interpenetrated. The kit replaces stretching with **tiling**,
+and since Phase 25 the kit IS the MegaKit:
 
-- **Module grid: 4 m.** Every kit piece occupies a whole number of 4 m
-  cells in plan. A 32 m wall is 8 wall modules, not one stretched box.
-- Pieces (per faction skin, same footprints): `wall4` (4×0.8×3 m),
-  `corner` (post, 1.2×1.2×3.6 m — corners belong to posts, walls BUTT
-  INTO them and never meet each other), `gate4` (wall with a 2.4 m
-  opening), `tower` (2×2 cell, 8 m), `mast` (1 cell, 10–14 m), `hab`
-  (2×2 cell closed hut, Colony), `shack` (2×2, leaning, Scrapyard),
-  plus the existing props (barrels, crates, generator, dish, bones).
-- **Ground skirt rule**: every piece's base extends 0.3 m below y=0 as
-  a plinth wider than the piece — the flatten disc is never perfectly
-  flat at the falloff band, and the skirt is what hides the seam. No
-  piece may show its underside from any standing viewpoint.
+- **Module grid: 4 m** — the MegaKit's own (`Platform_Simple` is
+  4 × 4 m, every `*_Straight` wall 4 m long and 3 m tall, corners are
+  `*_Corner_Inner/Outer`). Every piece occupies a whole number of 4 m
+  cells in plan. A 32 m wall is 8 wall modules.
+- Roles, each with a Scrapyard and a Colony pick from the table above:
+  `wall4` (a `Wall*_Straight`), `corner` (a `*_Corner_Outer`; walls BUTT
+  INTO corners and never meet each other), `gate4` (a `Door_Frame_*` +
+  `Door_*` in a wall run), `tower` (2×2 cell: a `Platform_*` on four
+  `Column_*` with `ShortWall_*` rails, 8 m), `mast` (1 cell, 10–14 m:
+  `Column_Large_Straight` stacked, the Essentials `Prop_SatelliteDish`
+  on top for the relay), `hab` (2×2 closed, Colony: walls + `TopSimple`
+  copings + a `Platform_*` roof), `shack` (2×2 leaning, Scrapyard:
+  `*_Broken` walls, `TopCables_*_Hanging`), plus the props. Until
+  Phase 25 lands these roles are Phase 9's own box pieces in
+  `art/structs/`; the role names and footprints do not change, so the
+  zone JSON does not either.
+- **Ground skirt rule**: every placed piece sits on a `Platform_*` or
+  `BottomSimple/BottomMetal_*` skirt that extends 0.3 m below y=0 and
+  wider than the piece — the flatten disc is never perfectly flat at
+  the falloff band, and the skirt hides the seam. No piece may show
+  its underside from any standing viewpoint.
 - **Clipping rules**: pieces may only touch at grid faces; nothing
   interpenetrates. Decorative lean (Scrapyard) happens INSIDE a piece's
   own cell, never across a boundary. The verify gate checks kit GLBs
   fit their declared cell bounds.
-- Budgets: wall/corner/gate ≤ 120 tris, tower/hab/shack ≤ 400, mast
-  ≤ 200. A whole POI including props stays under 6,000.
+- Budgets (kit pieces are 2–400 tris each, the dish 3.3 k): wall/
+  corner/gate ≤ 400 tris, tower/hab/shack ≤ 1,500, mast ≤ 3,500. A
+  whole POI including props stays under 12,000.
 
 Colliders remain the server's, authored per zone as today — the kit is
 VISUAL. The mapping rule inverts though: the zone names kit placements

@@ -2102,9 +2102,9 @@ recipe lights.
   recipes (the eight old ones keep their outputs; inputs and times may
   change — recorded).
 
-# Phase 23 — placeable stations (drafted 2026-10-08)
+# Phase 23 — placeable stations (started 2026-10-11)
 
-### Where Phase 23 stands (2026-10-08, drafted)
+### Where Phase 23 stands (2026-10-11, in progress)
 
 The first persistent thing a player leaves in the world: a bench, a
 forge or a chest, crafted (Construction), carried, placed, picked up
@@ -2124,12 +2124,13 @@ bench up: it is in your bag; the friend cannot pick up the chest.
 
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
+| 0 | 0 | Docs: GDD style guide → the Quaternius kits (own-art rule), Phase 25 drafted, this row | `docs/` | — |
 | 1 | 0 | Structure defs (`structure.bench/forge/chest`, interact verbs, colliders), the three Construction recipes in `craft.json` | `server/data/items.json`, `craft.json` | regen test |
 | 2 | 1 | Store: migration 008 `structure`; load at boot, write on place/pick-up/chest change; cascade on character delete | `server/internal/store/` | store tests on Postgres (`make test-pg`) |
 | 3 | 1 | Server: `place` (flat + clearance checks, cap 5, guests refused), structure entities (spawn data, collider), interact pick-up channel (owner), `craft` on a structure, chest cmds with party access; PROTOCOL | `server/internal/server/`, `sim/`, `docs/PROTOCOL.md` | Go tests: placement refusals, cap, pick-up by owner only, craft on a placed forge, chest put/take, party access |
 | 4 | 1 | Harness: `t44-structures.mjs`: place, craft on it, chest, restart survival (store), refusals; `wire.mjs` entity type | `test/` | bare server with DATABASE_URL + kind |
 | 5 | 1 | Client: structure views (asset by id, owner nametag), place from the backpack (right-click → PLACE), interact prompts `E · use` / `E · open` / hold `E · pick up`, chest panel (two grids), `-uiPlace`, `-uiChest` | `Entities.cs`, `Interact.cs`, `UI/Inventory.cs`, `UI/Chest.cs` | shots; `-selftest` |
-| 6 | art | `prop.chest`; the bench and forge props reused as structure assets | `art/tools/gen_props.py` | `npm --prefix art test` |
+| 6 | art | `prop.chest` = the MegaKit `Prop_Chest` (324 tris, trim sheets, `pbr: true`) through the vendored-glTF path; the bench and forge props reused as structure assets | `art/tools/`, `art/manifest.json` | `npm --prefix art test` |
 | 7 | 2 | Record QA-STATUS "Phase 23"; Deferred row "bases" → "plots, territory" | `docs/` | — |
 
 ### Acceptance criteria (C190–C195)
@@ -2192,6 +2193,45 @@ shop no longer lists the ship.
 - **C199 Demolish.** Owner only, materials lost, the slot frees.
 - **C200 Nothing else moved.** Sweep green; C153–C195 hold.
 
+# Phase 25 — the kit swap: the world in the Quaternius kits (drafted 2026-10-11)
+
+### Where Phase 25 stands (2026-10-11, drafted)
+
+The three Quaternius kits (Modular SciFi MegaKit, Sci-Fi Essentials,
+Stylized Nature MegaKit — CC0, `art/vendor/`) become the world's look;
+Phase 9's own box kit is replaced piece for piece at the same 4 m
+cells, so the server, the zone JSON and the colliders do not move.
+Contract: GDD "World art style guide" (rewritten 2026-10-11) and "The
+kit swap (Phase 25)". No wire change.
+
+**Playable proof.** Walk from spawn to the camp: the Colony hab and
+walls are white MegaKit panels with window strips; the camp is broken
+dark-metal walls with cables hanging off the top and tarp crates
+inside; the relay's mast is a stacked column with the Essentials dish
+on top. Every rock and ore node is a Nature kit rock. The map, the
+compass, the POI names, the fights: unchanged.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 0 | Vendor the Nature MegaKit (`art/vendor/stylized-nature`, by hand); ATTRIBUTION rows for all three kits as world art | `art/` | `npm --prefix art test` |
+| 2 | 1 | `tools/gen_kit.py` composes assembly recipes (`art/kit/<role>.<faction>.json`) from vendored glTFs: cell offsets, yaw, skirt, ink; same footprints as today | `art/tools/`, `art/kit/` | verify gate cell bounds; `render_check.py` per role |
+| 3 | 1 | The 16 struct GLBs rebuilt (wall4/corner/gate4/cover4/tower/mast × faction, hab, shack, post, wall) | `art/structs/` | `-uiShot` from the camp gate and the Colony hab |
+| 4 | 1 | Props: barrel(s), loot_crate, dish, generator from Essentials at the old mounts | `art/props/` | shots; mount points asserted |
+| 5 | 1 | Nature: rock_a/b/c + the three nodes from the Nature kit; tint + pebbles kept | `art/props/`, `gen_nodes.py` | node silhouettes differ at 20 m (shot) |
+| 6 | 2 | Record QA-STATUS "Phase 25"; style guide budgets confirmed against the real tri counts | `docs/` | — |
+
+### Acceptance criteria (C201–C204)
+
+- **C201 Same world.** Zone JSON, colliders and the server untouched;
+  every struct GLB fits its declared cell bounds (verify gate).
+- **C202 Two hands still read.** Scrapyard and Colony tell at
+  silhouette range from the kit picks alone (shots from 40 m).
+- **C203 Budgets.** Per-piece and per-POI tri counts within the
+  rewritten style guide.
+- **C204 Nothing else moved.** Sweep green; C153–C200 hold.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.
@@ -2207,7 +2247,7 @@ Named so nobody builds them speculatively, and so the trigger is explicit.
 | Walking around inside a moving ship | Phase 5 ships and the seated version feels limiting |
 | PvP, player-vs-player collision | after NPC combat is fun; PvP changes every balance number |
 | Guilds | chat landed in Phase 20; a guild needs a reason to exist first (shared bases or territory) |
-| A persistent world players mutate (bases, territory) | Phase 6 candidate — the persistence layer from Phase 2 is the seed |
+| A persistent world players mutate (bases, territory) | started: Phase 23 placeables, Phase 24 the dock; plots and territory when two players want the same flat |
 | Rig + animation clips | procedural motion stops carrying the fidelity |
 | Timed crafting (a smelt that takes seconds) | a playtest says instant forging feels cheap; reuse the gather channel (`gather.go`), one knob |
 | Item quality / durability / named crafts | wire + store change (per-instance item data); only after everything is craftable (Phase 22) and the loop is fun |
