@@ -1929,7 +1929,7 @@ Craft a bench, carry it, put it down: the first **persistent structure**
 players mutate the world with (the Deferred "bases" row starting here).
 World stations stay as the free starter set; a placed one works the same.
 
-- **Structure items.** Kind `structure`, stack 1, Construction recipes:
+- **Structure items.** Kind `structure`, stack 5 (the cap), Construction recipes:
   `structure.bench` (hand, Construction 1: plate 4, parts 4, 20 s — so
   the first bench needs no bench), `structure.forge` (bench, Construction
   5: plate 8, ingot.iron 4, parts 4, 40 s), `structure.chest` (bench,
@@ -1945,8 +1945,10 @@ World stations stay as the free starter set; a placed one works the same.
   the def (`Use` for stations, `Open` for a chest). Everyone sees it and
   **anyone can use** a station. `craft`'s `npc` takes a structure id and
   the server reads the station kind off it.
-- **Picking up.** Interact-hold (E, 1.5 s channel) by the **owner only**
-  returns the item to the bag (`not_yours`, `no_space`). No decay, no
+- **Picking up.** Interact-hold (F, 1.5 s channel; `cmd` `0x001B`
+  `pick_up` `{"structure"}`, ends with event `pick_up_end`) by the
+  **owner only** returns the item to the bag (`not_yours`, `no_space`;
+  a chest with anything in it refuses `not_empty`). No decay, no
   durability, no damage.
 - **Persistence.** Table `structure` (id, owner token, item, pos,
   facing, placed_ms; a chest's stacks as JSON) loaded at boot, written
@@ -2006,6 +2008,15 @@ names, cell for cell, so **no zone JSON and no collider changes**.
   Nature MegaKit rocks and crystals; the per-placement tint and pebble
   rules carry over; node silhouettes must still differ at 20 m (the
   Phase 11 discovery read).
+- **Lighting.** Phase 23's chest (the first kit PBR prop in the world)
+  reads near-black at night beside the vertex-coloured own art: before
+  the swap, settle how kit materials take the scene light (ambient /
+  emissive floor for `pbr` assets, or a bake) — one shot at the camp at
+  night is the gate.
+- **Textures.** Every kit glb embeds its own copy of the shared trim
+  sheets (3.4 MB for the chest); the swap needs them shared, not
+  per-file (`import_pack` keeps a texture atlas by hash, or Godot
+  external textures), else 16 pieces = 50 MB.
 - **Not in 25.** New POIs, interiors, the dock (24), trees as
   obstacles (the planet stays open; trees are dressing with no
   collider until a playtest wants cover from them).

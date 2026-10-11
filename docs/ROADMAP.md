@@ -2111,7 +2111,8 @@ forge or a chest, crafted (Construction), carried, placed, picked up
 again by its owner, there after a restart. The world's stations stay.
 Contract: GDD "Placeable stations (Phase 23)". Wire: `entity_type`
 `0x0009` structure; cmds `0x0017 place`, `0x0018 chest_put`, `0x0019
-chest_take`; refusals `no_room`, `too_many`, `not_yours`, `no_account`.
+chest_take`, `0x001B pick_up` (event `0x0013 pick_up_end`); refusals
+`no_room`, `too_many`, `not_yours`, `no_account`, `not_empty`.
 Store: table `structure`. Three ends.
 
 **Playable proof.** Make a bench by hand, walk to the crystal rocks,
@@ -2129,7 +2130,7 @@ bench up: it is in your bag; the friend cannot pick up the chest.
 | 2 | 1 | Store: migration 008 `structure`; load at boot, write on place/pick-up/chest change; cascade on character delete | `server/internal/store/` | store tests on Postgres (`make test-pg`) |
 | 3 | 1 | Server: `place` (flat + clearance checks, cap 5, guests refused), structure entities (spawn data, collider), interact pick-up channel (owner), `craft` on a structure, chest cmds with party access; PROTOCOL | `server/internal/server/`, `sim/`, `docs/PROTOCOL.md` | Go tests: placement refusals, cap, pick-up by owner only, craft on a placed forge, chest put/take, party access |
 | 4 | 1 | Harness: `t44-structures.mjs`: place, craft on it, chest, restart survival (store), refusals; `wire.mjs` entity type | `test/` | bare server with DATABASE_URL + kind |
-| 5 | 1 | Client: structure views (asset by id, owner nametag), place from the backpack (right-click → PLACE), interact prompts `E · use` / `E · open` / hold `E · pick up`, chest panel (two grids), `-uiPlace`, `-uiChest` | `Entities.cs`, `Interact.cs`, `UI/Inventory.cs`, `UI/Chest.cs` | shots; `-selftest` |
+| 5 | 1 | Client: structure views (asset by id, owner nametag), place from the backpack (right-click → PLACE), interact prompts `F · use` / `F · open` / hold `F · pick up`, chest panel (two grids), `-uiPlace`, `-uiChest` | `Entities.cs`, `Interact.cs`, `UI/Inventory.cs`, `UI/Chest.cs` | shots; `-selftest` |
 | 6 | art | `prop.chest` = the MegaKit `Prop_Chest` (324 tris, trim sheets, `pbr: true`) through the vendored-glTF path; the bench and forge props reused as structure assets | `art/tools/`, `art/manifest.json` | `npm --prefix art test` |
 | 7 | 2 | Record QA-STATUS "Phase 23"; Deferred row "bases" → "plots, territory" | `docs/` | — |
 

@@ -906,3 +906,46 @@ re-imported (8993 / 8992 tris). `fp-vanguard-unarmed.png`, `-armed.png`,
 sleeve to the frame edge; the Colonist is unchanged. `-selftest` PASS,
 gate clean, `npm --prefix art test` 278/278.
 
+
+# Phase 23 — placeable stations (2026-10-11)
+
+Wave 0 by hand (the three Quaternius kits become the world art style
+guide, Phase 25 drafted, the wire contract pinned: `0x0017 place`,
+`0x0018 chest_put`, `0x0019 chest_take` (qty 0 = peek), `0x001B
+pick_up`, entity `0x0009`, event `pick_up_end 0x0013`), then four halves
+in one wave: server + store (the three cmds, the 1.5 s pick-up channel,
+migration 008, boot load, cascades), harness (`t44`, the first test that
+restarts the server), client (structure views, prompts, hold-F, the
+chest panel, `-uiPlace`/`-uiChest`), art (`prop.chest` from the MegaKit).
+Proofs on bare servers built from the branch with a sqlite store.
+
+Calls made in the wave: the interact key is F (the client's; the docs
+said E); pick-up got its own opcode; a chest with anything in it refuses
+pick-up (`not_empty`) rather than spilling; structure items stack to 5
+(one stack per item id meant a bag could never hold two benches); the
+chest panel opens with a peek (`chest_take` item "" qty 0) because the
+contract had no read; owner shows in the prompt (`(Kade's)`) — there are
+no overhead nametags in the client, none added.
+
+| # | Result | Evidence |
+|---|---|---|
+| C190 | PASS | `t44`: `place` → `{"structure":1048634,"inventory":[…]}`, B sees `spawn` type 9 data `structure.bench\0t44a-…`; a second on the chest's spot `no_room`; the 6th `too_many`; a guest (server 3, `SA_GUESTS=1`, `SA_START=structure.bench=1`) `no_account`; a plate `unknown_item`; nothing in the bag `not_owned`. Go `structures_test.go`: slope + clearance (surface distance to walls/rocks/props, centre distance to bodies/nodes/structures), cap, guest. Colliders: `t13-collide-parity` 13/13 with the three new `PropBoxes`; `test/out/ui/p23-place.png` (the bench 2 m ahead, facing the placer, the own-art bench asset) |
+| C191 | PASS | `t44`: B crafts `tool.drill` on A's bench with `npc` = the structure id; A crafts chests on its own bench; Go: craft on a placed forge ok, on a chest `wrong_station`; hand and world-NPC paths untouched (`t43` shape unchanged) |
+| C192 | PASS | `t44`: B `pick_up` on A's bench `not_yours`; A `pick_up` → `{"seconds":1.5}` then `pick_up_end ok` with the bench back in the bag and B's despawn; B `chest_take` `not_yours` until A's party invite lands, then 2 of 3 plates move; after the restart (party gone) B's peek is `not_yours` again. Go: owner-only, `not_empty`, the channel breaks on a 0.5 m move, `gather_cancel` cancels it |
+| C193 | PASS | `t44`: SIGTERM, restart on the same `DATABASE_URL`, rejoin: all 5 structures respawn with the same `item\0owner` data at the same positions (0.000 m), the chest still holds its 1 plate; store tests on sqlite and Postgres 17 (`make test-pg`): put/list/delete, `DeletePlayer` and `DeleteAccount` cascade the owner's rows; `Kick` drops the entities and the rows |
+| C194 | PASS | `test/out/ui/p23-place.png` (`F · use workbench · hold to pick up` reported, mine=True), `p23-pickup.png` (the `PICKING UP` bar over the bench, hold F), `p23-chest.png` (CHEST panel: BAG 2/20 left, CHEST 3/20 right, three stacks moved by right-click, the MegaKit chest below it). `-selftest` +15 `structure:` checks (wire numbers, ItemDef station/verb, prompts, spawn split, the four bodies, peek/put/take parsing, pick_up_end ok + refused, refusals in words, the collider box). Backpack right-click on a structure stack places it |
+| C195 | PASS | Go vet/test (store on sqlite + Postgres), `dotnet build` 0 warnings, `-selftest`, `godot-gate`, `godot-test`, `godot-codec` (9), `godot-conformance`, `t13` (13), `t35` (6), `npm --prefix art test` 281/281; `t44` 84 checks in 155 s. C153–C189 hold. **Owed:** t44 is bare-server only by design (it owns its server); on kind the Phase 23 proof is the rig shots after deploy |
+
+**Found on the way.** My own body never gets an entity view (predicted),
+so "is this structure mine" first compared against a view that did not
+exist — the name now comes from the spawn's pending label
+(`Entities.LabelOf`). The MegaKit chest renders near-black under the
+night sky (`p23-chest.png`): the trim-sheet PBR takes the real scene
+light while the own-art props are vertex-coloured; the first sign of
+the Phase 25 question (how kit PBR reads at night) — noted there.
+
+**Known / notes.** A structure's owner is its token; the client's
+"mine" is a name match, the server decides. Party access to a chest is
+session-only (an offline owner's chest opens for nobody else). Peek
+writes the chest row once per open (harmless). `SetStore` now returns
+an error: a store that cannot list structures fails the boot.
