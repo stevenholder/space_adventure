@@ -7319,6 +7319,27 @@
       "description": "No hair (bald): the default hair slot value. No file -- nothing is worn; the client's registry skips rows without a file.",
       "source_url": "tools/bpy/hair.py",
       "author": "Space Adventure"
+    },
+    {
+      "id": "prop.chest",
+      "description": "Placeable storage chest (Phase 23), the Quaternius Modular SciFi MegaKit's Props/Prop_Chest.gltf (red trim-sheet PBR, textures capped 1024x1024), re-framed by tools/bpy/props_vendor.py. Base at origin, up +Y, latch faces -Z; 1.503 x 0.753 m, 0.729 m tall. Nodes `chest` (the body) and `lid`, the lid's origin on its hinge at the back (+Z), [0, 0.4123, 0.3645]: rotate it about X to open.",
+      "file": "props/chest.glb",
+      "tris": 324,
+      "surfaces": {
+        "chest": [
+          "MI_Trim_02",
+          "MI_Trim_01"
+        ],
+        "lid": [
+          "MI_Trim_02",
+          "MI_Trim_01"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/props_vendor.py"
     }
   ],
   "palettes": {

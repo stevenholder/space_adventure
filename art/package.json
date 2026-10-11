@@ -12,7 +12,8 @@
     "test": "python3 tools/glb.py && node tools/verify.mjs && node tools/import_pack.mjs --selftest",
     "import": "for r in recipes/*.json; do node tools/import_pack.mjs \"$r\" || exit 1; done",
     "mobs": "B=\"env LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH ${BLENDER:-$HOME/opt/blender/4.5.14/blender}\"; $B -b --python tools/bpy/mobs.py && node tools/mobs.mjs",
-    "rpg": "B=\"env LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH ${BLENDER:-$HOME/opt/blender/4.5.14/blender}\"; $B -b --python tools/bpy/rpg_items.py && node tools/rpg_items.mjs"
+    "rpg": "B=\"env LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH ${BLENDER:-$HOME/opt/blender/4.5.14/blender}\"; $B -b --python tools/bpy/rpg_items.py && node tools/rpg_items.mjs",
+    "props:vendor": "B=\"env LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH ${BLENDER:-$HOME/opt/blender/4.5.14/blender}\"; $B -b --python tools/bpy/props_vendor.py && node tools/props_vendor.mjs"
   },
   "devDependencies": {
     "three": "^0.185.1",
