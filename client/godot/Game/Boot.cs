@@ -998,6 +998,8 @@ namespace SpaceAdventure.Game
             CharacterRow row = _chars.Rows[_chars.Selected];
             SelfBody = string.IsNullOrEmpty(row.Body) ? "char.player" : row.Body;
             _viewModel.SetBody(SelfBody);
+            _character.Body = SelfBody;
+            _character.Name = row.Name ?? "";
             SaveToken(row.Token); // Reconnect keeps working
             CloseSelect();
             _ui.Root.Visible = true;
@@ -1505,6 +1507,7 @@ namespace SpaceAdventure.Game
             {
                 SelfBody = _rigBody;
                 _viewModel.SetBody(_rigBody);
+                _character.Body = _rigBody;
                 GD.Print($"rig: body {_rigBody}");
                 _rigBody = null;
             }

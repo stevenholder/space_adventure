@@ -115,7 +115,7 @@
     {
       "id": "char.ubc.f",
       "file": "chars/ubc_f.glb",
-      "tris": 8992,
+      "tris": 8989,
       "license": "CC0",
       "source": "recipes/char.ubc.f.json",
       "description": "Body, female (GDD 'Bodies': VANGUARD F): Quaternius Universal Base Characters Superhero female (CC0) with the pack's Hair_Buns, imported and dressed by tools/bpy/human.py variant char.ubc.f exactly as char.ubc, on the same game-engine bone names, clips and hand mounts as char.player. Faces -Z, eye at 1.7 m.",

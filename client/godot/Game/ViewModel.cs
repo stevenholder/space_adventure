@@ -50,6 +50,7 @@ namespace SpaceAdventure.Game
         private static readonly Vector3 HoldSight = new Vector3(0.12f, -0.12f, 0f);
         private static readonly Vector3 AdsSight = new Vector3(0f, -0.01f, 0f);
         private static readonly Vector3 UnarmedHand = new Vector3(0.20f, -0.20f, 0f);
+        private static readonly Vector3 UnarmedHandVanguard = new Vector3(0.20f, -0.17f, 0f);
         // A hand weapon: one fixed lift of the arms (camera space). Measured
         // off the weapon like a gun's sight, the framing would chase the fist
         // and cancel the swing.
@@ -661,7 +662,10 @@ void fragment() {
             {
                 // Empty hands: the right hand to the lower right of the view.
                 Vector3 un = _eye.GlobalTransform.AffineInverse() * hand.GlobalPosition - _ads;
-                want = UnarmedHand - un;
+                // The Vanguard's fists are chest-high in its clip (human.py
+                // `fists`) and its big hands hang under the wrist: a higher
+                // target keeps them in the frame, with the shoulders still under it.
+                want = (BodyId.StartsWith("char.ubc") ? UnarmedHandVanguard : UnarmedHand) - un;
                 want.Z = 0f;
             }
             else if (Armed && _cls.StartsWith("_melee"))
