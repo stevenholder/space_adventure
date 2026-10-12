@@ -151,9 +151,11 @@ VARIANTS = {
     },
     "char.ubc": {                              # spike: Quaternius Universal Base Characters body (CC0)
         "ubc": {"body": "Superhero_Male_FullBody"},     # hair: tools/bpy/hair.py
+        "fists": (0.22, 0.34, 1.36),           # first-person fists at the chest: the shoulders stay under the frame
     },
     "char.ubc.f": {                            # UBC Superhero female (GDD "Bodies": VANGUARD F)
         "ubc": {"body": "Superhero_Female_FullBody"},
+        "fists": (0.22, 0.34, 1.36),
     },
     "npc.gunner": {                            # ranged raider: a combat robot (player's build, so armor fits)
         "materials": {"skin": (0.48, 0.50, 0.54), "suit": (0.30, 0.32, 0.35), "glove": (0.40, 0.42, 0.45),
@@ -1841,9 +1843,14 @@ def clips(rig):
 
     def unarmed(t):
         # Loose fists low in the view, knuckles forward, thumbs up and in.
+        # A variant's `fists` raises them: in first person the client lifts the
+        # arms until the right fist sits 0.20 m under the eye, and fists at the
+        # hip (0.6 m under it) mean a 0.4 m lift that drags a thick body's
+        # shoulders past the lens (the Vanguard, playtest 2026-10-11).
+        fx, fy, fz = ACTIVE.get("fists", (0.20, 0.30, 1.10))
         b = 0.006 * math.sin(2 * math.pi * t)
-        reach(rig, "r", (0.20, 0.30, 1.10 + b), (0.6, -0.2, -0.8), hand_dir=(-0.15, 1, -0.35))
-        reach(rig, "l", (-0.20, 0.30, 1.10 - b), (-0.6, -0.2, -0.8), hand_dir=(0.15, 1, -0.35))
+        reach(rig, "r", (fx, fy, fz + b), (0.6, -0.2, -0.8), hand_dir=(-0.15, 1, -0.35))
+        reach(rig, "l", (-fx, fy, fz - b), (-0.6, -0.2, -0.8), hand_dir=(0.15, 1, -0.35))
         curl(rig, "r", CURL * 1.2, thumb=CURL * 0.4)
         curl(rig, "l", CURL * 1.2, thumb=CURL * 0.4)
     clip(rig, "fp_unarmed", 3.0, unarmed, Q)

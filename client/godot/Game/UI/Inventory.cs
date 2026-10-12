@@ -325,7 +325,7 @@ namespace SpaceAdventure.Game.UI
             worn["suit"] = character.Suit;
             string inHand = character.Held;
             string weapon = defs.ItemAsset(inHand);
-            _assets.Attach("char.player", _turn, model =>
+            _assets.Attach(character.Body, _turn, model =>
             {
                 CharacterAnim anim = CharacterAnim.For(model);
                 if (anim != null) { anim.Class = defs.HoldSuffix(inHand); anim.Armed = weapon != ""; anim.Drive(0f, false); }
@@ -443,7 +443,7 @@ namespace SpaceAdventure.Game.UI
             top.AddChild(SlotColumn(LeftSlots));
             var centre = Styles.Column(4);
             centre.AddChild(_doll.View);
-            var nameLab = Styles.Display_(System.Environment.MachineName ?? "you", 14, Styles.Cream);
+            var nameLab = Styles.Display_(_character.Name != "" ? _character.Name : System.Environment.MachineName ?? "you", 14, Styles.Cream);
             nameLab.HorizontalAlignment = HorizontalAlignment.Center;
             centre.AddChild(nameLab);
             top.AddChild(centre);
