@@ -75,6 +75,9 @@ namespace SpaceAdventure.Game
         /// <summary>Phase 21: our own `skin` / `suit` palette ids, from the `worn` frames ("" = as baked).</summary>
         public string Skin { get; set; } = "";
         public string Suit { get; set; } = "";
+        /// <summary>The body in play and its name (the select's row; a guest or rig keeps the defaults). The sheet's doll wears this.</summary>
+        public string Body { get; set; } = "char.player";
+        public string Name { get; set; } = "";
 
         /// <summary>The item worn in a slot, or "".</summary>
         public string Worn(string slot) => Equipped.TryGetValue(slot, out string p) ? p : "";

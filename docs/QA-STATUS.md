@@ -954,3 +954,33 @@ spot, so the second rig placement is `no_room` unless `-uiPitch 0
 -uiYaw <deg>` turns it first (`-uiYaw` needs `-uiPitch` present). A
 refusal shows for 2 s; the rig used to read the notice after its 6 s
 wait and log it empty — it now catches it as it lands.
+
+# Vanguard playtest (2026-10-11)
+
+Playtest on the install, a Vanguard at 21:9: "the arms are weird and
+transparent", and the character panel showed a Colonist.
+
+**The panel.** `Doll.Ensure` attached `char.player` whatever the
+character's body, and the name under it was the machine name.
+`Character` now carries `Body` and `Name` (set by PLAY in the select and
+by `-rigBody`); the doll wears the body, the label is the character's
+name (machine name only for a guest/rig). `test/out/ui/sheet-vanguard.png`
+(`-rigBody char.ubc -uiPanel sheet`): the Vanguard on the sheet.
+
+**The arms.** Not the shader: the unarmed clip held the fists at the hip
+(0.6 m under the eye), so the first-person framing lifted the whole arm
+model 0.4 m to put the right hand 0.20 m under the eye, which dragged
+the Vanguard's shoulders past the lens — and the `FpCut` sleeve dissolve
+then ate everything but the hands. At 16:9 the dissolving cuffs sat at
+the frame edge; at 21:9 the whole forearm is in view and a pale suit
+makes the dither read as torn (`fp-vanguard-unarmed-wide-before.png`,
+reproduced with `--resolution 2560x1080`). Fix in the art: human.py
+`unarmed()` reads a variant `fists` target, the two UBC bodies carry
+theirs at the chest (0.22, 0.34, 1.36); the client's unarmed hand target
+is 0.17 m under the eye for `char.ubc*` (0.20 left the big fists under
+the frame, 0.13 put open hands mid-screen). `fp-vanguard-unarmed.png`
+and `-wide.png`: solid sleeves to the frame edge, no dissolve in either
+aspect; the Colonist's clip and framing are untouched (its shot matches
+the old one). Rebuilt `chars/ubc.glb` 8993 / `ubc_f.glb` 8989 tris,
+`npm --prefix art test` PASS, `-selftest` PASS, `dotnet build` 0 warnings.
+Not retested: the armed holds (their clips did not change).
