@@ -203,7 +203,7 @@ namespace SpaceAdventure.Game.UI
         /// <summary>Renames the header (one panel serving two stations).</summary>
         protected void SetTitle(string title) { if (_title != null) _title.Text = title.ToUpperInvariant(); }
 
-        public void Show(bool on)
+        public virtual void Show(bool on)
         {
             Box.Visible = on;
             if (on)
@@ -402,16 +402,19 @@ namespace SpaceAdventure.Game.UI
         private readonly System.Action _onSettings;
         private readonly System.Action _onCharacters;
         private readonly System.Func<bool> _hasCharacters;
+        private readonly System.Action _onControls;
 
         /// <param name="onCharacters">Leave the world for the character select (playtest ask 2026-10-08); shown only while <paramref name="hasCharacters"/> says a select exists to go back to (a signed-in session, not a rig token).</param>
         public GameMenuView(Control root, System.Action onQuit, System.Action onSettings = null,
-                            System.Action onCharacters = null, System.Func<bool> hasCharacters = null)
+                            System.Action onCharacters = null, System.Func<bool> hasCharacters = null,
+                            System.Action onControls = null)
             : base(root, "Menu", 260, 0.30f)
         {
             _onQuit = onQuit;
             _onSettings = onSettings;
             _onCharacters = onCharacters;
             _hasCharacters = hasCharacters;
+            _onControls = onControls;
         }
 
         protected override void Fill(VBoxContainer body)
@@ -422,6 +425,11 @@ namespace SpaceAdventure.Game.UI
             if (_onSettings != null)
             {
                 body.AddChild(Styles.Button("SETTINGS", false, () => { Show(false); _onSettings(); }));
+                body.AddChild(Styles.Gap(4));
+            }
+            if (_onControls != null)
+            {
+                body.AddChild(Styles.Button("CONTROLS", false, () => { Show(false); _onControls(); }));
                 body.AddChild(Styles.Gap(4));
             }
             if (_onCharacters != null && (_hasCharacters?.Invoke() ?? true))

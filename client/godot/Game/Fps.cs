@@ -123,15 +123,15 @@ namespace SpaceAdventure.Game
             var result = new LocalInput();
             result.Look = Frame.ToSim(Look(up, delta));
 
-            if (_input.Held(Key.A)) result.MoveX -= 1;
-            if (_input.Held(Key.D)) result.MoveX += 1;
-            if (_input.Held(Key.S)) result.MoveY -= 1;
-            if (_input.Held(Key.W)) result.MoveY += 1;
-            if (_input.Held(Key.Shift)) result.ActionMask |= Net.Action.Sprint;
-            if (_input.Held(Key.Space)) result.ActionMask |= Net.Action.Jump;
+            if (_input.Held(UI.Binds.Of("left"))) result.MoveX -= 1;
+            if (_input.Held(UI.Binds.Of("right"))) result.MoveX += 1;
+            if (_input.Held(UI.Binds.Of("back"))) result.MoveY -= 1;
+            if (_input.Held(UI.Binds.Of("forward"))) result.MoveY += 1;
+            if (_input.Held(UI.Binds.Of("sprint"))) result.ActionMask |= Net.Action.Sprint;
+            if (_input.Held(UI.Binds.Of("jump"))) result.ActionMask |= Net.Action.Jump;
             // F interacts (Phase 13 keybinds); E is a hotbar key.
-            result.InteractPressed = _input.Pressed(Key.F);
-            result.InteractHeld = _input.Held(Key.F);
+            result.InteractPressed = _input.Pressed(UI.Binds.Of("interact"));
+            result.InteractHeld = _input.Held(UI.Binds.Of("interact"));
             // A click with the cursor free is a UI click (a journal button, a
             // shop row), never a shot -- claiming a mission used to fire the
             // rifle. Captured pointer = the world has the mouse.

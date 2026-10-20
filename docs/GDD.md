@@ -1368,6 +1368,15 @@ a **UI scale** slider (0.75–1.5×, on top of the window scaling) and
 `[settings]` and apply at boot; the rig and the self-test own their own
 window and ignore the display mode.
 
+**Controls.** A CONTROLS page off the same menu lists every game key
+(move, sprint, jump, interact, reload, swap, the five panels, the ten
+hotbar slots) and rebinds one on a click and a key press; Esc cancels,
+a key already in use swaps with the one vacated, RESET DEFAULTS puts
+WASD back. Binds are physical keys (WASD is WASD on any layout) and
+show as the user's own keycap; the hotbar cells relabel with them. Enter
+(chat), Esc (menu), F3 (debug) and the mouse buttons are fixed. Saved in
+`user://sa.cfg` `[keys]`.
+
 ### Launcher (Phase 15)
 
 The game no longer opens full screen into an update. The same executable
