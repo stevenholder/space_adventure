@@ -7,6 +7,7 @@ import (
 
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
+	"space-adventure/server/internal/store"
 )
 
 func shipsInWorld(s *Server) []*sim.Ent {
@@ -68,14 +69,11 @@ func sendCmd(t *testing.T, ws *wsClient, seq uint16, opcode uint16, body string)
 	return r
 }
 
-// C33's server half: buy -> ship on the pad -> board the pilot seat, and
-// the ship persists across a reconnect on the same token.
+// C33's server half, Phase 24 edition: ship.v1 landing in the bag (a dock
+// craft now, not a buy) puts a ship on the pad -> board the pilot seat, and
+// the ship does not duplicate across a reconnect on the same token.
 func TestShipPurchaseSpawnsAndPersists(t *testing.T) {
 	s, url := newTestServer(t)
-	// Phase 22 starts a character with nothing; this one needs the money.
-	if err := s.SetStart("credits=1000"); err != nil {
-		t.Fatal(err)
-	}
 
 	token := fmt.Sprintf("ship-owner-%d", time.Now().UnixNano())
 	a := dialWS(t, url)
@@ -85,30 +83,11 @@ func TestShipPurchaseSpawnsAndPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := len(shipsInWorld(s)); n != 0 {
-		t.Fatalf("%d ships before anyone bought one", n)
+		t.Fatalf("%d ships before anyone owned one", n)
 	}
-
-	// Stand at the quartermaster and buy. The shop needs proximity; find
-	// the NPC and teleport within range (white-box, like the seat tests).
-	s.mu.Lock()
-	var npcID uint32
-	var npcPos sim.Vec
-	for _, e := range s.worldEnts {
-		if e.Def == "npc.quartermaster" {
-			npcID, npcPos = e.ID, sim.Vec(e.Pos)
-		}
-	}
-	s.mu.Unlock()
-	if npcID == 0 {
-		t.Fatal("no quartermaster")
-	}
-	teleportNear(s, ha.EntityID, npcPos, 2)
-	aimAt(t, s, a, ha.EntityID, npcPos)
-
-	if r := sendCmd(t, a, 1, protocol.OpShopBuy,
-		fmt.Sprintf(`{"npc":%d,"item":"ship.v1","qty":1}`, npcID)); r.Status != protocol.StatusOK {
-		t.Fatalf("buy refused: %s", r.Data)
-	}
+	c := published(s, ha.EntityID)
+	c.ident.Mutate(func(p *store.Player) { p.Inventory = []store.Stack{{Item: sim.ShipItemID, Qty: 1}} })
+	s.syncOwnedVehicles(c) // drainCrafts' hook after a done unit
 
 	ships := waitShips(t, s, 1)
 	// The test server is storeless, so the session is ephemeral by design

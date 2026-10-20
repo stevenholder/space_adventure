@@ -34,8 +34,14 @@ const (
 	// and placeProbe how far out the slope is sampled.
 	placeClear = 1.5
 	placeProbe = 1.5
-	// pickUpSeconds is the pick-up channel.
-	pickUpSeconds = 1.5
+	// pickUpSeconds is the pick-up channel; demolishSeconds the same
+	// channel on a `demolish` item (a site or a dock, Phase 24), which
+	// returns nothing.
+	pickUpSeconds   = 1.5
+	demolishSeconds = 3.0
+	// siteXPDivisor: a finished site pays Construction XP of its bill's
+	// value over this (craft.json's xp_divisor).
+	siteXPDivisor = 2
 	// structureAimHeight is where the interact cone points on a structure.
 	structureAimHeight = 0.6
 )
@@ -46,6 +52,77 @@ const reasonNoRoom = "no_room"
 
 // placeSlopeMax is the steepest ground a structure sits on (15°).
 var placeSlopeMax = 15 * math.Pi / 180
+
+// placeRule is a place's ground rule: the free radius around the centre,
+// how far out the slope is probed, and the steepest slope (radians).
+type placeRule struct {
+	clear, probe, slopeMax float64
+}
+
+// defaultPlaceRule is a bench, forge or chest's.
+var defaultPlaceRule = placeRule{placeClear, placeProbe, placeSlopeMax}
+
+// placeRuleFor is item's ground rule: a site's from its footprint (Phase
+// 24: clear and probe at footprint/2, its own slope), else the default.
+func placeRuleFor(it defs.Item) placeRule {
+	if st := it.Site; st != nil {
+		return placeRule{st.Footprint / 2, st.Footprint / 2, st.SlopeMax * math.Pi / 180}
+	}
+	return defaultPlaceRule
+}
+
+// builtBySite reports whether id is what some site becomes (a dock): it
+// is never placed by hand.
+func builtBySite(reg *defs.Registry, id string) bool {
+	for _, it := range reg.Items {
+		if it.Site != nil && it.Site.Becomes == id {
+			return true
+		}
+	}
+	return false
+}
+
+// siteFamily reports whether id is a site or what one becomes: these do
+// not count toward structureCap, and a character has one of them at most.
+func siteFamily(reg *defs.Registry, id string) bool {
+	return reg.Items[id].Site != nil || builtBySite(reg, id)
+}
+
+// siteDelivered is how much of item stacks holds (a site's delivered
+// bill: one stack per line).
+func siteDelivered(stacks []store.Stack, item string) int {
+	n := 0
+	for _, st := range stacks {
+		if st.Item == item {
+			n += st.Qty
+		}
+	}
+	return n
+}
+
+// siteRemaining is every bill line's remaining count, zeros included, in
+// bill order.
+func siteRemaining(site *defs.Site, stacks []store.Stack) []defs.ItemQty {
+	out := make([]defs.ItemQty, 0, len(site.Bill))
+	for _, q := range site.Bill {
+		out = append(out, defs.ItemQty{Item: q.Item, Qty: max(0, q.Qty-siteDelivered(stacks, q.Item))})
+	}
+	return out
+}
+
+// sitePct is a site's completion, 0..100: floor of delivered over needed
+// units across every line (each line's delivered capped at its need).
+func sitePct(site *defs.Site, stacks []store.Stack) int {
+	need, have := 0, 0
+	for _, q := range site.Bill {
+		need += q.Qty
+		have += min(q.Qty, siteDelivered(stacks, q.Item))
+	}
+	if need <= 0 {
+		return 100
+	}
+	return have * 100 / need
+}
 
 // structureState is a placed structure's server state (Ent.Data).
 type structureState struct {
@@ -163,7 +240,12 @@ func (s *Server) loadStructures(ctx context.Context) error {
 		if s.reg.Items[r.Item].Station == "" {
 			st.Stacks = r.Stacks
 		}
-		s.world.Add(s.newStructureEnt(r.Item, sim.Vec(r.Pos), st))
+		e := s.newStructureEnt(r.Item, sim.Vec(r.Pos), st)
+		// Phase 24: a half-built site's row health is its percent.
+		if site := s.reg.Items[r.Item].Site; site != nil {
+			e.Health = sitePct(site, st.Stacks)
+		}
+		s.world.Add(e)
 	}
 	s.syncWorldEnts()
 	if len(rows) > 0 {
@@ -275,13 +357,23 @@ func (s *Server) placeStructure(c *client, item string, take func() error) (uint
 
 func (s *Server) placeLocked(c *client, item string, take func() error) (id uint32, key, reason string) {
 	tok := c.ident.token
+	it := s.reg.Items[item]
+	// The cap counts benches, forges and chests; a site or a dock is its
+	// own rule — one of them per character (Phase 24).
+	family := siteFamily(s.reg, item)
 	n := 0
 	for _, e := range s.world.Ents {
 		if st := structureOf(e); st != nil && st.Owner == tok {
-			n++
+			if siteFamily(s.reg, e.Def) {
+				if family {
+					return 0, "", "too_many"
+				}
+			} else {
+				n++
+			}
 		}
 	}
-	if n >= structureCap {
+	if !family && n >= structureCap {
 		return 0, "", "too_many"
 	}
 	if c.seat != 0 || c.vitals.DeadTicks > 0 {
@@ -297,7 +389,7 @@ func (s *Server) placeLocked(c *client, item string, take func() error) (id uint
 	f = terrain.Normalize(f)
 	dir := terrain.Normalize(body.Add(f.Scale(placeReach)))
 	target := dir.Scale(s.terrain.SampleRadius(dir))
-	if !s.roomAtLocked(target, f) {
+	if !s.roomForLocked(target, f, placeRuleFor(it), c) {
 		return 0, "", reasonNoRoom
 	}
 	if err := take(); err != nil {
@@ -319,24 +411,31 @@ func (s *Server) placeLocked(c *client, item string, take func() error) (id uint
 	return e.ID, st.Key, ""
 }
 
-// roomAtLocked is the place rule: flat ground (≤ 15° at the point and 1.5 m
-// out along ±facing and ±right) and nothing within 1.5 m — a structure,
-// NPC, node, vehicle or other body by centre (horizontal), a wall, rock or
-// solid prop by its surface. Under s.mu.
+// roomAtLocked is the default place rule: flat ground (≤ 15° at the point
+// and 1.5 m out along ±facing and ±right) and nothing within 1.5 m — a
+// structure, NPC, node, vehicle or other body by centre (horizontal), a
+// wall, rock or solid prop by its surface. Under s.mu.
 func (s *Server) roomAtLocked(target, f sim.Vec) bool {
+	return s.roomForLocked(target, f, defaultPlaceRule, nil)
+}
+
+// roomForLocked is the place rule with r's radius, probe and slope; self
+// (the placer, may be nil) is not an obstacle — a site's 3 m clearance
+// reaches past the body that stands 2 m from its centre. Under s.mu.
+func (s *Server) roomForLocked(target, f sim.Vec, r placeRule, self *client) bool {
 	up := terrain.Normalize(target)
 	right := terrain.Cross(up, f)
 	for _, p := range []sim.Vec{target,
-		target.Add(f.Scale(placeProbe)), target.Sub(f.Scale(placeProbe)),
-		target.Add(right.Scale(placeProbe)), target.Sub(right.Scale(placeProbe))} {
-		if s.terrain.Slope(terrain.Normalize(p)) > placeSlopeMax {
+		target.Add(f.Scale(r.probe)), target.Sub(f.Scale(r.probe)),
+		target.Add(right.Scale(r.probe)), target.Sub(right.Scale(r.probe))} {
+		if s.terrain.Slope(terrain.Normalize(p)) > r.slopeMax {
 			return false
 		}
 	}
 	near := func(p [3]float64) bool {
 		d := sim.Vec(p).Sub(target)
 		d = d.Sub(up.Scale(d.Dot(up)))
-		return d.Len() < placeClear
+		return d.Len() < r.clear
 	}
 	for _, e := range s.world.Ents {
 		switch uint16(e.Kind) {
@@ -348,12 +447,12 @@ func (s *Server) roomAtLocked(target, f sim.Vec) bool {
 		}
 	}
 	for _, o := range s.clients {
-		if o.entity != nil && o.seat == 0 && near(o.entity.State.Pos) {
+		if o != self && o.entity != nil && o.seat == 0 && near(o.entity.State.Pos) {
 			return false
 		}
 	}
 	for _, col := range s.solid {
-		if sim.ColliderWithin(target, placeClear, col) {
+		if sim.ColliderWithin(target, r.clear, col) {
 			return false
 		}
 	}
@@ -391,24 +490,34 @@ func (s *Server) chestMove(id uint32, f func(chest *store.Player) error) ([]stor
 	return out, nil
 }
 
+// pickUpSecondsFor is the pick-up channel on item: a demolish is longer.
+func pickUpSecondsFor(it defs.Item) float64 {
+	if it.Demolish {
+		return demolishSeconds
+	}
+	return pickUpSeconds
+}
+
 // startPickUp begins c's pick-up of id, re-checking under the lock what the
-// cmd checked: still there, still c's, still empty, no channel running.
-// "" on success. Called with s.mu NOT held.
+// cmd checked: still there, still c's, still empty (a demolish ignores
+// what a site holds), no channel running. "" on success. Called with s.mu
+// NOT held.
 func (s *Server) startPickUp(c *client, id uint32) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := structureOf(s.world.Ents[id])
+	e := s.world.Ents[id]
+	st := structureOf(e)
 	switch {
 	case st == nil:
 		return "not_found"
 	case c.ident == nil || st.Owner != c.ident.token:
 		return "not_yours"
-	case len(st.Stacks) > 0:
+	case len(st.Stacks) > 0 && !s.reg.Items[e.Def].Demolish:
 		return "not_empty"
 	case s.channelling(c):
 		return "busy"
 	}
-	c.pickup = pickUpState{structure: id, ticks: int(math.Round(pickUpSeconds * sim.TickHz)),
+	c.pickup = pickUpState{structure: id, ticks: int(math.Round(pickUpSecondsFor(s.reg.Items[e.Def]) * sim.TickHz)),
 		from: c.entity.State.Pos}
 	return ""
 }
@@ -457,8 +566,8 @@ func (s *Server) stepPickUps() []*client {
 }
 
 // drainPickUps lands each finished pick-up: the item into the bag (or
-// no_space, the structure stays), the structure out of the world, the row
-// deleted. Takes the identity, then s.mu — the cmd path's order. Called
+// no_space, the structure stays) — nothing for a demolish (Phase 24) —
+// the structure out of the world, the row deleted. Takes the identity, then s.mu — the cmd path's order. Called
 // with s.mu NOT held, on the tick goroutine: the store delete runs in the
 // background.
 func (s *Server) drainPickUps(due []*client) {
@@ -480,13 +589,17 @@ func (s *Server) drainPickUps(due []*client) {
 			case st.Owner != c.ident.token:
 				s.endPickUp(c, "not_yours", nil)
 				return
-			case len(st.Stacks) > 0:
+			}
+			demolish := s.reg.Items[e.Def].Demolish
+			if len(st.Stacks) > 0 && !demolish {
 				s.endPickUp(c, "not_empty", nil) // a party member filled it mid-channel
 				return
 			}
-			if err := sim.AddItem(p, e.Def, 1, s.reg); err != nil {
-				s.endPickUp(c, refusalReason(err), nil)
-				return
+			if !demolish {
+				if err := sim.AddItem(p, e.Def, 1, s.reg); err != nil {
+					s.endPickUp(c, refusalReason(err), nil)
+					return
+				}
 			}
 			s.world.Remove(e.ID)
 			key = st.Key
@@ -496,4 +609,88 @@ func (s *Server) drainPickUps(due []*client) {
 			go s.persistStructure(key)
 		}
 	}
+}
+
+// deliverResult is a deliver's outcome: every bill line's remaining count
+// (zeros included) and the completion percent after it.
+type deliverResult struct {
+	Bill []defs.ItemQty
+	Pct  int
+}
+
+// deliver moves up to qty of item from c's bag into site id's bill
+// (Phase 24) and persists it; qty 0 is a peek. take(item, n) moves at most
+// n out of the requester's bag — the cmd path's own player row, already
+// held — and returns how many it moved (sim refusal not_owned for none).
+// Called with s.mu NOT held.
+func (s *Server) deliver(c *client, id uint32, item string, qty int, take func(item string, n int) (int, error)) (deliverResult, error) {
+	s.mu.Lock()
+	res, key, err := s.deliverLocked(c, id, item, qty, take)
+	s.mu.Unlock()
+	if err == nil && key != "" {
+		s.persistStructure(key)
+	}
+	return res, err
+}
+
+// deliverLocked is deliver under s.mu. The returned key is set when the
+// row changed. On the last unit the site becomes its Becomes in place:
+// same entity id, the def swapped, a despawn then a spawn broadcast, the
+// bill's Construction XP (Σ value × qty / 2) to c.
+func (s *Server) deliverLocked(c *client, id uint32, item string, qty int, take func(item string, n int) (int, error)) (deliverResult, string, error) {
+	e := s.world.Ents[id]
+	st := structureOf(e)
+	if st == nil {
+		return deliverResult{}, "", errStructureGone
+	}
+	site := s.reg.Items[e.Def].Site
+	if site == nil {
+		return deliverResult{}, "", errStructureGone
+	}
+	if qty == 0 {
+		return deliverResult{Bill: siteRemaining(site, st.Stacks), Pct: sitePct(site, st.Stacks)}, "", nil
+	}
+	need := -1
+	for _, q := range site.Bill {
+		if q.Item == item {
+			need = q.Qty - siteDelivered(st.Stacks, item)
+		}
+	}
+	if need <= 0 {
+		return deliverResult{}, "", sim.RefusalError{Reason: "not_wanted"}
+	}
+	n, err := take(item, min(qty, need))
+	if err != nil {
+		return deliverResult{}, "", err
+	}
+	merged := false
+	for i := range st.Stacks {
+		if st.Stacks[i].Item == item {
+			st.Stacks[i].Qty += n
+			merged = true
+			break
+		}
+	}
+	if !merged {
+		st.Stacks = append(st.Stacks, store.Stack{Item: item, Qty: n})
+	}
+	res := deliverResult{Bill: siteRemaining(site, st.Stacks), Pct: sitePct(site, st.Stacks)}
+	e.Health = res.Pct
+	if res.Pct >= 100 {
+		var xp int64
+		for _, q := range site.Bill {
+			xp += s.reg.Items[q.Item].Value * int64(q.Qty)
+		}
+		into := s.reg.Items[site.Becomes]
+		e.Def = into.ID
+		e.Health = 0
+		st.Stacks = nil
+		if into.Station == "" {
+			st.Stacks = []store.Stack{}
+		}
+		s.broadcast(protocol.EncodeDespawn(protocol.Despawn{EntityID: e.ID}))
+		s.broadcast(protocol.EncodeSpawn(protocol.Spawn{EntityID: e.ID, EntityType: uint16(e.Kind), Data: spawnData(e)}))
+		c.awardLocked("construction", xp/siteXPDivisor)
+	}
+	return res, st.Key, nil
 }

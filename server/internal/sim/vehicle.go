@@ -66,6 +66,11 @@ type VehicleState struct {
 	// the input each tick; 0 (no driver, or untrained) reads as 1.0. Both
 	// sims apply it identically, keeping drive prediction conformant.
 	EffMult float64
+
+	// Owner is the stable identity key of the player whose vehicle.rover
+	// item this is (Phase 24: owning the item IS owning the rover, the
+	// ship's rule). The Phase 4 world rover keeps "".
+	Owner string
 }
 
 // NewVehicleState builds the rover's state, parked.
@@ -98,6 +103,63 @@ func SpawnRover(t *terrain.Field) (pos Vec, quat Quat) {
 		}
 	}
 
+	pos = cand.Scale(t.SampleRadius(cand))
+	forward := tangential(bearing, cand)
+	if forward.Len() < EpsDeg {
+		forward = tangential(Vec{0, 0, 1}, cand)
+	}
+	forward = terrain.Normalize(forward)
+	right := terrain.Cross(cand, forward) // +X = up × forward
+	return pos, QuatFromBasis(right, cand, forward)
+}
+
+// SpawnOwnedRover parks an owned rover with no dock to stand at (Phase 24):
+// the world rover's scan — rover_spawn_dist from spawn along the spawn
+// bearing, +10 m steps — skipping any walkable slot within padMinSep of an
+// occupied position (the world rover's own spot is one), as SpawnShip does
+// on the pad.
+func SpawnOwnedRover(t *terrain.Field, occupied []Vec) (pos Vec, quat Quat) {
+	up0 := terrain.Normalize(terrain.SpawnDir)
+	return padScan(t, up0, SpawnState(t).Facing, RoverSpawnDist, 10, 7, occupied)
+}
+
+// DockSpawnDist is how far in front of a dock's centre its vehicles park:
+// clear of the 6 m pad (3 m half-width) by the rover's own half-length.
+const DockSpawnDist = 5.5
+
+// SpawnAtDock parks a vehicle at a dock (Phase 24): DockSpawnDist in front
+// of dockPos along dockForward, walkable-retry at +2 m steps, skipping any
+// slot within padMinSep of an occupied position; it faces away from the
+// dock (along dockForward).
+func SpawnAtDock(t *terrain.Field, dockPos, dockForward Vec, occupied []Vec) (pos Vec, quat Quat) {
+	return padScan(t, dockPos, dockForward, DockSpawnDist, 2, 7, occupied)
+}
+
+// padScan is the shared parking scan: from the ground point under from,
+// along bearing, candidates at dist0 + step·k (k < n); the first walkable
+// one clear of occupied by padMinSep wins (the last one tried otherwise).
+// The vehicle faces along bearing, quat basis +X = up × forward.
+func padScan(t *terrain.Field, from, bearing Vec, dist0, step float64, n int, occupied []Vec) (pos Vec, quat Quat) {
+	up0 := terrain.Normalize(from)
+	p0 := up0.Scale(t.SampleRadius(up0))
+	cand := up0
+	for k := 0; k < n; k++ {
+		cand = terrain.Normalize(p0.Add(bearing.Scale(dist0 + step*float64(k))))
+		if !t.Walkable(cand) {
+			continue
+		}
+		slot := cand.Scale(t.SampleRadius(cand))
+		free := true
+		for _, o := range occupied {
+			if slot.Sub(o).Len() < padMinSep {
+				free = false
+				break
+			}
+		}
+		if free {
+			break
+		}
+	}
 	pos = cand.Scale(t.SampleRadius(cand))
 	forward := tangential(bearing, cand)
 	if forward.Len() < EpsDeg {

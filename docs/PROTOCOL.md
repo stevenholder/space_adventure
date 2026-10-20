@@ -98,7 +98,12 @@ Constants:
   chest: `spawn.data` is `item id NUL owner name`, e.g.
   `structure.chest\0Kade`; the client draws the item's `asset` and
   labels it with the owner; `quat` is yaw only, the front toward where the
-  placer stood; health and flags 0; solid as the asset's prop box).
+  placer stood; health and flags 0; solid as the asset's prop box). Phase
+  24: a building site (`site.dock\0Kade`) is a structure too, and its
+  snapshot `health` is its completion percent `0..100` (see `health`
+  below); when it completes it becomes its `site.becomes` IN PLACE — the
+  same `entity_id` is sent `despawn` then `spawn` with the new data
+  (`structure.dock\0Kade`). A `structure.dock`'s `health` is 0 again.
 - `action_mask` bits: `0x0001` sprint, `0x0002` jump (mode 0); `0x0004`
   boost (mode 1, Phase 5). Other bits ignored.
 - **`input`'s mode byte is trailing and optional** (landed in Phase 3.5;
@@ -117,7 +122,10 @@ Constants:
   range; `3` not seated / invalid.
 - `health`: current hit points, `0` = dead. Maximum comes from the entity's
   def in `defs`, not the wire. An entity with no health concept (loot, a
-  projectile) sends `0` and sets no `dead` flag.
+  projectile) sends `0` and sets no `dead` flag. Phase 24: a `site.*`
+  structure's `health` is its completion percent, `floor(100 · Σ
+  min(delivered, needed) / Σ needed)` over every bill line by unit count
+  (`0..100`, no `dead` flag); every other structure sends `0`.
 - `flags` bits: `0x01` grounded, `0x02` sprinting, `0x04` dead, `0x08` firing,
   `0x10` space (Phase 5: the entity — a ship — is in the space regime, GDD
   "Space regime"; carried state mirrored onto the wire the same way a
@@ -197,8 +205,8 @@ Constants:
   stored or logged; the server counts lines (`space_adventure_chat_total`).
   Phase 23 (GDD "Placeable stations"): `0x0017` `place`, `0x0018`
   `chest_put`, `0x0019` `chest_take`, `0x001B` `pick_up` — bodies in the
-  cmd table. `0x001A` is reserved for Phase 24 `deliver`; `0x001C`+
-  still reserved.
+  cmd table. Phase 24 (GDD "Buildings and the dock"): `0x001A` `deliver`.
+  `0x001C`+ still reserved.
 - `cmd_result` `status`: `0` ok; `1` unknown opcode; `2` malformed body;
   `3` refused by a game rule (cannot afford, out of range, unknown item,
   magazine full); `4` rate limited; `5` target not found.
@@ -239,7 +247,10 @@ Constants:
   ended without it: `moved` / `died` / `cancel` / `disconnect` (the
   gather rules), `no_space` (the bag filled during the channel; the
   structure stays), `not_empty` (a party member filled the chest
-  mid-channel), `not_found` (it went away);
+  mid-channel), `not_found` (it went away). Phase 24: a demolish (an item
+  with `demolish: true` — a site or a dock) ends `{"structure": <id>,
+  "ok": true, "inventory": [...]}` with the structure gone and NOTHING
+  added — the bag is as it was, whatever the site held is lost;
   and `0x0006` `equipped`
   (Phase 3.5) — `entity_id` is the body whose item IN HAND changed and
   `data` is the item id as UTF-8, empty for "nothing equipped". Since melee
@@ -484,10 +495,11 @@ Bodies per opcode:
 | `gather_cancel` (Phase 12) | `{}` | `{}` (refused `not_gathering` if no channel is running) — Phase 22: ends a craft too |
 | `use` (Phase 13) | `{"item":"consumable.medkit"}` | `{"item":"consumable.medkit","effect":{"health":100},"cooldown":8}` |
 | `craft` (Phase 22) | `{"npc": <entity_id> \| 0, "recipe":"recipe.mat.parts", "qty":3}` | `{"recipe":"recipe.mat.parts","qty":3,"duration":1}` — `duration` is ONE unit's seconds × (1 − the recipe skill's `craft_speed` and its synergies), floored at 0.5. Units run back to back: a unit's inputs leave the bag when it starts (the first with this reply), its output and the recipe's `xp` (in the recipe's `skill`) land when it ends, each as a `craft_end` event; a stackable output may land one extra (`craft_extra`, Engineering). Moving 0.5 m, a hit, death, disconnecting or `gather_cancel` ends it, the running unit's inputs returned. Refusals in order: `out_of_range` (a `bench`/`forge` recipe: the NPC must be in reach; status 5 if `npc` names nothing; a `hand` recipe ignores `npc`), `busy` (any channel running), `unknown_recipe`, `wrong_station` (the recipe's `station` is not the NPC's kind, or `npc` 0 for a station recipe), `bad_qty`, `locked` (below `level` in the recipe's `skill`), `missing_materials` (for the first unit), `no_space` (its output, once its inputs are out) |
-| `place` (Phase 23) | `{"item":"structure.bench"}` | `{"structure":<entity_id>,"inventory":[…]}` — the structure lands 2 m ahead along the body's facing, on the ground, facing the placer; one leaves the bag. Refusals in order: `unknown_item` (not a `structure` item), `not_owned` (none in the bag), `no_account` (a guest — no owning account or no token), `too_many` (5 already placed by this character), `no_room` (slope over 15° at the point or 1.5 m out along ±facing/±right; or a structure, NPC, node, target, vehicle, ship or other body within 1.5 m horizontally, or a wall, rock or solid prop within 1.5 m of its surface; or seated/dead). Nothing is taken on a refusal |
+| `place` (Phase 23) | `{"item":"structure.bench"}` | `{"structure":<entity_id>,"inventory":[…]}` — the structure lands 2 m ahead along the body's facing, on the ground, facing the placer; one leaves the bag. Refusals in order: `unknown_item` (not a `structure` item, or one a site becomes — `structure.dock` is never placed by hand), `not_owned` (none in the bag), `no_account` (a guest — no owning account or no token), `too_many` (5 benches/forges/chests already placed by this character; Phase 24: for a `site.*`, the character already has a site or a dock — one each, and neither counts toward the 5), `no_room` (slope over 15° at the point or 1.5 m out along ±facing/±right; or a structure, NPC, node, target, vehicle, ship or other body within 1.5 m horizontally, or a wall, rock or solid prop within 1.5 m of its surface; or seated/dead. Phase 24: a site's rule is its `site` def — clearance `footprint/2` (3 m for `site.dock`) and slope ≤ `slope_max` (8°) at the centre and `footprint/2` out along ±facing/±right; the placer's own body is not an obstacle — it stands 2 m from the centre, on the pad's edge). Nothing is taken on a refusal |
 | `chest_put` (Phase 23) | `{"structure":<entity_id>,"item":"mat.parts","qty":7}` | `{"inventory":[…],"chest":[…]}` — bag → chest. Status 5 if `structure` names none. Refusals in order: `out_of_range` (aim height 0.6), `wrong_station` (a bench or forge, not a chest), `not_yours` (neither the owner nor the owner online in your party), `bad_qty` (1–1000), `not_owned` (the bag lacks it), `no_space` (the chest's 20 stacks / the item's `stack_max`). An item that leaves the bag entirely is unworn |
 | `chest_take` (Phase 23) | `{"structure":<entity_id>,"item":"mat.parts","qty":2}` — `"item":"", "qty":0` is a PEEK (the panel opening): no transfer | `{"inventory":[…],"chest":[…]}` — chest → bag. Refusals as `chest_put`, `not_owned` meaning the chest lacks it and `no_space` the bag is full; a peek is subject to `out_of_range`, `wrong_station` and `not_yours` only |
-| `pick_up` (Phase 23) | `{"structure":<entity_id>}` | `{"seconds":1.5}` — starts a 1.5 s channel; it ends with event `pick_up_end`. Moving 0.5 m, death, disconnecting or `gather_cancel` breaks it. Status 5 if `structure` names none. Refusals in order: `out_of_range`, `not_yours` (owner only), `busy` (any channel running), `not_empty` (a chest with anything in it), `no_space` (the bag cannot take the item — checked again at the end) |
+| `pick_up` (Phase 23) | `{"structure":<entity_id>}` | `{"seconds":1.5}` — starts a 1.5 s channel; it ends with event `pick_up_end`. Moving 0.5 m, death, disconnecting or `gather_cancel` breaks it. Status 5 if `structure` names none. Refusals in order: `out_of_range`, `not_yours` (owner only), `busy` (any channel running), `not_empty` (a chest with anything in it), `no_space` (the bag cannot take the item — checked again at the end). Phase 24 DEMOLISH: on an item with `demolish: true` (`site.dock`, `structure.dock`) the reply is `{"seconds":3}` — a 3.0 s channel, same breaks, owner only — and it ends `pick_up_end ok` with nothing added; `not_empty` and `no_space` do not apply (a half-delivered site is demolished with what it holds) |
+| `deliver` (Phase 24) | `{"structure":<entity_id>,"item":"mat.plate.steel","qty":60}` — `"qty":0` is a PEEK (any `item`, `""` is usual): nothing moves | `{"bill":[{"item":"mat.plate.steel","qty":0},{"item":"mat.wiring","qty":24},…],"pct":55,"inventory":[…]}` — bag → a building site's bill. `bill` is every line's REMAINING count in the def's order, zeros included; `pct` the completion percent (the row `health` rule). qty is clamped to min(qty, the line's remaining, carried). Status 5 if `structure` names none or is not a `site.*`. Refusals in order: `out_of_range` (aim height 0.6), `not_yours` (neither the owner nor the owner online in your party), `bad_qty` (outside 0–1000), `not_wanted` (the item is not in the bill, or its line is already full), `not_owned` (none carried). An item that leaves the bag entirely is unworn. On the LAST unit the site becomes its `site.becomes` in place: same `entity_id`, `despawn` then `spawn` (type `0x0009`, data `structure.dock\0<owner>`) broadcast, its stacks cleared, and the deliverer of that unit earns Construction XP `floor(Σ item value × qty over the whole bill / 2)` (1580 for `site.dock`; a `skill_xp` event as usual). The reply to that cmd reads `pct` 100, every line 0 |
 | `chat` (Phase 20) | `{"text":"over here"}` | `{}` — refusals: status 3 `{"reason":"empty"}` (nothing left after strip + trim), status 2 (over 200 bytes after the strip), status 4 (the chat bucket: burst 3, 1 per s) |
 
 A refusal (`status` 3) carries `{"reason":"<machine-readable code>"}` — e.g.
@@ -503,6 +515,23 @@ Phase 23 adds `no_account`, `too_many`, `no_room` (`place`); `not_yours`,
 `wrong_station` (`chest_put`/`chest_take`); `not_yours`, `not_empty`
 (`pick_up`). `craft`'s `npc` may name a placed structure: a bench or
 forge serves its `station` to anyone, a chest is `wrong_station`.
+Phase 24 adds `not_wanted` (`deliver`; with `not_yours`, `not_owned`,
+`bad_qty`, `out_of_range`), and `too_many` on a second site. A
+`structure.dock` serves station `dock` to anyone (`recipe.vehicle.rover`,
+`recipe.ship.v1`); a site serves none (`wrong_station`), and is no chest
+(`chest_put`/`chest_take` → `wrong_station`). When a `craft` unit's
+output is a `vehicle` item, the server makes the world agree: owning the
+item IS owning the vehicle (Phase 5's rule, now every vehicle item). The
+vehicle spawns (a `spawn` broadcast, type `0x0005` rover or `0x0002`
+ship) once per owner per item — after a craft, on join, and after a
+`shop_buy` — at the owner's `structure.dock` when they have one:
+5.5 m in front of its centre along its forward (its local +Z, which
+points back toward where the placer stood), walkable-retry at +2 m
+steps, skipping any spot within 6 m of another vehicle or ship, facing
+away from the dock (its forward is the dock's). With no dock: a ship on
+the Phase 5 pad, a rover by the world rover's scan (25 m+ from spawn,
++10 m steps, the next free slot past the world rover). `stack_max: 1`
+on a vehicle item makes a second craft `no_space` — one each.
 Phase 13 adds `unusable`, `dead`, `no_effect` and `cooldown` (`use`; a
 `cooldown` refusal carries `"ready_in": <s>` beside the reason) and
 `no_buyback` (`shop_buyback`). The
@@ -538,6 +567,14 @@ Phase 23 adds, additively: items of kind `structure` (`structure.bench`,
 `forge`; absent for a chest) and `verb` (the prompt's word, `Use` /
 `Open`); `entities.structure` (hitbox for interaction; `asset` empty —
 each structure's asset is its item's).
+
+Phase 24 adds, additively: per item `demolish` (true: `pick_up` is a 3 s
+demolish that returns nothing) and `site: {becomes, footprint, slope_max,
+bill: [{item, qty}…]}` (a building site — `site.dock`, verb `Deliver`);
+`structure.dock` (station `dock`, verb `Use`) and `vehicle.rover` (kind
+`vehicle`, asset `vehicle.rover.v1`); recipes at station `dock`. Both
+`site.dock` and `structure.dock` draw `prop.dock` (solid as its pad box,
+x,z ∈ [−3, 3], y ∈ [0, 0.25]).
 
 Phase 13 adds, additively: per item `consumable: {heal, cooldown}`,
 `ability: {id, range, cooldown}`, `mod: {damage, magazine, max_range,

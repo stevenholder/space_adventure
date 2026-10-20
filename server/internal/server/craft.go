@@ -117,10 +117,12 @@ func (s *Server) stepCrafts() []craftDue {
 
 // drainCrafts lands each finished unit: output (+ craft_extra) or, with no
 // room, the inputs back and the end; the XP; then the next unit's inputs,
-// or missing_materials. Called with s.mu NOT held.
+// or missing_materials; a vehicle item spawns its vehicle. Called with s.mu
+// NOT held.
 func (s *Server) drainCrafts(due []craftDue) {
 	for _, d := range due {
 		c := d.c
+		vehicle := false
 		c.ident.Mutate(func(p *store.Player) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -143,6 +145,7 @@ func (s *Server) drainCrafts(due []craftDue) {
 			k.held = false
 			c.awardLocked(r.Skill, r.XP)
 			s.sendCraftEnd(c, r.ID, "done", r.Output.Item, made)
+			vehicle = vehicle || s.reg.Items[r.Output.Item].Kind == "vehicle"
 			k.left--
 			if k.left <= 0 {
 				c.craft = craftState{}
@@ -154,6 +157,12 @@ func (s *Server) drainCrafts(due []craftDue) {
 			}
 			k.held, k.pending, k.ticks = true, false, k.unitTicks
 		})
+		// Phase 24: a vehicle item landed (a dock craft): owning it is
+		// having it in the world. Outside Mutate — the sync snapshots the
+		// identity and takes s.mu itself.
+		if vehicle {
+			s.syncOwnedVehicles(c)
+		}
 	}
 }
 

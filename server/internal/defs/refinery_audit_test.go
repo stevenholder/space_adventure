@@ -54,8 +54,9 @@ func loadAudit(t *testing.T) *Registry {
 	return reg
 }
 
-// C183: every item past the five raws (vehicles excepted until Phase 24)
-// is the output of exactly one recipe; a raw is the output of none.
+// C183: every item past the five raws is the output of exactly one recipe
+// (vehicles too, since the dock: Phase 24); a raw is the output of none,
+// and neither is the dock a site becomes.
 func TestRefineryEveryItemHasOneRecipe(t *testing.T) {
 	reg := loadAudit(t)
 	makes := map[string]int{}
@@ -68,9 +69,13 @@ func TestRefineryEveryItemHasOneRecipe(t *testing.T) {
 			if makes[id] != 0 {
 				t.Errorf("raw %s is the output of %d recipes, want 0", id, makes[id])
 			}
-		case it.Kind == "vehicle":
-			// the shop keeps the ship until the dock (Phase 24)
+		case it.Station == "dock":
+			// a dock is what a finished site becomes (Phase 24), never made
+			if makes[id] != 0 {
+				t.Errorf("%s is the output of %d recipes, want 0 (a site becomes it)", id, makes[id])
+			}
 		default:
+			// vehicles included: the dock makes them (Phase 24)
 			if makes[id] != 1 {
 				t.Errorf("item %s is the output of %d recipes, want exactly 1", id, makes[id])
 			}
@@ -91,10 +96,10 @@ func TestRefineryRecipesWellFormed(t *testing.T) {
 	for _, s := range reg.Skills {
 		skills[s.ID] = true
 	}
-	stations := map[string]bool{"hand": true, "bench": true, "forge": true}
+	stations := map[string]bool{"hand": true, "bench": true, "forge": true, "dock": true}
 	for _, r := range readAuditRecipes(t) {
 		if !stations[r.Station] {
-			t.Errorf("%s: station %q, want hand|bench|forge", r.ID, r.Station)
+			t.Errorf("%s: station %q, want hand|bench|forge|dock", r.ID, r.Station)
 		}
 		if !skills[r.Skill] {
 			t.Errorf("%s: skill %q is not in skills.json", r.ID, r.Skill)
@@ -321,10 +326,12 @@ func TestRefineryShopPriceVsRecipe(t *testing.T) {
 		t.Fatal("npc.quartermaster has no stock")
 	}
 	for _, s := range vex.Stock {
+		if reg.Items[s.Item].Kind == "vehicle" {
+			t.Errorf("Vex stocks %s: a vehicle is made at a dock, not sold (Phase 24)", s.Item)
+			continue
+		}
 		if _, ok := byOut[s.Item]; !ok {
-			if reg.Items[s.Item].Kind != "vehicle" {
-				t.Errorf("Vex stocks %s, which has no recipe", s.Item)
-			}
+			t.Errorf("Vex stocks %s, which has no recipe", s.Item)
 			continue
 		}
 		need := 1.5 * unit(s.Item, 0)

@@ -96,12 +96,12 @@ const (
 	OpShopBuyback  uint16 = 0x0014 // Phase 13: re-buy something sold this session, at what the shop paid
 	OpWield        uint16 = 0x0015 // melee: {"slot":"primary"|"melee"} picks the weapon in hand
 	OpChat         uint16 = 0x0016 // Phase 20: {"text":"..."}, broadcast as EventChat
-	// Phase 23 (PROTOCOL.md): placeable stations. 0x001A is reserved for
-	// Phase 24 `deliver`.
+	// Phase 23 (PROTOCOL.md): placeable stations.
 	OpPlace     uint16 = 0x0017 // {"item"}: put a structure item down in front of you
 	OpChestPut  uint16 = 0x0018 // {"structure","item","qty"}: bag -> chest
 	OpChestTake uint16 = 0x0019 // {"structure","item","qty"}: chest -> bag
-	OpPickUp    uint16 = 0x001B // {"structure"}: a 1.5 s channel, ends with EventPickUpEnd
+	OpDeliver   uint16 = 0x001A // Phase 24 {"structure","item","qty"}: bag -> a building site's bill
+	OpPickUp    uint16 = 0x001B // {"structure"}: a 1.5 s channel (3 s demolish), ends with EventPickUpEnd
 )
 
 // cmd_result status codes (PROTOCOL.md constants).

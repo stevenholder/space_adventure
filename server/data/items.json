@@ -347,14 +347,14 @@
       "desc": "Energy cells for the pulse rifle. Stack to 300."
     },
     {
-      "$comment": "Phase 5: owning this item IS owning a ship (GDD 'Ownership') - the server spawns the owner's ship on the pad at purchase and on join. stack_max 1: one ship per owner.",
+      "$comment": "Phase 5: owning this item IS owning a ship (GDD 'Ownership') - the server spawns the owner's ship at purchase/craft and on join. stack_max 1: one ship per owner. Phase 24: made at a dock, no longer sold.",
       "id": "ship.v1",
       "name": "Scout Ship",
       "kind": "vehicle",
       "rarity": "epic",
       "asset": "ship.v1",
       "stack_max": 1,
-      "desc": "Your own ship, parked on the pad. Owning it is flying it."
+      "desc": "Your own ship, built at your dock and parked on its pad. Owning it is flying it."
     },
     {
       "id": "armor.helmet.scout",
@@ -855,6 +855,54 @@
       "value": 80,
       "verb": "Open",
       "desc": "Twenty stacks that stay where you leave them. Your party may open it while you are online."
+    },
+    {
+      "$comment": "Phase 24 (GDD 'Buildings and the dock'): a site is a structure that is built in place. Its stacks are what has been delivered; on the last unit of the bill it becomes `site.becomes` (same entity). Never counts toward the 5-structure cap: one site-or-dock per character.",
+      "id": "site.dock",
+      "name": "Dock Site",
+      "kind": "structure",
+      "rarity": "rare",
+      "asset": "prop.dock",
+      "stack_max": 1,
+      "value": 300,
+      "verb": "Deliver",
+      "demolish": true,
+      "site": {
+        "becomes": "structure.dock",
+        "footprint": 6.0,
+        "slope_max": 8,
+        "bill": [
+          {"item": "mat.plate.steel", "qty": 60},
+          {"item": "mat.wiring", "qty": 24},
+          {"item": "mat.ingot.iron", "qty": 20},
+          {"item": "mat.core", "qty": 4}
+        ]
+      },
+      "desc": "Where a dock will stand. Place it on six metres of flat ground and bring it plates, wiring, iron and cores."
+    },
+    {
+      "$comment": "Phase 24: what a finished site.dock becomes. Never crafted, never carried, never placed by hand.",
+      "id": "structure.dock",
+      "name": "Dock",
+      "kind": "structure",
+      "rarity": "rare",
+      "asset": "prop.dock",
+      "stack_max": 1,
+      "value": 2000,
+      "station": "dock",
+      "verb": "Use",
+      "demolish": true,
+      "desc": "Rovers and ships are built here and parked on its pad. Yours; hold to demolish."
+    },
+    {
+      "$comment": "Phase 24: owning this item IS owning a rover, exactly as ship.v1 is a ship. Built at a dock; parked in front of the owner's dock (else beside the world rover) on craft and on join.",
+      "id": "vehicle.rover",
+      "name": "Rover",
+      "kind": "vehicle",
+      "rarity": "rare",
+      "asset": "vehicle.rover.v1",
+      "stack_max": 1,
+      "desc": "Your own rover, parked at your dock. Owning it is driving it."
     }
   ],
   "entity_defs": [
