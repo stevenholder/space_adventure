@@ -1015,7 +1015,7 @@ no ship, so `t26`/`t27`/`t34` and kind's `SA_START` seed `ship.v1=1`
 | C197 | PASS | `t45`: stranger `not_yours`, ammo `not_wanted`; 10 plates → pct 9 and row health 9; party invite, B delivers 60 clamped to 50 (pct 55), wiring 4 (59); the last cores → every line 0, pct 100, `despawn` then `spawn` of the SAME id as `structure.dock\0<A>` on both sockets, A's `skill_xp` construction +1580 (= bill value / 2), B none. Go `TestDeliverBillPartyAndCompletion` (status 5, `bad_qty`, the clamp, stored stacks, chest ops on a site `wrong_station`). `p24-deliver.png`: DOCK SITE · 43 %, BAG left, BILL right (30/60, 10/24, 7/20, 0/4) |
 | C198 | PASS | `t45`: `craft recipe.vehicle.rover` with `npc` = the dock → `craft_end done` in 28.5 s, `vehicle.rover` in the bag, a type-5 spawn 5.50 m from the dock seen by B; a second craft `no_space`; Vex's `shop_list` has no `ship.v1`; after the restart A's rover is back (the item). Go `TestDockCraftsRover` (Owner set, ≤ 8 m, along the forward), `TestOwnedRoverWithoutDock`, `TestShopSellsNoShip`. `p24-dock-rover.png`: the finished dock with its beacon lit and the new rover beside it |
 | C199 | PASS | `t45`: B `pick_up` on the dock `not_yours`; A → `{"seconds":3}`, `pick_up_end ok` after 3.0 s, the bag byte-identical, B sees the despawn, the rover stays; a new site places at once (slot freed). Go `TestDemolish` (nothing back with a full bag, row deleted). Client: hold F reads `DEMOLISHING`, the notice "demolished" |
-| C200 | PASS | Go vet/test (+`-race` server 61 s; `dock_test.go` ×3), `gen_recipes --check` (56), `dotnet build` 0 warnings, `-selftest` (191, +16 `site:`), `godot-gate`, `godot-test`, `godot-codec` (9), `godot-conformance`, `npm --prefix art test` (282 assets), `t13` (13), `t35` (6), `t44` 84/84 in 155 s, `t45` 96 checks in 63 s (×2), `t26` 13, `t27` 2×3, `t34` 32 — the last three with `ship.v1=1` seeded. C153–C195 hold. **Owed:** kind after the merge (`make up` carries the new `SA_START`; `t45` is bare-server only by design) |
+| C200 | PASS | Go vet/test (+`-race` server 61 s; `dock_test.go` ×3), `gen_recipes --check` (56), `dotnet build` 0 warnings, `-selftest` (191, +16 `site:`), `godot-gate`, `godot-test`, `godot-codec` (9), `godot-conformance`, `npm --prefix art test` (282 assets), `t13` (13), `t35` (6), `t44` 84/84 in 155 s, `t45` 96 checks in 63 s (×2), `t26` 13, `t27` 2×3, `t34` 32 — the last three with `ship.v1=1` seeded. C153–C195 hold. **On kind after the merge** (`make up`, build `7012ed9`, an account registered over HTTP, kind's `SA_START` extended by hand with the site and one stack of each material): `test/out/ui/p24-kind-site.png` (`site.dock` placed at yaw 90, four right-clicks → `DOCK 90 %`, the pad and gantry solid, the beacon still ghost — the 60-plate line is two trips); `rollout restart` → `structures: loaded 3`, the rig rejoins: `too_many`, walks to its site, peek `pct 90, remaining mat.plate.steel=10` (`p24-kind-restart.png`); the last 10 plates and the rover inputs put in the Postgres row by hand (the rig's stage trick) → `deliver` pct 100, `dock swap: structure 1048635 def=structure.dock`, `F · use dock · hold to demolish`, `craft recipe.vehicle.rover` → `vehicle 1048638 at 5.5 m from the dock`, the row `[ammo.cell 120, ship.v1 1, vehicle.rover 1]`, the structure row `structure.dock` (`p24-kind-dock-rover.png`: dock, beacon lit, the new rover, the owner's seeded ship behind). `t26` against kind with the manifest's `ship.v1=1`: 13/13. Prod: release `v2026.10.20-b8f2357`, deploy green. `t45` is bare-server only by design |
 
 **Found on the way.** `GeometryInstance3D.Transparency` draws fully
 opaque under gl_compatibility (the first ghost came out solid black) —
@@ -1027,6 +1027,16 @@ second seeded ship (t27 saw it as snap-backs); with a store it keys by
 token. The spawn camp never fits a 6 m site — every rig run walked out
 first; players will too. Kit PBR reads dark at night in all three shots
 (the Phase 25 debt, unchanged).
+
+**Found on kind.** A dock placed along the ship pad's bearing (yaw 90
+from spawn) sits in the pad lane: the next seeded ship went to the
+fifth slot 70 m out and t26's straight walker stalled on the dock and
+its rover (`OUT_OF_RANGE` at the pilot seat). Ships only exist for
+owners who joined this server lifetime (every guest token with
+`ship.v1` seeds one), so a restart clears the pile; the dock row and the
+rover item were removed by hand and t26 passed. The site rule keeps 3 m
+from ships but nothing keeps the pad lane itself clear — a player's
+dock can do the same. Noted, not fixed.
 
 **Known / notes.** Entity ids are not stable across a restart (t45
 matches by data + position). There is no wire marker that a rover is

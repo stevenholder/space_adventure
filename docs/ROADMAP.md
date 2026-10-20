@@ -2155,7 +2155,7 @@ bench up: it is in your bag; the friend cannot pick up the chest.
 
 # Phase 24 — buildings and the dock (drafted 2026-10-08)
 
-### Where Phase 24 stands (2026-10-20, in progress)
+### Where Phase 24 stands (2026-10-20, shipped — PR #103; kind + prod proven the same day)
 
 Buildings are built in place from a site and deliveries; the dock is the
 first, and vehicles move from the shop to it. Contract: GDD "Buildings
