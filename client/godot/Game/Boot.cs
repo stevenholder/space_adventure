@@ -211,6 +211,7 @@ namespace SpaceAdventure.Game
         private ShopView _shopView;
         private BenchView _benchView; // Phase 12
         private ChestView _chestView; // Phase 23
+        private DeliverView _deliverView; // Phase 24
         private Settings _settings;
         private SettingsView _settingsView;
         private Hotbar _hotbar; // Phase 13
@@ -242,7 +243,7 @@ namespace SpaceAdventure.Game
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
             (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
             (_benchView?.Open ?? false) || (_settingsView?.Open ?? false) ||
-            (_chestView?.Open ?? false);
+            (_chestView?.Open ?? false) || (_deliverView?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -1211,6 +1212,7 @@ namespace SpaceAdventure.Game
             _shopView = new ShopView(_ui.Root, _character, _interact, _icons, NextCmdSeq, b => _net.Send(b));
             _benchView = new BenchView(_ui.Root, _character, _skills, _icons, NextCmdSeq, b => _net.Send(b));
             _chestView = new ChestView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
+            _deliverView = new DeliverView(_ui.Root, _character, _icons, NextCmdSeq, b => _net.Send(b));
             _hotbar = new Hotbar();
             _hotbar.Load();
             _hotbarView = new HotbarView(_ui.Root, _hotbar, _character, _icons);
@@ -1481,6 +1483,8 @@ namespace SpaceAdventure.Game
             if (_interact.ShopOpen && OutOfCounterRange(_interact.ShopNpc)) { _interact.CloseShop(); _shopView.Show(false); }
             if (_benchView.Open && _benchView.Bench != 0 && OutOfCounterRange(_benchView.Bench)) _benchView.Show(false);
             else if (_chestView.Open && _chestView.Chest != 0 && OutOfCounterRange(_chestView.Chest)) _chestView.Show(false);
+            // A site's panel also closes the moment the site becomes the dock (its id despawns first).
+            else if (_deliverView.Open && _deliverView.Site != 0 && OutOfCounterRange(_deliverView.Site)) _deliverView.Show(false);
             else if (Clock.Now > _noticeUntil) _interact.Notice = "";
             // After the clear above, or the hint is wiped the frame it is set.
             if (_seat != 0 && Clock.Now > _noticeUntil) _interact.Notice = SeatKind == EntityType.Ship ? "F  ·  exit ship" : "F  ·  exit rover";
@@ -1574,6 +1578,7 @@ namespace SpaceAdventure.Game
             if (_interact.ShopOpen) { _interact.CloseShop(); _shopView.Show(false); return; }
             if (_benchView.Open) { _benchView.Show(false); return; }
             if (_chestView.Open) { _chestView.Show(false); return; }
+            if (_deliverView.Open) { _deliverView.Show(false); return; }
             if (_interact.Target == 0) return;
             switch (_interact.TargetType)
             {
@@ -2074,8 +2079,9 @@ namespace SpaceAdventure.Game
                     CmdResult r = Decode.CmdResult(frame.Reader);
                     _hud.OnCmdResult(r);
                     if (r.Ok && (r.Opcode == Op.Inventory || r.Opcode == Op.ShopBuy || r.Opcode == Op.ShopSell || r.Opcode == Op.ShopBuyback || r.Opcode == Op.Craft
-                        || r.Opcode == Op.Place || r.Opcode == Op.ChestPut || r.Opcode == Op.ChestTake)) _character.OnWallet(r.Body);
+                        || r.Opcode == Op.Place || r.Opcode == Op.ChestPut || r.Opcode == Op.ChestTake || r.Opcode == Op.Deliver)) _character.OnWallet(r.Body);
                     if (r.Opcode == Op.Place || r.Opcode == Op.ChestPut || r.Opcode == Op.ChestTake || r.Opcode == Op.PickUp) OnStructureResult(r);
+                    if (r.Opcode == Op.Deliver) OnDeliverResult(r);
                     if (r.Opcode == Op.Gather) OnGatherResult(r);
                     if (r.Opcode == Op.Use) OnUseResult(r);
                     if (r.Opcode == Op.Craft) OnCraftResult(r);
@@ -2112,6 +2118,7 @@ namespace SpaceAdventure.Game
                     if (_bagsView.Open) _bagsView.Rebuild();
                     if (_sheetView.Open) _sheetView.Rebuild();
                     if (_chestView.Open) _chestView.Rebuild();
+                    if (_deliverView.Open) _deliverView.Rebuild();
                     if (_journalView.Open) _journalView.Rebuild();
                     if (_partyView.Open) _partyView.Rebuild();
                     break;
@@ -2313,6 +2320,7 @@ namespace SpaceAdventure.Game
             _hudView.SetLog(_hud.DebugOpen ? _hud.Lines : System.Array.Empty<string>());
             _hudView.SetDebug(_hud.DebugText(_net, _predictor, _character));
             _hudView.UpdateHealthBars(_camera, _views, !_map.Open);
+            _hudView.UpdateSiteLabels(_camera, _views, !_map.Open);
 
             _map.Draw(_terrain, Frame.ToGodot(me.Pos), Frame.ToGodot(me.Facing), MapMarkers());
         }
@@ -2596,6 +2604,8 @@ namespace SpaceAdventure.Game
         private uint _holdTarget, _pickUp;
         private double _holdStart;
         private bool _pickUpChannel;
+        /// <summary>Phase 24: the pick-up that went out is a demolish (remembered: the site is gone by its end).</summary>
+        private bool _pickUpDemolish;
         /// <summary>The last place reply's structure id (the rig faces it).</summary>
         private uint _lastPlaced;
         /// <summary>Rig: F reads as held (-uiPickUp).</summary>
@@ -2612,7 +2622,9 @@ namespace SpaceAdventure.Game
                     _holdTarget = 0;
                     if (_benchView.Open) _benchView.Show(false);
                     if (_chestView.Open) _chestView.Show(false);
+                    if (_deliverView.Open) _deliverView.Show(false);
                     _pickUp = hv.Id;
+                    _pickUpDemolish = Demolishing(hv.Id);
                     _pickUpChannel = false;
                     _net.Send(StructureRules.PickUpCmd(NextCmdSeq(), hv.Id));
                 }
@@ -2634,9 +2646,15 @@ namespace SpaceAdventure.Game
             }
         }
 
-        /// <summary>F on a structure: a station opens the craft panel on it, a chest the chest panel.</summary>
+        /// <summary>F on a structure: a station opens the craft panel on it, a chest the chest panel, a site the deliver panel.</summary>
         private void OpenStructure(EntityView v)
         {
+            if (DeliverRules.IsSite(v.Def))
+            {
+                _deliverView.OpenOn(v.Id, v.Def, v.SitePct);
+                _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
+                return;
+            }
             string station = UI.CraftRules.StationOfStructure(_character.Defs, v.Def);
             if (station != "") { OpenStation(v.Id, station); return; }
             _chestView.OpenOn(v.Id);
@@ -2656,6 +2674,12 @@ namespace SpaceAdventure.Game
                     _chestView.OnChest(StructureRules.ParseChest(r.Body));
                     if (!r.Body.Contains("bad_qty")) { _chestView.Status = why; _chestView.Rebuild(); }
                     return;
+                }
+                // Phase 24: a site's too_many is the one-dock rule, not the five-structure cap.
+                if (r.Opcode == Op.Place && DeliverRules.IsSite(StructureRules.LastPlaceItem))
+                {
+                    string site = DeliverRules.Explain(ReasonCode(r.Body), true);
+                    if (site != "") why = site;
                 }
                 _interact.Notice = why;
                 _noticeUntil = Clock.Now + 2;
@@ -2682,22 +2706,47 @@ namespace SpaceAdventure.Game
                     _pickUpChannel = true;
                     _channelStart = Clock.Now;
                     _channelEnd = Clock.Now + secs;
-                    _channelLabel = "picking up";
+                    _channelLabel = _pickUpDemolish ? DeliverRules.DemolishBar : "picking up";
                     break;
             }
+        }
+
+        /// <summary>Phase 24: is this structure one a pick-up demolishes (a site or the dock)?</summary>
+        private bool Demolishing(uint structure) =>
+            _views.TryGet(structure, out var v) && _character.Defs.Item(v.Def)?.Demolish == true;
+
+        /// <summary>
+        /// Phase 24: a deliver reply. The panel's own peek and every
+        /// right-click land here; the bill redraws, a refusal says why.
+        /// </summary>
+        private void OnDeliverResult(CmdResult r)
+        {
+            if (!r.Ok)
+            {
+                string code = ReasonCode(r.Body);
+                string why = DeliverRules.Explain(code, true);
+                if (why == "") why = Reason(r.Body);
+                if (_deliverView.Open) { _deliverView.Status = why; _deliverView.Rebuild(); }
+                else { _interact.Notice = why; _noticeUntil = Clock.Now + 2; }
+                return;
+            }
+            _deliverView.Status = "";
+            _deliverView.OnResult(DeliverRules.ParseResult(r.Body));
+            if (_bagsView.Open) _bagsView.Rebuild();
         }
 
         /// <summary>Phase 23: pick_up_end — the item is back in the bag, or why not.</summary>
         private void OnPickUpEnd(string json)
         {
             var (_, ok, reason) = StructureRules.ParsePickUpEnd(json);
+            bool demolished = _pickUpDemolish;
             if (_pickUpChannel || _pickUp != 0) _channelStart = _channelEnd = -1;
             _pickUp = 0;
             _pickUpChannel = false;
             if (ok)
             {
                 _character.OnWallet(json); // carries `inventory`
-                _interact.Notice = "picked up";
+                _interact.Notice = demolished ? "demolished" : "picked up";
                 if (_bagsView.Open) _bagsView.Rebuild();
             }
             else _interact.Notice = reason is "moved" or "hit" or "died" or "cancel" or "disconnect"
@@ -2835,6 +2884,13 @@ namespace SpaceAdventure.Game
             _noticeUntil = Clock.Now + 2;
         }
 
+        /// <summary>A refusal body's bare {"reason"} code ("" when none).</summary>
+        private static string ReasonCode(string body)
+        {
+            try { return (string)Newtonsoft.Json.Linq.JObject.Parse(string.IsNullOrEmpty(body) ? "{}" : body)["reason"] ?? ""; }
+            catch (Newtonsoft.Json.JsonException) { return ""; }
+        }
+
         /// <summary>A refusal's {"reason"} as the words the HUD shows.</summary>
         private static string Reason(string body)
         {
@@ -2867,6 +2923,8 @@ namespace SpaceAdventure.Game
                 "no_account" => "guests cannot place",
                 "not_empty" => "empty it first",
                 "not_found" => "it is gone",
+                // Phase 24: sites (a site's too_many is reworded by its caller).
+                "not_wanted" => "the site does not need that",
                 "" => "refused",
                 _ => code.Replace('_', ' '),
             };
@@ -2874,7 +2932,7 @@ namespace SpaceAdventure.Game
 
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView, _chestView })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView, _chestView, _deliverView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();
@@ -3275,6 +3333,114 @@ namespace SpaceAdventure.Game
                 && Sim.Collide.PropCollider("prop.forge", Vec3.Zero, new Quat(0, 0, 0, 1), 1, out _));
         }
 
+        /// <summary>
+        /// Phase 24 (GDD "Buildings and the dock"): the deliver opcode and
+        /// body, the result parse, pct from health, the ghost's thirds, the
+        /// prompts and label, the refusal words, the dock's collider box.
+        /// </summary>
+        private static void SiteChecks(Action<string, bool> Check)
+        {
+            Check("site: wire number (deliver 0x001A)", Op.Deliver == 0x001A);
+            var defs = Defs.Parse("{\"items\":{" +
+                "\"site.dock\":{\"id\":\"site.dock\",\"name\":\"Dock Site\",\"kind\":\"structure\",\"asset\":\"prop.dock\",\"verb\":\"Deliver\",\"demolish\":true," +
+                "\"site\":{\"becomes\":\"structure.dock\",\"footprint\":6.0,\"slope_max\":8,\"bill\":[{\"item\":\"mat.plate.steel\",\"qty\":60},{\"item\":\"mat.core\",\"qty\":4}]}}," +
+                "\"structure.dock\":{\"id\":\"structure.dock\",\"name\":\"Dock\",\"kind\":\"structure\",\"asset\":\"prop.dock\",\"station\":\"dock\",\"verb\":\"Use\",\"demolish\":true}," +
+                "\"structure.bench\":{\"id\":\"structure.bench\",\"name\":\"Workbench\",\"kind\":\"structure\",\"asset\":\"prop.bench\",\"station\":\"bench\",\"verb\":\"Use\"}," +
+                "\"mat.plate.steel\":{\"id\":\"mat.plate.steel\",\"name\":\"Steel Plate\",\"kind\":\"material\"}}}");
+            ItemDef site = defs.Item("site.dock");
+            Check("site: ItemDef parses site (becomes, footprint, slope, bill) and demolish",
+                site?.Site != null && site.Site.Becomes == "structure.dock" && site.Site.Footprint == 6.0 && site.Site.SlopeMax == 8
+                && site.Site.Bill.Count == 2 && site.Site.Bill[0].Item == "mat.plate.steel" && site.Site.Bill[0].Qty == 60
+                && site.Demolish && defs.Item("structure.dock")?.Demolish == true && defs.Item("structure.bench")?.Demolish == false
+                && defs.Item("structure.bench")?.Site == null);
+            Check("site: a site is site.*; the dock and a bench are not",
+                DeliverRules.IsSite("site.dock") && !DeliverRules.IsSite("structure.dock") && !DeliverRules.IsSite("structure.bench") && !DeliverRules.IsSite(null));
+            Check("site: deliver body {structure,item,qty}; a peek is qty 0",
+                DeliverRules.DeliverBody(12, "mat.plate.steel", 20) == "{\"structure\":12,\"item\":\"mat.plate.steel\",\"qty\":20}"
+                && DeliverRules.PeekCmd(1, 12, "mat.core").AsSpan().SequenceEqual(DeliverRules.DeliverCmd(1, 12, "mat.core", 0)));
+            var res = DeliverRules.ParseResult("{\"bill\":[{\"item\":\"mat.plate.steel\",\"qty\":40},{\"item\":\"mat.core\",\"qty\":0}],\"pct\":43,\"inventory\":[]}");
+            Check("site: a deliver result reads the remaining bill (zeros kept) and pct; junk is null",
+                res != null && res.Value.Pct == 43 && res.Value.Remaining.Count == 2 && res.Value.Remaining[1].qty == 0
+                && DeliverRules.Want(res.Value.Remaining, "mat.plate.steel") == 40 && DeliverRules.Want(res.Value.Remaining, "mat.wiring") == 0
+                && DeliverRules.ParseResult("{\"inventory\":[]}") == null && DeliverRules.ParseResult("junk") == null
+                && DeliverRules.ParseResult("{\"bill\":[],\"pct\":250}")?.Pct == 100);
+            Check("site: a right-click delivers as much as the line wants",
+                DeliverRules.Qty(res?.Remaining, "mat.plate.steel", 60) == 40 && DeliverRules.Qty(res?.Remaining, "mat.plate.steel", 7) == 7
+                && DeliverRules.Qty(res?.Remaining, "mat.core", 4) == 0 && DeliverRules.Qty(res?.Remaining, "mat.scrap", 9) == 0);
+            Check("site: pct is the row's health, clamped 0..100",
+                DeliverRules.PctOf(43) == 43 && DeliverRules.PctOf(0) == 0 && DeliverRules.PctOf(140) == 100 && DeliverRules.PctOf(-3) == 0
+                && new EntityView { Type = EntityType.Structure, Def = "site.dock", Health = 43 }.SitePct == 43);
+            Check("site: the ghost fills by thirds (pad 34, gantry 67, beacon 100)",
+                DeliverRules.SolidParts(0) == 0 && DeliverRules.SolidParts(33) == 0 && DeliverRules.SolidParts(34) == 1 && DeliverRules.SolidParts(66) == 1
+                && DeliverRules.SolidParts(67) == 2 && DeliverRules.SolidParts(99) == 2 && DeliverRules.SolidParts(100) == 3
+                && string.Join(",", DeliverRules.Parts) == "pad,gantry,beacon");
+            Check("site: part names as the importer leaves them",
+                EntityViews.PartIndex(AssetRegistry.NameKey("pad")) == 0 && EntityViews.PartIndex(AssetRegistry.NameKey("Gantry")) == 1
+                && EntityViews.PartIndex(AssetRegistry.NameKey("beacon.001")) == 2 && EntityViews.PartIndex(AssetRegistry.NameKey("padding")) == -1
+                && EntityViews.PartIndex(AssetRegistry.NameKey("deck")) == -1);
+            {
+                // A stand-in dock: pad (a mesh), gantry (a node over a mesh),
+                // beacon (an emissive lamp), an outline, and a stray mesh.
+                var model = new Node3D { Name = "prop_dock" };
+                var shared = new StandardMaterial3D { AlbedoColor = new Color(0.5f, 0.5f, 0.5f) };
+                var lamp = new StandardMaterial3D { EmissionEnabled = true, Emission = new Color(1f, 0.68f, 0.1f) };
+                MeshInstance3D Mesh(Node parent, string name, Material mat)
+                {
+                    var m = new MeshInstance3D { Name = name, Mesh = new Godot.BoxMesh { Material = mat } };
+                    parent.AddChild(m);
+                    return m;
+                }
+                var pad = Mesh(model, "pad", shared);
+                var gantry = new Node3D { Name = "gantry" }; model.AddChild(gantry);
+                var boom = Mesh(gantry, "boom", shared);
+                var beacon = Mesh(model, "beacon", lamp);
+                var ink = Mesh(model, "ink", shared);
+                var stray = Mesh(model, "skirt", shared);
+                bool Ghost(MeshInstance3D m) => m.GetActiveMaterial(0) is BaseMaterial3D b && b.Transparency == BaseMaterial3D.TransparencyEnum.Alpha
+                    && Math.Abs(b.AlbedoColor.A - EntityViews.GhostAlpha) < 1e-6 && !b.EmissionEnabled;
+                bool Solid(MeshInstance3D m, Material own) => m.GetActiveMaterial(0) == own;
+                var v = new EntityView { Type = EntityType.Structure, Def = "site.dock", Model = model, Health = 43 };
+                EntityViews.DrawGhost(v);
+                bool at43 = Solid(pad, shared) && Ghost(boom) && Ghost(beacon) && Solid(ink, shared) && Ghost(stray)
+                    && shared.Transparency == BaseMaterial3D.TransparencyEnum.Disabled && lamp.EmissionEnabled;   // the sources untouched
+                v.Health = 70;
+                int redrawn = EntityViews.DrawGhost(v), again = EntityViews.DrawGhost(v);
+                bool at70 = Solid(pad, shared) && Solid(boom, shared) && Ghost(beacon) && redrawn == 2 && again == 0;
+                v.Health = 100;
+                EntityViews.DrawGhost(v);
+                bool lit = Solid(beacon, lamp);
+                v.Health = 10;
+                EntityViews.DrawGhost(v);
+                bool at10 = Ghost(pad) && Ghost(boom) && Solid(ink, shared) && lit;
+                Check("site: the ghost draws parts solid by pct, the outline kept, the rest translucent copies (alpha 0.35), a ghost lamp unlit",
+                    at43 && at70 && at10);
+                model.Free();
+            }
+            Check("site: prompts (deliver + pct; mine adds hold to demolish; the dock: use dock)",
+                Interaction.StructurePrompt("F", defs, "site.dock", "Kade", false, 43) == "F  ·  deliver to dock site  ·  43 % (Kade's)"
+                && Interaction.StructurePrompt("F", defs, "site.dock", "Kade", true, 43) == "F  ·  deliver to dock site  ·  43 %  ·  hold to demolish"
+                && Interaction.StructurePrompt("F", defs, "structure.dock", "Kade", true) == "F  ·  use dock  ·  hold to demolish"
+                && Interaction.StructurePrompt("F", defs, "structure.dock", "Kade", false) == "F  ·  use dock (Kade's)"
+                && Interaction.StructurePrompt("F", defs, "structure.bench", "Kade", true) == "F  ·  use workbench  ·  hold to pick up");
+            Check("site: the label over the ghost and the panel title",
+                DeliverRules.Label(defs, "site.dock", 43) == "DOCK 43 %" && DeliverRules.Label(defs, "site.dock", 0) == "DOCK 0 %"
+                && DeliverRules.Title(defs, "site.dock", 43) == "Dock Site  ·  43 %");
+            Check("site: the dock is station dock, titled Dock; a site is no station",
+                UI.CraftRules.StationOfStructure(defs, "structure.dock") == "dock" && UI.CraftRules.StationOfStructure(defs, "site.dock") == ""
+                && BenchView.TitleOf("dock") == "Dock" && BenchView.TitleOf("forge") == "Forge" && BenchView.TitleOf("bench") == "Workbench");
+            Check("site: refusals in words (not_wanted, not_yours, a site's too_many)",
+                DeliverRules.Explain("not_wanted", true) == "the site does not need that" && DeliverRules.Explain("not_yours", true) == "not yours"
+                && DeliverRules.Explain("too_many", true) == "you already have a dock" && DeliverRules.Explain("too_many", false) == ""
+                && Reason("{\"reason\":\"not_wanted\"}") == "the site does not need that" && Reason("{\"reason\":\"too_many\"}") == "five is the limit"
+                && ReasonCode("{\"reason\":\"too_many\"}") == "too_many" && ReasonCode("junk") == "");
+            Check("site: the demolish bar reads DEMOLISHING; demolish seconds come from the reply",
+                DeliverRules.DemolishBar == "DEMOLISHING" && StructureRules.PickUpSeconds("{\"seconds\":3}") == 3.0);
+            Check("site: the dock pad is a 6 x 0.25 x 6 box on the ground, as props.go has it",
+                Sim.Collide.PropCollider("prop.dock", new Vec3(0, 100, 0), new Quat(0, 0, 0, 1), 1, out var dc)
+                && Math.Abs(dc.Half.X - 3.0) < 1e-6 && Math.Abs(dc.Half.Z - 3.0) < 1e-6 && Math.Abs(dc.Half.Y - 0.125) < 1e-6
+                && Math.Abs(dc.Center.Y - 100.125) < 1e-4);
+        }
+
         private static int SelfTest()
         {
             int failed = 0;
@@ -3338,6 +3504,7 @@ namespace SpaceAdventure.Game
             }));
             CraftChecks(Check);
             StructureChecks(Check);
+            SiteChecks(Check);
             // Phase 20: the chat log's model (GDD "Chat (Phase 20)", C176).
             var chat = new UI.ChatLog();
             Check("chat: an empty log is not visible", !chat.Visible && chat.Lines.Count == 0);

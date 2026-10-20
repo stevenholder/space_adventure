@@ -14,7 +14,7 @@ namespace SpaceAdventure.Game.UI
     {
         /// <summary>The station NPC's entity id; Boot sets it before Show.</summary>
         public uint Bench;
-        /// <summary>"bench" or "forge": which recipes this station makes.</summary>
+        /// <summary>"bench", "forge" or (Phase 24) "dock": which recipes this station makes.</summary>
         public string Station = "bench";
         /// <summary>A refusal or notice line from Boot; shown at the bottom when non-empty.</summary>
         public string Status = "";
@@ -34,9 +34,17 @@ namespace SpaceAdventure.Game.UI
         /// <summary>The rig's press: CRAFT on a recipe's row.</summary>
         public bool Press(string recipe, out string why) => List.Press(Bench, recipe, out why);
 
+        /// <summary>The panel's title for a station kind.</summary>
+        public static string TitleOf(string station) => station switch
+        {
+            "forge" => "Forge",
+            "dock" => "Dock",
+            _ => "Workbench",
+        };
+
         protected override void Fill(VBoxContainer body)
         {
-            SetTitle(Station == "forge" ? "Forge" : "Workbench");
+            SetTitle(TitleOf(Station));
             List.Fill(body, Station, Bench, Rebuild);
             if (!string.IsNullOrEmpty(Status))
                 Line(body, Status, Styles.Dust);

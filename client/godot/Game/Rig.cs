@@ -58,6 +58,14 @@
 //                           prompt; -uiPickUp then holds F on it so the shot carries the bar
 //   -uiChest                Phase 23: place a structure.chest (SA_START), open it, move the
 //                           first three bag stacks in, shoot the panel
+//   -uiSite                 Phase 24: place site.dock (SA_START), deliver every bag stack its bill
+//                           wants (a partial bill: ~43 %), close the panel, back off, face the
+//                           ghost; reports prompt, pct and the label over it
+//   -uiDeliver              Phase 24: the same, but the shot is the deliver panel after the
+//                           right-clicks (bag left, bill right, title DOCK SITE · 43 %)
+//   -uiDockRover            Phase 24: place site.dock, deliver the whole bill (SA_START carries
+//                           it), wait for the swap to structure.dock, open the dock, craft
+//                           recipe.vehicle.rover, wait <= 35 s for the rover, face it and the dock
 
 using System;
 using System.Collections.Generic;
@@ -85,6 +93,120 @@ namespace SpaceAdventure.Game
         private bool _rigDeathDemo; // -uiDeathDemo holds the dead flag against the snapshots
         private bool _rigShift;     // -uiShift holds the hotbar's shift row for a shot
         private float _detourSign = 1f;
+
+        /// <summary>
+        /// Phase 24's rig: -uiSite / -uiDeliver / -uiDockRover on a site
+        /// placed by the -uiPlace path. Every count is the server's: the
+        /// rig only right-clicks what the bag holds.
+        /// </summary>
+        private async Task RigSite(EntityView sv)
+        {
+            uint id = sv.Id;
+            Vector3 at = sv.Root.GlobalPosition;
+            Vector3 up = at.Normalized();
+            GD.Print($"ui: site {id} def={sv.Def} pct={sv.SitePct} prompt \"{_interact.Prompt}\"");
+            if (UI.DeliverRules.IsSite(sv.Def)) await RigDeliver(id);
+
+            if (Flag("-uiDeliver")) return;   // the shot is the panel
+            if (Flag("-uiSite"))
+            {
+                _deliverView.Show(false);
+                await BackOffAndFace(at + up * 0.8f, 2.0);
+                _views.TryGet(id, out var now);
+                string label = "";
+                foreach (var (lid, text) in _hudView.SiteLabels()) if (lid == id) label = text;
+                GD.Print($"ui: site ghost: pct {(now != null ? now.SitePct : -1)}, solid parts {(now != null ? now.GhostDrawn : -1)}, label \"{label}\", prompt \"{_interact.Prompt}\"");
+                return;
+            }
+            await RigDockRover(id, at, up);
+        }
+
+        /// <summary>Opens the site's panel and right-clicks every bag stack its bill wants.</summary>
+        private async Task RigDeliver(uint id)
+        {
+            if (!_views.TryGet(id, out var sv)) return;
+            OpenStructure(sv);
+            for (double waited = 0; _deliverView.Remaining == null && waited < 4; waited += 0.25) await Wait(0.25);
+            var bag = new List<string>();
+            if (_character.Inventory != null) foreach (var st in _character.Inventory) bag.Add($"{st.item}={st.qty}");
+            GD.Print($"ui: deliver peek: pct {_deliverView.Pct}, remaining {RemainingText()}, bag {string.Join(",", bag)}, status \"{_deliverView.Status}\"");
+            int sent = _deliverView.DeliverAllWanted();
+            await Wait(1.5);
+            _views.TryGet(id, out var now);
+            GD.Print($"ui: deliver: {sent} right-clicks, result pct {_deliverView.Pct}, row pct {(now != null ? now.SitePct.ToString() : "gone")}, remaining {RemainingText()}, status \"{_deliverView.Status}\"");
+        }
+
+        /// <summary>-uiDockRover after the deliveries: the swap, the dock's panel, the rover craft, the shot.</summary>
+        private async Task RigDockRover(uint id, Vector3 at, Vector3 up)
+        {
+            // -uiDockRover: the last unit swaps the site for the dock (despawn + spawn, same id).
+            EntityView dock = null;
+            for (double waited = 0; dock == null && waited < 8; waited += 0.25)
+            {
+                if (_views.TryGet(id, out var d) && d.Def == "structure.dock" && d.Root != null) dock = d;
+                else await Wait(0.25);
+            }
+            GD.Print($"ui: dock swap: {(dock == null ? "no dock (" + (_views.TryGet(id, out var still) ? still.Def + " " + still.SitePct + " %" : "gone") + ")" : $"structure {dock.Id} def={dock.Def} owner={dock.Label}")}");
+            if (dock == null) return;
+            await Wait(1.5);   // skill_xp batches once a second: the rover recipe needs Construction 10
+            var before = new HashSet<uint>();
+            foreach (EntityView v in _views.All) if (v.Type == EntityType.Vehicle) before.Add(v.Id);
+            _fps.FaceToward(Eye, at + up * 0.6f);
+            await Wait(0.3);
+            GD.Print($"ui: dock prompt \"{_interact.Prompt}\"");
+            OpenStructure(dock);
+            await Wait(1.0);
+            _benchView.List.Qty = 1;
+            _benchView.Rebuild();
+            bool ok = _benchView.Press("recipe.vehicle.rover", out string why);
+            GD.Print($"ui: dock craft recipe.vehicle.rover: {(ok ? "pressed" : "not pressed: " + why)}, title {UI.BenchView.TitleOf(_benchView.Station)}");
+            if (!ok) return;
+            EntityView rover = null;
+            for (double waited = 0; rover == null && waited < 35; waited += 0.5)
+            {
+                foreach (EntityView v in _views.All)
+                    if (v.Type == EntityType.Vehicle && !before.Contains(v.Id) && v.Root != null && v.Root.GlobalPosition.DistanceTo(at) <= 8f) rover = v;
+                if (rover == null) await Wait(0.5);
+            }
+            GD.Print($"ui: dock rover: bag holds {_character.Count("vehicle.rover")} vehicle.rover, " +
+                (rover == null ? "no new vehicle within 8 m" : $"vehicle {rover.Id} at {rover.Root.GlobalPosition.DistanceTo(at):F1} m from the dock") +
+                $", status \"{_benchView.Status}\"");
+            if (_benchView.Open) _benchView.Show(false);
+            if (rover == null) return;
+            // Stand off to the side of the pad's front, past the rover, so
+            // the shot holds the dock and the rover it made side by side.
+            Vector3 rp = rover.Root.GlobalPosition;
+            Vector3 out_ = (rp - at).Slide(up).Normalized();
+            Vector3 side = up.Cross(out_).Normalized();
+            Vector3 stand = rp + out_ * 6f + side * 5f;
+            await ApproachTo(stand, 2.2f);   // eye to ground point: 1.7 m is the floor
+            await Wait(0.8);
+            Vector3 mid = (at + rp) * 0.5f;
+            _fps.FaceToward(Eye, mid + up * 0.6f);
+            await Wait(0.6);
+            GD.Print($"ui: dock shot from {Eye.DistanceTo(at):F1} m to the dock, {Eye.DistanceTo(rp):F1} m to the rover");
+        }
+
+        private string RemainingText()
+        {
+            if (_deliverView.Remaining == null) return "?";
+            var parts = new List<string>();
+            foreach (var st in _deliverView.Remaining) parts.Add($"{st.item}={st.qty}");
+            return string.Join(",", parts);
+        }
+
+        /// <summary>Walk backwards for `seconds`, settle, and look at `point` (the whole building in frame).</summary>
+        private async Task BackOffAndFace(Vector3 point, double seconds)
+        {
+            _fps.FaceToward(Eye, point);
+            await Wait(0.2);
+            _rigBack = true;
+            await Wait(seconds);
+            _rigBack = false;
+            await Wait(0.8);
+            _fps.FaceToward(Eye, point);
+            await Wait(0.6);
+        }
 
         private async Task Wait(double seconds) =>
             await ToSignal(GetTree().CreateTimer(seconds), SceneTreeTimer.SignalName.Timeout);
@@ -762,27 +884,63 @@ namespace SpaceAdventure.Game
             // the item (a bare server's SA_START), since the rig gives nothing
             // the server did not. Place goes 2 m ahead; the rig then looks at
             // it the way a player would and reads the prompt back.
-            string placeId = Arg("-uiPlace") ?? (Flag("-uiChest") ? "structure.chest" : null);
+            bool rigSite = Flag("-uiSite") || Flag("-uiDeliver") || Flag("-uiDockRover");
+            string placeId = Arg("-uiPlace") ?? (Flag("-uiChest") ? "structure.chest" : rigSite ? "site.dock" : null);
             if (placeId != null)
             {
                 _net.Send(Interaction.InventoryCmd(NextCmdSeq()));
                 for (double waited = 0; _character.Count(placeId) == 0 && waited < 6; waited += 0.25) await Wait(0.25);
-                if (_character.Count(placeId) == 0)
+                if (_character.Count(placeId) == 0 && !rigSite)
                     GD.Print($"ui: place {placeId}: not in the bag (start the server with SA_START=...,{placeId}=1)");
                 else
                 {
-                    _lastPlaced = 0;
-                    _net.Send(UI.StructureRules.PlaceCmd(NextCmdSeq(), placeId));
                     EntityView sv = null;
-                    // A refusal shows for 2 s, shorter than this wait: catch it as it lands.
                     string refused = "";
-                    for (double waited = 0; sv == null && refused == "" && waited < 6; waited += 0.25)
+                    // A site wants 6 m of flat, clear ground, which the camp
+                    // spawn is not: on no_room the rig walks on (-uiYaw picks
+                    // the way) and tries again, like a player looking for a spot.
+                    // A site rig with no site.dock in the bag: mine is already placed (a staged db).
+                    if (_character.Count(placeId) == 0) refused = UI.DeliverRules.Explain("too_many", true);
+                    else for (int attempt = 0; attempt < (rigSite ? 10 : 1); attempt++)
                     {
-                        if (_lastPlaced != 0) _views.TryGet(_lastPlaced, out sv);
-                        if (_lastPlaced == 0 && _interact.Notice != "") refused = _interact.Notice;
-                        if (sv?.Root == null) { sv = null; await Wait(0.25); }
+                        if (attempt > 0)
+                        {
+                            GD.Print($"ui: place {placeId}: {refused}, walking on (attempt {attempt + 1})");
+                            _rigWalk = true;
+                            await Wait(1.2);
+                            _rigWalk = false;
+                            await Wait(1.0);
+                            _interact.Notice = "";
+                        }
+                        _lastPlaced = 0;
+                        _net.Send(UI.StructureRules.PlaceCmd(NextCmdSeq(), placeId));
+                        // A refusal shows for 2 s, shorter than this wait: catch it as it lands.
+                        refused = "";
+                        for (double waited = 0; sv == null && refused == "" && waited < 6; waited += 0.25)
+                        {
+                            if (_lastPlaced != 0) _views.TryGet(_lastPlaced, out sv);
+                            if (_lastPlaced == 0 && _interact.Notice != "") refused = _interact.Notice;
+                            if (sv?.Root == null) { sv = null; await Wait(0.25); }
+                        }
+                        if (sv != null || refused != "no flat ground here") break;
                     }
                     GD.Print($"ui: place {placeId}: {(sv == null ? "no structure (" + refused + ")" : $"structure {sv.Id} def={sv.Def} owner={sv.Label}")}");
+                    if (sv == null && rigSite && refused == UI.DeliverRules.Explain("too_many", true))
+                    {
+                        // One site-or-dock per character: a staged db already
+                        // has mine (a half-built site restored by a restart).
+                        // Walk to it and carry on from there.
+                        string me = _views.LabelOf(_net.EntityId);
+                        foreach (EntityView v in _views.All)
+                            if (v.Type == EntityType.Structure && v.Label == me && v.Root != null
+                                && (UI.DeliverRules.IsSite(v.Def) || v.Def == "structure.dock")) sv = v;
+                        if (sv != null)
+                        {
+                            GD.Print($"ui: place {placeId}: using my existing {sv.Def} {sv.Id} ({sv.SitePct} %)");
+                            await ApproachTo(sv.Root.GlobalPosition, 2.2f);
+                            await Wait(0.7);
+                        }
+                    }
                     if (sv != null)
                     {
                         Vector3 at = sv.Root.GlobalPosition;
@@ -807,6 +965,7 @@ namespace SpaceAdventure.Game
                             await Wait(1.0);
                             GD.Print($"ui: chest {sv.Id}: moved {moved}, chest holds {(_chestView.Stacks == null ? "?" : _chestView.Stacks.Count.ToString())} stacks, status \"{_chestView.Status}\"");
                         }
+                        else if (rigSite && (UI.DeliverRules.IsSite(sv.Def) || sv.Def == "structure.dock")) await RigSite(sv);
                         else if (Flag("-uiPickUp"))
                         {
                             _holdTarget = sv.Id;

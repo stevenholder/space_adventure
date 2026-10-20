@@ -45,12 +45,13 @@ namespace SpaceAdventure.Game.UI
 
         /// <summary>
         /// Phase 23: what station a placed structure is -- its item def's
-        /// `station` ("bench"/"forge"); "" for a chest or anything else.
+        /// `station` ("bench"/"forge"; Phase 24 "dock"); "" for a chest, a
+        /// site or anything else.
         /// </summary>
         public static string StationOfStructure(Defs defs, string itemId)
         {
             string st = defs?.Item(itemId ?? "")?.Station ?? "";
-            return st == "bench" || st == "forge" ? st : "";
+            return st == "bench" || st == "forge" || st == "dock" ? st : "";
         }
 
         /// <summary>The recipes made at `station`, in file order.</summary>

@@ -70,6 +70,11 @@ namespace SpaceAdventure.Net
         [JsonProperty("station")] public string Station { get; set; } = "";
         [JsonProperty("verb")] public string Verb { get; set; } = "";
 
+        // Phase 24: a building site's bill and what it becomes; a structure
+        // the owner demolishes (hold F: 3 s, nothing back) instead of picking up.
+        [JsonProperty("site")] public SiteDef Site { get; set; }
+        [JsonProperty("demolish")] public bool Demolish { get; set; }
+
         /// <summary>Phase 13: something `use` accepts — a consumable or worn gear with an ability.</summary>
         public bool Usable => Consumable != null || Ability != null;
     }
@@ -129,6 +134,15 @@ namespace SpaceAdventure.Net
         [JsonProperty("yields")] public int Yields { get; set; }
         /// <summary>XP in `skill` per completed channel.</summary>
         [JsonProperty("xp")] public long XP { get; set; }
+    }
+
+    /// <summary>Phase 24: a site's def — the structure it becomes, its footprint, and the bill.</summary>
+    public sealed class SiteDef
+    {
+        [JsonProperty("becomes")] public string Becomes { get; set; } = "";
+        [JsonProperty("footprint")] public double Footprint { get; set; }
+        [JsonProperty("slope_max")] public double SlopeMax { get; set; }
+        [JsonProperty("bill")] public List<ItemQtyDef> Bill { get; set; } = new List<ItemQtyDef>();
     }
 
     /// <summary>An item and a count, as recipes name them.</summary>
@@ -197,6 +211,11 @@ namespace SpaceAdventure.Net
         [JsonProperty("name")] public string Name { get; set; } = "";
         [JsonProperty("asset")] public string Asset { get; set; } = "";
         [JsonProperty("verb")] public string Verb { get; set; } = "";
+
+        // Phase 24: a building site's bill and what it becomes; a structure
+        // the owner demolishes (hold F: 3 s, nothing back) instead of picking up.
+        [JsonProperty("site")] public SiteDef Site { get; set; }
+        [JsonProperty("demolish")] public bool Demolish { get; set; }
         /// <summary>The archetype's kind when the server ships it ("bench", "forge"); "" otherwise.</summary>
         [JsonProperty("kind")] public string Kind { get; set; } = "";
         // Body size in metres; the server omits a default, which leaves a

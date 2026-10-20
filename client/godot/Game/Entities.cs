@@ -67,6 +67,11 @@ namespace SpaceAdventure.Game
         /// <summary>Phase 12: the tint last applied, so it is set once per change.</summary>
         public bool DepletedDrawn;
 
+        /// <summary>Phase 24: how many of a site ghost's parts are drawn solid (-1 = not drawn yet).</summary>
+        public int GhostDrawn = -1;
+        /// <summary>Phase 24: a site's completion, 0..100 (its snapshot health).</summary>
+        public int SitePct => UI.DeliverRules.PctOf(Health);
+
         /// <summary>
         /// Where this body was drawn last frame, and how fast it is therefore
         /// moving. Speed comes from the drawn positions rather than from the
@@ -598,6 +603,7 @@ namespace SpaceAdventure.Game
                 if (kv.Value.Health > view.MaxHealth) view.MaxHealth = kv.Value.Health;
                 view.Dead = kv.Value.Dead;
                 Place(view.Root, kv.Value.Pos, kv.Value.Facing);
+                if (view.Type == EntityType.Structure && UI.DeliverRules.IsSite(view.Def)) DrawGhost(view);
                 if (view.Type == EntityType.Node)
                 {
                     // GDD "Nodes": depleted draws the same model at 0.6 in the
@@ -651,6 +657,111 @@ namespace SpaceAdventure.Game
         }
 
         private readonly List<EntityView> _seated = new List<EntityView>();
+
+        /// <summary>A ghost part's alpha.</summary>
+        public const float GhostAlpha = 0.35f;
+
+        /// <summary>
+        /// Phase 24: a building site draws its building as a GHOST. Every
+        /// mesh goes see-through except the parts already "built": the
+        /// prop's top-level `pad`, `gantry`, `beacon` turn solid by thirds
+        /// of the site's pct (DeliverRules.SolidParts). A mesh under none of
+        /// them stays a ghost until the site becomes the building; a mesh
+        /// named `ink`/`outline` (an inverted-hull outline) stays as drawn.
+        /// Translucent material COPIES (GhostMaterials): the shared materials
+        /// are never touched, so the real dock beside a site draws normally.
+        /// Set once per change of the solid count.
+        /// </summary>
+        public static int DrawGhost(EntityView view)
+        {
+            if (view?.Model == null) return 0;
+            int solid = UI.DeliverRules.SolidParts(view.SitePct);
+            if (solid == view.GhostDrawn) return 0;
+            view.GhostDrawn = solid;
+            int ghosts = 0;
+            foreach (GeometryInstance3D g in AssetRegistry.Descendants<GeometryInstance3D>(view.Model))
+            {
+                var (part, ink) = GhostPart(g, view.Model);
+                bool see = !ink && (part < 0 || part >= solid);
+                if (g is MeshInstance3D mi) GhostMaterials(mi, see);
+                if (see) ghosts++;
+            }
+            return ghosts;
+        }
+
+        private static readonly Dictionary<Material, Material> GhostCopies = new Dictionary<Material, Material>();
+
+        /// <summary>
+        /// One mesh as a ghost or as built. A ghost surface draws a cached
+        /// translucent COPY of its material (alpha × GhostAlpha, emission off:
+        /// the beacon's lamp lights when its third is built, not while it is a
+        /// ghost); built puts back the surface's own override (remembered in
+        /// `sa_ghost_src_i`, false = none). Copies, never the source changed
+        /// in place: the materials are shared with every other dock and prop.
+        /// Per-instance GeometryInstance3D.Transparency was tried first and
+        /// draws OPAQUE under gl_compatibility (the p24 ghost shot).
+        /// </summary>
+        public static void GhostMaterials(MeshInstance3D mi, bool ghost)
+        {
+            if (mi.Mesh == null) return;
+            for (int i = 0; i < mi.Mesh.GetSurfaceCount(); i++)
+            {
+                string key = "sa_ghost_src_" + i;
+                if (!mi.HasMeta(key))
+                {
+                    Material own = mi.GetSurfaceOverrideMaterial(i);
+                    mi.SetMeta(key, own != null ? (Variant)own : false);
+                }
+                Variant v = mi.GetMeta(key);
+                Material src = v.VariantType == Variant.Type.Object ? v.As<Material>() : null;
+                if (!ghost) { mi.SetSurfaceOverrideMaterial(i, src); continue; }
+                Material active = src ?? mi.Mesh.SurfaceGetMaterial(i);
+                Material copy = GhostOf(active);
+                if (copy != null) mi.SetSurfaceOverrideMaterial(i, copy);
+            }
+        }
+
+        /// <summary>The translucent copy of a material (cached); null for one with no albedo to fade.</summary>
+        public static Material GhostOf(Material src)
+        {
+            if (src is not BaseMaterial3D bm) return null;
+            if (GhostCopies.TryGetValue(bm, out Material m)) return m;
+            var dup = (BaseMaterial3D)bm.Duplicate();
+            dup.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
+            Color c = bm.AlbedoColor;
+            dup.AlbedoColor = new Color(c.R, c.G, c.B, c.A * GhostAlpha);
+            dup.EmissionEnabled = false;
+            dup.CullMode = BaseMaterial3D.CullModeEnum.Disabled;
+            dup.SetMeta("sa_ghost", true);
+            GhostCopies[bm] = dup;
+            return dup;
+        }
+
+        /// <summary>Which of DeliverRules.Parts a mesh sits under (-1: none), and whether it is an outline.</summary>
+        public static (int part, bool ink) GhostPart(Node n, Node model)
+        {
+            int part = -1;
+            bool ink = false;
+            for (Node at = n; at != null && at != model; at = at.GetParent())
+            {
+                string key = AssetRegistry.NameKey(at.Name);
+                if (key.StartsWith("ink") || key.Contains("outline")) ink = true;
+                if (part < 0) part = PartIndex(key);
+            }
+            return (part, ink);
+        }
+
+        /// <summary>`pad` / `pad001` / `Pad` → 0, `gantry` → 1, `beacon` → 2; else -1.</summary>
+        public static int PartIndex(string key)
+        {
+            for (int i = 0; i < UI.DeliverRules.Parts.Length; i++)
+            {
+                string p = UI.DeliverRules.Parts[i];
+                if (key == p) return i;
+                if (key.StartsWith(p) && key.Length > p.Length && char.IsDigit(key[p.Length])) return i;
+            }
+            return -1;
+        }
 
         /// <summary>
         /// How far a seated body's eye sits under a standing one (art
