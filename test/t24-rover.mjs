@@ -220,6 +220,9 @@ if (steepSlope <= 40) {
     a.ws.send(input(0, Math.max(-1, Math.min(1, 3 * dot(target, cross(f, u)))), [0, 0, 1], 0, a.seq++, 2))
     await sleep(50)
   }
+  // Skid steering leaves a coast (seen: 0.13 m on 47°, a false FAIL); let
+  // hold_speed kill it before measuring.
+  for (let i = 0; i < 60 && Math.hypot(...rover().vel) > 0.01; i++) { a.ws.send(input(0, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
   const at = rover().pos.slice()
   for (let i = 0; i < 20; i++) { a.ws.send(input(upSign, 0, [0, 0, 1], 0, a.seq++, 2)); await sleep(50) }
   check('a rover never wedges: uphill throttle past drive_slope_max is refused', dist(rover().pos, at) < 0.05,
