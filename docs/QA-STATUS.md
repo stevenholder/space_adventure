@@ -984,3 +984,55 @@ aspect; the Colonist's clip and framing are untouched (its shot matches
 the old one). Rebuilt `chars/ubc.glb` 8993 / `ubc_f.glb` 8989 tris,
 `npm --prefix art test` PASS, `-selftest` PASS, `dotnet build` 0 warnings.
 Not retested: the armed holds (their clips did not change).
+
+# Phase 24 — buildings and the dock (2026-10-20)
+
+Wave 0 by hand (GDD and ROADMAP rewritten to the codebase's rules, the
+contract pinned: `0x001A deliver`, a site's snapshot `health` = its
+percent, demolish = `pick_up` on a `demolish` item, the delivered bill
+in the structure row's `stacks`, the craft output = the vehicle item),
+then four halves in one wave: server + data (sites, deliveries, the
+in-place swap, vehicle ownership generalised to every vehicle item,
+`dock_test.go`), harness (`t45`, the three ship-buying tests re-seeded),
+client (the ghost by thirds, the projected label, the deliver panel, the
+dock as a station, `-uiSite`/`-uiDeliver`/`-uiDockRover`), art
+(`prop.dock` composed from four MegaKit pieces). Proofs on bare servers
+built from the branch with a sqlite store.
+
+Calls made in the wave: the placer's own body is not an obstacle to
+their site (a 3 m clearance would always see the body 2 m away); vehicle
+recipes carry `xp` overrides in `craft.json` (490/930) because vehicles
+have no `value` (a value would make them sellable); `ensureVehicle`
+scans `s.world`, not the per-tick cache (two syncs in one tick spawned
+two); a bag holds one stack of 50 per material, so the 60-plate line is
+two trips by design and `SA_START` cannot seed a whole bill; Vex sells
+no ship, so `t26`/`t27`/`t34` and kind's `SA_START` seed `ship.v1=1`
+(the join sync spawns it).
+
+| # | Result | Evidence |
+|---|---|---|
+| C196 | PASS | `t45`: `place site.dock` → `spawn` type 9 data `site.dock\0<A>` on both sockets, ~2 m ahead, row `health` 0, a peek (qty 0) returns the four-line bill at pct 0; a second site `too_many`. Go `TestSitePlaceFootprintAndOneDock`: `no_room` with a bench 2.5 m away, five benches do not block a site, `too_many` beside a dock, `structure.dock` by hand `unknown_item`. `test/out/ui/p24-ghost-43.png`: the translucent gantry over a solid pad, `DOCK 43 %` projected above it |
+| C197 | PASS | `t45`: stranger `not_yours`, ammo `not_wanted`; 10 plates → pct 9 and row health 9; party invite, B delivers 60 clamped to 50 (pct 55), wiring 4 (59); the last cores → every line 0, pct 100, `despawn` then `spawn` of the SAME id as `structure.dock\0<A>` on both sockets, A's `skill_xp` construction +1580 (= bill value / 2), B none. Go `TestDeliverBillPartyAndCompletion` (status 5, `bad_qty`, the clamp, stored stacks, chest ops on a site `wrong_station`). `p24-deliver.png`: DOCK SITE · 43 %, BAG left, BILL right (30/60, 10/24, 7/20, 0/4) |
+| C198 | PASS | `t45`: `craft recipe.vehicle.rover` with `npc` = the dock → `craft_end done` in 28.5 s, `vehicle.rover` in the bag, a type-5 spawn 5.50 m from the dock seen by B; a second craft `no_space`; Vex's `shop_list` has no `ship.v1`; after the restart A's rover is back (the item). Go `TestDockCraftsRover` (Owner set, ≤ 8 m, along the forward), `TestOwnedRoverWithoutDock`, `TestShopSellsNoShip`. `p24-dock-rover.png`: the finished dock with its beacon lit and the new rover beside it |
+| C199 | PASS | `t45`: B `pick_up` on the dock `not_yours`; A → `{"seconds":3}`, `pick_up_end ok` after 3.0 s, the bag byte-identical, B sees the despawn, the rover stays; a new site places at once (slot freed). Go `TestDemolish` (nothing back with a full bag, row deleted). Client: hold F reads `DEMOLISHING`, the notice "demolished" |
+| C200 | PASS | Go vet/test (+`-race` server 61 s; `dock_test.go` ×3), `gen_recipes --check` (56), `dotnet build` 0 warnings, `-selftest` (191, +16 `site:`), `godot-gate`, `godot-test`, `godot-codec` (9), `godot-conformance`, `npm --prefix art test` (282 assets), `t13` (13), `t35` (6), `t44` 84/84 in 155 s, `t45` 96 checks in 63 s (×2), `t26` 13, `t27` 2×3, `t34` 32 — the last three with `ship.v1=1` seeded. C153–C195 hold. **Owed:** kind after the merge (`make up` carries the new `SA_START`; `t45` is bare-server only by design) |
+
+**Found on the way.** `GeometryInstance3D.Transparency` draws fully
+opaque under gl_compatibility (the first ghost came out solid black) —
+the ghost uses translucent material copies instead; the depleted-node
+tint in `Entities.cs` uses the same property and is probably a no-op
+(not fixed, outside 24). A storeless server keys a guest's vehicles by
+`session:<name>`: rejoining on one token under another name spawned a
+second seeded ship (t27 saw it as snap-backs); with a store it keys by
+token. The spawn camp never fits a 6 m site — every rig run walked out
+first; players will too. Kit PBR reads dark at night in all three shots
+(the Phase 25 debt, unchanged).
+
+**Known / notes.** Entity ids are not stable across a restart (t45
+matches by data + position). There is no wire marker that a rover is
+owned (spawn data is `vehicle`); the client treats every rover alike.
+Ownership of a vehicle is still "spawn once per owner", not "only the
+owner may board" — as the ship has been since Phase 5. A site keeps
+what it holds in its row; demolishing it loses that (by the GDD). The
+dock's 3.4 MB (its own copy of the trim sheets, like the chest) is the
+Phase 25 shared-texture debt, now twice.

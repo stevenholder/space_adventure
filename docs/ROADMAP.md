@@ -2155,13 +2155,17 @@ bench up: it is in your bag; the friend cannot pick up the chest.
 
 # Phase 24 — buildings and the dock (drafted 2026-10-08)
 
-### Where Phase 24 stands (2026-10-08, drafted)
+### Where Phase 24 stands (2026-10-20, in progress)
 
 Buildings are built in place from a site and deliveries; the dock is the
 first, and vehicles move from the shop to it. Contract: GDD "Buildings
-and the dock (Phase 24)". Wire: `0x001A deliver`; site/dock/ghost as
-structure entities (type `0x0009`, data carries the progress);
-`recipe.station` `dock`; the craft's output is a spawned, owned vehicle.
+and the dock (Phase 24)". Wire: `0x001A deliver`; site/dock as
+structure entities (type `0x0009`; a site's snapshot `health` is its
+percent); `recipe.station` `dock`; the craft's output is the vehicle
+item (Phase 5 ownership), spawned at the dock; demolish is `pick_up`
+on a `demolish` item (3 s, nothing back). Store: the `structure` row's
+`stacks` hold the deliveries (no migration). Three ends plus art
+(`prop.dock`: `pad`/`gantry`/`beacon`).
 
 **Playable proof.** Place a dock site on the flat by the relay: a
 translucent dock with `DOCK 0 %` over it. Three trips with plates and
@@ -2174,7 +2178,7 @@ shop no longer lists the ship.
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
 | 1 | 0 | `site.dock` + `structure.dock` defs, the bill, the two vehicle recipes (`station: dock`), the ship out of Vex's stock | `server/data/*.json`, `craft.json` | regen test |
-| 2 | 1 | Server: site placement (6 m footprint, one per character), `deliver` (owner + party, bill accounting, completion swap, Construction XP), `craft` at a dock → the ship/rover spawn-and-own path, demolish; store rows carry the bill | `server/internal/server/`, `store/` | Go tests: footprint refusals, one per character, deliveries to zero → dock, a rover from the dock owned by the crafter, demolish |
+| 2 | 1 | Server: site placement (6 m footprint, one per character), `deliver` (owner + party, bill accounting, completion swap, Construction XP), `craft` at a dock → the vehicle item + spawn-and-own at the dock, demolish via `pick_up`; the row's `stacks` carry the deliveries | `server/internal/server/`, `store/` | Go tests: footprint refusals, one per character, deliveries to zero → dock, a rover from the dock owned by the crafter, demolish |
 | 3 | 1 | Harness: `t45-dock.mjs`: site → deliveries → dock → rover; the shop lacks the ship | `test/` | bare + kind |
 | 4 | 1 | Client: ghost material (translucent + ink) with the progress nametag and thirds fill, the deliver panel (bag → bill), the dock's station panel, vehicle appears via the existing spawn path; `-uiSite`, `-uiDeliver` | `Entities.cs`, `UI/Deliver.cs`, `ViewModel.cs` | shots `p24-ghost-43.png`, `p24-dock-rover.png` |
 | 5 | art | `prop.dock` (pad + gantry, Scrapyard Comic) and its ghost variant | `art/tools/gen_props.py` | `npm --prefix art test` |

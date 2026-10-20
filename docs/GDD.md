@@ -1967,25 +1967,36 @@ place a site, deliver materials over visits, it becomes the building.
 Vehicles are then **crafted at the dock** and leave the shop.
 
 - **Sites.** `site.dock` (bench, Construction 15: plate 10, parts 10,
-  60 s), placed like a structure with a 6 m flat footprint (slope ≤ 8°,
-  nothing within 6 m); **one dock per character**. It spawns as the
-  dock's ghost (the model translucent, the Scrapyard ink outline) with
-  a bill of materials: plate.steel 60, wiring 24, ingot.iron 20, core 4.
+  60 s), placed like a structure 2 m ahead but with a 6 m footprint
+  (slope ≤ 8° at the centre and 3 m out, nothing within 3 m of the
+  centre); **one site or dock per character** (`too_many`), outside the
+  five-structure cap. It spawns as the dock's ghost (the model
+  translucent, the Scrapyard ink outline) with a bill of materials:
+  plate.steel 60, wiring 24, ingot.iron 20, core 4. The bill lives in
+  the item def (`site.bill`), what has arrived in the structure row's
+  `stacks`.
 - **Deliveries.** `0x001A` `deliver` `{"structure", "item", "qty"}` moves
-  from the bag into the site (owner or party); the result is the bill's
-  remaining counts; the ghost's nametag reads `DOCK 43 %` and the model
-  fills in by thirds. When the bill is zero the site becomes
-  `structure.dock` in place; Construction XP = the bill's value / 2 on
-  completion, to whoever delivered the last unit.
+  from the bag into the site (owner or online party; qty 0 peeks); the
+  result is the bill's remaining counts and the percent. The client has
+  no nametags (Phase 23), so the percent travels as the site's snapshot
+  row `health` (0..100): a projected `DOCK 43 %` label over the ghost
+  (the health-bar layer, 45 m) and the prompt `F · deliver to dock site
+  · 43 %`; the model fills in by thirds (`pad`, `gantry`, `beacon`).
+  When the bill is zero the site becomes `structure.dock` in place
+  (same entity id; despawn then spawn); Construction XP = the bill's
+  value / 2 on completion, to whoever delivered the last unit.
 - **Vehicles at the dock.** `recipe.station` `dock`: `vehicle.rover`
   (Construction 10: plate 20, wiring 8, ingot 10; 30 s) and `ship.v1`
-  (Construction 20: plate 40, wiring 16, core 2; 60 s). The output is
-  not an item: the channel's end calls the same spawn-and-own path the
-  shop's ship purchase does (Phase 5 ownership), the vehicle appearing on
-  the dock's pad. The shop stops stocking the ship. The dock **is** the
-  landing pad.
-- **Demolish.** Owner only, interact-hold 3 s; materials are lost; the
-  slot frees.
+  (Construction 20: plate 40, wiring 16, core 2; 60 s). The output is the
+  vehicle ITEM, stack 1 — Phase 5's rule unchanged: owning the item is
+  owning the vehicle, so a second rover is `no_space`. When the unit
+  lands the same spawn-and-own path the ship purchase used puts the
+  vehicle 5.5 m in front of the owner's dock (the legacy pad when they
+  have none), on purchase, craft and join alike. The shop stops stocking
+  the ship. The dock **is** the landing pad.
+- **Demolish.** Owner only, hold F 3 s — the `pick_up` channel on a
+  `demolish: true` item, nothing returned; materials are lost; the
+  slot frees. The world's one Phase 4 rover stays, unowned.
 - **Not in 24.** Walls, plots, territory, more buildings; a second dock;
   anyone else's vehicles on your pad.
 
