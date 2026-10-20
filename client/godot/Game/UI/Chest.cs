@@ -25,7 +25,14 @@ namespace SpaceAdventure.Game.UI
 
         public static string PlaceBody(string item) => JsonConvert.SerializeObject(new { item = item ?? "" });
 
-        public static byte[] PlaceCmd(ushort seq, string item) => Encode.Cmd(seq, Op.Place, PlaceBody(item));
+        public static byte[] PlaceCmd(ushort seq, string item)
+        {
+            LastPlaceItem = item ?? "";
+            return Encode.Cmd(seq, Op.Place, PlaceBody(item));
+        }
+
+        /// <summary>Phase 24: the item the last place cmd named, so its refusal can be worded for a site.</summary>
+        public static string LastPlaceItem = "";
 
         /// <summary>`chest_put` / `chest_take`: {"structure","item","qty"}.</summary>
         public static string MoveBody(uint structure, string item, int qty) =>

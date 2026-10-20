@@ -206,14 +206,26 @@ export function decodePickUpEnd(data) {
 export const OP = {
   INVENTORY: 0x0004, EQUIP: 0x0003, PARTY_INVITE: 0x0006, PARTY_RESPOND: 0x0007, PARTY_LEAVE: 0x0008,
   GATHER: 0x0010, GATHER_CANCEL: 0x0011, CRAFT: 0x0012, CHAT: 0x0016,
-  // Phase 23 placeable stations (0x001A is reserved for Phase 24 `deliver`).
-  PLACE: 0x0017, CHEST_PUT: 0x0018, CHEST_TAKE: 0x0019, PICK_UP: 0x001b,
+  SHOP_LIST: 0x0001,
+  // Phase 23 placeable stations; Phase 24 `deliver` (a site's bill).
+  PLACE: 0x0017, CHEST_PUT: 0x0018, CHEST_TAKE: 0x0019, DELIVER: 0x001a, PICK_UP: 0x001b,
+}
+
+// A `deliver` cmd_result body (Phase 24): `{bill:[{item,qty}...], pct,
+// inventory}` — bill is what is still WANTED, every line (zeros included);
+// pct is 0..100 by unit count. Takes the parsed body or the raw bytes/string.
+export function decodeDeliverResult(body) {
+  const o = typeof body === 'string' ? JSON.parse(body)
+    : (Buffer.isBuffer(body) || body instanceof Uint8Array) ? JSON.parse(Buffer.from(body).toString('utf8')) : body
+  return { bill: o?.bill ?? null, pct: o?.pct ?? null, inventory: o?.inventory ?? null }
 }
 
 // entity_type values a harness here names (docs/PROTOCOL.md "Constants").
+export const TYPE_SHIP = 2
 export const TYPE_NPC = 3
+export const TYPE_VEHICLE = 5 // Phase 4 ground vehicle; Phase 24 an owned rover too
 export const TYPE_NODE = 8
-export const TYPE_STRUCTURE = 9 // Phase 23: spawn data = `<item id>\0<owner name>`
+export const TYPE_STRUCTURE = 9 // Phase 23: spawn data = `<item id>\0<owner name>`; Phase 24: a `site.*` row's health = pct
 
 /** cmd: u16 seq | u16 opcode | u32 data_len | bytes data (UTF-8 JSON; a string/Buffer is sent as is). */
 export function encodeCmd(seq, opcode, body) {

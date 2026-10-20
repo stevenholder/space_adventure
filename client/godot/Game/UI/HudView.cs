@@ -263,6 +263,68 @@ namespace SpaceAdventure.Game.UI
             }
         }
 
+        private readonly Dictionary<uint, Label> _siteLabels = new();
+        private readonly List<uint> _staleSites = new();
+
+        /// <summary>Where a site's label floats: over the gantry (≤ 2.5 m, art contract).</summary>
+        public const float SiteLabelHeight = 3.0f;
+
+        /// <summary>
+        /// Phase 24: `DOCK 43 %` over each building site, on the health bars'
+        /// layer and by their rules (pooled by id, 45 m, hidden behind walls
+        /// and hills). No overhead nametags exist (Phase 23); this is the
+        /// ghost's. Gone the frame the site is (despawned or became the dock).
+        /// </summary>
+        public void UpdateSiteLabels(Camera3D cam, EntityViews views, bool visible)
+        {
+            _staleSites.Clear();
+            foreach (var id in _siteLabels.Keys) _staleSites.Add(id);
+
+            if (cam != null && views != null && visible)
+            {
+                foreach (EntityView v in views.All)
+                {
+                    if (v.Type != EntityType.Structure || v.Root == null || !v.Root.Visible || !DeliverRules.IsSite(v.Def)) continue;
+                    Vector3 world = v.Root.GlobalPosition;
+                    Vector3 above = world + world.Normalized() * SiteLabelHeight;
+                    if (cam.IsPositionBehind(above)) continue;
+                    float depth = cam.GlobalPosition.DistanceTo(above);
+                    if (depth > HealthBarRange) continue;
+                    if (Sfx.Occluded(cam.GlobalPosition, above, Colliders, Terrain)) continue;
+                    Vector2 screen = cam.UnprojectPosition(above);
+
+                    if (!_siteLabels.TryGetValue(v.Id, out var label))
+                    {
+                        label = Styles.Display_("", 16, Styles.Amber);
+                        label.MouseFilter = Control.MouseFilterEnum.Ignore;
+                        label.HorizontalAlignment = HorizontalAlignment.Center;
+                        label.AddThemeColorOverride("font_outline_color", Styles.Ink);
+                        label.AddThemeConstantOverride("outline_size", 6);
+                        _healthBarLayer.AddChild(label);
+                        _siteLabels[v.Id] = label;
+                    }
+                    _staleSites.Remove(v.Id);
+                    string text = DeliverRules.Label(views.Defs, v.Def, v.SitePct);
+                    if (label.Text != text) label.Text = text;
+                    Vector2 size = label.GetCombinedMinimumSize();
+                    label.Size = size;
+                    label.Position = new Vector2(screen.X - size.X * 0.5f, screen.Y - size.Y);
+                }
+            }
+
+            foreach (uint id in _staleSites)
+            {
+                _siteLabels[id].QueueFree();
+                _siteLabels.Remove(id);
+            }
+        }
+
+        /// <summary>The site labels drawn now, id → text (the rig reports them).</summary>
+        public IEnumerable<(uint id, string text)> SiteLabels()
+        {
+            foreach (var kv in _siteLabels) yield return (kv.Key, kv.Value.Text);
+        }
+
         /// <summary>The death screen; negative hides it, otherwise seconds to respawn.</summary>
         public void SetDeath(double respawnIn)
         {

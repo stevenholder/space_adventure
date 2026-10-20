@@ -172,7 +172,7 @@ namespace SpaceAdventure.Game
                     EntityType.Ship => $"{InteractKey}  ·  fly",
                     EntityType.Player => $"{InteractKey}  ·  invite {v.Label} to party",
                     EntityType.Node => NodePrompt(v),
-                    EntityType.Structure => StructurePrompt(InteractKey, _character.Defs, v.Def, v.Label, IsMine(v)),
+                    EntityType.Structure => StructurePrompt(InteractKey, _character.Defs, v.Def, v.Label, IsMine(v), v.SitePct),
                     _ => $"{InteractKey}  ·  {Verb(v.Label)} {Nice(v.Label)}",
                 };
             }
@@ -190,16 +190,21 @@ namespace SpaceAdventure.Game
         /// <summary>
         /// Phase 23: `F  ·  use workbench (Kade's)`, `F  ·  open chest (Kade's)`;
         /// my own: `F  ·  use workbench  ·  hold to pick up`. Verb and name
-        /// come from the structure's item def.
+        /// come from the structure's item def. Phase 24: a site reads
+        /// `F  ·  deliver to dock site  ·  43 %` (pct = its snapshot health),
+        /// and a `demolish` structure of mine `...  ·  hold to demolish`.
         /// </summary>
-        public static string StructurePrompt(string key, Defs defs, string item, string owner, bool mine)
+        public static string StructurePrompt(string key, Defs defs, string item, string owner, bool mine, int pct = 0)
         {
             ItemDef it = defs?.Item(item ?? "");
             string verb = (it?.Verb ?? "").Trim().ToLowerInvariant();
             if (verb == "") verb = string.IsNullOrEmpty(it?.Station) ? "open" : "use";
+            if (verb == "deliver") verb = "deliver to";
             string name = string.IsNullOrEmpty(it?.Name) ? (item ?? "") : it.Name.ToLowerInvariant();
-            if (mine) return $"{key}  ·  {verb} {name}  ·  hold to pick up";
-            return string.IsNullOrEmpty(owner) ? $"{key}  ·  {verb} {name}" : $"{key}  ·  {verb} {name} ({owner}'s)";
+            string line = $"{key}  ·  {verb} {name}";
+            if (UI.DeliverRules.IsSite(item)) line += $"  ·  {UI.DeliverRules.PctOf(pct)} %";
+            if (mine) return line + (it?.Demolish == true ? "  ·  hold to demolish" : "  ·  hold to pick up");
+            return string.IsNullOrEmpty(owner) ? line : $"{line} ({owner}'s)";
         }
 
         /// <summary>Own entity id, so the cone never offers self-invites.</summary>

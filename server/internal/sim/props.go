@@ -20,6 +20,9 @@ var PropBoxes = map[string][2]Vec{
 	"prop.bench": {{-1.0, 0, -0.5}, {1.0, 0.95, 0.5}},
 	"prop.forge": {{-0.9, 0, -0.6}, {0.9, 1.5, 0.6}},
 	"prop.chest": {{-0.75, 0, -0.4}, {0.75, 0.75, 0.4}},
+	// Phase 24: the dock's 6 m pad (site.dock and structure.dock share
+	// it); the gantry and beacon are dressing.
+	"prop.dock": {{-3.0, 0, -3.0}, {3.0, 0.25, 3.0}},
 }
 
 // PropCollider is a solid prop as a box collider; false for dressing a body

@@ -77,6 +77,8 @@ namespace SpaceAdventure.Sim
                 ["prop.bench"] = (new Vec3(-1.0, 0, -0.5), new Vec3(1.0, 0.95, 0.5)),
                 ["prop.forge"] = (new Vec3(-0.9, 0, -0.6), new Vec3(0.9, 1.5, 0.6)),
                 ["prop.chest"] = (new Vec3(-0.75, 0, -0.4), new Vec3(0.75, 0.75, 0.4)),
+                // Phase 24: the dock's pad (the gantry is dressing); a site is the same box.
+                ["prop.dock"] = (new Vec3(-3.0, 0, -3.0), new Vec3(3.0, 0.25, 3.0)),
             };
 
         /// <summary>A solid prop as a box (props.go PropCollider); false for walk-through dressing.</summary>

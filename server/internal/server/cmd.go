@@ -122,6 +122,10 @@ type cmdWorld struct {
 	Place         func(item string, take func() error) (id uint32, reason string)
 	ChestMove     func(id uint32, f func(chest *store.Player) error) ([]store.Stack, error)
 	PickUp        func(id uint32) string
+	// Phase 24: Deliver moves up to qty of item into a site's bill under
+	// the world lock (take moves from Player, returns how many), saves it,
+	// and swaps a finished site for what it becomes. qty 0 is a peek.
+	Deliver func(id uint32, item string, qty int, take func(item string, n int) (int, error)) (deliverResult, error)
 
 	// Ent is the requester's own server-side entity, for the rounds
 	// currently in the magazine. The magazine lives on the connection
@@ -577,7 +581,8 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !decodeStrict(req.Data, &body) {
 			return reply(protocol.StatusMalformed, nil)
 		}
-		if it, ok := w.Reg.Items[body.Item]; !ok || it.Kind != "structure" {
+		// A dock is what a site becomes, never put down by hand (Phase 24).
+		if it, ok := w.Reg.Items[body.Item]; !ok || it.Kind != "structure" || builtBySite(w.Reg, body.Item) {
 			return refuse(sim.ReasonUnknownItem)
 		}
 		if sim.CountItem(w.Player, body.Item) < 1 {
@@ -615,8 +620,8 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if !inRangeAt(w, st.Pos, structureAimHeight) {
 			return refuse("out_of_range")
 		}
-		if st.Item.Station != "" {
-			return refuse("wrong_station") // a bench or forge holds nothing
+		if st.Item.Station != "" || st.Item.Site != nil {
+			return refuse("wrong_station") // a bench, forge, dock or site is no chest
 		}
 		if !st.Mine && !st.Party {
 			return refuse("not_yours")
@@ -687,17 +692,71 @@ func handleCmd(rate *cmdRate, now time.Time, req protocol.Cmd, w cmdWorld) proto
 		if w.Busy != nil && w.Busy() {
 			return refuse("busy")
 		}
-		if !st.Empty {
-			return refuse("not_empty")
-		}
-		scratch := store.Player{Inventory: w.Player.Inventory}
-		if err := sim.AddItem(&scratch, st.Item.ID, 1, w.Reg); err != nil {
-			return refuseErr(err)
+		// Phase 24: a demolish (a site or a dock) returns nothing, so what
+		// a site holds and the bag's room do not matter.
+		if !st.Item.Demolish {
+			if !st.Empty {
+				return refuse("not_empty")
+			}
+			scratch := store.Player{Inventory: w.Player.Inventory}
+			if err := sim.AddItem(&scratch, st.Item.ID, 1, w.Reg); err != nil {
+				return refuseErr(err)
+			}
 		}
 		if why := w.PickUp(body.Structure); why != "" {
 			return refuse(why)
 		}
-		return reply(protocol.StatusOK, encodeJSON(map[string]any{"seconds": pickUpSeconds}))
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{"seconds": pickUpSecondsFor(st.Item)}))
+
+	case protocol.OpDeliver:
+		// Phase 24: bag -> a building site's bill. Status 5 for an id that
+		// is not a site; then out_of_range, not_yours (owner or the owner
+		// online in your party), bad_qty, not_wanted, not_owned.
+		var body struct {
+			Structure uint32 `json:"structure"`
+			Item      string `json:"item"`
+			Qty       int    `json:"qty"`
+		}
+		if !decodeStrict(req.Data, &body) {
+			return reply(protocol.StatusMalformed, nil)
+		}
+		st, ok := w.findStructure(body.Structure)
+		if !ok || w.Deliver == nil || st.Item.Site == nil {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if !inRangeAt(w, st.Pos, structureAimHeight) {
+			return refuse("out_of_range")
+		}
+		if !st.Mine && !st.Party {
+			return refuse("not_yours")
+		}
+		if body.Qty < 0 || body.Qty > 1000 {
+			return refuse(sim.ReasonBadQty)
+		}
+		res, err := w.Deliver(body.Structure, body.Item, body.Qty, func(item string, n int) (int, error) {
+			n = min(n, sim.CountItem(w.Player, item))
+			if n <= 0 {
+				return 0, sim.RefusalError{Reason: sim.ReasonNotOwned}
+			}
+			if err := sim.TakeItem(w.Player, item, n); err != nil {
+				return 0, err
+			}
+			for slot, held := range w.Player.Equipped {
+				if sim.CountItem(w.Player, held) == 0 {
+					delete(w.Player.Equipped, slot)
+				}
+			}
+			return n, nil
+		})
+		if errors.Is(err, errStructureGone) {
+			return reply(protocol.StatusNotFound, nil)
+		}
+		if err != nil {
+			return refuseErr(err)
+		}
+		return reply(protocol.StatusOK, encodeJSON(map[string]any{
+			"bill": res.Bill, "pct": res.Pct, "inventory": w.Player.Inventory,
+		}))
 
 	case protocol.OpGatherCancel:
 		var body struct{}

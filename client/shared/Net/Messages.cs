@@ -103,6 +103,7 @@ namespace SpaceAdventure.Net
         public const ushort Place = 0x0017;     // {"item"} -> {"structure","inventory"}
         public const ushort ChestPut = 0x0018;  // {"structure","item","qty"} -> {"inventory","chest"}
         public const ushort ChestTake = 0x0019; // same body and result
+        public const ushort Deliver = 0x001A;   // Phase 24: {"structure","item","qty"} -> {"bill","pct","inventory"}; qty 0 = peek
         public const ushort PickUp = 0x001B;    // {"structure"} -> {"seconds"}; the channel ends with pick_up_end
     }
 

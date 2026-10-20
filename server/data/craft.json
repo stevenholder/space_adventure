@@ -143,6 +143,44 @@
         "mat.plate.steel": 2,
         "mat.parts": 4
       }
+    },
+    {
+      "output": "site.dock",
+      "qty": 1,
+      "station": "bench",
+      "skill": "construction",
+      "level": 15,
+      "seconds": 60,
+      "inputs": {
+        "mat.plate.steel": 10,
+        "mat.parts": 10
+      }
+    },
+    {
+      "output": "vehicle.rover",
+      "qty": 1,
+      "station": "dock",
+      "skill": "construction",
+      "level": 10,
+      "seconds": 30,
+      "inputs": {
+        "mat.plate.steel": 20,
+        "mat.wiring": 8,
+        "mat.ingot.iron": 10
+      }
+    },
+    {
+      "output": "ship.v1",
+      "qty": 1,
+      "station": "dock",
+      "skill": "construction",
+      "level": 20,
+      "seconds": 60,
+      "inputs": {
+        "mat.plate.steel": 40,
+        "mat.wiring": 16,
+        "mat.core": 2
+      }
     }
   ],
   "shapes": {
@@ -301,6 +339,14 @@
     }
   },
   "items": {
+    "vehicle.rover": {
+      "$comment": "Phase 24: a vehicle has no sell value; XP is half its material value (980 / 2).",
+      "xp": 490
+    },
+    "ship.v1": {
+      "$comment": "Phase 24: half its material value (1860 / 2).",
+      "xp": 930
+    },
     "ammo.cell": {
       "id": "recipe.cells",
       "xp": 20
@@ -344,6 +390,6 @@
     "mat.scrap",
     "mat.hide",
     "mat.crystal",
-    "ship.v1"
+    "structure.dock"
   ]
 }

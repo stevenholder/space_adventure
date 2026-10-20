@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"space-adventure/server/internal/protocol"
 	"space-adventure/server/internal/sim"
@@ -128,8 +129,15 @@ func TestCraftChannelCancels(t *testing.T) {
 	if e := nextCraftEnd(t, a); e.Reason != "moved" {
 		t.Fatalf("moved end: %+v", e)
 	}
-	a.awaitPublished(t) // a round trip: the tick's refund drain has run
-	if count(c, "mat.scrap") != 8 || count(c, "mat.parts") != 4 || count(c, "tool.drill.crude") != 0 {
+	// The end is sent under the tick's lock and the refund drains after it,
+	// so a single round trip can beat the drain (seen on CI): poll for it.
+	refunded := func() bool {
+		return count(c, "mat.scrap") == 8 && count(c, "mat.parts") == 4 && count(c, "tool.drill.crude") == 0
+	}
+	for i := 0; i < 100 && !refunded(); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !refunded() {
 		t.Fatalf("moved did not refund: scrap=%d parts=%d", count(c, "mat.scrap"), count(c, "mat.parts"))
 	}
 }

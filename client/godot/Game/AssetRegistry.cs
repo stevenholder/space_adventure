@@ -531,6 +531,9 @@ namespace SpaceAdventure.Game
             return null;
         }
 
+        /// <summary>A node name as FindNode compares it: letters and digits, lower-case.</summary>
+        public static string NameKey(string s) => Key(s ?? "");
+
         private static string Key(string s)
         {
             var sb = new StringBuilder(s.Length);

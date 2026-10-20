@@ -1057,10 +1057,10 @@ func (s *Server) join(ctx context.Context, c *client, h protocol.Hello) {
 	}
 	s.mu.Unlock()
 
-	// An owner's ship follows them across reconnects (GDD "Ownership":
-	// spawn on join). After publishing, so the spawn broadcast lands on a
-	// registered client.
-	s.syncOwnedShip(c)
+	// An owner's ship and rover follow them across reconnects (GDD
+	// "Ownership": spawn on join; Phase 24 every vehicle item). After
+	// publishing, so the spawn broadcast lands on a registered client.
+	s.syncOwnedVehicles(c)
 }
 
 // leave removes c's entity from the world and tells the remaining clients.
@@ -1310,6 +1310,9 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			},
 			ChestMove: s.chestMove,
 			PickUp:    func(id uint32) string { return s.startPickUp(c, id) },
+			Deliver: func(id uint32, item string, qty int, take func(string, int) (int, error)) (deliverResult, error) {
+				return s.deliver(c, id, item, qty, take)
+			},
 		})
 		after = heldItem(p.Equipped, c.wieldMelee.Load())
 		wornAfter = wornOf(p.Equipped)
@@ -1350,10 +1353,11 @@ func (s *Server) doCmd(c *client, req protocol.Cmd) protocol.CmdResult {
 			s.mu.Unlock()
 		}
 	}
-	// A successful buy may have put a ship in the inventory; make the world
-	// agree (GDD "Ownership": spawn on purchase). Idempotent.
+	// A successful buy may have put a vehicle in the inventory; make the
+	// world agree (GDD "Ownership": spawn on purchase). Idempotent. (Phase
+	// 24: no shop sells one today; a dock craft lands through drainCrafts.)
 	if req.Opcode == protocol.OpShopBuy && result.Status == protocol.StatusOK {
-		s.syncOwnedShip(c)
+		s.syncOwnedVehicles(c)
 	}
 	return result
 }

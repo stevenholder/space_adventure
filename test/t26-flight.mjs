@@ -3,8 +3,10 @@
  * Phase 5 acceptance, live at the wire level: C33, C35–C38.
  * (C34 is t25's cross-sim diff; C39 latency is t27 with the proxy.)
  *
- * Buy the ship (fresh token, quartermaster, 600 cr of the 1000 start),
- * watch it spawn on the pad, board the pilot seat, take a passenger,
+ * Own the ship (fresh token; Phase 24 took ship.v1 out of Vex's stock —
+ * the dock builds it — so the server's SA_START seeds it: every new
+ * character joins owning `ship.v1=1` and the join sync spawns it on the
+ * pad), board the pilot seat, take a passenger,
  * then REPLAY THE COMMITTED C34 FLIGHT SCRIPT as live mode-1 input —
  * the same climb / space / boost / return / landing arc t25 proves both
  * sims agree on. Along the way: no position discontinuities, the space
@@ -14,7 +16,9 @@
  * disembarks on the ground after landing (C38). Reconnecting on the
  * buyer's token does not duplicate the ship (C33's persistence half).
  *
- * Run: node test/t26-flight.mjs   (needs `make up` / `make check-server`)
+ * Run: node test/t26-flight.mjs   (needs a server whose SA_START includes
+ *   ship.v1=1, e.g. SA_GUESTS=1 SA_START="credits=3000,ammo.cell=120,ship.v1=1";
+ *   SA_SERVER_URL=ws://127.0.0.1:1809x/ws for a bare one)
  */
 import { readFileSync } from 'node:fs'
 import { SEAT } from './lib/wire.mjs'
@@ -120,26 +124,15 @@ const token = `t26-owner-${Date.now()}`
 const a = connect('pilot', token)
 await wait(() => a.id && a.ents.size > 1)
 
-// --- C33: buy -> pad -> pilot seat ------------------------------------------
+// --- C33: owned (seeded) -> pad -> pilot seat --------------------------------
 // Ships from earlier runs persist for the server's lifetime (GDD: never
-// destroyed), so the assertion is "MY purchase adds one", not "the world
-// is empty".
-const preShips = new Set([...a.spawns].filter(([, v]) => v.type === 2).map(([id]) => id))
-
-// The quartermaster, by spawn label (t14's lesson: never "the first NPC" —
-// zone composition once put camp hostiles on the lowest ids).
-const npcId = [...a.spawns].find(([, v]) => v.type === 3 && v.data === 'npc.quartermaster')?.[0] ?? 0
-check('found the quartermaster', npcId !== 0, `npc ${npcId}`)
-await walkTo(a, () => a.ents.get(npcId).pos, 2.4)
-await aimAt(a, a.ents.get(npcId).pos)
-
-a.ws.send(cmd(a.cmdSeq, 0x0002, { npc: npcId, item: 'ship.v1', qty: 1 }))
-const buySeq = a.cmdSeq++
-const buy = await wait(() => a.results.find((x) => x.seq === buySeq))
-check('C33 ship purchased', buy?.status === 0, `status ${buy?.status}`)
-
-const shipId = await wait(() => [...a.spawns].find(([id, v]) => v.type === 2 && !preShips.has(id))?.[0], 3000)
-check('C33 ship spawned on the pad after purchase', !!shipId, `id ${shipId}`)
+// destroyed). The seeded ship spawns on the tick after the join burst, so
+// it cannot be told apart by arrival; world ids only grow, and nobody
+// joined after this token, so MY ship is the newest type-2 id.
+await sleep(1000)
+const shipIds = () => [...a.spawns].filter(([, v]) => v.type === 2).map(([id]) => id)
+const shipId = await wait(() => shipIds().length ? Math.max(...shipIds()) : 0, 3000)
+check('C33 the owned ship (SA_START ship.v1=1) spawned on join', !!shipId, `id ${shipId} of ${shipIds().length} ship(s)`)
 if (!shipId) { console.log('OVERALL: FAIL'); process.exit(1) }
 const ship = () => a.ents.get(shipId)
 await wait(() => ship())
@@ -222,13 +215,14 @@ if (off) {
 } else check('C38 passenger lands on the terrain', false, 'never unseated')
 
 // --- C33 persistence: reconnect on the buyer's token, no duplicate ----------
+// (The rider's join owns a seeded ship too, so count what A saw just now.)
+const shipsBefore = [...a.spawns.values()].filter((v) => v.type === 2).length
 a.ws.close()
 await sleep(300)
 const a2 = connect('pilot', token)
 await wait(() => a2.id && a2.ents.size > 1)
-await sleep(500)
+await sleep(1000)
 const shipsNow = [...a2.spawns.values()].filter((v) => v.type === 2).length
-const shipsBefore = preShips.size + 1 // the world's carry-overs plus mine
 check('C33 ship persists across reconnect without duplicating',
   shipsNow === shipsBefore && a2.spawns.has(shipId),
   `${shipsNow} ships (want ${shipsBefore}), mine ${a2.spawns.has(shipId) ? 'present' : 'GONE'}`)

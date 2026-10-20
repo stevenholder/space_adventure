@@ -69,37 +69,8 @@ func (s *ShipState) Bank() *SeatBank { return &s.SeatBank }
 // bearing — skipping any slot within padMinSep of a position in occupied.
 func SpawnShip(t *terrain.Field, occupied []Vec) (pos Vec, quat Quat) {
 	up0 := terrain.Normalize(terrain.SpawnDir)
-	p0 := up0.Scale(t.SampleRadius(up0))
 	bearing := rotateAboutAxis(SpawnState(t).Facing, up0, -math.Pi/2)
-
-	cand := up0
-	for k := 0; k < 7; k++ {
-		dist := PadDist + 10*float64(k)
-		cand = terrain.Normalize(p0.Add(bearing.Scale(dist)))
-		if !t.Walkable(cand) {
-			continue
-		}
-		slot := cand.Scale(t.SampleRadius(cand))
-		free := true
-		for _, o := range occupied {
-			if slot.Sub(o).Len() < padMinSep {
-				free = false
-				break
-			}
-		}
-		if free {
-			break
-		}
-	}
-
-	pos = cand.Scale(t.SampleRadius(cand))
-	forward := tangential(bearing, cand)
-	if forward.Len() < EpsDeg {
-		forward = tangential(Vec{0, 0, 1}, cand)
-	}
-	forward = terrain.Normalize(forward)
-	right := terrain.Cross(cand, forward) // +X = up × forward
-	return pos, QuatFromBasis(right, cand, forward)
+	return padScan(t, up0, bearing, PadDist, 10, 7, occupied)
 }
 
 // ShipItemID is the item whose possession IS ship ownership (GDD

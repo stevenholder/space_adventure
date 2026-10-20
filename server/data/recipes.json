@@ -446,6 +446,33 @@
       "xp": 20
     },
     {
+      "id": "recipe.ship.v1",
+      "name": "Scout Ship",
+      "level": 20,
+      "skill": "construction",
+      "station": "dock",
+      "seconds": 60,
+      "inputs": [
+        {
+          "item": "mat.plate.steel",
+          "qty": 40
+        },
+        {
+          "item": "mat.wiring",
+          "qty": 16
+        },
+        {
+          "item": "mat.core",
+          "qty": 2
+        }
+      ],
+      "output": {
+        "item": "ship.v1",
+        "qty": 1
+      },
+      "xp": 930
+    },
+    {
       "id": "recipe.armor.helmet.scout",
       "name": "Scout Helmet",
       "level": 1,
@@ -1284,6 +1311,56 @@
         "qty": 1
       },
       "xp": 40
+    },
+    {
+      "id": "recipe.site.dock",
+      "name": "Dock Site",
+      "level": 15,
+      "skill": "construction",
+      "station": "bench",
+      "seconds": 60,
+      "inputs": [
+        {
+          "item": "mat.plate.steel",
+          "qty": 10
+        },
+        {
+          "item": "mat.parts",
+          "qty": 10
+        }
+      ],
+      "output": {
+        "item": "site.dock",
+        "qty": 1
+      },
+      "xp": 150
+    },
+    {
+      "id": "recipe.vehicle.rover",
+      "name": "Rover",
+      "level": 10,
+      "skill": "construction",
+      "station": "dock",
+      "seconds": 30,
+      "inputs": [
+        {
+          "item": "mat.plate.steel",
+          "qty": 20
+        },
+        {
+          "item": "mat.wiring",
+          "qty": 8
+        },
+        {
+          "item": "mat.ingot.iron",
+          "qty": 10
+        }
+      ],
+      "output": {
+        "item": "vehicle.rover",
+        "qty": 1
+      },
+      "xp": 490
     }
   ]
 }

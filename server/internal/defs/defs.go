@@ -81,6 +81,23 @@ type Item struct {
 	// for a chest); Verb is the interact prompt's word ("Use", "Open").
 	Station string `json:"station,omitempty"`
 	Verb    string `json:"verb,omitempty"`
+	// Phase 24 (GDD "Buildings and the dock"): Site makes a structure a
+	// building site — built in place from its bill, then it becomes another
+	// structure. Demolish: picking it up is a 3 s demolish that returns
+	// nothing (a site or a dock is not carried back).
+	Site     *Site `json:"site,omitempty"`
+	Demolish bool  `json:"demolish,omitempty"`
+}
+
+// Site is a building site's rule (Phase 24): Becomes is the structure item
+// it turns into on the last delivered unit; Footprint the pad's width in
+// metres (clearance radius Footprint/2 when placed); SlopeMax the steepest
+// ground it sits on, in degrees; Bill what must be delivered.
+type Site struct {
+	Becomes   string    `json:"becomes"`
+	Footprint float64   `json:"footprint"`
+	SlopeMax  float64   `json:"slope_max"`
+	Bill      []ItemQty `json:"bill"`
 }
 
 // Consumable is a one-shot: one unit leaves the bag, Heal lands, the item
@@ -699,8 +716,8 @@ func auditArtisan(reg *Registry) error {
 		if !skill(r.Skill) {
 			return fmt.Errorf("defs: recipe %s: skill %q unknown", r.ID, r.Skill)
 		}
-		if r.Station != "hand" && r.Station != "bench" && r.Station != "forge" {
-			return fmt.Errorf("defs: recipe %s: station %q is not hand, bench or forge", r.ID, r.Station)
+		if r.Station != "hand" && r.Station != "bench" && r.Station != "forge" && r.Station != "dock" {
+			return fmt.Errorf("defs: recipe %s: station %q is not hand, bench, forge or dock", r.ID, r.Station)
 		}
 		if r.Seconds <= 0 {
 			return fmt.Errorf("defs: recipe %s: seconds must be positive", r.ID)
@@ -721,8 +738,28 @@ func auditArtisan(reg *Registry) error {
 		// Phase 23: a structure stacks (a bag holds up to the cap), is drawn from its
 		// asset, and serves a station the craft path knows (or none: a chest).
 		if it.Kind == "structure" && (it.StackMax < 1 || it.Asset == "" || it.Verb == "" ||
-			(it.Station != "" && it.Station != "bench" && it.Station != "forge")) {
-			return fmt.Errorf("defs: item %s: a structure needs a positive stack_max, an asset, a verb and a station of bench, forge or none", it.ID)
+			(it.Station != "" && it.Station != "bench" && it.Station != "forge" && it.Station != "dock")) {
+			return fmt.Errorf("defs: item %s: a structure needs a positive stack_max, an asset, a verb and a station of bench, forge, dock or none", it.ID)
+		}
+		// Phase 24: a site is a station-less structure with a footprint, a
+		// slope, a bill of known items and a structure to become.
+		if st := it.Site; st != nil {
+			if it.Kind != "structure" || it.Station != "" || st.Footprint <= 0 || st.SlopeMax <= 0 || len(st.Bill) == 0 {
+				return fmt.Errorf("defs: item %s: a site is a station-less structure with a positive footprint, slope_max and a bill", it.ID)
+			}
+			if b, ok := reg.Items[st.Becomes]; !ok || b.Kind != "structure" || b.Site != nil {
+				return fmt.Errorf("defs: item %s: site becomes %q, not a finished structure", it.ID, st.Becomes)
+			}
+			seen := map[string]bool{}
+			for _, q := range st.Bill {
+				if _, ok := reg.Items[q.Item]; !ok || q.Qty < 1 || seen[q.Item] {
+					return fmt.Errorf("defs: item %s: bill line %s ×%d is not a known item in a positive count, once", it.ID, q.Item, q.Qty)
+				}
+				seen[q.Item] = true
+			}
+		}
+		if it.Demolish && it.Kind != "structure" {
+			return fmt.Errorf("defs: item %s: only a structure is demolished", it.ID)
 		}
 		if it.Kind != "structure" && it.Station != "" {
 			return fmt.Errorf("defs: item %s: only a structure serves a station", it.ID)
