@@ -59,6 +59,7 @@ const BUDGETS = [
   [/^weapon\./, 3000],
   [/^tool\./, 1000],
   [/^struct\./, 1500],
+  [/^prop\.dock$/, 3000], // the 6 m dock pad + gantry (Phase 24), composed of MegaKit pieces
   [/^prop\./, 1000],
   [/^armor\./, 5000],
   [/^pack\./, 800],
@@ -167,6 +168,8 @@ const NODE_CONTRACTS = {
   "tool.drill": { nodes: ["grip", "muzzle"] },
   "tool.cutter": { nodes: ["grip", "muzzle"] },
   "prop.target": { nodes: ["plate"] },
+  // The dock's site ghost fills in by thirds, in this order (Entities.cs).
+  "prop.dock": { nodes: ["pad", "gantry", "beacon"], topLevel: true },
 };
 
 // Bounds contracts (Phase 22): the gatherable nodes and the crafting
@@ -177,7 +180,12 @@ const NODE_CONTRACTS = {
 // station inside its footprint and under the wrecks' skyline.
 const NODE_BOUNDS = { minTop: 0.9, maxTop: 1.05, halfX: 0.8, halfZ: 0.8 };
 const STATION_BOUNDS = { minTop: 0.9, maxTop: 1.6, halfX: 1.1, halfZ: 0.7 };
+// The dock (Phase 24): the whole prop inside 6 x 6 m and under 2.5 m, and its
+// `pad` node filling the collider box (sim/props.go PropBoxes, Boot.cs):
+// x/z ±3, y 0..0.25, so what you stand on is what you see.
+const DOCK_BOUNDS = { minTop: 2.0, maxTop: 2.5, halfX: 3.0, halfZ: 3.0, pad: { node: "pad", halfX: 3.0, halfZ: 3.0, top: 0.25 } };
 const BOUNDS_CONTRACTS = {
+  "prop.dock": DOCK_BOUNDS,
   "prop.node.ore.iron": NODE_BOUNDS,
   "prop.node.ore.copper": NODE_BOUNDS,
   "prop.node.crystal": NODE_BOUNDS,
@@ -404,6 +412,20 @@ for (const asset of selected) {
       problems.push(
         `outside its ±${bounds.halfX} x ±${bounds.halfZ} m footprint: x [${b.min.x.toFixed(2)}, ${b.max.x.toFixed(2)}] ` +
         `z [${b.min.z.toFixed(2)}, ${b.max.z.toFixed(2)}]`);
+    if (bounds.pad) {
+      const node = findByName(gltf.scene, bounds.pad.node)[0];
+      if (!node) problems.push(`missing node ${bounds.pad.node}`);
+      else {
+        const pb = new Box3().setFromObject(node), q = bounds.pad, pe = 0.02;
+        if (Math.abs(pb.min.y) > e || pb.max.y > q.top + e || pb.max.y < q.top - pe ||
+            Math.abs(pb.min.x + q.halfX) > pe || Math.abs(pb.max.x - q.halfX) > pe ||
+            Math.abs(pb.min.z + q.halfZ) > pe || Math.abs(pb.max.z - q.halfZ) > pe)
+          problems.push(
+            `${q.node} does not fill its collider box ±${q.halfX} x 0..${q.top} x ±${q.halfZ}: ` +
+            `x [${pb.min.x.toFixed(3)}, ${pb.max.x.toFixed(3)}] y [${pb.min.y.toFixed(3)}, ${pb.max.y.toFixed(3)}] ` +
+            `z [${pb.min.z.toFixed(3)}, ${pb.max.z.toFixed(3)}]`);
+      }
+    }
     problems.push(...rawColorProblems(asset.file));
   }
   // Node names are checked against the original glTF JSON: three.js's
@@ -414,6 +436,13 @@ for (const asset of selected) {
   if (contract) {
     for (const need of contract.nodes)
       if (!names.has(need)) problems.push(`missing node ${need}`);
+    // `topLevel`: exactly these nodes at the scene root, in this order.
+    if (contract.topLevel) {
+      const json = gltf.parser.json;
+      const top = json.scenes[json.scene ?? 0].nodes.map((i) => json.nodes[i].name);
+      if (JSON.stringify(top) !== JSON.stringify(contract.nodes))
+        problems.push(`top-level nodes ${JSON.stringify(top)}, want ${JSON.stringify(contract.nodes)}`);
+    }
     if (contract.eyeHeadSiblings && names.has("eye") && names.has("head")) {
       const eye = findByName(gltf.scene, "eye")[0];
       if (eye.parent && eye.parent.name === "head")

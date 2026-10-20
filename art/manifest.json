@@ -7340,6 +7340,32 @@
       "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
       "author": "Quaternius",
       "source": "tools/bpy/props_vendor.py"
+    },
+    {
+      "id": "prop.dock",
+      "description": "The dock (Phase 24), composed by tools/bpy/props_vendor.py from Quaternius Modular SciFi MegaKit pieces (Platforms/Platform_Round1 on a Platform_DarkPlates apron, Columns/Column_Simple + Column_MetalSupport, Props/Prop_Light_Floor; red trim-sheet PBR, textures capped 1024x1024). Base at origin, up +Y, front +Z; 6 x 6 m, 2.487 m tall. Three top-level nodes in fill order: `pad` (x/z ±3, y 0..0.25: the collider box), `gantry` (post at the back, -Z, its truss boom out over the pad) and `beacon` (the lamp on the post, emissive material `M_Beacon`, flame-amber #FFAE19).",
+      "file": "props/dock.glb",
+      "tris": 1736,
+      "surfaces": {
+        "pad": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "gantry": [
+          "MI_Trim_01",
+          "MI_Trim_02",
+          "MI_PaddedWall"
+        ],
+        "beacon": [
+          "MI_Trim_01",
+          "M_Beacon"
+        ]
+      },
+      "pbr": true,
+      "license": "CC0",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius",
+      "source": "tools/bpy/props_vendor.py"
     }
   ],
   "palettes": {
