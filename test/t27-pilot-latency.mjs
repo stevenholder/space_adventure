@@ -4,15 +4,20 @@
  * proxy (test/lib/proxy.mjs, 50 ms/direction), a scripted pilot run keeps
  * p95 |predicted − authoritative| under 0.5 m with no snap-back.
  *
- * This harness owns the setup: buy a ship on a fresh token (direct
- * connection — the purchase is not the thing under test), then hand the
+ * This harness owns the setup: own a ship on a fresh token (direct
+ * connection). Phase 24 took ship.v1 out of Vex's stock (the dock builds
+ * it), so the server's SA_START must seed `ship.v1=1`: the join sync
+ * spawns the owner's ship on the pad. Then hand the
  * token and ship id to SimDump --pilot, which joins THROUGH THE PROXY
  * (the owner's ship follows the token), walks to the pad, takes seat 1,
  * and flies the measurement run with ShipPredictor. The predictor under
  * test is the client's own (Game/Core/ShipPrediction.cs), same as C6
  * tests the body's.
  *
- * Run: node test/t27-pilot-latency.mjs   (needs `make up`, dotnet)
+ * Run: node test/t27-pilot-latency.mjs   (needs dotnet and a server whose
+ *   SA_START includes ship.v1=1, e.g. SA_GUESTS=1
+ *   SA_START="credits=3000,ammo.cell=120,ship.v1=1"; SA_PORT=1809x for a
+ *   bare one, default 18080)
  */
 import { spawn, execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -22,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const PROXY_PORT = 19180
 const TARGET_HOST = '127.0.0.1'
-const TARGET_PORT = 18080
+const TARGET_PORT = Number(process.env.SA_PORT ?? 18080)
 const EVIDENCE = path.join(root, 'test/out/t27-pilot-latency.json')
 
 const enc = new TextEncoder(), dec = new TextDecoder()
@@ -50,12 +55,16 @@ const norm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l) }
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// ---- setup: buy a ship on a fresh token (direct, no proxy) -----------------
+// ---- setup: own a ship on a fresh token (direct, no proxy) -----------------
 const token = `t27-pilot-${Date.now()}`
 const ws = new WebSocket(`ws://${TARGET_HOST}:${TARGET_PORT}/ws`)
 ws.binaryType = 'arraybuffer'
 const st = { id: 0, ents: new Map(), spawns: new Map(), results: [], seq: 1 }
-ws.addEventListener('open', () => ws.send(hello('t27-setup', token)))
+// The setup joins under SimDump's name: a storeless guest's vehicles are
+// keyed `session:<name>`, so any other name here makes SimDump's join own
+// (and spawn) a SECOND seeded ship beside the flown one — the take-off then
+// brushes it and C39 counts snap-backs.
+ws.addEventListener('open', () => ws.send(hello('c39-pilot', token)))
 ws.addEventListener('message', (ev) => {
   const dv = new DataView(ev.data), t = dv.getUint16(0, true), pv = new DataView(ev.data, 2)
   if (t === 0x0002) st.id = pv.getUint32(8, true)
@@ -74,27 +83,12 @@ ws.addEventListener('message', (ev) => {
 const wait = async (fn, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = fn(); if (v) return v; await sleep(25) } return null }
 
 await wait(() => st.id && st.ents.size > 1)
-const preShips = new Set([...st.spawns].filter(([, v]) => v.type === 2).map(([id]) => id))
-const npcId = [...st.spawns].find(([, v]) => v.type === 3 && v.data === 'npc.quartermaster')?.[0]
-if (!npcId) { console.log('FAIL: no quartermaster'); process.exit(1) }
-
-for (let i = 0; i < 400; i++) {
-  const me = st.ents.get(st.id), np = st.ents.get(npcId)
-  const d = sub(np, me)
-  if (Math.hypot(...d) <= 2.4) break
-  const up = norm(me)
-  const lk = norm(sub(d, up.map((x) => x * (d[0] * up[0] + d[1] * up[1] + d[2] * up[2]))))
-  ws.send(input([0, 1, lk[0], lk[1], lk[2]], 0x0001, st.seq++))
-  await sleep(50)
-}
-const aim = norm(sub(st.ents.get(npcId), st.ents.get(st.id)))
-ws.send(input([0, 0, aim[0], aim[1], aim[2]], 0, st.seq++))
-await sleep(150)
-ws.send(cmd(1, 0x0002, { npc: npcId, item: 'ship.v1', qty: 1 }))
-const buy = await wait(() => st.results.find((r) => r.seq === 1))
-if (buy?.status !== 0) { console.log(`FAIL: buy status ${buy?.status}`); process.exit(1) }
-const shipId = await wait(() => [...st.spawns].find(([id, v]) => v.type === 2 && !preShips.has(id))?.[0], 3000)
-if (!shipId) { console.log('FAIL: ship never spawned'); process.exit(1) }
+// The seeded ship spawns on the tick after the join burst; world ids only
+// grow, so the newest type-2 id is this fresh token's.
+await sleep(1000)
+const shipIds = () => [...st.spawns].filter(([, v]) => v.type === 2).map(([id]) => id)
+const shipId = await wait(() => shipIds().length ? Math.max(...shipIds()) : 0, 3000)
+if (!shipId) { console.log('FAIL: no owned ship spawned (does SA_START include ship.v1=1?)'); process.exit(1) }
 console.log(`setup: token ${token}, ship ${shipId}`)
 ws.close()
 await sleep(300)

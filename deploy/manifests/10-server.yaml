@@ -38,7 +38,7 @@ spec:
             # harness fleet and the screenshot rig buy things, so the kind
             # server seats them rich; production never sets it.
             - name: SA_START
-              value: "credits=3000,ammo.cell=120"
+              value: "credits=3000,ammo.cell=120,ship.v1=1"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

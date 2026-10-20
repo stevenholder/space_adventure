@@ -5,7 +5,7 @@
  * A fresh player plays the verbs the roster hooks, in one connection, and
  * watches the sheet move:
  *
- *   sprint to the quartermaster (Athletics) -> buy rifle, ammo, ship
+ *   sprint to the quartermaster (Athletics) -> buy rifle, ammo
  *   (Commerce) -> fly the committed C34 arc as pilot and land (Piloting,
  *   plus the clean-landing bonus) -> drive the rover out and back
  *   (Driving) -> walk the solved route into the camp (Recon fires on
@@ -22,7 +22,16 @@
  * the test walks onto the drop while shooting the next hostile precisely
  * so it usually lives long enough.
  *
- * Run: node test/t34-skills-loop.mjs   (needs `make up`)
+ * The ship is OWNED from the start: Phase 24 took ship.v1 out of Vex's
+ * stock (the dock builds it), so the server's SA_START seeds `ship.v1=1`
+ * and the join sync spawns it on the pad.
+ *
+ * Run: node test/t34-skills-loop.mjs   (needs a server whose SA_START
+ *   includes ship.v1=1, e.g. SA_GUESTS=1
+ *   SA_START="credits=3000,ammo.cell=120,ship.v1=1";
+ *   SA_SERVER_URL=ws://127.0.0.1:1809x/ws for a bare one — give a bare one
+ *   a DATABASE_URL=sqlite://..., or the sheet-survives-reconnect check
+ *   fails: a storeless guest's row dies with its session)
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { loadField, sampleRadius } from './lib/field.mjs'
@@ -186,17 +195,15 @@ await walkTo(away, 4, 15000)
 await walkTo(c.ents.get(shopId).pos, 2.4, 20000)
 console.log(`at the quartermaster: ${dist(c.ents.get(shopId).pos, me().pos).toFixed(1)} m`)
 
-const preShips = new Set([...c.spawns].filter(([, v]) => v.type === 2).map(([id]) => id))
 // Prices are data (Phase 22 moved them): Commerce pays 1 XP per whole 5 cr
 // of each purchase.
 const stock = (await sendCmd(0x0001, { npc: shopId }))?.body?.stock ?? []
 const priceOf = (item) => stock.find((s) => s.item === item)?.price ?? 0
-const commerceWant = ['weapon.pulse', 'ammo.cell', 'ship.v1'].reduce((n, it) => n + Math.floor(priceOf(it) / 5), 0)
+const commerceWant = ['weapon.pulse', 'ammo.cell'].reduce((n, it) => n + Math.floor(priceOf(it) / 5), 0)
 const buyGun = await sendCmd(0x0002, { npc: shopId, item: 'weapon.pulse', qty: 1 })
 const buyAmmo = await sendCmd(0x0002, { npc: shopId, item: 'ammo.cell', qty: 1 })
-const buyShip = await sendCmd(0x0002, { npc: shopId, item: 'ship.v1', qty: 1 })
-check('bought rifle, cell and ship', buyGun?.status === 0 && buyAmmo?.status === 0 && buyShip?.status === 0,
-  `credits ${buyShip?.body?.credits}`)
+check('bought rifle and cell', buyGun?.status === 0 && buyAmmo?.status === 0,
+  `credits ${buyAmmo?.body?.credits}`)
 const eq = await sendCmd(0x0003, { slot: 'primary', item: 'weapon.pulse' })
 const rl = await sendCmd(0x0005, {})
 check('armed', eq?.status === 0 && rl?.status === 0)
@@ -207,8 +214,11 @@ check('Athletics trained on the sprint', lastXP('athletics') > 0, `${lastXP('ath
 
 // ---- act 2: fly the C34 arc as pilot -----------------------------------------
 
-const shipId = await wait(() => [...c.spawns].find(([id, v]) => v.type === 2 && !preShips.has(id))?.[0], 3000)
-check('the ship spawned on the pad', !!shipId, `id ${shipId}`)
+// The seeded ship spawned on the tick after the join burst; world ids only
+// grow, so the newest type-2 id is this fresh token's.
+const shipIds = () => [...c.spawns].filter(([, v]) => v.type === 2).map(([id]) => id)
+const shipId = await wait(() => shipIds().length ? Math.max(...shipIds()) : 0, 3000)
+check('the owned ship (SA_START ship.v1=1) is on the pad', !!shipId, `id ${shipId}`)
 const ship = () => c.ents.get(shipId)
 await wait(() => ship())
 await walkTo(() => ship().pos, 5, 30000)
