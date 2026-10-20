@@ -37,8 +37,8 @@ namespace SpaceAdventure.Game.UI
         /// twenty slots and their saves stay; flip this to bring it back.
         /// </summary>
         public const bool ShiftRow = false;
-        public static readonly Key[] Keys = { Key.Key1, Key.Key2, Key.Key3, Key.Key4, Key.Key5, Key.Q, Key.E, Key.T, Key.Z, Key.X };
-        private static readonly string[] Labels = { "1", "2", "3", "4", "5", "Q", "E", "T", "Z", "X" };
+        /// <summary>The slot keys, as bound (Esc menu > CONTROLS).</summary>
+        public static Key[] Keys => Binds.Hotbar;
         private const string ConfigPath = "user://sa.cfg";
 
         public readonly HotbarRef[] Refs = new HotbarRef[Slots];
@@ -48,7 +48,7 @@ namespace SpaceAdventure.Game.UI
         /// <summary>A fresh profile: an empty bar. Interact and reload are keys of their own.</summary>
         public void Defaults() => Array.Clear(Refs, 0, Slots);
 
-        public static string Label(int slot) => (slot >= Row ? "⇧" : "") + Labels[slot % Row];
+        public static string Label(int slot) => (slot >= Row ? "⇧" : "") + Binds.Name(Keys[slot % Row]);
 
         public void Load()
         {

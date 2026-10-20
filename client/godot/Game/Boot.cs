@@ -214,6 +214,7 @@ namespace SpaceAdventure.Game
         private DeliverView _deliverView; // Phase 24
         private Settings _settings;
         private SettingsView _settingsView;
+        private ControlsView _controlsView;
         private Hotbar _hotbar; // Phase 13
         private HotbarView _hotbarView;
         private readonly ChatLog _chat = new ChatLog();
@@ -243,7 +244,7 @@ namespace SpaceAdventure.Game
             (_journalView?.Open ?? false) || (_partyView?.Open ?? false) ||
             (_skillsView?.Open ?? false) || (_gameMenu?.Open ?? false) ||
             (_benchView?.Open ?? false) || (_settingsView?.Open ?? false) ||
-            (_chestView?.Open ?? false) || (_deliverView?.Open ?? false);
+            (_chestView?.Open ?? false) || (_deliverView?.Open ?? false) || (_controlsView?.Open ?? false);
 
         private TerrainField _terrain;
         private Sim.Collider[] _colliders = Array.Empty<Sim.Collider>();
@@ -1228,7 +1229,9 @@ namespace SpaceAdventure.Game
             _settings = new Settings();
             _settings.Load();
             _settingsView = new SettingsView(_ui.Root, _settings, ApplySettings);
-            _gameMenu = new GameMenuView(_ui.Root, () => GetTree().Quit(0), () => _settingsView.Show(true), LeaveToSelect, CanLeaveToSelect);
+            Binds.Load();
+            _controlsView = new ControlsView(_ui.Root);
+            _gameMenu = new GameMenuView(_ui.Root, () => GetTree().Quit(0), () => _settingsView.Show(true), LeaveToSelect, CanLeaveToSelect, () => _controlsView.Show(true));
             // The rig fixes its own window (--resolution, headless shots), so
             // the saved display mode is for a player's session only.
             // The launcher holds them back until PLAY.
@@ -1294,6 +1297,16 @@ namespace SpaceAdventure.Game
             }
             _net?.Dispose();
             Godot.Input.MouseMode = Godot.Input.MouseModeEnum.Visible;
+        }
+
+        /// <summary>A bind waiting for its key takes the next press before the GUI or the game sees it.</summary>
+        public override void _Input(InputEvent e)
+        {
+            if (_controlsView?.Listening != null && e is InputEventKey k && k.Pressed && !k.Echo)
+            {
+                _controlsView.Capture(k.PhysicalKeycode);
+                GetViewport().SetInputAsHandled();
+            }
         }
 
         public override void _UnhandledInput(InputEvent e) => _input.Feed(e);
@@ -1380,18 +1393,18 @@ namespace SpaceAdventure.Game
                 else _gameMenu.Show(true);
             }
             if (_input.Pressed(Key.F3)) _hud.DebugOpen = !_hud.DebugOpen;
-            if (_input.Pressed(Key.M)) _map.Toggle();
+            if (_input.Pressed(Binds.Of("map"))) _map.Toggle();
             // R reloads when a gun is worn; the server would refuse otherwise,
             // and a refusal for pressing R with empty hands is noise.
             // Tab swaps the hand between the gun and the melee weapon (when
             // both are worn). The server answers with `equipped`; flipping
             // here too means the swap shows on the frame the key went down.
-            if (_input.Pressed(Key.Tab) && _character.Primary != "" && _character.Melee != "")
+            if (_input.Pressed(Binds.Of("swap")) && _character.Primary != "" && _character.Melee != "")
             {
                 _character.WieldMelee = !_character.WieldMelee;
                 _net.Send(Character.WieldCmd(NextCmdSeq(), _character.WieldMelee));
             }
-            if (_input.Pressed(Key.R) && _character.Held == _character.Primary && _character.Defs.Item(_character.Primary)?.Weapon != null)
+            if (_input.Pressed(Binds.Of("reload")) && _character.Held == _character.Primary && _character.Defs.Item(_character.Primary)?.Weapon != null)
             {
                 _net.Send(Character.ReloadCmd(NextCmdSeq()));
                 // Cosmetic and local, like the muzzle flash: the arms time
@@ -1403,12 +1416,12 @@ namespace SpaceAdventure.Game
             // Phase 13: 1–5 Q E T Z X fire the hotbar; Shift picks the second
             // row (Shift is also sprint — a hotkey while sprinting fires the
             // shift row, which is what a modifier means).
-            _hotbarView.Shift = (Hotbar.ShiftRow && _input.Held(Key.Shift)) || _rigShift;
+            _hotbarView.Shift = (Hotbar.ShiftRow && _input.Held(Binds.Of("sprint"))) || _rigShift;
             foreach (Key k in Hotbar.Keys)
                 if (_input.Pressed(k)) FireHotbar(Hotbar.SlotFor(k, _hotbarView.Shift));
-            if (_input.Pressed(Key.B)) OpenPanel(_bagsView, _sheetView);
-            if (_input.Pressed(Key.C)) OpenPanel(_sheetView, _bagsView);
-            if (_input.Pressed(Key.J))
+            if (_input.Pressed(Binds.Of("bags"))) OpenPanel(_bagsView, _sheetView);
+            if (_input.Pressed(Binds.Of("sheet"))) OpenPanel(_sheetView, _bagsView);
+            if (_input.Pressed(Binds.Of("journal")))
             {
                 bool open = !_journalView.Open;
                 _journalView.Show(open);
@@ -1420,13 +1433,13 @@ namespace SpaceAdventure.Game
                         _net.Send(Encode.Cmd(NextCmdSeq(), Op.MissionList, $"{{\"npc\":{board}}}"));
                 }
             }
-            if (_input.Pressed(Key.P))
+            if (_input.Pressed(Binds.Of("party")))
             {
                 bool open = !_partyView.Open;
                 _partyView.Show(open);
                 if (open) _journalView.Show(false);
             }
-            if (_input.Pressed(Key.K)) ToggleSkills();
+            if (_input.Pressed(Binds.Of("skills"))) ToggleSkills();
 
             // The map and the panels want the pointer. Movement keeps working
             // under either.
@@ -2208,6 +2221,7 @@ namespace SpaceAdventure.Game
                 case "forge": _benchView.Bench = 0; _benchView.Station = "forge"; _benchView.Show(true); break;
                 case "craft": _bagsView.ShowCraft(true); OpenPanel(_bagsView, _sheetView); _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}")); break;
                 case "settings": _settingsView.Show(true); break;
+                case "controls": _controlsView.Show(true); break;
             }
         }
 
@@ -2932,7 +2946,7 @@ namespace SpaceAdventure.Game
 
         private void CloseAllPanels()
         {
-            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView, _chestView, _deliverView })
+            foreach (ModalView m in new ModalView[] { _sheetView, _bagsView, _shopView, _journalView, _partyView, _skillsView, _gameMenu, _benchView, _settingsView, _chestView, _deliverView, _controlsView })
                 if (m != null && m.Open) m.Show(false);
             if (_map.Open) _map.Toggle();
             if (_interact.ShopOpen) _interact.CloseShop();
@@ -3338,6 +3352,22 @@ namespace SpaceAdventure.Game
         /// body, the result parse, pct from health, the ghost's thirds, the
         /// prompts and label, the refusal words, the dock's collider box.
         /// </summary>
+        /// <summary>Key binds (Esc menu > CONTROLS): the table, the swap, the hotbar mirror.</summary>
+        private static void BindChecks(Action<string, bool> Check)
+        {
+            Binds.Reset();
+            Check("binds: defaults are WASD, F interacts, 1 is hotbar 1", Binds.Of("forward") == Key.W && Binds.Of("left") == Key.A
+                && Binds.Of("interact") == Key.F && UI.Hotbar.Keys[0] == Key.Key1 && UI.Hotbar.SlotFor(Key.Q, false) == 5);
+            Binds.Set("interact", Key.E);
+            Check("binds: a taken key swaps (E interacts, hotbar 7 takes F)", Binds.Of("interact") == Key.E && Binds.Of("hotbar7") == Key.F
+                && UI.Hotbar.SlotFor(Key.F, false) == 6 && UI.Hotbar.SlotFor(Key.E, false) == -1 && UI.Hotbar.Label(6) == Binds.Name(Key.F));
+            Binds.Set("forward", Key.Up);
+            Check("binds: a free key moves, nothing else changes", Binds.Of("forward") == Key.Up && Binds.Of("back") == Key.S);
+            Binds.Reset();
+            Check("binds: reset restores every default", Binds.Of("forward") == Key.W && Binds.Of("interact") == Key.F && Binds.Of("hotbar7") == Key.E
+                && Binds.Name(Key.W).Length > 0 && Binds.Table.Length == 25);
+        }
+
         private static void SiteChecks(Action<string, bool> Check)
         {
             Check("site: wire number (deliver 0x001A)", Op.Deliver == 0x001A);
@@ -3505,6 +3535,7 @@ namespace SpaceAdventure.Game
             CraftChecks(Check);
             StructureChecks(Check);
             SiteChecks(Check);
+            BindChecks(Check);
             // Phase 20: the chat log's model (GDD "Chat (Phase 20)", C176).
             var chat = new UI.ChatLog();
             Check("chat: an empty log is not visible", !chat.Visible && chat.Lines.Count == 0);

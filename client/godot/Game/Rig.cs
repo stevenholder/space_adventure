@@ -8,9 +8,10 @@
 // so a `await Wait(s)` is a `yield return new WaitForSeconds(s)`.
 //
 //   -uiShot <path>          save a PNG once the scene settles (after -uiShotAfter s, default 8)
-//   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug|menu first
+//   -uiPanel <name>         open bags|sheet|map|account|journal|party|skills|debug|menu|settings|controls first
 //   -uiMenuChars            with -uiPanel menu: show the CHARACTERS button without a session
 //   -uiLeave                with -uiPanel menu: press CHARACTERS (leave the world for the select)
+//   -uiRebind <id>=<Key>    with -uiPanel controls: rebind that action by a real key event, report, undo
 //   -uiRoute <json>         walk a solved route (test/out/route-*.json) before anything else
 //   -uiDemo                 stage two wounded grunts and the combat feed near spawn
 //   -uiFace <kind>          aim at the nearest target|npc|hostile|player|wounded|rover|rock|mast
@@ -990,6 +991,20 @@ namespace SpaceAdventure.Game
                 // -uiLeave: press the menu's CHARACTERS (the world torn down, the
                 // select up on the saved session -- or its empty-session error).
                 if (Flag("-uiLeave")) { LeaveToSelect(); await Wait(1.5); GD.Print($"ui: left for the select: selectUp={_selectUp} net={_net.State}"); }
+                // -uiRebind <id>=<Key>: with -uiPanel controls, click that bind and press
+                // the key through Godot's input path (the _Input capture), report, undo.
+                string rebind = Arg("-uiRebind");
+                if (rebind != null)
+                {
+                    string[] kv = rebind.Split('=');
+                    Key want = Enum.Parse<Key>(kv[1], true);
+                    _controlsView.Listen(kv[0]);
+                    await Wait(0.2);
+                    Godot.Input.ParseInputEvent(new InputEventKey { PhysicalKeycode = want, Keycode = want, Pressed = true });
+                    await Wait(0.5);
+                    GD.Print($"ui: rebind {kv[0]} -> {UI.Binds.Of(kv[0])} listening={_controlsView.Listening ?? "none"} (wanted {want})");
+                    UI.Binds.Reset(); UI.Binds.Save();
+                }
 
                 // -uiDragDemo: grab the open panel by its header and drag it
                 // 300 px right, 120 px down through Godot's own input path,
