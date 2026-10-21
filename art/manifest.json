@@ -353,28 +353,73 @@
     {
       "id": "struct.wall4.colony",
       "file": "structs/wall4.colony.glb",
-      "tris": 48,
+      "tris": 140,
       "cell": [
         1,
         1
       ],
       "height": 3.3,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE — the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to −0.3. Colony skin: one thing is always symmetric."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit wall, 4 m module (Phase 25, the Colony hand): the Quaternius Modular SciFi MegaKit's Walls/WallAstra_Straight_Flat on a BottomSimple_Straight skirt (0.3 m below y=0), the default trim sheets, composed by tools/bpy/props_vendor.py. MODELLED AT FINAL SCALE: the client tiles these along +X (the run), never stretches them; 4.4 x 0.9 m, 3.3 m tall, centred in its 1x1 cell.",
+      "surfaces": {
+        "wall": [
+          "MI_Trim_03",
+          "MI_Trim_03_Dark",
+          "MI_Trim_02"
+        ],
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_02_BaseColor.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_BaseColor.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.wall4.scrap",
       "file": "structs/wall4.scrap.glb",
-      "tris": 60,
+      "tris": 134,
       "cell": [
         1,
         1
       ],
       "height": 3.3,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit wall, 4 m module, MODELLED AT FINAL SCALE — the client tiles these, never stretches them (GDD \"World art style guide\"). Base at y=0, ground skirt to −0.3. Scrapyard skin: one thing is always crooked."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit wall, 4 m module (Phase 25, the Scrapyard hand): the Quaternius Modular SciFi MegaKit's Walls/WallBand_Straight_Broken on a BottomMetal_Straight skirt (0.3 m below y=0), the `_Red` trim sheets, composed by tools/bpy/props_vendor.py. MODELLED AT FINAL SCALE: the client tiles these along +X (the run), never stretches them; 4.437 x 1.029 m, 3.3 m tall, centred in its 1x1 cell.",
+      "surfaces": {
+        "wall": [
+          "MI_Trim_02",
+          "MI_Trim_01",
+          "M_Decal_White"
+        ],
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Decals.png",
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.corner.colony",
