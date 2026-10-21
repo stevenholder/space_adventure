@@ -21,7 +21,7 @@
  *
  * Usage: node tools/verify.mjs   (from art/, three.js installed)
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Box3, Vector3 } from "three";
@@ -310,9 +310,20 @@ function textureProblems(asset) {
   const json = JSON.parse(buf.subarray(20, 20 + jlen).toString("utf8"));
   const bin = buf.subarray(20 + jlen + 8);
   for (const [i, img] of (json.images ?? []).entries()) {
-    if (img.bufferView === undefined) continue;
-    const bv = json.bufferViews[img.bufferView];
-    const size = imageSize(bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength));
+    let bytes;
+    if (img.uri !== undefined) {
+      // A shared texture (art/tex, `shared_textures` recipes): must be there.
+      const file = path.resolve(artDir, path.dirname(asset.file), img.uri);
+      if (!existsSync(file)) { out.push(`image ${img.uri} missing`); continue; }
+      if (!(asset.textures ?? []).includes(path.relative(artDir, file)))
+        out.push(`image ${img.uri} not in the manifest row's textures (staging would skip it)`);
+      bytes = readFileSync(file);
+    } else {
+      if (img.bufferView === undefined) continue;
+      const bv = json.bufferViews[img.bufferView];
+      bytes = bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength);
+    }
+    const size = imageSize(bytes);
     if (size && Math.max(...size) > TEXTURE_MAX)
       out.push(`image ${img.name ?? i} ${size[0]}x${size[1]} exceeds ${TEXTURE_MAX} px`);
   }

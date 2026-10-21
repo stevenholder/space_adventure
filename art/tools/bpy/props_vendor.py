@@ -69,6 +69,30 @@ PROPS = {
         # #FFAE19 (GDD world art style guide, "light"), named for the client.
         tint={"M_Light": ("M_Beacon", (1.0, 0.423, 0.010))},
     ),
+    # ---- The kit swap (Phase 25): the Phase 9 roles rebuilt from MegaKit
+    # pieces at the SAME footprints (manifest `cell`/`height`, the verify
+    # gate), so the zone JSON and the colliders do not move. Our wall4 is
+    # 4 m along +X, centred in a 1x1 cell; a kit `*_Straight` wall is 4 m
+    # along Z on the cell's x = -2 edge, so every wall piece turns 90 about
+    # Y and shifts 2.1 m to the centre. Scrapyard reaches for the `_Red`
+    # sheets, Colony for the default ones (`sheet`); GDD "The two builders".
+    "struct.wall4.scrap": dict(
+        textures=MEGAKIT + "/Textures",
+        pieces=[
+            # the broken band wall: 4.82 m long as shipped (the rip overhangs
+            # one end); 0.92 along its length keeps the rip and fits the cell
+            ("wall", MK + "Walls/WallBand_Straight_Broken.gltf", (1, 1, 0.92), (0.375, 0, -2.1), (0, 90, 0)),
+            ("skirt", MK + "Walls/BottomMetal_Straight.gltf", (1.5, 15, 1.1), (0, -0.3, -2.55), (0, 90, 0)),
+        ],
+    ),
+    "struct.wall4.colony": dict(
+        textures=MEGAKIT + "/Textures",
+        sheet="default",
+        pieces=[
+            ("wall", MK + "Walls/WallAstra_Straight_Flat.gltf", (1, 1, 1), (0, 0, -2.05), (0, 90, 0)),
+            ("skirt", MK + "Walls/BottomSimple_Straight.gltf", (1.5, 15, 1.1), (0, -0.3, -2.55), (0, 90, 0)),
+        ],
+    ),
 }
 
 
@@ -82,6 +106,9 @@ def stage(oid, p):
     for b in g.get("buffers", []):
         shutil.copy(os.path.join(os.path.dirname(src), b["uri"]), d)
     for img in g.get("images", []):
+        if p.get("sheet") == "default":  # Colony: the un-tinted trim sheets
+            img["uri"] = img["uri"].replace("_Red.png", ".png").replace("_Blue.png", ".png")
+            img.pop("name", None)
         shutil.copy(os.path.join(ART, p["textures"], img["uri"]), d)
     path = os.path.join(d, os.path.basename(src))
     json.dump(g, open(path, "w"))
@@ -95,7 +122,7 @@ def build_pieces(oid, p):
     by_node = {}
     for i, (node, src, scl, pos, rot) in enumerate(p["pieces"]):
         before = set(bpy.data.objects)
-        bpy.ops.import_scene.gltf(filepath=stage(f"{oid}/{i}", dict(src=src, textures=p["textures"])))
+        bpy.ops.import_scene.gltf(filepath=stage(f"{oid}/{i}", dict(src=src, textures=p["textures"], sheet=p.get("sheet"))))
         new = [o for o in bpy.data.objects if o not in before]
         dg = bpy.context.evaluated_depsgraph_get()
         # glTF frame -> Blender: (x, y, z) -> (x, -z, y).

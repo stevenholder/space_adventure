@@ -2200,7 +2200,33 @@ shop no longer lists the ship.
 
 # Phase 25 — the kit swap: the world in the Quaternius kits (drafted 2026-10-11)
 
-### Where Phase 25 stands (2026-10-11, drafted)
+### Where Phase 25 stands (2026-10-20, wave 0 — both gates settled, PR pending)
+
+The two gates the GDD named are closed, on the chest and the dock
+(`test/out/ui/p25-chest-before.png` → `p25-chest.png`, `p25-dock.png`):
+
+- **Lighting was never a night problem.** Both MegaKit trim sheets
+  paint metallic 1.0 into every texel of the ORM, and MI_Trim_01
+  ships specular 0; a metal takes no ambient and reflects a black sky,
+  so the chest was a black box in full sun. `import_pack` recipe flag
+  `painted` sets metallic 0 on every material (roughness maps stay)
+  and drops the specular extension. No client change, no bake.
+- **Textures are shared.** Recipe flag `shared_textures`: each image
+  goes to `art/tex/<name>.png` once, the glb names it by relative uri
+  (Godot's GltfDocument resolves from the glb's directory), the
+  manifest row lists them and `godot-cli stage_art` copies them.
+  Chest 3.4 MB → 24 KB, dock 6.0 MB → 75 KB, trim sheets 5.7 MB once.
+
+Task 3 begun the same day: `wall4` both hands, composed in
+`tools/bpy/props_vendor.py` (the dock's `pieces` composer IS the kit
+assembler; there is no separate `gen_kit.py` for the swap and no
+`art/kit/*.json`), through the verify gate at the old cell and height,
+shot at spawn with `-uiKitDemo` (`p25-wall4*.png`). The pattern for the
+other 14: a kit `*_Straight` wall sits on its cell's edge, so each wall
+piece turns 90° and shifts to the centre; Colony takes the default
+sheets by `sheet: "default"`. Next: corner, gate4, cover4, mast, tower,
+hab, shack; task 1 (the Nature kit) waits on the pack landing in
+`art/vendor/stylized-nature`.
 
 The three Quaternius kits (Modular SciFi MegaKit, Sci-Fi Essentials,
 Stylized Nature MegaKit — CC0, `art/vendor/`) become the world's look;
@@ -2221,7 +2247,7 @@ compass, the POI names, the fights: unchanged.
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
 | 1 | 0 | Vendor the Nature MegaKit (`art/vendor/stylized-nature`, by hand); ATTRIBUTION rows for all three kits as world art | `art/` | `npm --prefix art test` |
-| 2 | 1 | `tools/gen_kit.py` composes assembly recipes (`art/kit/<role>.<faction>.json`) from vendored glTFs: cell offsets, yaw, skirt, ink; same footprints as today | `art/tools/`, `art/kit/` | verify gate cell bounds; `render_check.py` per role |
+| 2 | 1 | ~~`tools/gen_kit.py` + `art/kit/*.json`~~ → the dock's `pieces` composer in `tools/bpy/props_vendor.py` assembles each role (cell offsets, yaw, skirt); same footprints as today | `art/tools/bpy/props_vendor.py`, `art/tools/props_vendor.mjs` | verify gate cell bounds; `-uiKitDemo` shots |
 | 3 | 1 | The 16 struct GLBs rebuilt (wall4/corner/gate4/cover4/tower/mast × faction, hab, shack, post, wall) | `art/structs/` | `-uiShot` from the camp gate and the Colony hab |
 | 4 | 1 | Props: barrel(s), loot_crate, dish, generator from Essentials at the old mounts | `art/props/` | shots; mount points asserted |
 | 5 | 1 | Nature: rock_a/b/c + the three nodes from the Nature kit; tint + pebbles kept | `art/props/`, `gen_nodes.py` | node silhouettes differ at 20 m (shot) |

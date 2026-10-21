@@ -702,15 +702,19 @@ namespace SpaceAdventure.Game
                 _rigFire = false;
             }
 
-            // -uiKitDemo: two kit pieces 7 m ahead through the props path
+            // -uiKitDemo [a,b,...]: kit pieces 7 m ahead through the props path
             // (AssetRegistry.Attach), so the wall render can be photographed
-            // at spawn instead of after a 250 m walk.
+            // at spawn instead of after a 250 m walk. A comma list picks the
+            // pieces, 6 m apart left to right; the default is the Phase 9 pair.
             if (Flag("-uiKitDemo"))
             {
                 Vector3 eyeK = Eye, upK = eyeK.Normalized();
                 Vector3 fwdK = CameraForward.Slide(upK).Normalized();
                 Vector3 rightK = fwdK.Cross(upK).Normalized();
-                foreach (var (asset, off) in new[] { ("struct.wall4.scrap", -3f), ("struct.tower.colony", 4f) })
+                string[] kitIds = (Arg("-uiKitDemo") ?? "struct.wall4.scrap,struct.tower.colony").Split(',');
+                var kitDemo = new List<(string, float)>();
+                for (int k = 0; k < kitIds.Length; k++) kitDemo.Add((kitIds[k], (k - (kitIds.Length - 1) / 2f) * 6f));
+                foreach (var (asset, off) in kitDemo)
                 {
                     Vector3 ground = (eyeK + fwdK * 7f + rightK * off).Normalized();
                     ground *= (float)_terrain.SampleRadius(Frame.ToSim(ground));

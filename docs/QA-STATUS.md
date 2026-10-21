@@ -1046,3 +1046,86 @@ owner may board" — as the ship has been since Phase 5. A site keeps
 what it holds in its row; demolishing it loses that (by the GDD). The
 dock's 3.4 MB (its own copy of the trim sheets, like the chest) is the
 Phase 25 shared-texture debt, now twice.
+
+# Phase 25 — the kit swap, wave 0: the two gates (2026-10-20)
+
+Both gates the GDD put in front of the swap, closed on the two kit
+props already in the world (chest, dock), before any wall is built.
+Proof shots on a bare dev server with the chest and the dock staged as
+spawn-zone props: `test/out/ui/p25-chest-before.png` (main's chest,
+black in full sun), `p25-chest.png` (the same chest after, sunlit
+side), `p25-dock.png` (the dock, 7 m, shadow side).
+
+**Lighting (C-gate 1).** Diagnosis, not a guess: the shot that raised
+the gate was taken in daylight (the NPC beside the chest is lit), and
+the kit's ORM textures measure metallic = 1.00 on every texel
+(`T_Trim_01/02_ORM.png`, blue channel), with MI_Trim_01 also carrying
+`KHR_materials_specular` 0. A metal takes no diffuse ambient and
+reflects the sky, which is black. Fix in `tools/import_pack.mjs`:
+recipe flag `painted` → metallic factor 0 on every material, the
+specular extension dropped, roughness maps kept. A first attempt did
+the same in Blender's node tree (unlink Metallic) and the exporter
+silently turned the dock's `MI_PaddedWall` roughness map into a
+constant 0.298 — the gltf-transform route keeps all three ORM maps.
+No client change; the ambient stays (0.17, 0.18, 0.24).
+
+**Textures (C-gate 2).** Recipe flag `shared_textures` →
+`art/tex/<image name>.png`, written by the first recipe that brings the
+name, referenced by relative uri from every glb (`../tex/...`; Godot's
+`GltfDocument.AppendFromFile` resolves against the glb's directory —
+proved by the shot, the textures are there). gltf-transform's GLB writer
+embeds every image whatever its uri, so `import_pack` packs the JSON it
+produces with the one binary buffer itself (`writeGlbWithUris`). The
+manifest row gains `textures`; `verify.mjs` requires each uri to exist,
+be in that list and respect `TEXTURE_MAX`; `godot-cli stage_art` copies
+them (dry run: 290 files staged, none missing). Sizes: chest 3.4 MB →
+24 KB, dock 6.0 MB → 75 KB, `art/tex` 5.7 MB for 9 images (three sheets
+× base/normal/ORM). `npm --prefix art test` 282/282, selftest gained
+two checks (no image embedded; every shared file exists and reads back).
+
+**Known / notes.** The ORM maps still carry the metallic channel
+(multiplied by 0) and an occlusion channel no material names — 0.8 MB
+each; repacking them to roughness-only is a later saving, not a gate.
+Image names are the dedupe key (not bytes: Blender re-encodes a PNG
+differently per run), so two kit textures with one name would collide —
+the kits have none. Staging a prop for a shot: zones are embedded in
+the server binary (`server/data/embed.go`), so a `props` row in a copy
+of `spawn.json` + `go build` is the way, restore the file after.
+
+**First kit piece: `wall4`, both hands (same day).** Composed in
+`tools/bpy/props_vendor.py` like the dock (no separate `gen_kit.py` for
+the swap: the dock's `pieces` composer already does cell offsets, yaw
+and material folding; `art/kit/*.json` would be a second copy of it).
+Scrapyard = `WallBand_Straight_Broken` on a `BottomMetal_Straight`
+skirt, the `_Red` sheets; Colony = `WallAstra_Straight_Flat` on a
+`BottomSimple_Straight` skirt, the default sheets (`sheet: "default"`
+rewrites the staged image uris, so the colony sheets land in `art/tex`
+under their own names). A kit `*_Straight` wall is 4 m along Z on the
+cell's x = -2 edge; ours runs along +X centred, so every wall piece is
+turned 90° and shifted 2.1 m. The broken wall ships 4.82 m long (the
+rip overhangs one end): 0.92 along its length keeps the rip inside the
+cell's ±2.45. Verify gate: both fit `cell [1,1]`, under `height 3.3`,
+134 / 140 tris (budget 400). The pair leaves `gen_kit.py`'s table.
+Shots via `-uiKitDemo a,b` (now a comma list; the pieces stand 7 m
+ahead facing the rig): `p25-wall4-before.png` (Phase 9 boxes),
+`p25-wall4.png` (kit, shadow side), `p25-wall4-lit.png` (`-uiYaw 180`,
+sunlit side: the Astra vents, the red band, the rip).
+
+Shadow side, measured, because the kit walls looked black beside the
+boxes (mean sRGB of the wall's face in the same frame; sky 0/0/7,
+ground 67/98/68):
+
+| colony wall front | r/g/b |
+|---|---|
+| Phase 9 box (hull #B8BDC4 as COLOR_0) | 46/48/61 |
+| kit, as built | 30/30/39 |
+| kit, normal map off | 29/30/39 |
+| kit, ORM off | 29/30/39 |
+| kit, single-sided | 29/30/39 |
+| kit, flat albedo 0.72/0.74/0.77 instead of the sheet | 40/42/54 |
+
+So: no normals or material fault — the shadow side is ambient only
+(0.17/0.18/0.24) for both kits, the trim sheet is darker than flat hull
+grey, and `COLOR_0` is read as linear (brighter than the same number
+as sRGB). The scene light is unchanged; raising the ambient is a look
+decision for a playtest, not a Phase 25 fix.

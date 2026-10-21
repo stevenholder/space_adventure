@@ -32,10 +32,13 @@
  *     "rig":    "animated",                  // optional manifest flag
  *     "bodies": ["npc.grunt"],               // optional: also "<id>@<body>" per wearer build
  *     "worn_surfaces": {"hair": ["hair"]},   // optional (bodies): a worn piece's mesh, coverable
+ *     "shared_textures": true,               // optional: images go to art/tex/<name>.png, written once,
+ *                                            //   and the glb references them (kit trim sheets)
+ *     "painted": true,                       // optional: metallic 0 on every material (kit trim sheets)
  *     "license": "CC0", "author": "Space Adventure", "source_url": "tools/bpy/armor.py"
  *   }
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -117,6 +120,51 @@ function addMounts(doc, mounts) {
  * the failure would look like a corrupt asset rather than two tools measuring
  * different things.
  */
+/**
+ * Shared textures: every MegaKit piece carries the same trim sheets, and an
+ * embedded copy per glb was 3.4 MB each (the Phase 25 gate: 16 pieces = 50 MB).
+ * Each image goes to art/tex/<name>.<ext> ONCE -- the first recipe to bring a
+ * name writes it, the rest reference it -- and the glb keeps a relative uri,
+ * which Godot's GltfDocument resolves from the glb's own directory. Returns
+ * the files (relative to art/) for the manifest row, so staging copies them.
+ */
+function shareTextures(doc, out) {
+  const texDir = path.join(artDir, "tex");
+  mkdirSync(texDir, { recursive: true });
+  const files = [];
+  doc.getRoot().listTextures().forEach((t, i) => {
+    const ext = (t.getMimeType() || "image/png").split("/")[1].replace("jpeg", "jpg");
+    const name = (t.getName() || `tex${i}`).replace(/[^A-Za-z0-9_.-]/g, "_");
+    const file = path.join(texDir, `${name}.${ext}`);
+    if (!existsSync(file)) writeFileSync(file, t.getImage());
+    t.setURI(path.posix.relative(path.dirname(out), file));
+    files.push(path.posix.relative(artDir, file));
+  });
+  return [...new Set(files)].sort();
+}
+
+/**
+ * gltf-transform's own GLB writer embeds every image whatever its uri; this
+ * packs the JSON it produces (uris intact) with the one binary buffer.
+ */
+async function writeGlbWithUris(doc, out) {
+  const { json, resources } = await io.writeJSON(doc, { format: 0 /* Format.GLB */ });
+  const binKey = Object.keys(resources).find((k) => !json.images?.some((im) => im.uri === k));
+  const bin = Buffer.from(binKey ? resources[binKey] : new Uint8Array(0));
+  if (json.buffers?.[0]) delete json.buffers[0].uri;
+  const pad = (n) => (n + 3) & ~3;
+  const jsonBuf = Buffer.from(JSON.stringify(json));
+  const jsonPad = Buffer.alloc(pad(jsonBuf.length), 0x20); jsonBuf.copy(jsonPad);
+  const binPad = Buffer.alloc(pad(bin.length)); bin.copy(binPad);
+  const header = Buffer.alloc(20);
+  header.writeUInt32LE(0x46546c67, 0); header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(28 + jsonPad.length + binPad.length, 8);
+  header.writeUInt32LE(jsonPad.length, 12); header.writeUInt32LE(0x4e4f534a, 16);
+  const binHeader = Buffer.alloc(8);
+  binHeader.writeUInt32LE(binPad.length, 0); binHeader.writeUInt32LE(0x004e4942, 4);
+  writeFileSync(out, Buffer.concat([header, jsonPad, binHeader, binPad]));
+}
+
 function triangleCount(doc) {
   let tris = 0;
   const visit = (node) => {
@@ -175,6 +223,19 @@ export async function importPack(recipe) {
   if (!recipe.pbr) throw new Error(`${recipe.id}: every model is pbr now (the vertex-colour bake went with the Kenney packs)`);
   const mounted = addMounts(doc, recipe.mounts);
 
+  // ponytail: both MegaKit trim sheets paint metallic = 1.0 into every texel
+  // of the ORM's blue channel, and MI_Trim_01 ships KHR_materials_specular 0.
+  // Our sky is black: a metal takes no ambient and reflects nothing, so the
+  // chest drew as a black box in daylight (p23-chest.png). The kit is painted
+  // metal, not chrome: factor 0 (the roughness map stays), dielectric
+  // specular back. Raise it only with a reflection source worth reflecting.
+  if (recipe.painted) {
+    for (const m of doc.getRoot().listMaterials()) {
+      m.setMetallicFactor(0);
+      m.setExtension("KHR_materials_specular", null);
+    }
+  }
+
   // Weld before simplify: meshoptimizer needs shared vertices to collapse
   // edges, and a flat-shaded export has none.
   let tris = triangleCount(doc);
@@ -189,9 +250,13 @@ export async function importPack(recipe) {
 
   const out = path.resolve(artDir, recipe.out);
   mkdirSync(path.dirname(out), { recursive: true });
-  await io.write(out, doc);
+  let textures;
+  if (recipe.shared_textures) {
+    textures = shareTextures(doc, out);
+    await writeGlbWithUris(doc, out);
+  } else await io.write(out, doc);
 
-  return { id: recipe.id, out: recipe.out, tris, mounted, surfaces };
+  return { id: recipe.id, out: recipe.out, tris, mounted, surfaces, textures };
 }
 
 /**
@@ -229,6 +294,9 @@ export function updateManifest(result, recipe) {
   else delete row.covers;
   if (recipe.pbr) row.pbr = true;
   else delete row.pbr;
+  // Shared textures the glb references by uri; godot-cli stage_art copies them.
+  if (result.textures) row.textures = result.textures;
+  else delete row.textures;
   // `arms`: a worn piece with parts on the arms (pauldrons, bracers) that the
   // first-person arms should wear too, whether or not it hides anything.
   if (recipe.arms) row.arms = true;
@@ -289,6 +357,24 @@ async function selftest() {
         probe && Math.abs(probe.getTranslation()[1] - 1.7) < 1e-4, `y=${probe?.getTranslation()[1]}`);
   // Counted as drawn: dedup() may merge meshes without dropping a triangle.
   check("no geometry lost", result.tris === before, `${result.tris} tris, source has ${before}`);
+
+  // Shared textures: the glb shrinks to geometry, the images land in art/tex
+  // once and the glb names them by relative uri.
+  const texDir = path.join(artDir, "tex");
+  const texBefore = new Set(existsSync(texDir) ? readdirSync(texDir) : []);
+  const shared = await importPack({
+    id: "char.player", src: SRC, out: path.relative(artDir, tmp), pbr: true, shared_textures: true,
+  });
+  const glb = readFileSync(tmp);
+  const glbJson = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"));
+  check("shared textures leave the glb",
+        glbJson.images?.length > 0 && glbJson.images.every((im) => im.uri && im.bufferView === undefined),
+        `${glb.length} bytes, images ${JSON.stringify(glbJson.images?.map((im) => im.uri ?? "embedded"))}`);
+  check("shared textures exist and are referenced",
+        shared.textures?.length > 0 && shared.textures.every((f) => existsSync(path.join(artDir, f))) &&
+        (await io.read(tmp)).getRoot().listTextures().every((t) => t.getImage()?.length > 0),
+        JSON.stringify(shared.textures));
+  for (const f of readdirSync(texDir)) if (!texBefore.has(f)) unlinkSync(path.join(texDir, f)); // the test's own files only
 
   console.log(failures === 0 ? "\nOVERALL: PASS" : `\nOVERALL: FAIL (${failures})`);
   return failures;

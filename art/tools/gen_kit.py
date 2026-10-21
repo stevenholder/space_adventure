@@ -220,11 +220,11 @@ def cover4_scrap():
     return t
 
 
+# Phase 25 retires these one role at a time: a role composed from the MegaKit
+# in tools/bpy/props_vendor.py leaves this table (wall4 went first).
 PIECES = {
     "structs/cover4.colony.glb": ("struct.cover4.colony", cover4_colony),
     "structs/cover4.scrap.glb": ("struct.cover4.scrap", cover4_scrap),
-    "structs/wall4.colony.glb": ("struct.wall4.colony", wall4_colony),
-    "structs/wall4.scrap.glb": ("struct.wall4.scrap", wall4_scrap),
     "structs/corner.colony.glb": ("struct.corner.colony", corner_colony),
     "structs/corner.scrap.glb": ("struct.corner.scrap", corner_scrap),
     "structs/gate4.colony.glb": ("struct.gate4.colony", gate4_colony),

@@ -43,6 +43,27 @@ const PROPS = {
       `\`gantry\` (post at the back, -Z, its truss boom out over the pad) and \`beacon\` (the lamp on the post, ` +
       `emissive material \`M_Beacon\`, flame-amber #FFAE19).`,
   },
+  // The kit swap (Phase 25): Phase 9's roles at the same cells.
+  "struct.wall4.scrap": {
+    out: "structs/wall4.scrap.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit wall, 4 m module (Phase 25, the Scrapyard hand): the Quaternius Modular SciFi MegaKit's ` +
+      `Walls/WallBand_Straight_Broken on a BottomMetal_Straight skirt (0.3 m below y=0), the \`_Red\` trim sheets, ` +
+      `composed by tools/bpy/props_vendor.py. MODELLED AT FINAL SCALE: the client tiles these along +X (the run), ` +
+      `never stretches them; ${m.width} x ${m.depth} m, ${m.height} m tall, centred in its 1x1 cell.`,
+  },
+  "struct.wall4.colony": {
+    out: "structs/wall4.colony.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit wall, 4 m module (Phase 25, the Colony hand): the Quaternius Modular SciFi MegaKit's ` +
+      `Walls/WallAstra_Straight_Flat on a BottomSimple_Straight skirt (0.3 m below y=0), the default trim sheets, ` +
+      `composed by tools/bpy/props_vendor.py. MODELLED AT FINAL SCALE: the client tiles these along +X (the run), ` +
+      `never stretches them; ${m.width} x ${m.depth} m, ${m.height} m tall, centred in its 1x1 cell.`,
+  },
 };
 
 const manifestPath = path.join(artDir, "manifest.json");
@@ -60,7 +81,7 @@ for (const [id, p] of Object.entries(PROPS)) {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 
   const recipe = {
-    id, src: `build/props/${id}.raw.glb`, out: p.out, pbr: true, budget: p.budget ?? 1000,
+    id, src: `build/props/${id}.raw.glb`, out: p.out, pbr: true, shared_textures: true, painted: true, budget: p.budget ?? 1000,
     ...p.pack, recipe_path: "tools/bpy/props_vendor.py",
   };
   const result = await importPack(recipe);
