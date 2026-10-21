@@ -2200,7 +2200,25 @@ shop no longer lists the ship.
 
 # Phase 25 — the kit swap: the world in the Quaternius kits (drafted 2026-10-11)
 
-### Where Phase 25 stands (2026-10-11, drafted)
+### Where Phase 25 stands (2026-10-20, wave 0 — both gates settled, PR pending)
+
+The two gates the GDD named are closed, on the chest and the dock
+(`test/out/ui/p25-chest-before.png` → `p25-chest.png`, `p25-dock.png`):
+
+- **Lighting was never a night problem.** Both MegaKit trim sheets
+  paint metallic 1.0 into every texel of the ORM, and MI_Trim_01
+  ships specular 0; a metal takes no ambient and reflects a black sky,
+  so the chest was a black box in full sun. `import_pack` recipe flag
+  `painted` sets metallic 0 on every material (roughness maps stay)
+  and drops the specular extension. No client change, no bake.
+- **Textures are shared.** Recipe flag `shared_textures`: each image
+  goes to `art/tex/<name>.png` once, the glb names it by relative uri
+  (Godot's GltfDocument resolves from the glb's directory), the
+  manifest row lists them and `godot-cli stage_art` copies them.
+  Chest 3.4 MB → 24 KB, dock 6.0 MB → 75 KB, trim sheets 5.7 MB once.
+
+Next: task 1 (vendor the Nature kit) and `gen_kit.py` on the first
+struct, `wall4.scrap`, shot at the camp.
 
 The three Quaternius kits (Modular SciFi MegaKit, Sci-Fi Essentials,
 Stylized Nature MegaKit — CC0, `art/vendor/`) become the world's look;

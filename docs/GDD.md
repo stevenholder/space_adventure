@@ -2028,15 +2028,19 @@ names, cell for cell, so **no zone JSON and no collider changes**.
   Nature MegaKit rocks and crystals; the per-placement tint and pebble
   rules carry over; node silhouettes must still differ at 20 m (the
   Phase 11 discovery read).
-- **Lighting.** Phase 23's chest (the first kit PBR prop in the world)
-  reads near-black at night beside the vertex-coloured own art: before
-  the swap, settle how kit materials take the scene light (ambient /
-  emissive floor for `pbr` assets, or a bake) — one shot at the camp at
-  night is the gate.
-- **Textures.** Every kit glb embeds its own copy of the shared trim
-  sheets (3.4 MB for the chest); the swap needs them shared, not
-  per-file (`import_pack` keeps a texture atlas by hash, or Godot
-  external textures), else 16 pieces = 50 MB.
+- **Lighting (settled 2026-10-20).** Phase 23's chest read near-black
+  in daylight, not just at night: the kit's trim sheets are metallic
+  1.0 everywhere and MI_Trim_01 has specular 0, and under a black sky
+  a metal takes no ambient and reflects nothing. Rule: **kit materials
+  are painted metal, not chrome** — every kit recipe carries
+  `painted: true` (`import_pack`: metallic factor 0, roughness maps
+  kept, no specular extension). Nothing changes in the client; the
+  scene light stays as it is.
+- **Textures (settled 2026-10-20).** Kit recipes carry
+  `shared_textures: true`: images live once in `art/tex/<name>.png`,
+  a glb names them by relative uri, the manifest row lists them under
+  `textures` and staging copies them. A kit piece is geometry only
+  (the chest: 24 KB).
 - **Not in 25.** New POIs, interiors, the dock (24), trees as
   obstacles (the planet stays open; trees are dressing with no
   collider until a playtest wants cover from them).

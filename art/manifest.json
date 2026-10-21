@@ -7339,7 +7339,15 @@
       "license": "CC0",
       "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
       "author": "Quaternius",
-      "source": "tools/bpy/props_vendor.py"
+      "source": "tools/bpy/props_vendor.py",
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ]
     },
     {
       "id": "prop.dock",
@@ -7365,7 +7373,18 @@
       "license": "CC0",
       "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
       "author": "Quaternius",
-      "source": "tools/bpy/props_vendor.py"
+      "source": "tools/bpy/props_vendor.py",
+      "textures": [
+        "tex/T_PaddedWall_BaseColor.png",
+        "tex/T_PaddedWall_Normal.png",
+        "tex/T_PaddedWall_ORM.png",
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ]
     }
   ],
   "palettes": {

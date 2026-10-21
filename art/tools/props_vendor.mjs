@@ -60,7 +60,7 @@ for (const [id, p] of Object.entries(PROPS)) {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 
   const recipe = {
-    id, src: `build/props/${id}.raw.glb`, out: p.out, pbr: true, budget: p.budget ?? 1000,
+    id, src: `build/props/${id}.raw.glb`, out: p.out, pbr: true, shared_textures: true, painted: true, budget: p.budget ?? 1000,
     ...p.pack, recipe_path: "tools/bpy/props_vendor.py",
   };
   const result = await importPack(recipe);
