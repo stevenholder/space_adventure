@@ -1129,3 +1129,47 @@ So: no normals or material fault — the shadow side is ambient only
 grey, and `COLOR_0` is read as linear (brighter than the same number
 as sRGB). The scene light is unchanged; raising the ambient is a look
 decision for a playtest, not a Phase 25 fix.
+# Phase 25 — the kit swap, wave 1: the other twelve roles (2026-10-21)
+
+Every struct role is now composed from the MegaKit in
+`tools/bpy/props_vendor.py` (`gen_kit.py` deleted, gone from `npm run
+gen`); same cells, same heights, zone JSON and colliders untouched. Two
+helpers carry the pattern: `skirt(file, w, d)` scales a
+`Bottom*_Straight` into the plinth; `sides(node, file, h, n, s, sy, y,
+dx, lean)` puts a `*_Straight` piece on the four edges of a square (n
+per edge, scaled along it; the ±x pair leans for Scrapyard — an XYZ
+euler cannot lean the ±z pair after their 90° turn, so those stand).
+Kit `*_Straight` detail protrudes past the stock x = -2 plane, i.e.
+OUTWARD on every edge, and every kit material is double-sided, so a
+single ShortWall plane reads from both sides.
+
+| role | Scrapyard | Colony | tris | notes |
+|---|---|---|---|---|
+| corner | Column_Simple leaning 4°, cap askew 25° | Column_Simple, square cap | 232 / 232 | a POST, not a `*_Corner_Outer`: `layout.go` places corners without a yaw, so the piece must read alike from every side |
+| gate4 | Door_Frame_A at stock width, one DarkMetal leaf 60° ajar | Door_Frame_Square × 0.82 | 236 / 296 | openings 2.27 / 2.62 m against the collider's 2.4 m gap. Frame_A × 0.82 was first (1.86 m: a visibly narrower door than the walkable gap); stock width fits the cell at ±2.44 |
+| cover4 | ShortWall_DarkMetal2 box, walls lean 4°, DarkPlates lid turned 6° | ShortWall_WhitePlate2 box, Platform_Squares lid | 48 / 72 | |
+| tower | posts lean 2° (deck follows 0.2 m), DarkPlates deck, rails 1 m, cabin shoved 12° | Platform_Simple deck, Simple1 rails, centred cabin | 604 / 580 | the deck is one Platform plane up and one flipped (`scale y -1`, normals flipped by the composer) for the underside |
+| mast | two Column_Simple stacked by eye (2°, then 5° + a twist), the dish tipped 8° the other way | Column_Large_Straight, the dish | 3495 / 3496 | the Essentials dish (3302 tris) names the same sheet files, so the MegaKit `Textures` dir serves both packs; `verify.mjs` budget `struct.mast.* ≤ 3500` (GDD), `import_pack` simplifies to it |
+| hab | — | 8 WallAstra_Straight_Flat, 8 TopSimple copings (3..5 m), Platform roof at 5 m, Door_Simple leaf on +z | 1102 | fills its 2×2 cell: walls at ±4.0, the slab to 4.1 (margin 4.45) |
+| shack | 4 WallBand walls (two Broken, rips over the corners), roof plate tipped 4°, awning plate on a post, DarkMetal door, stovepipe | — | 544 | no `TopCables_*_Hanging`: 4 k tris each |
+
+Verify: `npm --prefix art test` PASS, every piece inside its cell
+(+0.45 m) and under its height. Shots at spawn via `-uiKitDemo` (new
+`-uiKitDist`/`-uiKitGap`: a 10 m spacing at 7 m overflowed the frame):
+`p25-scrap-small.png` / `p25-colony-small.png` (corner, gate, cover),
+`p25-towers.png`, `p25-masts.png`, `p25-huts.png`. The tiled proof:
+the camp's `layout` block staged into `spawn.json` (zone-local
+coordinates, so it copies as is; server rebuilt, then restored), both
+hands (`shack` → `hab` for Colony): `p25-camp-gate.png` /
+`p25-camp-north.png` — the band walls with a rip per module, the
+emblem gate with its leaf, the leaning corner post, the shack — and
+`p25-colony-gate.png` / `p25-colony-north.png` — white Astra runs,
+the square frame gate, the white cover. Runs tile without gaps and
+butt into the posts. The `-uiRoute` camp walk stays retired (wedges on
+scree): staging a layout at spawn is how a POI gets photographed.
+
+Still open in Phase 25: the Nature kit (task 1, waits on the pack),
+Essentials props (task 4), ATTRIBUTION rows for the kits as world art,
+and the ambient look decision (shadow sides read dark on kit and own
+art alike, measured in wave 0).
+

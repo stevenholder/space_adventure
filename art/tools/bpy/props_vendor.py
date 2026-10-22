@@ -40,6 +40,33 @@ OUT = os.path.join(ART, "build", "props")
 TEX_MAX = 1024
 MEGAKIT = "vendor/scifi-megakit/Modular SciFi MegaKit[Standard]"
 MK = MEGAKIT + "/glTF/"
+ESS = "vendor/scifi-essentials/glTF/"  # shares the MegaKit's trim sheets (same image names)
+COL = MK + "Columns/Column_Simple.gltf"  # 0.5 x 5 x 1 m; the kit's all-purpose post
+DISH = ESS + "Prop_SatelliteDish.gltf"  # 1.8 x 5.8 x 2.8 m, 3.3k tris
+
+
+def skirt(file, w, d):
+    """The ground plinth (GDD skirt rule): a Bottom*_Straight (stock x -2..-1.4,
+    z +-2, 0.02 tall) scaled to w x 0.3 x d, centred, top at y=0."""
+    s = w / 0.6
+    return ("skirt", MK + "Walls/" + file + ".gltf", (s, 15, d / 4), (1.7 * s, -0.3, 0), (0, 0, 0))
+
+
+def sides(node, file, h, n=1, s=1.0, sy=1.0, y=0.0, dx=0.0, lean=0.0):
+    """A kit *_Straight piece (stock: the cell's x=-2 edge, z +-2, 4 m long) on
+    all four edges of a square of half-width h: n pieces per edge, scaled s
+    along it, sy tall. `lean` (deg) tips the +-x walls outward at the top (the
+    Scrapyard tell); the +-z walls cannot lean with XYZ eulers, so they stand.
+    Wall detail protrudes past the stock x=-2 plane, i.e. OUTWARD on every edge."""
+    d, out = h - 2, []
+    for k in range(n):
+        o = (k - (n - 1) / 2) * 4 * s
+        out += [(node, file, (1, sy, s), (-d + dx, y, o), (0, 0, lean)),
+                (node, file, (1, sy, s), (d + dx, y, o), (0, 180, -lean)),
+                (node, file, (1, sy, s), (o + dx, y, d), (0, 90, 0)),
+                (node, file, (1, sy, s), (o + dx, y, -d), (0, -90, 0))]
+    return out
+
 
 PROPS = {
     "prop.chest": dict(
@@ -93,6 +120,101 @@ PROPS = {
             ("skirt", MK + "Walls/BottomSimple_Straight.gltf", (1.5, 15, 1.1), (0, -0.3, -2.55), (0, 90, 0)),
         ],
     ),
+    # ---- the other roles (wave 1), same cells and heights as Phase 9 ----------
+    # corner: a post (layout.go places corners WITHOUT a yaw, so it must read the
+    # same from every side; a kit *_Corner_Outer L would need one). 1.1 m square,
+    # 3.6 m, a 0.4 m cap. Scrapyard: post leans 4 deg, cap sits askew.
+    "struct.corner.scrap": dict(textures=MEGAKIT + "/Textures", pieces=[
+        skirt("BottomMetal_Straight", 1.7, 1.7),
+        ("post", COL, (2.2, 0.72, 1.12), (0, 0, 0.02), (0, 0, 4)),
+        ("cap", COL, (2.7, 0.08, 1.38), (-0.25, 3.4, 0.02), (0, 25, 0)),
+    ]),
+    "struct.corner.colony": dict(textures=MEGAKIT + "/Textures", sheet="default", pieces=[
+        skirt("BottomSimple_Straight", 1.7, 1.7),
+        ("post", COL, (2.2, 0.72, 1.12), (0, 0, 0.02), (0, 0, 0)),
+        ("cap", COL, (2.7, 0.08, 1.38), (0, 3.4, 0.02), (0, 0, 0)),
+    ]),
+    # gate4: a kit Door_Frame (4.86 x 5 m stock) scaled into the 4 x 3.2 m wall
+    # module, open (the server's collider splits around the opening). Scrapyard
+    # hangs one DarkMetal leaf 60 deg ajar on the left jamb.
+    "struct.gate4.colony": dict(textures=MEGAKIT + "/Textures", sheet="default", pieces=[
+        skirt("BottomSimple_Straight", 4.3, 1.3),
+        ("frame", MK + "Platforms/Door_Frame_Square.gltf", (0.82, 0.64, 1.2), (0, 0, 0), (0, 0, 0)),
+    ]),
+    "struct.gate4.scrap": dict(textures=MEGAKIT + "/Textures", pieces=[
+        skirt("BottomMetal_Straight", 4.3, 1.3),
+        ("frame", MK + "Platforms/Door_Frame_A.gltf", (1, 0.64, 1), (0, 0, 0), (0, 0, 0)),  # stock width: its 2.27 m opening matches the 2.4 m collider gap
+        ("leaf", MK + "Platforms/Door_DarkMetal.gltf", (0.6, 0.64, 1), (-1.15, 0, 0.3), (0, 60, 0)),
+    ]),
+    # cover4: a closed 3.8 m box of 2 m ShortWalls with a Platform lid -- the
+    # fight-geometry piece. Scrapyard: walls lean, lid turned 6 deg.
+    "struct.cover4.colony": dict(textures=MEGAKIT + "/Textures", sheet="default", pieces=[
+        skirt("BottomSimple_Straight", 4.3, 4.3),
+        *sides("wall", MK + "Walls/ShortWall_WhitePlate2_Straight.gltf", 1.9, s=0.95),
+        ("top", MK + "Platforms/Platform_Squares.gltf", (0.95, 1, 0.95), (0, 2.0, 0), (0, 0, 0)),
+    ]),
+    "struct.cover4.scrap": dict(textures=MEGAKIT + "/Textures", pieces=[
+        skirt("BottomMetal_Straight", 4.3, 4.3),
+        *sides("wall", MK + "Walls/ShortWall_DarkMetal2_Straight.gltf", 1.9, s=0.95, lean=4),
+        ("top", MK + "Platforms/Platform_DarkPlates.gltf", (0.95, 1, 0.95), (0, 2.0, 0), (0, 6, 0)),
+    ]),
+    # tower: 2x2 cells. Four posts, an 8 m Platform deck (a second one flipped
+    # for the underside), 1 m ShortWall rails, a post-box cabin. Scrapyard: the
+    # whole thing leans 2 deg, the cabin is shoved off-centre.
+    "struct.tower.colony": dict(textures=MEGAKIT + "/Textures", sheet="default", pieces=[
+        skirt("BottomSimple_Straight", 8.6, 8.6),
+        *[("leg", COL, (1.6, 1.16, 1.2), (sx, 0, sz), (0, 0, 0)) for sx in (-3.2, 3.2) for sz in (-3.2, 3.2)],
+        ("deck", MK + "Platforms/Platform_Simple.gltf", (2, 1, 2), (0, 6.2, 0), (0, 0, 0)),
+        ("deck", MK + "Platforms/Platform_Simple.gltf", (2, -1, 2), (0, 5.8, 0), (0, 0, 0)),
+        *sides("rail", MK + "Walls/ShortWall_Simple1_Straight.gltf", 3.9, s=2.0, y=5.8),
+        ("cabin", COL, (4, 0.3, 2), (0, 6.2, 0.04), (0, 0, 0)),
+    ]),
+    "struct.tower.scrap": dict(textures=MEGAKIT + "/Textures", pieces=[
+        skirt("BottomMetal_Straight", 8.6, 8.6),
+        *[("leg", COL, (1.6, 1.16, 1.2), (sx, 0, sz), (0, 0, 2)) for sx in (-3.2, 3.2) for sz in (-3.2, 3.2)],
+        ("deck", MK + "Platforms/Platform_DarkPlates.gltf", (2, 1, 2), (-0.2, 6.2, 0), (0, 0, 0)),
+        ("deck", MK + "Platforms/Platform_DarkPlates.gltf", (2, -1, 2), (-0.2, 5.8, 0), (0, 0, 0)),
+        *sides("rail", MK + "Walls/ShortWall_DarkMetal2_Straight.gltf", 3.9, s=2.0, sy=0.5, y=5.8, dx=-0.2),
+        ("cabin", COL, (4.4, 0.26, 1.8), (0.9, 6.2, -0.8), (0, 12, 0)),
+    ]),
+    # mast: THE landmark, 12.3 m, the Essentials dish on top (the relay).
+    # Colony: one Column_Large_Straight. Scrapyard: two posts stacked by eye,
+    # each leaning further, the dish tipped the other way.
+    "struct.mast.colony": dict(textures=MEGAKIT + "/Textures", sheet="default", pieces=[
+        skirt("BottomSimple_Straight", 2.0, 2.0),
+        ("mast", MK + "Columns/Column_Large_Straight.gltf", (1, 1, 1), (0, 0, -0.14), (0, 0, 0)),
+        ("dish", DISH, (0.4, 0.4, 0.4), (0, 10, -0.04), (0, 0, 0)),
+    ]),
+    "struct.mast.scrap": dict(textures=MEGAKIT + "/Textures", pieces=[
+        skirt("BottomMetal_Straight", 2.0, 2.0),
+        ("mast", COL, (1.4, 1, 1.4), (0, 0, 0.03), (0, 0, 2)),
+        ("mast", COL, (1.2, 1, 1.2), (-0.17, 5, 0.02), (0, 15, 5)),
+        ("dish", DISH, (0.4, 0.4, 0.4), (-0.6, 9.95, -0.04), (0, 30, -8)),
+    ]),
+    # hab (Colony): 2x2 closed hut filling its cells -- eight Astra walls, eight
+    # TopSimple copings (3..5 m), a Platform roof at 5 m, a door leaf on +z.
+    "struct.hab.colony": dict(textures=MEGAKIT + "/Textures", sheet="default", pieces=[
+        skirt("BottomSimple_Straight", 8.6, 8.6),
+        *sides("wall", MK + "Walls/WallAstra_Straight_Flat.gltf", 4.0, n=2),
+        *sides("coping", MK + "Walls/TopSimple_Straight.gltf", 4.0, n=2),
+        ("roof", MK + "Platforms/Platform_Simple.gltf", (2, 1, 2), (0, 5.0, 0), (0, 0, 0)),
+        ("door", MK + "Platforms/Door_Simple.gltf", (0.8, 0.72, 1), (0.85, 0, 4.1), (0, 0, 0)),
+    ]),
+    # shack (Scrapyard): 2x2 leaning hut, 5.6 x 4.8 m of band walls (two of them
+    # the Broken ones, rips overhanging the corners), a tipped roof plate, an
+    # awning on a post, a door leaf, a stovepipe.
+    "struct.shack.scrap": dict(textures=MEGAKIT + "/Textures", pieces=[
+        skirt("BottomMetal_Straight", 8.0, 8.0),
+        ("wall", MK + "Walls/WallBand_Straight.gltf", (1, 0.9, 1.2), (-0.8, 0, 0), (0, 0, 3)),
+        ("wall", MK + "Walls/WallBand_Straight_Broken.gltf", (1, 0.9, 1.2), (0.8, 0, 0), (0, 180, -3)),
+        ("wall", MK + "Walls/WallBand_Straight.gltf", (1, 0.9, 1.4), (0, 0, 0.8), (0, 90, 0)),
+        ("wall", MK + "Walls/WallBand_Straight_Broken.gltf", (1, 0.9, 1.4), (0, 0, -0.8), (0, -90, 0)),
+        ("roof", MK + "Platforms/Platform_DarkPlates.gltf", (1.6, 1, 1.4), (-0.3, 2.75, 0), (0, 0, 4)),
+        ("leanto", MK + "Platforms/Platform_DarkPlates.gltf", (0.5, 1, 0.5), (3.3, 1.9, -1.4), (0, 0, -30)),
+        ("leanto", COL, (0.6, 0.3, 0.6), (4.0, 0, -1.4), (0, 0, 0)),
+        ("door", MK + "Platforms/Door_DarkMetal.gltf", (0.65, 0.6, 1), (0.7, 0, 3.05), (0, 0, 2)),
+        ("pipe", COL, (0.5, 0.35, 0.3), (-2.2, 2.6, 1.4), (0, 0, 6)),
+    ]),
 }
 
 

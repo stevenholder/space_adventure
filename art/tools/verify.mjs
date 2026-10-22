@@ -58,6 +58,7 @@ const BUDGETS = [
   [/^vehicle\./, 15000],
   [/^weapon\./, 3000],
   [/^tool\./, 1000],
+  [/^struct\.mast\./, 3500], // GDD: the dish alone is 3.3k
   [/^struct\./, 1500],
   [/^prop\.dock$/, 3000], // the 6 m dock pad + gantry (Phase 24), composed of MegaKit pieces
   [/^prop\./, 1000],

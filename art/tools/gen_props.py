@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the world props that used to come from Kenney's Space Kit.
 
-Eleven files from one script, in the style of gen_nodes.py / gen_kit.py:
+Eleven files from one script, in the style of gen_nodes.py:
 
     props/rock_a.glb       prop.rock.a        rounded boulder
     props/rock_b.glb       prop.rock.b        broken slab cluster

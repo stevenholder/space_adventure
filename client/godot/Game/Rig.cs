@@ -705,7 +705,8 @@ namespace SpaceAdventure.Game
             // -uiKitDemo [a,b,...]: kit pieces 7 m ahead through the props path
             // (AssetRegistry.Attach), so the wall render can be photographed
             // at spawn instead of after a 250 m walk. A comma list picks the
-            // pieces, 6 m apart left to right; the default is the Phase 9 pair.
+            // pieces, -uiKitGap m apart left to right (6), -uiKitDist m ahead
+            // (7); the default is the Phase 9 pair.
             if (Flag("-uiKitDemo"))
             {
                 Vector3 eyeK = Eye, upK = eyeK.Normalized();
@@ -713,10 +714,12 @@ namespace SpaceAdventure.Game
                 Vector3 rightK = fwdK.Cross(upK).Normalized();
                 string[] kitIds = (Arg("-uiKitDemo") ?? "struct.wall4.scrap,struct.tower.colony").Split(',');
                 var kitDemo = new List<(string, float)>();
-                for (int k = 0; k < kitIds.Length; k++) kitDemo.Add((kitIds[k], (k - (kitIds.Length - 1) / 2f) * 6f));
+                float kitGap = float.Parse(Arg("-uiKitGap") ?? "6", System.Globalization.CultureInfo.InvariantCulture);
+                for (int k = 0; k < kitIds.Length; k++) kitDemo.Add((kitIds[k], (k - (kitIds.Length - 1) / 2f) * kitGap));
                 foreach (var (asset, off) in kitDemo)
                 {
-                    Vector3 ground = (eyeK + fwdK * 7f + rightK * off).Normalized();
+                    float kitDist = float.Parse(Arg("-uiKitDist") ?? "7", System.Globalization.CultureInfo.InvariantCulture);
+                Vector3 ground = (eyeK + fwdK * kitDist + rightK * off).Normalized();
                     ground *= (float)_terrain.SampleRadius(Frame.ToSim(ground));
                     var holder = new Node3D { Name = "kitdemo", Transform = new Transform3D(Frame.OrientationBasis(Frame.ToSim(ground), Frame.ToSim(-fwdK)), ground) };
                     AddChild(holder);

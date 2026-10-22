@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the Phase 12 artisan-loop props and hand tools (ROADMAP task 11).
 
-Seven files from one script, like gen_kit.py:
+Seven files from one script, like the old gen_kit.py (retired by Phase 25):
 
     props/node_ore_iron.glb     prop.node.ore.iron   rock cluster, rust streaks
     props/node_ore_copper.glb   prop.node.ore.copper rock cluster, teal streaks

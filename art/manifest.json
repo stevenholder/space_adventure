@@ -424,132 +424,427 @@
     {
       "id": "struct.corner.colony",
       "file": "structs/corner.colony.glb",
-      "tris": 36,
+      "tris": 232,
       "cell": [
         1,
         1
       ],
       "height": 3.8,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit corner post. Corners belong to posts: walls butt into these and never meet each other. Colony skin: one thing is always symmetric."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit corner post, the Colony hand: a Column_Simple with a square cap, the default trim sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 1.7 x 1.7 m, 4.1 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ],
+        "post": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "cap": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.corner.scrap",
       "file": "structs/corner.scrap.glb",
-      "tris": 36,
+      "tris": 232,
       "cell": [
         1,
         1
       ],
       "height": 3.8,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit corner post. Corners belong to posts: walls butt into these and never meet each other. Scrapyard skin: one thing is always crooked."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit corner post, the Scrapyard hand: a leaning Column_Simple with an askew cap, the _Red trim sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 2.015 x 1.762 m, 4.1 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "post": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "cap": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.gate4.colony",
       "file": "structs/gate4.colony.glb",
-      "tris": 72,
+      "tris": 296,
       "cell": [
         1,
         1
       ],
       "height": 3.3,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit gate module: a wall4 footprint with a 2.4 m opening. Colony skin: one thing is always symmetric."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit gate, 4 m module, the Colony hand: an open Door_Frame_Square, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 4.3 x 1.3 m, 3.5 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ],
+        "frame": [
+          "MI_Trim_01"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.gate4.scrap",
       "file": "structs/gate4.scrap.glb",
-      "tris": 84,
+      "tris": 236,
       "cell": [
         1,
         1
       ],
       "height": 3.3,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit gate module: a wall4 footprint with a 2.4 m opening. Scrapyard skin: one thing is always crooked."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit gate, 4 m module, the Scrapyard hand: Door_Frame_A with one DarkMetal leaf hung ajar, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 4.87 x 2.095 m, 3.525 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "frame": [
+          "MI_Trim_01",
+          "MI_Trim_02",
+          "M_Decal_White"
+        ],
+        "leaf": [
+          "MI_Trim_01"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Decals.png",
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.tower.colony",
       "file": "structs/tower.colony.glb",
-      "tris": 132,
+      "tris": 580,
       "cell": [
         2,
         2
       ],
       "height": 8.4,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit watchtower, 2×2 cells, 8 m. Colony skin: one thing is always symmetric."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit watchtower, 2x2 cells, the Colony hand: four posts, a Platform_Simple deck, Simple1 rails, a centred cabin, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 8.6 x 8.6 m, 8 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ],
+        "leg": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "deck": [
+          "MI_Trim_03"
+        ],
+        "rail": [
+          "MI_Trim_03"
+        ],
+        "cabin": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_BaseColor.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.tower.scrap",
       "file": "structs/tower.scrap.glb",
-      "tris": 144,
+      "tris": 604,
       "cell": [
         2,
         2
       ],
       "height": 8.4,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit watchtower, 2×2 cells, 8 m. Scrapyard skin: one thing is always crooked."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit watchtower, 2x2 cells, the Scrapyard hand: four leaning posts, DarkPlates deck, DarkMetal rails, a shoved cabin, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 8.6 x 8.6 m, 7.8 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "leg": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "deck": [
+          "MI_Trim_01"
+        ],
+        "rail": [
+          "MI_Trim_01"
+        ],
+        "cabin": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.mast.colony",
       "file": "structs/mast.colony.glb",
-      "tris": 72,
+      "tris": 3496,
       "cell": [
         1,
         1
       ],
       "height": 12.6,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI — the skyline spike discovery runs on. Colony skin: one thing is always symmetric."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit mast, 1 cell, the Colony hand: Column_Large_Straight with the Essentials Prop_SatelliteDish on top, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 2 x 2 m, 12.604 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ],
+        "mast": [
+          "MI_Trim_03",
+          "MI_Trim_01",
+          "MI_Trim_03_Dark",
+          "MI_Trim_02"
+        ],
+        "dish": [
+          "MI_Trim_01",
+          "MI_Trim_02",
+          "MI_Trim_03_Dark"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_BaseColor.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.mast.scrap",
       "file": "structs/mast.scrap.glb",
-      "tris": 84,
+      "tris": 3495,
       "cell": [
         1,
         1
       ],
       "height": 12.6,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit landmark mast, 12 m, glow tip in the faction light color. One per POI — the skyline spike discovery runs on. Scrapyard skin: one thing is always crooked."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit mast, 1 cell, the Scrapyard hand: two Column_Simple stacked by eye, the Essentials Prop_SatelliteDish tipped on top, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 2.055 x 2 m, 12.535 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "mast": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "dish": [
+          "MI_Trim_01",
+          "MI_Trim_02",
+          "MI_Trim_03_Dark"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.hab.colony",
       "file": "structs/hab.colony.glb",
-      "tris": 96,
+      "tris": 1102,
       "cell": [
         2,
         2
       ],
       "height": 5.4,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit habitat, Colony only: 2×2 cells, the closed hut. Colony skin: one thing is always symmetric."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit hab, 2x2 cells, Colony only: eight WallAstra_Straight_Flat, TopSimple copings, a Platform roof, a Door_Simple leaf on +Z, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 8.6 x 8.6 m, 5.3 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ],
+        "wall": [
+          "MI_Trim_03",
+          "MI_Trim_03_Dark",
+          "MI_Trim_02"
+        ],
+        "coping": [
+          "MI_Trim_02"
+        ],
+        "roof": [
+          "MI_Trim_03"
+        ],
+        "door": [
+          "MI_Trim_01",
+          "MI_Trim_03",
+          "MI_Trim_03_Dark"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_BaseColor.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.shack.scrap",
       "file": "structs/shack.scrap.glb",
-      "tris": 72,
+      "tris": 544,
       "cell": [
         2,
         2
       ],
       "height": 4.5,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit shack, Scrapyard only: 2×2 cells, the leaning hut. Scrapyard skin: one thing is always crooked."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit shack, 2x2 cells, Scrapyard only: WallBand walls (two Broken), a tipped DarkPlates roof, an awning, a DarkMetal door, a stovepipe, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 8.166 x 8 m, 4.654 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "wall": [
+          "MI_Trim_02",
+          "MI_Trim_01",
+          "M_Decal_White"
+        ],
+        "roof": [
+          "MI_Trim_01"
+        ],
+        "leanto": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "door": [
+          "MI_Trim_01"
+        ],
+        "pipe": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Decals.png",
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.cover4.scrap",
@@ -561,21 +856,67 @@
       ],
       "height": 2.5,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit barricade, 1 cell, 2.1 m — the cover-ring piece and the camp inner block. Scrapyard skin."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit cover, 1 cell, the Scrapyard hand: leaning ShortWall_DarkMetal2 box under a turned DarkPlates lid, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 4.3 x 4.3 m, 2.302 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ],
+        "wall": [
+          "MI_Trim_01"
+        ],
+        "top": [
+          "MI_Trim_01"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "struct.cover4.colony",
       "file": "structs/cover4.colony.glb",
-      "tris": 48,
+      "tris": 72,
       "cell": [
         1,
         1
       ],
       "height": 2.5,
       "license": "CC0",
-      "source": "tools/gen_kit.py",
-      "description": "Phase 9 kit barricade, 1 cell, 2.1 m — the cover-ring piece and the camp inner block. Colony skin."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Kit cover, 1 cell, the Colony hand: a ShortWall_WhitePlate2 box under a Platform_Squares lid, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; MODELLED AT FINAL SCALE, the client tiles it, never stretches it; 4.3 x 4.3 m, 2.302 m tall, centred on its cell(s), base at y=0 on a 0.3 m skirt.",
+      "surfaces": {
+        "skirt": [
+          "MI_Trim_03_Dark"
+        ],
+        "wall": [
+          "MI_Trim_03"
+        ],
+        "top": [
+          "MI_Trim_02_Floor"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_02_BaseColor.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_BaseColor.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ],
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "npc.grunt",

@@ -2182,17 +2182,22 @@ and since Phase 25 the kit IS the MegaKit:
   `*_Corner_Inner/Outer`). Every piece occupies a whole number of 4 m
   cells in plan. A 32 m wall is 8 wall modules.
 - Roles, each with a Scrapyard and a Colony pick from the table above:
-  `wall4` (a `Wall*_Straight`), `corner` (a `*_Corner_Outer`; walls BUTT
-  INTO corners and never meet each other), `gate4` (a `Door_Frame_*` +
-  `Door_*` in a wall run), `tower` (2×2 cell: a `Platform_*` on four
-  `Column_*` with `ShortWall_*` rails, 8 m), `mast` (1 cell, 10–14 m:
-  `Column_Large_Straight` stacked, the Essentials `Prop_SatelliteDish`
-  on top for the relay), `hab` (2×2 closed, Colony: walls + `TopSimple`
-  copings + a `Platform_*` roof), `shack` (2×2 leaning, Scrapyard:
-  `*_Broken` walls, `TopCables_*_Hanging`), plus the props. Until
-  Phase 25 lands these roles are Phase 9's own box pieces in
-  `art/structs/`; the role names and footprints do not change, so the
-  zone JSON does not either.
+  `wall4` (a `Wall*_Straight`), `corner` (a POST: a `Column_*` with a
+  cap, 1.1 m square — the layout places corners without a yaw, so the
+  piece must read the same from every side; walls BUTT INTO corners and
+  never meet each other), `gate4` (an open `Door_Frame_*` in a wall
+  run, its opening matched to the 2.4 m collider gap; Scrapyard hangs a
+  `Door_*` leaf ajar), `tower` (2×2 cell: a `Platform_*` on four
+  `Column_*` with `ShortWall_*` rails, 8 m), `mast` (1 cell, 12 m:
+  `Column_Large_Straight` / stacked `Column_Simple`, the Essentials
+  `Prop_SatelliteDish` on top for the relay), `hab` (2×2 closed,
+  Colony: walls + `TopSimple` copings + a `Platform_*` roof), `shack`
+  (2×2 leaning, Scrapyard: `*_Broken` walls; `TopCables_*_Hanging` is
+  4 k tris a piece and waits on a budget decision), plus the props.
+  Since 2026-10-21 every role is composed from the kit in
+  `tools/bpy/props_vendor.py` (`pieces` tables; `gen_kit.py` is gone);
+  the role names and footprints did not change, so the zone JSON did
+  not either.
 - **Ground skirt rule**: every placed piece sits on a `Platform_*` or
   `BottomSimple/BottomMetal_*` skirt that extends 0.3 m below y=0 and
   wider than the piece — the flatten disc is never perfectly flat at
