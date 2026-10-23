@@ -19,6 +19,20 @@ const MEGAKIT = {
   source_url: "https://quaternius.com/packs/modularscifimegakit.html",
 };
 
+const ESSENTIALS = {
+  license: "CC0",
+  author: "Quaternius",
+  source_url: "https://quaternius.com/packs/scifiessentialskit.html",
+};
+const NATURE = {
+  license: "CC0",
+  author: "Quaternius",
+  source_url: "https://quaternius.com/packs/stylizednaturemegakit.html",
+};
+// The texture size the composer capped the sheets to ("<name> <w>x<h>").
+const cap = (m) => m.textures[0].split(" ")[1];
+const box = (m) => `${m.width} x ${m.depth} m, ${m.height} m tall`;
+
 const PROPS = {
   "prop.chest": {
     out: "props/chest.glb",
@@ -172,6 +186,98 @@ const PROPS = {
       `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
       `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
   },
+  // ---- camp props (Phase 25 wave 2): same ids, same solid boxes (Collide.cs PropBoxes).
+  "prop.barrel": {
+    out: "props/barrel.glb",
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Fuel drum, camp dressing placed from zone data: the Quaternius Modular SciFi MegaKit's Props/Prop_Barrel_Large ` +
+      `scaled 1.2 across to fill its solid box (red trim-sheet PBR, textures capped ${cap(m)}), composed by tools/bpy/props_vendor.py (Phase 25). ` +
+      `Base at origin, up +Y; ${box(m)}.`,
+  },
+  "prop.barrels": {
+    out: "props/barrels.glb",
+    // three MegaKit drums (502 each); verify.mjs allows prop.barrels 1600
+    budget: 1600,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Three fuel drums for filling a corner without three placements: two MegaKit Prop_Barrel_Large standing toward +Z, ` +
+      `one fallen on its side across the -Z front (red trim-sheet PBR, textures capped ${cap(m)}), composed by tools/bpy/props_vendor.py (Phase 25). ` +
+      `Base at origin, up +Y; ${box(m)}.`,
+  },
+  "prop.generator": {
+    out: "props/generator.glb",
+    // Crate3 housing + fan + drum tank = 1140; verify.mjs allows prop.generator 1600
+    budget: 1600,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Portable generator, the reason a camp in vacuum has lights. Nothing in the Essentials kit, so composed by tools/bpy/props_vendor.py ` +
+      `from Quaternius Modular SciFi MegaKit pieces (Phase 25): a Prop_Crate3 housing on -X, Prop_Fan_Small on its roof, a Prop_Barrel_Large ` +
+      `on its side on the +X end as the fuel tank (trim-sheet PBR, textures capped ${cap(m)}). Base at origin, up +Y; ${box(m)}.`,
+  },
+  "prop.dish": {
+    out: "props/dish.glb",
+    // the Essentials dish alone is 3302 tris (like struct.mast.*); verify.mjs allows prop.dish 3500
+    budget: 3500,
+    pack: ESSENTIALS,
+    describe: (m) =>
+      `Comms dish, a camp that is talking to someone: the Quaternius Sci-Fi Essentials Prop_SatelliteDish at 0.36, bowl toward -Z, ` +
+      `on a MegaKit Platform_DarkPlates pad that is its solid box's footprint (red trim-sheet PBR, textures capped ${cap(m)}), ` +
+      `composed by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y; ${box(m)}.`,
+  },
+  "prop.loot.crate": {
+    out: "props/loot_crate.glb",
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here -- EntityType.Loot has no ` +
+      `entity_def on the server (not damageable, no hitbox), so the client names this id itself. The Quaternius Modular SciFi MegaKit's ` +
+      `Props/Prop_Crate3 (red trim-sheet PBR, capped ${cap(m)}) squeezed into its 0.44 x 0.50 x 0.34 m box by ` +
+      `tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y, ${box(m)}: it reads as a container from standing height ` +
+      `without hiding what is behind it.`,
+  },
+  // ---- Nature (Phase 25 wave 2): the scatter's three rocks and the two ore nodes.
+  "prop.rock.a": {
+    out: "props/rock_a.glb",
+    pack: NATURE,
+    describe: (m) =>
+      `Rounded boulder: the Quaternius Stylized Nature MegaKit's Rock_Medium_1 (Rocks_Diffuse sheet, capped ${cap(m)}), ` +
+      `re-framed by tools/bpy/props_vendor.py (Phase 25). Exactly 1 m tall, base at origin, up +Y, ${box(m)}; the client seats ` +
+      `it on the surface, orients it radially, scales it 0.3-1.5 m and multiplies a per-rock tint into the albedo (Rocks.cs).`,
+  },
+  "prop.rock.b": {
+    out: "props/rock_b.glb",
+    pack: NATURE,
+    describe: (m) =>
+      `Low broad rock: the Stylized Nature MegaKit's Rock_Medium_2 (Rocks_Diffuse sheet, capped ${cap(m)}), tools/bpy/props_vendor.py ` +
+      `(Phase 25). Exactly 1 m tall, base at origin, up +Y, ${box(m)}; scaled and tinted by the client like prop.rock.a.`,
+  },
+  "prop.rock.c": {
+    out: "props/rock_c.glb",
+    pack: NATURE,
+    describe: (m) =>
+      `Tall broken rock on the desert sheet: the Stylized Nature MegaKit's Rock_Medium_3 with Rocks_Desert_Diffuse (capped ${cap(m)}), ` +
+      `tools/bpy/props_vendor.py (Phase 25). Exactly 1 m tall, base at origin, up +Y, ${box(m)}; scaled and tinted by the client like prop.rock.a.`,
+  },
+  "prop.node.ore.iron": {
+    out: "props/node_ore_iron.glb",
+    pack: NATURE,
+    // import_pack multiplies the rock sheet by this: rust
+    base_color: { Rocks: [0.9, 0.5, 0.32] },
+    describe: (m) =>
+      `Phase 12 iron ore node: a tall split pair of Stylized Nature MegaKit rocks (Rock_Medium_3 + Rock_Medium_2, leaning apart, ` +
+      `the taller toward -Z, the face), the desert sheet (capped ${cap(m)}) tinted rust, composed by tools/bpy/props_vendor.py (Phase 25). ` +
+      `Base at origin, up +Y, ${box(m)}; the client scales it 0.6 and darkens it when depleted.`,
+  },
+  "prop.node.ore.copper": {
+    out: "props/node_ore_copper.glb",
+    pack: NATURE,
+    // import_pack multiplies the rock sheet by this: teal
+    base_color: { Rocks: [0.4, 0.95, 0.9] },
+    describe: (m) =>
+      `Phase 12 copper ore node: three low, wide Stylized Nature MegaKit Rock_Medium_2 chunks in a ring, the tallest toward -Z, ` +
+      `the default sheet (capped ${cap(m)}) tinted teal, composed by tools/bpy/props_vendor.py (Phase 25). ` +
+      `Base at origin, up +Y, ${box(m)}; the client scales it 0.6 and darkens it when depleted.`,
+  },
 };
 
 const manifestPath = path.join(artDir, "manifest.json");
@@ -189,7 +295,7 @@ for (const [id, p] of Object.entries(PROPS)) {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 
   const recipe = {
-    id, src: `build/props/${id}.raw.glb`, out: p.out, pbr: true, shared_textures: true, painted: true, budget: p.budget ?? 1000,
+    id, src: `build/props/${id}.raw.glb`, out: p.out, pbr: true, shared_textures: true, painted: true, budget: p.budget ?? 1000, base_color: p.base_color,
     ...p.pack, recipe_path: "tools/bpy/props_vendor.py",
   };
   const result = await importPack(recipe);

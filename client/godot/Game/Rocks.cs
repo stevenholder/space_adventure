@@ -26,15 +26,13 @@ namespace SpaceAdventure.Game
             { "prop.rock.a", "prop.rock.b", "prop.rock.c" };
 
         private readonly Node _parent;
-        private readonly Material _material;
         private readonly AssetRegistry _assets;
         private Node3D _root;
         private readonly List<Vector3> _positions = new List<Vector3>(); // every rock, for the screenshot rig
 
-        public Rocks(Node parent, Material material, AssetRegistry assets)
+        public Rocks(Node parent, AssetRegistry assets)
         {
             _parent = parent;
-            _material = material;
             _assets = assets;
         }
 
@@ -136,11 +134,21 @@ namespace SpaceAdventure.Game
                 List<Transform3D> batch = batches[v];
                 _assets.Mesh(VariantAssets[v], mesh =>
                 {
+                    // The rocks are the Nature kit's (Phase 25): a textured
+                    // material per surface, no vertex colours. Overriding it
+                    // with Boot's flat vertex-colour material would throw the
+                    // texture away; instead each surface's own material takes
+                    // COLOR into its albedo, and with no vertex colours COLOR
+                    // is the instance colour -- so the per-rock tint still
+                    // multiplies the rock, texture and all.
+                    for (int s = 0; s < mesh.GetSurfaceCount(); s++)
+                        if (mesh.SurfaceGetMaterial(s) is StandardMaterial3D sm)
+                            sm.VertexColorUseAsAlbedo = true;
                     List<Color> tint = tints[v];
                     var mm = new MultiMesh
                     {
                         TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-                        UseColors = true, // the instance colour multiplies the model's vertex colours
+                        UseColors = true, // the instance colour multiplies the albedo (above)
                         Mesh = mesh,
                         InstanceCount = batch.Count,
                     };
@@ -153,7 +161,6 @@ namespace SpaceAdventure.Game
                     {
                         Name = VariantAssets[v].Replace('.', '_'),
                         Multimesh = mm,
-                        MaterialOverride = _material,
                     });
                 });
             }

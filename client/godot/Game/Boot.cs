@@ -1195,7 +1195,7 @@ namespace SpaceAdventure.Game
             _assets = new AssetRegistry(_material);
             _views = new EntityViews(this, _material, _assets);
             _structures = new Structures(this, _material, _assets);
-            _rocks = new Rocks(this, _material, _assets);
+            _rocks = new Rocks(this, _assets);
             _viewModel = new ViewModel(_camera, _material, VmLayer, this, _assets);
             _viewModel.ArmsVisible = false; // until the world is up
             _fx = new CombatFx(this);

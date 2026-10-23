@@ -61,6 +61,12 @@ const BUDGETS = [
   [/^struct\.mast\./, 3500], // GDD: the dish alone is 3.3k
   [/^struct\./, 1500],
   [/^prop\.dock$/, 3000], // the 6 m dock pad + gantry (Phase 24), composed of MegaKit pieces
+  // Phase 25 wave 2, decided per id (the camp props from the kits): the
+  // Essentials dish alone is 3.3k (as struct.mast.*); three MegaKit drums are
+  // 1506; the generator's housing + fan + drum is 1140 (headroom for a lamp).
+  [/^prop\.dish$/, 3500],
+  [/^prop\.barrels$/, 1600],
+  [/^prop\.generator$/, 1600],
   [/^prop\./, 1000],
   [/^armor\./, 5000],
   [/^pack\./, 800],

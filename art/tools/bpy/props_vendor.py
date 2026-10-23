@@ -43,6 +43,14 @@ MK = MEGAKIT + "/glTF/"
 ESS = "vendor/scifi-essentials/glTF/"  # shares the MegaKit's trim sheets (same image names)
 COL = MK + "Columns/Column_Simple.gltf"  # 0.5 x 5 x 1 m; the kit's all-purpose post
 DISH = ESS + "Prop_SatelliteDish.gltf"  # 1.8 x 5.8 x 2.8 m, 3.3k tris
+NAT = "vendor/stylized-nature/glTF/"  # the free 68-model tier: textures sit beside the glTFs
+MKP = MK + "Props/"
+DRUM = MKP + "Prop_Barrel_Large.gltf"  # 0.51 x 1.10 x 0.53 m, 502 tris, base y 0.008
+DESERT = {"Rocks_Diffuse.png": "Rocks_Desert_Diffuse.png"}  # the Nature kit's second rock sheet
+# Nature rocks as shipped (glTF frame, metres): (file, lo xyz, hi xyz).
+ROCK1 = ("Rock_Medium_1", (-1.727, -0.271, -1.150), (1.498, 1.989, 1.839))  # 342 tris
+ROCK2 = ("Rock_Medium_2", (-1.714, -0.051, -1.159), (1.335, 1.848, 1.320))  # 244 tris
+ROCK3 = ("Rock_Medium_3", (-1.824, -0.316, -0.890), (1.596, 2.001, 2.586))  # 522 tris
 
 
 def skirt(file, w, d):
@@ -66,6 +74,17 @@ def sides(node, file, h, n=1, s=1.0, sy=1.0, y=0.0, dx=0.0, lean=0.0):
                 (node, file, (1, sy, s), (o + dx, y, d), (0, 90, 0)),
                 (node, file, (1, sy, s), (o + dx, y, -d), (0, -90, 0))]
     return out
+
+
+def rock(node, r, h=1.0, sxz=None, at=(0, 0), rot=(0, 0, 0), dy=0.0):
+    """A Nature rock scaled to h metres tall (x/z by `sxz`, default the same
+    factor), its base at y=0 and its footprint centred on `at` (x, z); a
+    tipped one (`rot`) dips its low edge, so `dy` lifts it back out."""
+    name, lo, hi = r
+    s = h / (hi[1] - lo[1])
+    k = s if sxz is None else sxz
+    return (node, NAT + name + ".gltf", (k, s, k),
+            (at[0] - k * (lo[0] + hi[0]) / 2, dy - s * lo[1], at[1] - k * (lo[2] + hi[2]) / 2), rot)
 
 
 PROPS = {
@@ -215,6 +234,63 @@ PROPS = {
         ("door", MK + "Platforms/Door_DarkMetal.gltf", (0.65, 0.6, 1), (0.7, 0, 3.05), (0, 0, 2)),
         ("pipe", COL, (0.5, 0.35, 0.3), (-2.2, 2.6, 1.4), (0, 0, 6)),
     ]),
+    # ---- camp props (wave 2), each filling its solid box (sim/props.go
+    # PropBoxes = Collide.cs, the model's own frame) without passing it. The
+    # MegaKit drum, not the Essentials one: Scrapyard dressing on the trim
+    # sheets the camp already loads, 502 tris against 2352. Scaled 1.2 across
+    # (a squat, real-drum 0.6 x 0.95 m) so it fills the 0.64 m box.
+    "prop.barrel": dict(textures=MEGAKIT + "/Textures", pieces=[
+        ("drum", DRUM, (1.2, 0.855, 1.2), (0, -0.007, 0), (0, 0, 0)),
+    ]),
+    # two standing toward +Z, one fallen across the front (-Z), its axis on X
+    "prop.barrels": dict(textures=MEGAKIT + "/Textures", pieces=[
+        ("drums", DRUM, (1.2, 0.855, 1.2), (-0.335, -0.007, 0.16), (0, 0, 0)),
+        ("drums", DRUM, (1.2, 0.855, 1.2), (0.335, -0.007, 0.16), (0, 40, 0)),
+        ("drums", DRUM, (1.2, 0.855, 1.2), (-0.478, 0.305, -0.54), (0, 0, -90)),
+    ]),
+    # the generator: nothing in Essentials, so MegaKit parts in the old
+    # layout -- a Crate3 housing on -X, the small fan on its roof as the
+    # cooling fan, a drum on its side on the +X end as the fuel tank.
+    "prop.generator": dict(textures=MEGAKIT + "/Textures", pieces=[
+        # Crate3, not the 972-tri Crate4: with Crate4 the lot is 1.9k and
+        # meshopt stalls at ~1.7k (UV seams), over the 1600 budget
+        ("housing", MKP + "Prop_Crate3.gltf", (1.546, 1.1, 0.85), (-0.226, 0.55, 0), (0, 0, 0)),
+        ("fan", MKP + "Prop_Fan_Small.gltf", (0.5, 0.5, 0.5), (-0.225, 1.13, 0), (0, 0, 0)),
+        ("tank", DRUM, (1.2, 0.515, 1.2), (0.546, 0.31, 0), (0, 0, -90)),
+    ]),
+    # the comms dish: the Essentials dish (already the masts' top) at 0.36,
+    # shipped bowl toward -Z, on a DarkPlates pad that is the box's footprint.
+    "prop.dish": dict(textures=MEGAKIT + "/Textures", pieces=[
+        ("pad", MK + "Platforms/Platform_DarkPlates.gltf", (0.475, 1, 0.3975), (0, 0.02, -0.135), (0, 0, 0)),
+        ("dish", DISH, (0.36, 0.36, 0.36), (0, 0.012, -0.135), (0, 0, 0)),
+    ]),
+    # dropped loot: the MegaKit's Crate3 (a 1 m cube, 204 tris) squeezed into
+    # the 0.44 x 0.50 x 0.34 m box. Not the Essentials Prop_Crate: its 3984
+    # tris stop simplifying at ~2.8k (UV seams pin the edges), 3x the budget.
+    "prop.loot.crate": dict(textures=MEGAKIT + "/Textures", pieces=[
+        ("crate", MKP + "Prop_Crate3.gltf", (0.44, 0.5, 0.34), (0, 0.25, 0), (0, 0, 0)),
+    ]),
+    # ---- Nature (wave 2): the Stylized Nature MegaKit rocks, exactly 1 m tall
+    # (the client scales them 0.3-1.5 m and tints each one; Rocks.cs).
+    "prop.rock.a": dict(textures=NAT, pieces=[rock("rock", ROCK1)]),
+    "prop.rock.b": dict(textures=NAT, pieces=[rock("rock", ROCK2)]),
+    "prop.rock.c": dict(textures=NAT, images=DESERT, pieces=[rock("rock", ROCK3)]),
+    # ore nodes: inside verify's NODE_BOUNDS (top 0.9..1.05, |x|,|z| <= 0.8),
+    # each a different silhouette from the other and from a plain rock at
+    # 20 m (the Phase 11 discovery read), the ore told by its `base_color`
+    # (tools/props_vendor.mjs; import_pack multiplies the sheet by it).
+    # Iron: a tall split pair leaning apart, the taller toward -Z, the
+    # desert sheet, rust.
+    "prop.node.ore.iron": dict(textures=NAT, images=DESERT, pieces=[
+        rock("ore", ROCK3, h=0.97, sxz=0.2, at=(0.0, -0.3), rot=(-12, 0, 0), dy=0.033),
+        rock("ore", ROCK2, h=0.75, sxz=0.2, at=(0.05, 0.35), rot=(12, 30, 0), dy=0.033),
+    ]),
+    # Copper: three low, wide chunks in a ring, the default sheet, teal.
+    "prop.node.ore.copper": dict(textures=NAT, pieces=[
+        rock("ore", ROCK2, h=0.95, sxz=0.22, at=(-0.28, -0.32), rot=(0, 0, 0)),
+        rock("ore", ROCK2, h=0.6, sxz=0.2, at=(0.30, -0.15), rot=(0, 120, 0)),
+        rock("ore", ROCK2, h=0.5, sxz=0.2, at=(-0.18, 0.30), rot=(0, 240, 0)),
+    ]),
 }
 
 
@@ -231,6 +307,9 @@ def stage(oid, p):
         if p.get("sheet") == "default":  # Colony: the un-tinted trim sheets
             img["uri"] = img["uri"].replace("_Red.png", ".png").replace("_Blue.png", ".png")
             img.pop("name", None)
+        if img["uri"] in p.get("images", {}):  # a recipe's sheet swap (the Nature desert rocks)
+            img["uri"] = p["images"][img["uri"]]
+            img["name"] = os.path.splitext(img["uri"])[0]
         shutil.copy(os.path.join(ART, p["textures"], img["uri"]), d)
     path = os.path.join(d, os.path.basename(src))
     json.dump(g, open(path, "w"))
@@ -244,7 +323,7 @@ def build_pieces(oid, p):
     by_node = {}
     for i, (node, src, scl, pos, rot) in enumerate(p["pieces"]):
         before = set(bpy.data.objects)
-        bpy.ops.import_scene.gltf(filepath=stage(f"{oid}/{i}", dict(src=src, textures=p["textures"], sheet=p.get("sheet"))))
+        bpy.ops.import_scene.gltf(filepath=stage(f"{oid}/{i}", dict(src=src, textures=p["textures"], sheet=p.get("sheet"), images=p.get("images", {}))))
         new = [o for o in bpy.data.objects if o not in before]
         dg = bpy.context.evaluated_depsgraph_get()
         # glTF frame -> Blender: (x, y, z) -> (x, -z, y).
@@ -252,8 +331,11 @@ def build_pieces(oid, p):
         r = Euler([math.radians(a) for a in rot], "XYZ").to_matrix().to_4x4()
         place = (Matrix.Translation((pos[0], -pos[2], pos[1]))
                  @ to_b @ r @ Matrix.Diagonal((scl[0], scl[1], scl[2], 1)) @ to_b.inverted())
+        # A skinned piece (Prop_Fan_Small) brings its bones' display shape
+        # (an Icosphere mesh object) along; that is not geometry.
+        shapes = {pb.custom_shape for o in new if o.type == "ARMATURE" for pb in o.pose.bones if pb.custom_shape}
         for o in new:
-            if o.type != "MESH":
+            if o.type != "MESH" or o in shapes:
                 continue
             me = bpy.data.meshes.new_from_object(o.evaluated_get(dg), preserve_all_data_layers=True, depsgraph=dg)
             me.transform(place @ o.matrix_world)
