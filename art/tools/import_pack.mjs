@@ -35,6 +35,8 @@
  *     "shared_textures": true,               // optional: images go to art/tex/<name>.png, written once,
  *                                            //   and the glb references them (kit trim sheets)
  *     "painted": true,                       // optional: metallic 0 on every material (kit trim sheets)
+ *     "base_color": {"Rocks": [1, 0.72, 0.5]}, // optional: material name -> base colour factor (rgb), which
+ *                                            //   multiplies its texture (the Nature kit's ore nodes)
  *     "license": "CC0", "author": "Space Adventure", "source_url": "tools/bpy/armor.py"
  *   }
  */
@@ -234,6 +236,14 @@ export async function importPack(recipe) {
       m.setMetallicFactor(0);
       m.setExtension("KHR_materials_specular", null);
     }
+  }
+
+  // One rock sheet, three readings: an ore node is the plain rock texture
+  // multiplied by a colour (rust iron, teal copper), not a repaint.
+  for (const [name, rgb] of Object.entries(recipe.base_color ?? {})) {
+    const m = doc.getRoot().listMaterials().find((x) => x.getName() === name);
+    if (!m) throw new Error(`${recipe.id}: base_color names no material ${name}`);
+    m.setBaseColorFactor([rgb[0], rgb[1], rgb[2], 1]);
   }
 
   // Weld before simplify: meshoptimizer needs shared vertices to collapse

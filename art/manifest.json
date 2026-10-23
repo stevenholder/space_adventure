@@ -152,32 +152,59 @@
     {
       "id": "prop.rock.a",
       "file": "props/rock_a.glb",
-      "tris": 80,
+      "tris": 342,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Rounded boulder: a jittered icosphere with a flat base. Exactly 1 m tall, base at origin, up +Y; the client seats it on the surface, orients it radially and scales it 0.3-1.5 m.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Rounded boulder: the Quaternius Stylized Nature MegaKit's Rock_Medium_1 (Rocks_Diffuse sheet, capped 1024x1024), re-framed by tools/bpy/props_vendor.py (Phase 25). Exactly 1 m tall, base at origin, up +Y, 1.427 x 1.322 m, 1 m tall; the client seats it on the surface, orients it radially, scales it 0.3-1.5 m and multiplies a per-rock tint into the albedo (Rocks.cs).",
+      "source_url": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "rock": [
+          "Rocks"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/Rocks_Diffuse.png"
+      ]
     },
     {
       "id": "prop.rock.b",
       "file": "props/rock_b.glb",
-      "tris": 126,
+      "tris": 244,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Broken slab cluster: three angular chunks. Exactly 1 m tall, base at origin, up +Y; scaled by the client like prop.rock.a.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Low broad rock: the Stylized Nature MegaKit's Rock_Medium_2 (Rocks_Diffuse sheet, capped 1024x1024), tools/bpy/props_vendor.py (Phase 25). Exactly 1 m tall, base at origin, up +Y, 1.606 x 1.306 m, 1 m tall; scaled and tinted by the client like prop.rock.a.",
+      "source_url": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "rock": [
+          "Rocks"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/Rocks_Diffuse.png"
+      ]
     },
     {
       "id": "prop.rock.c",
       "file": "props/rock_c.glb",
-      "tris": 152,
+      "tris": 522,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Boulder with four teal crystals growing out of it. Exactly 1 m tall to the tallest crystal, base at origin, up +Y; scaled by the client like prop.rock.a.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Tall broken rock on the desert sheet: the Stylized Nature MegaKit's Rock_Medium_3 with Rocks_Desert_Diffuse (capped 1024x1024), tools/bpy/props_vendor.py (Phase 25). Exactly 1 m tall, base at origin, up +Y, 1.476 x 1.5 m, 1 m tall; scaled and tinted by the client like prop.rock.a.",
+      "source_url": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "rock": [
+          "Rocks"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/Rocks_Desert_Diffuse.png"
+      ]
     },
     {
       "id": "ship.v1",
@@ -992,52 +1019,138 @@
     {
       "id": "prop.loot.crate",
       "file": "props/loot_crate.glb",
-      "tris": 120,
+      "tris": 204,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here and had no model at all -- EntityType.Loot has no entity_def on the server (loot is not damageable and has no hitbox, so there is nothing for the server to say about it) and so no asset id either. Base at origin, up +Y, ~0.5 m tall: it has to read as a container from standing height without hiding what is behind it.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Dropped loot. Every grunt and gunner leaves one, so it is on screen more than most things here -- EntityType.Loot has no entity_def on the server (not damageable, no hitbox), so the client names this id itself. The Quaternius Modular SciFi MegaKit's Props/Prop_Crate3 (red trim-sheet PBR, capped 1024x1024) squeezed into its 0.44 x 0.50 x 0.34 m box by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y, 0.44 x 0.34 m, 0.5 m tall: it reads as a container from standing height without hiding what is behind it.",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "crate": [
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ]
     },
     {
       "id": "prop.barrel",
       "file": "props/barrel.glb",
-      "tris": 216,
+      "tris": 502,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Fuel drum. Camp dressing, placed from zone data.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Fuel drum, camp dressing placed from zone data: the Quaternius Modular SciFi MegaKit's Props/Prop_Barrel_Large scaled 1.2 across to fill its solid box (red trim-sheet PBR, textures capped 1024x1024), composed by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y; 0.61 x 0.638 m, 0.943 m tall.",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "drum": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ]
     },
     {
       "id": "prop.barrels",
       "file": "props/barrels.glb",
-      "tris": 648,
+      "tris": 1506,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "A stack of three drums, for filling a corner without three placements.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Three fuel drums for filling a corner without three placements: two MegaKit Prop_Barrel_Large standing toward +Z, one fallen on its side across the -Z front (red trim-sheet PBR, textures capped 1024x1024), composed by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y; 1.279 x 1.338 m, 0.943 m tall.",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "drums": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ]
     },
     {
       "id": "prop.generator",
       "file": "props/generator.glb",
-      "tris": 260,
+      "tris": 1140,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Portable generator. The reason a camp in vacuum has lights.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Portable generator, the reason a camp in vacuum has lights. Nothing in the Essentials kit, so composed by tools/bpy/props_vendor.py from Quaternius Modular SciFi MegaKit pieces (Phase 25): a Prop_Crate3 housing on -X, Prop_Fan_Small on its roof, a Prop_Barrel_Large on its side on the +X end as the fuel tank (trim-sheet PBR, textures capped 1024x1024). Base at origin, up +Y; 2.117 x 0.85 m, 1.324 m tall.",
+      "source_url": "https://quaternius.com/packs/modularscifimegakit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "housing": [
+          "MI_Trim_02"
+        ],
+        "fan": [
+          "MI_Trim_02",
+          "MI_Trim_01",
+          "M_Black"
+        ],
+        "tank": [
+          "MI_Trim_01",
+          "MI_Trim_02"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png"
+      ]
     },
     {
       "id": "prop.dish",
       "file": "props/dish.glb",
-      "tris": 272,
+      "tris": 3318,
       "license": "CC0",
-      "source": "tools/gen_props.py",
-      "description": "Comms dish. Reads as a camp that is talking to someone.",
-      "source_url": "tools/gen_props.py",
-      "author": "Space Adventure"
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Comms dish, a camp that is talking to someone: the Quaternius Sci-Fi Essentials Prop_SatelliteDish at 0.36, bowl toward -Z, on a MegaKit Platform_DarkPlates pad that is its solid box's footprint (red trim-sheet PBR, textures capped 1024x1024), composed by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y; 1.9 x 1.59 m, 2.086 m tall.",
+      "source_url": "https://quaternius.com/packs/scifiessentialskit.html",
+      "author": "Quaternius",
+      "surfaces": {
+        "pad": [
+          "MI_Trim_01"
+        ],
+        "dish": [
+          "MI_Trim_01",
+          "MI_Trim_02",
+          "MI_Trim_03_Dark"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/T_Trim_01_BaseColor_Red.png",
+        "tex/T_Trim_01_Normal.png",
+        "tex/T_Trim_01_ORM.png",
+        "tex/T_Trim_02_BaseColor_Red.png",
+        "tex/T_Trim_02_Normal.png",
+        "tex/T_Trim_02_ORM.png",
+        "tex/T_Trim_03_Cables.png",
+        "tex/T_Trim_03_Normal.png",
+        "tex/T_Trim_03_ORM.png"
+      ]
     },
     {
       "id": "prop.bones",
@@ -1052,18 +1165,40 @@
     {
       "id": "prop.node.ore.iron",
       "file": "props/node_ore_iron.glb",
-      "tris": 144,
+      "tris": 766,
       "license": "CC0",
-      "source": "tools/gen_nodes.py",
-      "description": "Phase 12 iron ore node. Base at origin, up +Y, faces -Z (the tallest chunk sits toward -Z). Four angular rock chunks, ~1.45 m wide, 1.0 m tall, dark grey with rust-orange facets for the iron streaks; the client scales it 0.6 and darkens it when depleted."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Phase 12 iron ore node: a tall split pair of Stylized Nature MegaKit rocks (Rock_Medium_3 + Rock_Medium_2, leaning apart, the taller toward -Z, the face), the desert sheet (capped 1024x1024) tinted rust, composed by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y, 0.718 x 1.414 m, 1.033 m tall; the client scales it 0.6 and darkens it when depleted.",
+      "surfaces": {
+        "ore": [
+          "Rocks"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/Rocks_Desert_Diffuse.png"
+      ],
+      "source_url": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "prop.node.ore.copper",
       "file": "props/node_ore_copper.glb",
-      "tris": 108,
+      "tris": 732,
       "license": "CC0",
-      "source": "tools/gen_nodes.py",
-      "description": "Phase 12 copper ore node. Base at origin, up +Y, faces -Z. Three angular rock chunks in a different arrangement from the iron node, ~1.25 m wide, 0.96 m tall, dark rock with green-teal facets for the copper streaks."
+      "source": "tools/bpy/props_vendor.py",
+      "description": "Phase 12 copper ore node: three low, wide Stylized Nature MegaKit Rock_Medium_2 chunks in a ring, the tallest toward -Z, the default sheet (capped 1024x1024) tinted teal, composed by tools/bpy/props_vendor.py (Phase 25). Base at origin, up +Y, 1.226 x 1.181 m, 0.95 m tall; the client scales it 0.6 and darkens it when depleted.",
+      "surfaces": {
+        "ore": [
+          "Rocks"
+        ]
+      },
+      "pbr": true,
+      "textures": [
+        "tex/Rocks_Diffuse.png"
+      ],
+      "source_url": "https://quaternius.com/packs/stylizednaturemegakit.html",
+      "author": "Quaternius"
     },
     {
       "id": "prop.node.crystal",

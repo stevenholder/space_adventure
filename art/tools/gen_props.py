@@ -1,27 +1,22 @@
 #!/usr/bin/env python3
-"""Generate the world props that used to come from Kenney's Space Kit.
+"""Generate the world props the Quaternius kits have nothing for.
 
-Eleven files from one script, in the style of gen_nodes.py:
+Three files from one script, in the style of gen_nodes.py:
 
-    props/rock_a.glb       prop.rock.a        rounded boulder
-    props/rock_b.glb       prop.rock.b        broken slab cluster
-    props/rock_c.glb       prop.rock.c        boulder with crystals
-    props/loot_crate.glb   prop.loot.crate    dropped-loot case
-    props/barrel.glb       prop.barrel        fuel drum
-    props/barrels.glb      prop.barrels       two drums standing, one fallen
-    props/generator.glb    prop.generator     skid-mounted generator
-    props/dish.glb         prop.dish          comms dish on a tripod
     props/bones.glb        prop.bones         skull, ribs, long bones
     vehicles/rover.v1.glb  vehicle.rover.v1   open buggy with seat mounts
     props/forge.glb        prop.forge         scrapyard forge: crucible, anvil
 
+The rocks, the loot crate, the drums, the generator and the dish moved to
+the kits in Phase 25 (tools/bpy/props_vendor.py composes them; `npm run
+props:vendor`), so this script no longer writes them.
+
 Contract (art/README.md): base at the origin, up +Y, faces -Z, flat-shaded
-vertex colours under one white double-sided material. Rocks are exactly
-1.0 m tall (the client scales them 0.3-1.5 m). The rover keeps its seat
+vertex colours under one white double-sided material. The rover keeps its seat
 contract: `seat.driver` and `seat.passenger.0` empties at the GDD eye
 points, art frame.
 
-Deterministic: fixed seeds, no clock.
+Deterministic: no rng, no clock.
 """
 from __future__ import annotations
 
@@ -30,25 +25,15 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from glb import Node, Rng, box, cap, icosphere, out_path, tube, write_glb  # noqa: E402
-from gen_nodes import MATERIALS, _rot_x, _rot_z, chunk, outward, shift, xform  # noqa: E402
+from glb import Node, box, cap, icosphere, out_path, tube, write_glb  # noqa: E402
+from gen_nodes import MATERIALS, _rot_x, _rot_z, outward, shift, xform  # noqa: E402
 
 # ---- palette ---------------------------------------------------------------
-ROCK_DARK = (0.24, 0.22, 0.24)
-ROCK_MID = (0.33, 0.31, 0.32)
-ROCK_DUST = (0.42, 0.37, 0.33)
-CRYSTAL = (0.30, 0.78, 0.86)
-CRYSTAL_DEEP = (0.16, 0.45, 0.62)
 STEEL = (0.46, 0.49, 0.53)
 STEEL_DARK = (0.26, 0.28, 0.31)
 RUBBER = (0.10, 0.10, 0.11)
-DRUM = (0.70, 0.30, 0.16)
-DRUM_DARK = (0.48, 0.20, 0.11)
-HAZARD = (0.92, 0.70, 0.12)
 OLIVE = (0.42, 0.46, 0.33)
 OLIVE_DARK = (0.30, 0.33, 0.24)
-GLOW = (0.35, 0.85, 0.95)
-GREEN_LIGHT = (0.35, 0.95, 0.45)
 LAMP = (1.0, 0.92, 0.65)
 BONE = (0.86, 0.82, 0.70)
 BONE_DARK = (0.62, 0.57, 0.47)
@@ -107,147 +92,6 @@ def beam(p0, p1, thick, col):
             return tuple(p[i] * c + cr[i] * s2 + k[i] * dot * (1 - c) for i in range(3))
         t = xform(t, rot)
     return shift(t, *p0)
-
-
-def normalise(tris, height):
-    """Uniform scale so the top sits at `height`."""
-    top = max(p[1] for t in tris for p in t[:3])
-    k = height / top
-    return [tuple((p[0] * k, p[1] * k, p[2] * k) for p in t[:3]) + (t[3],) for t in tris]
-
-
-def boulder(rng, r, squash, seed_jitter=0.18, cx=0.0, cz=0.0):
-    """A jittered icosphere with a flat base: a rounded rock, 80 faces."""
-    V, F = icosphere(1.0, 1)
-    pts = []
-    for (x, y, z) in V:
-        k = 1.0 + rng.uniform(-seed_jitter, seed_jitter)
-        pts.append((x * r * k, y * r * k * squash, z * r * k))
-    floor = -0.45 * r * squash
-    pts = [(x + cx, max(y, floor) - floor, z + cz) for (x, y, z) in pts]
-    tris = []
-    for (a, b, c) in F:
-        pa, pb, pc = pts[a], pts[b], pts[c]
-        up = (pa[1] + pb[1] + pc[1]) / 3 / (r * squash * 1.4)
-        col = ROCK_DUST if up > 0.85 else ROCK_MID if rng.next() < 0.45 else ROCK_DARK
-        tris.append((pa, pb, pc, col))
-    return outward(tris, (cx, r * squash * 0.5, cz))
-
-
-def crystal(cx, cz, r, h, lean_x, lean_z, col):
-    """Six-sided prism with a pointed tip, leaning."""
-    base = ring(cx, 0.0, cz, r, 6, 0.3)
-    mid = ring(cx + lean_x * 0.7, h * 0.75, cz + lean_z * 0.7, r * 0.9, 6, 0.3)
-    tip = (cx + lean_x, h, cz + lean_z)
-    t = tube(base, mid, col) + cap(mid, tip, (0, 1, 0), CRYSTAL)
-    return outward(t, (cx, h * 0.4, cz))
-
-
-# ---- rocks -----------------------------------------------------------------
-def rock_a():
-    return normalise(boulder(Rng(0xA0C1), 0.95, 0.72), 1.0)
-
-
-def rock_b():
-    rng = Rng(0xB0C2)
-    t = []
-    for (cx, cz, r, h, lean) in ((0.0, 0.0, 0.85, 1.0, (0.12, -0.05)),
-                                 (-0.95, 0.55, 0.55, 0.62, (-0.15, 0.08)),
-                                 (0.90, 0.65, 0.45, 0.45, (0.10, 0.12))):
-        t += chunk(rng, cx, cz, r, h, lean, ROCK_DUST, sides=7)
-    return normalise(t, 1.0)
-
-
-def rock_c():
-    rng = Rng(0xC0C3)
-    t = boulder(rng, 0.9, 0.55)
-    for (cx, cz, r, h, lx, lz, col) in ((0.15, -0.20, 0.13, 1.45, 0.10, -0.15, CRYSTAL),
-                                       (-0.25, -0.05, 0.10, 1.10, -0.20, -0.05, CRYSTAL_DEEP),
-                                       (0.40, 0.15, 0.09, 0.95, 0.20, 0.05, CRYSTAL),
-                                       (-0.05, 0.30, 0.08, 0.80, 0.0, 0.18, CRYSTAL_DEEP)):
-        t += crystal(cx, cz, r, h, lx, lz, col)
-    return normalise(t, 1.0)
-
-
-# ---- containers ------------------------------------------------------------
-def loot_crate():
-    t = []
-    t += box(0, 0.22, 0, 0.40, 0.40, 0.32, OLIVE)                    # body
-    t += box(0, 0.45, 0, 0.42, 0.08, 0.34, OLIVE_DARK)               # lid
-    for sx in (-1, 1):                                               # corner posts
-        for sz in (-1, 1):
-            t += box(sx * 0.195, 0.24, sz * 0.155, 0.04, 0.48, 0.04, STEEL_DARK)
-    t += box(0, 0.22, -0.165, 0.30, 0.04, 0.01, GLOW)                # glowing seal, front
-    t += box(0, 0.49, -0.08, 0.14, 0.02, 0.04, STEEL)                # handle
-    for sx in (-1, 1):
-        t += box(sx * 0.21, 0.30, 0, 0.02, 0.05, 0.12, STEEL)        # side grips
-    return t
-
-
-def drum(cx, cz, col=DRUM, h=0.92, r=0.30):
-    t = cyl(cx, 0.0, cz, r, h, 12, col, top=DRUM_DARK, bottom=DRUM_DARK)
-    for y in (0.24, 0.62):                                           # rolling hoops
-        t += cyl(cx, y, cz, r + 0.015, 0.035, 12, DRUM_DARK)
-    t += cyl(cx, 0.40, cz, r + 0.006, 0.10, 12, HAZARD)              # hazard band
-    t += cyl(cx + 0.14, h, cz - 0.08, 0.04, 0.025, 6, STEEL)         # bung
-    return t
-
-
-def barrel():
-    return drum(0, 0)
-
-
-def barrels():
-    t = drum(-0.33, 0.12) + drum(0.33, 0.18, col=(0.32, 0.45, 0.58))
-    fallen = drum(0, 0)
-    fallen = xform(fallen, lambda p: _rot_z((p[0], p[1] - 0.46, p[2]), math.pi / 2))
-    return t + shift(fallen, 0.05, 0.30, -0.55)
-
-
-# ---- machines --------------------------------------------------------------
-def generator():
-    t = []
-    for sz in (-1, 1):                                               # skids
-        t += box(0, 0.05, sz * 0.38, 2.0, 0.10, 0.10, STEEL_DARK)
-    t += box(-0.15, 0.55, 0, 1.40, 0.90, 0.85, OLIVE)                # housing
-    for i in range(5):                                               # vent slats, front
-        t += box(-0.45 + i * 0.12, 0.62, -0.43, 0.07, 0.50, 0.02, OLIVE_DARK)
-    t += box(0.30, 0.65, -0.43, 0.36, 0.30, 0.02, STEEL_DARK)        # control panel
-    t += box(0.20, 0.72, -0.445, 0.06, 0.06, 0.01, GREEN_LIGHT)
-    t += box(0.36, 0.72, -0.445, 0.06, 0.06, 0.01, HAZARD)
-    t += cyl_x(0.85, 0.45, 0.0, 0.26, 0.55, 10, DRUM, STEEL_DARK)    # fuel tank
-    t += cyl(-0.55, 1.0, 0.20, 0.06, 0.30, 8, STEEL_DARK)            # exhaust stack
-    t += cyl(-0.55, 1.30, 0.20, 0.09, 0.04, 8, RUBBER)
-    t += box(-0.15, 1.02, 0, 1.30, 0.04, 0.78, OLIVE_DARK)           # roof plate
-    t += box(-0.15, 1.12, -0.20, 0.08, 0.16, 0.08, LAMP)             # work lamp
-    return t
-
-
-def dish():
-    t = []
-    hub_y = 1.20
-    for k in range(3):                                               # tripod legs
-        a = 2 * math.pi * k / 3 + math.pi / 6
-        fx, fz = 0.85 * math.cos(a), 0.85 * math.sin(a)
-        t += beam((fx, 0.0, fz), (0.0, hub_y - 0.05, 0.0), 0.06, STEEL_DARK)
-        t += box(fx, 0.03, fz, 0.16, 0.06, 0.16, STEEL_DARK)          # feet
-    t += cyl(0, hub_y - 0.1, 0, 0.12, 0.25, 8, STEEL)                # head unit
-    # Dish: a shallow bowl of three rings, tilted up and toward -Z.
-    rings = [(0.0, 0.10), (0.08, 0.55), (0.20, 0.95)]
-    bowl = []
-    prev = None
-    for (y, r) in rings:
-        cur = ring(0, y, 0, r, 12)
-        if prev is not None:
-            bowl += tube(prev, cur, (0.82, 0.84, 0.86))
-        prev = cur
-    bowl += cap(ring(0, 0.0, 0, 0.10, 12), (0, -0.02, 0), (0, -1, 0), STEEL)
-    bowl += [(c, b, a, STEEL) for (a, b, c, _) in bowl]              # back side, darker
-    bowl += cyl(0, 0.0, 0, 0.025, 0.55, 6, STEEL_DARK)               # feed arm
-    bowl += cyl(0, 0.55, 0, 0.05, 0.08, 6, GLOW)                     # feed horn
-    bowl = xform(bowl, lambda p: _rot_x(p, -math.radians(35)))
-    t += shift(bowl, 0, hub_y + 0.18, 0)
-    return t
 
 
 # ---- bones -----------------------------------------------------------------
@@ -406,14 +250,6 @@ def _prop(asset_id, tris, mounts=None):
 
 
 FILES = {
-    "props/rock_a.glb": (lambda: _prop("prop.rock.a", rock_a()), 400),
-    "props/rock_b.glb": (lambda: _prop("prop.rock.b", rock_b()), 400),
-    "props/rock_c.glb": (lambda: _prop("prop.rock.c", rock_c()), 400),
-    "props/loot_crate.glb": (lambda: _prop("prop.loot.crate", loot_crate()), 400),
-    "props/barrel.glb": (lambda: _prop("prop.barrel", barrel()), 400),
-    "props/barrels.glb": (lambda: _prop("prop.barrels", barrels()), 800),
-    "props/generator.glb": (lambda: _prop("prop.generator", generator()), 800),
-    "props/dish.glb": (lambda: _prop("prop.dish", dish()), 800),
     "props/bones.glb": (lambda: _prop("prop.bones", bones()), 800),
     "props/forge.glb": (lambda: _prop("prop.forge", forge()), 800),
     "vehicles/rover.v1.glb": (lambda: _prop("vehicle.rover.v1", rover(), ROVER_SEATS), 1500),

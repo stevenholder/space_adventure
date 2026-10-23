@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Generate the Phase 12 artisan-loop props and hand tools (ROADMAP task 11).
 
-Seven files from one script, like the old gen_kit.py (retired by Phase 25):
+Five files from one script, like the old gen_kit.py (retired by Phase 25):
 
-    props/node_ore_iron.glb     prop.node.ore.iron   rock cluster, rust streaks
-    props/node_ore_copper.glb   prop.node.ore.copper rock cluster, teal streaks
     props/node_crystal.glb      prop.node.crystal    hex prisms out of a rock
     props/wreck.glb             prop.wreck           hull section, snapped strut
     props/bench.glb             prop.bench           workbench with vise + rack
@@ -13,8 +11,12 @@ Seven files from one script, like the old gen_kit.py (retired by Phase 25):
 
 Contract (art/README.md): base at the origin, up +Y, faces -Z, flat-shaded
 vertex colours under one white double-sided material, every model under
-200 triangles. The hand tools follow weapon.pulse: -Z forward, the pistol
-grip bottoming out at y=0, and two translation-only mount nodes -- `grip`
+200 triangles. The two ore nodes moved to the Stylized Nature MegaKit in
+Phase 25 (tools/bpy/props_vendor.py); the crystal node stays here, own art,
+because the free Nature tier ships no crystals.
+
+The hand tools follow weapon.pulse: -Z forward, the pistol grip bottoming
+out at y=0, and two translation-only mount nodes -- `grip`
 (the client lines it up with hand.r) and `muzzle` (the working tip at the
 -Z end).
 
@@ -36,8 +38,6 @@ MATERIALS = [{"name": "opaque", "double_sided": True}]
 # ---- palette ---------------------------------------------------------------
 ROCK_DARK = (0.22, 0.21, 0.23)
 ROCK_MID = (0.30, 0.29, 0.31)
-IRON = (0.74, 0.36, 0.13)        # rust-orange iron streak
-COPPER = (0.16, 0.64, 0.54)      # green-teal copper streak
 CRYSTAL_PALE = (0.66, 0.90, 0.96)    # pale cyan facet
 CRYSTAL_VIOLET = (0.62, 0.52, 0.90)  # violet facet
 CRYSTAL_CORE = (0.88, 0.98, 1.00)    # the lit core: the tips and the inner shard
@@ -101,7 +101,7 @@ def outward(tris, centre):
     return out
 
 
-# ---- ore nodes -------------------------------------------------------------
+# ---- rock chunks (the crystal node's base) ---------------------------------
 
 def chunk(rng, cx, cz, r, h, lean, streak, sides=6):
     """One angular rock: a jittered hexagonal base ring, a bulged mid ring,
@@ -135,21 +135,6 @@ def chunk(rng, cx, cz, r, h, lean, streak, sides=6):
     floor = cap(base, (cx, 0.0, cz), (0.0, -1.0, 0.0), ROCK_DARK)
     centre = (cx + lean[0] * 0.4, h * 0.4, cz + lean[1] * 0.4)
     return outward(coloured + lid + floor, centre)
-
-
-# (cx, cz, radius, height, lean) -- the big chunk sits toward -Z, the face.
-IRON_CHUNKS = [
-    (0.02, -0.12, 0.34, 1.00, (0.06, -0.08)),
-    (-0.42, 0.18, 0.24, 0.62, (-0.10, 0.06)),
-    (0.40, 0.22, 0.22, 0.56, (0.08, 0.10)),
-    (0.14, 0.44, 0.15, 0.34, (0.02, 0.06)),
-]
-
-COPPER_CHUNKS = [
-    (-0.10, 0.08, 0.32, 0.96, (-0.04, -0.10)),
-    (0.40, -0.16, 0.25, 0.66, (0.10, -0.06)),
-    (-0.36, -0.36, 0.16, 0.38, (-0.06, -0.04)),
-]
 
 
 # Crystal node (Phase 22, node.crystal): a squat two-chunk rock base and
@@ -192,14 +177,6 @@ def build_crystal():
         tris += chunk(rng, cx, cz, r, h, lean, ROCK_MID)
     for (cx, cz, r, h, lx, lz, col) in CRYSTAL_PRISMS:
         tris += prism(cx, cz, r, h, lx, lz, col)
-    return tris
-
-
-def build_ore(chunks, streak, seed):
-    rng = Rng(seed)
-    tris = []
-    for (cx, cz, r, h, lean) in chunks:
-        tris += chunk(rng, cx, cz, r, h, lean, streak)
     return tris
 
 
@@ -309,10 +286,6 @@ def _prop(asset_id, tris):
 
 
 FILES = {
-    "props/node_ore_iron.glb":
-        lambda: _prop("prop.node.ore.iron", build_ore(IRON_CHUNKS, IRON, 0x1207)),
-    "props/node_ore_copper.glb":
-        lambda: _prop("prop.node.ore.copper", build_ore(COPPER_CHUNKS, COPPER, 0x12C0)),
     "props/node_crystal.glb": lambda: _prop("prop.node.crystal", build_crystal()),
     "props/wreck.glb": lambda: _prop("prop.wreck", build_wreck()),
     "props/bench.glb": lambda: _prop("prop.bench", build_bench()),
