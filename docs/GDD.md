@@ -2021,13 +2021,27 @@ names, cell for cell, so **no zone JSON and no collider changes**.
   into one GLB at the same footprint, ink outline and skirt included.
   The verify gate's cell-bounds check is the contract that the swap is
   invisible to the server.
-- **Props.** `barrel(s)`, `loot_crate`, `dish`, `generator` become
-  Essentials props at their old mount points and budgets; `bones`,
+- **Props (settled 2026-10-23, wave 2).** `barrel(s)`, `loot_crate`,
+  `dish`, `generator` are kit props filling their old solid boxes
+  (`PropBoxes`, unchanged). The drum is the MegaKit's `Prop_Barrel_Large`
+  (502 tris, the trim sheets the camp already loads), not the Essentials
+  drum (2352); the loot crate is the MegaKit's `Prop_Crate3`, because the
+  Essentials crate stops simplifying at ~2.8 k tris; the dish is the
+  Essentials `Prop_SatelliteDish` on a plate pad; the generator has no
+  kit model, so it is composed of MegaKit parts (a crate housing, the
+  small fan on top, a drum on its side as the tank). Per-id budgets:
+  `prop.dish` 3500, `prop.barrels` and `prop.generator` 1600. `bones`,
   `wreck`, `target` stay own art (nothing in the kits).
-- **Nature.** `rock_a/b/c` and the three ore/crystal nodes become
-  Nature MegaKit rocks and crystals; the per-placement tint and pebble
-  rules carry over; node silhouettes must still differ at 20 m (the
-  Phase 11 discovery read).
+- **Nature (settled 2026-10-23, wave 2).** `rock_a/b/c` are the Nature
+  MegaKit's `Rock_Medium_1/2/3` (rock c on the desert sheet), exactly
+  1 m tall; the per-placement tint and pebble rules carry over (the
+  instance colour now multiplies the kit texture). The two ore nodes are
+  Nature rocks composed per node and coloured by a base-colour factor
+  (iron: a tall split pair, desert sheet, rust; copper: three low chunks,
+  teal). **The crystal node stays own art** until a crystal model is
+  vendored: the free Nature tier (68 of 116 models) ships none, and a
+  rock with a crystal tint would not read as one. Node silhouettes differ
+  at 20 m (the Phase 11 discovery read; `p25-nodes-20m.png`).
 - **Lighting (settled 2026-10-20).** Phase 23's chest read near-black
   in daylight, not just at night: the kit's trim sheets are metallic
   1.0 everywhere and MI_Trim_01 has specular 0, and under a black sky

@@ -1173,3 +1173,78 @@ Essentials props (task 4), ATTRIBUTION rows for the kits as world art,
 and the ambient look decision (shadow sides read dark on kit and own
 art alike, measured in wave 0).
 
+
+# Phase 25 — the kit swap, wave 2: props and nature (2026-10-23)
+
+The five camp props, the three scatter rocks and the two ore nodes are
+now kit models, composed in `tools/bpy/props_vendor.py` under their old
+manifest ids. The solid boxes (`sim/props.go` PropBoxes = `Collide.cs`)
+did not move, and neither did the server, the wire or the zone JSON; each
+prop fills its box to within 0.05 m and nothing passes it. `gen_props.py`
+no longer writes the rocks, loot crate, drums, generator or dish, and
+`gen_nodes.py` no longer writes the ore nodes (`npm --prefix art run gen`
+afterwards leaves every kit glb alone).
+
+| id | pieces | tris | bounds (m) vs its box |
+|---|---|---|---|
+| prop.barrel | MegaKit `Prop_Barrel_Large` × (1.2, 0.855, 1.2) | 502 | x ±0.305, y 0..0.943, z ±0.319 vs ±0.32, 0..0.95, ±0.32 |
+| prop.barrels | three drums: two standing toward +Z (one turned 40°), one fallen across the -Z front | 1506 | x −0.640..0.639, y 0..0.943, z −0.859..0.479 vs ±0.65, 0..0.95, −0.86..0.49 |
+| prop.generator | MegaKit `Prop_Crate3` housing on −X, `Prop_Fan_Small` on its roof, a drum on its side on +X as the fuel tank | 1140 | x −0.999..1.118, y 0..1.324, z ±0.425 vs −1.00..1.12, 0..1.34, −0.45..0.43 |
+| prop.dish | Essentials `Prop_SatelliteDish` × 0.36 (shipped bowl toward −Z), on a MegaKit `Platform_DarkPlates` pad | 3318 | the pad is the box's footprint (x ±0.95, z −0.93..0.66); dish x ±0.33, y 0..2.086 vs 2.09 |
+| prop.loot.crate | MegaKit `Prop_Crate3` × (0.44, 0.5, 0.34) | 204 | exactly the box: ±0.22, 0..0.50, ±0.17 |
+| prop.rock.a | Nature `Rock_Medium_1`, uniform, default sheet | 342 | 1.43 × 1.32 m, exactly 1.0 tall, base y = 0 |
+| prop.rock.b | Nature `Rock_Medium_2` | 244 | 1.61 × 1.31, 1.0 tall |
+| prop.rock.c | Nature `Rock_Medium_3`, desert sheet | 522 | 1.48 × 1.50, 1.0 tall |
+| prop.node.ore.iron | `Rock_Medium_3` + `Rock_Medium_2` stretched tall (x/z 0.2), leaning apart ±12°, the taller toward −Z; desert sheet × rust (0.9, 0.5, 0.32) | 766 | top 1.033, x −0.34..0.38, z −0.73..0.68 (NODE_BOUNDS 0.9..1.05, ±0.8) |
+| prop.node.ore.copper | three `Rock_Medium_2` chunks in a ring (0.95 / 0.6 / 0.5 m), the tallest toward −Z; default sheet × teal (0.4, 0.95, 0.9) | 732 | top 0.95, x ±0.61, z ±0.59 |
+
+Substitutions against the brief, both measured: the loot crate was to
+be the Essentials `Prop_Crate`, but its 3984 tris simplify only to
+~2.8 k at any meshopt error (UV seams pin the edges), so it is the
+MegaKit `Prop_Crate3`; the generator's housing was to be `Prop_Crate4`
+(972 tris), which made the lot 1.9 k and stalled at 1.7 k, so it is
+`Prop_Crate3` too. The single drum is the MegaKit one, not the 2352-tri
+Essentials drum. Budgets raised per id in `verify.mjs`: `prop.dish`
+3500 (the dish alone is 3.3 k, like `struct.mast.*`), `prop.barrels`
+1600, `prop.generator` 1600.
+
+Pipeline additions: `stage()` takes `images` (an image uri swap before
+the copy: `Rocks_Diffuse` → `Rocks_Desert_Diffuse`); `import_pack`
+takes `base_color` (material name → base-colour factor, multiplied into
+its texture), threaded through `props_vendor.mjs` like `budget`; the
+composer skips a skinned piece's bone display shape (`Prop_Fan_Small`
+brought an Icosphere along). New shared textures: `tex/Rocks_Diffuse.png`,
+`tex/Rocks_Desert_Diffuse.png` (2048² capped to 1024). The struct glbs
+rebuilt byte-identical. `gen_icons.py` re-rendered `mat.ore.iron/copper`
+from the new nodes.
+
+Client: `Rocks.cs` drew the scatter with `MaterialOverride` = Boot's
+flat vertex-colour material, which would have thrown the kit texture
+away. The override (and the ctor's `material` parameter) is gone; each
+surface's own material sets `VertexColorUseAsAlbedo`, and with no vertex
+colours in the mesh COLOR is the MultiMesh instance colour, so the
+per-rock tint still multiplies the rock. Scatter, pebbles and colliders
+(`RockScatter.ColliderOf`) untouched.
+
+The crystal node stays own art (`gen_nodes.py`): the free Nature tier
+(68 of 116 models) ships no crystals, and a tinted rock would not read
+as one. It waits on a crystal model being vendored.
+
+Verify: `npm --prefix art run props:vendor` (all 26 rows) then `npm
+--prefix art run gen` — only the intended glbs changed; `npm --prefix
+art test` PASS 282/282 (budgets, NODE_BOUNDS); `make godot-test` PASS;
+`node test/t13-collide-parity.mjs` PASS (13 scenarios). Shots on a bare
+server (`SA_START=credits=3000,ammo.cell=120`, `:18080`) from source at
+1920×1080, `-uiShotAfter 4 -quitAfter 45`:
+`p25-props.png` (`-uiKitDemo prop.barrel,prop.barrels,prop.generator,prop.dish,prop.loot.crate
+-uiKitGap 2.5 -uiKitDist 6`, the shadow side), `p25-props-lit.png`
+(same, `-uiPitch 0 -uiYaw 90`: `-uiYaw` needs `-uiPitch`, and yaw 90 is
+clear of the spawn NPCs), `p25-rocks.png` (`-uiFace rock -uiApproach
+6`: the textured, tinted scatter), `p25-nodes.png` / `p25-nodes-20m.png`
+(`-uiKitDemo prop.node.ore.iron,prop.node.ore.copper,prop.node.crystal,prop.rock.a
+-uiKitGap 3 -uiKitDist 7|20 -uiPitch 0 -uiYaw 90`). At 20 m the rust
+split pair, the teal ring, the crystal and the grey rock read as four
+different things. The first rust (1.0, 0.72, 0.5) on the desert sheet
+was too close to a plain desert `rock.c`; the darker rust fixed that.
+The generator reads as a crate with a fan and a tank rather than a
+machine; good enough for camp dressing.

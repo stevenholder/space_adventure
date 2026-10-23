@@ -2200,7 +2200,29 @@ shop no longer lists the ship.
 
 # Phase 25 — the kit swap: the world in the Quaternius kits (drafted 2026-10-11)
 
-### Where Phase 25 stands (2026-10-21, wave 1 — every struct role in the kit, PR pending)
+### Where Phase 25 stands (2026-10-23, wave 2 — props and nature in the kits)
+
+Wave 2 (2026-10-23) closes tasks 1, 4 and 5: every camp prop, rock and
+ore node is a kit model under the same manifest id, inside the same
+solid box, with no server, wire or collider change (QA-STATUS "Phase 25
+— the kit swap, wave 2"). Decisions: the drum is the MegaKit's
+`Prop_Barrel_Large` (502 tris on the trim sheets the camp already loads)
+instead of the 2352-tri Essentials drum; the loot crate is the MegaKit's
+`Prop_Crate3`, because the Essentials crate stops simplifying at ~2.8 k
+tris (UV seams), three times its budget; the generator has no kit model
+and is composed from MegaKit parts (crate housing, small fan, a drum as
+the tank); the dish is the Essentials dish on a plate pad. Per-id
+budgets raised in `verify.mjs`: `prop.dish` 3500 (the dish alone is
+3.3 k, as `struct.mast.*`), `prop.barrels` and `prop.generator` 1600.
+Rocks are the Nature MegaKit's `Rock_Medium_1/2/3`, the ore nodes are
+Nature rocks coloured by a base-colour factor; **the crystal node stays
+own art** (the free Nature tier ships no crystals). Client: `Rocks.cs`
+no longer overrides the rock material (that threw the kit texture away);
+each surface takes the instance tint into its albedo instead. Open:
+task 6 (QA record against C201–C204, the style-guide budgets), and the
+ambient look decision.
+
+#### Wave 1 (2026-10-21) — every struct role in the kit
 
 The two gates the GDD named are closed, on the chest and the dock
 (`test/out/ui/p25-chest-before.png` → `p25-chest.png`, `p25-dock.png`):
@@ -2253,11 +2275,11 @@ compass, the POI names, the fights: unchanged.
 
 | # | Wave | Task | Where | Verify |
 |---|---|---|---|---|
-| 1 | 0 | Vendor the Nature MegaKit (`art/vendor/stylized-nature`, by hand); ATTRIBUTION rows for all three kits as world art | `art/` | `npm --prefix art test` |
+| 1 | 0 | ~~Vendor the Nature MegaKit (`art/vendor/stylized-nature`, by hand); ATTRIBUTION rows for all three kits as world art~~ DONE 2026-10-23: the free 68-model tier from itch.io; ATTRIBUTION has all three kits as world art | `art/` | `npm --prefix art test` |
 | 2 | 1 | ~~`tools/gen_kit.py` + `art/kit/*.json`~~ → the dock's `pieces` composer in `tools/bpy/props_vendor.py` assembles each role (cell offsets, yaw, skirt); same footprints as today | `art/tools/bpy/props_vendor.py`, `art/tools/props_vendor.mjs` | verify gate cell bounds; `-uiKitDemo` shots |
 | 3 | 1 | ~~The 16 struct GLBs rebuilt~~ DONE 2026-10-21: the 14 role GLBs (wall4/corner/gate4/cover4/tower/mast × faction, hab, shack); `post`/`wall` are pre-Phase-9 legacy rows, untouched | `art/structs/` | `p25-camp-gate.png`, `p25-colony-gate.png` (the camp layout staged at spawn, both hands) |
-| 4 | 1 | Props: barrel(s), loot_crate, dish, generator from Essentials at the old mounts | `art/props/` | shots; mount points asserted |
-| 5 | 1 | Nature: rock_a/b/c + the three nodes from the Nature kit; tint + pebbles kept | `art/props/`, `gen_nodes.py` | node silhouettes differ at 20 m (shot) |
+| 4 | 1 | ~~Props: barrel(s), loot_crate, dish, generator from Essentials at the old mounts~~ DONE 2026-10-23: MegaKit drum ×1/×3, MegaKit Crate3 loot crate, Essentials dish on a pad, generator composed from MegaKit parts; each fills its `PropBoxes` box | `art/props/` | `p25-props.png`, `p25-props-lit.png` |
+| 5 | 1 | ~~Nature: rock_a/b/c + the three nodes from the Nature kit; tint + pebbles kept~~ DONE 2026-10-23: rocks and both ore nodes from the Nature kit; the crystal node stays own art (no crystals in the free tier) | `art/props/`, `gen_nodes.py` | `p25-nodes-20m.png` (three nodes and a rock, distinct at 20 m) |
 | 6 | 2 | Record QA-STATUS "Phase 25"; style guide budgets confirmed against the real tri counts | `docs/` | — |
 
 ### Acceptance criteria (C201–C204)
