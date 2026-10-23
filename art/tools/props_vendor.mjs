@@ -64,6 +64,114 @@ const PROPS = {
       `composed by tools/bpy/props_vendor.py. MODELLED AT FINAL SCALE: the client tiles these along +X (the run), ` +
       `never stretches them; ${m.width} x ${m.depth} m, ${m.height} m tall, centred in its 1x1 cell.`,
   },
+  "struct.corner.scrap": {
+    out: "structs/corner.scrap.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit corner post, the Scrapyard hand: a leaning Column_Simple with an askew cap, the _Red trim sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.corner.colony": {
+    out: "structs/corner.colony.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit corner post, the Colony hand: a Column_Simple with a square cap, the default trim sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.gate4.scrap": {
+    out: "structs/gate4.scrap.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit gate, 4 m module, the Scrapyard hand: Door_Frame_A with one DarkMetal leaf hung ajar, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.gate4.colony": {
+    out: "structs/gate4.colony.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit gate, 4 m module, the Colony hand: an open Door_Frame_Square, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.cover4.scrap": {
+    out: "structs/cover4.scrap.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit cover, 1 cell, the Scrapyard hand: leaning ShortWall_DarkMetal2 box under a turned DarkPlates lid, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.cover4.colony": {
+    out: "structs/cover4.colony.glb",
+    budget: 400,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit cover, 1 cell, the Colony hand: a ShortWall_WhitePlate2 box under a Platform_Squares lid, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.tower.scrap": {
+    out: "structs/tower.scrap.glb",
+    budget: 1500,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit watchtower, 2x2 cells, the Scrapyard hand: four leaning posts, DarkPlates deck, DarkMetal rails, a shoved cabin, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.tower.colony": {
+    out: "structs/tower.colony.glb",
+    budget: 1500,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit watchtower, 2x2 cells, the Colony hand: four posts, a Platform_Simple deck, Simple1 rails, a centred cabin, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.mast.scrap": {
+    out: "structs/mast.scrap.glb",
+    budget: 3500,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit mast, 1 cell, the Scrapyard hand: two Column_Simple stacked by eye, the Essentials Prop_SatelliteDish tipped on top, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.mast.colony": {
+    out: "structs/mast.colony.glb",
+    budget: 3500,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit mast, 1 cell, the Colony hand: Column_Large_Straight with the Essentials Prop_SatelliteDish on top, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.hab.colony": {
+    out: "structs/hab.colony.glb",
+    budget: 1500,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit hab, 2x2 cells, Colony only: eight WallAstra_Straight_Flat, TopSimple copings, a Platform roof, a Door_Simple leaf on +Z, default sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
+  "struct.shack.scrap": {
+    out: "structs/shack.scrap.glb",
+    budget: 1500,
+    pack: MEGAKIT,
+    describe: (m) =>
+      `Kit shack, 2x2 cells, Scrapyard only: WallBand walls (two Broken), a tipped DarkPlates roof, an awning, a DarkMetal door, a stovepipe, _Red sheets (Phase 25 kit swap), composed by tools/bpy/props_vendor.py from Quaternius MegaKit pieces; ` +
+      `MODELLED AT FINAL SCALE, the client tiles it, never stretches it; ${m.width} x ${m.depth} m, ${m.height} m tall, ` +
+      `centred on its cell(s), base at y=0 on a 0.3 m skirt.`,
+  },
 };
 
 const manifestPath = path.join(artDir, "manifest.json");

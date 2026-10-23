@@ -2200,7 +2200,7 @@ shop no longer lists the ship.
 
 # Phase 25 — the kit swap: the world in the Quaternius kits (drafted 2026-10-11)
 
-### Where Phase 25 stands (2026-10-20, wave 0 — both gates settled, PR pending)
+### Where Phase 25 stands (2026-10-21, wave 1 — every struct role in the kit, PR pending)
 
 The two gates the GDD named are closed, on the chest and the dock
 (`test/out/ui/p25-chest-before.png` → `p25-chest.png`, `p25-dock.png`):
@@ -2217,16 +2217,23 @@ The two gates the GDD named are closed, on the chest and the dock
   manifest row lists them and `godot-cli stage_art` copies them.
   Chest 3.4 MB → 24 KB, dock 6.0 MB → 75 KB, trim sheets 5.7 MB once.
 
-Task 3 begun the same day: `wall4` both hands, composed in
-`tools/bpy/props_vendor.py` (the dock's `pieces` composer IS the kit
-assembler; there is no separate `gen_kit.py` for the swap and no
-`art/kit/*.json`), through the verify gate at the old cell and height,
-shot at spawn with `-uiKitDemo` (`p25-wall4*.png`). The pattern for the
-other 14: a kit `*_Straight` wall sits on its cell's edge, so each wall
-piece turns 90° and shifts to the centre; Colony takes the default
-sheets by `sheet: "default"`. Next: corner, gate4, cover4, mast, tower,
-hab, shack; task 1 (the Nature kit) waits on the pack landing in
-`art/vendor/stylized-nature`.
+Task 3 is done (wave 1, 2026-10-21): all fourteen struct GLBs are
+composed in `tools/bpy/props_vendor.py` (the dock's `pieces` composer
+IS the kit assembler; `gen_kit.py` is deleted and gone from `npm run
+gen`), through the verify gate at the old cells and heights, so the
+server, the zone JSON and the colliders did not move. Decisions worth
+knowing: the corner is a POST (`Column_Simple` + cap), not a kit
+`*_Corner_Outer`, because `layout.go` places corners without a yaw;
+the gates are open `Door_Frame`s whose openings (2.27 / 2.62 m) match
+the collider's 2.4 m gap; the mast carries the Essentials dish, so
+`verify.mjs` allows `struct.mast.*` 3500 tris (GDD); the shack has no
+`TopCables_*_Hanging` (4 k tris each — over budget, deferred). Shots:
+`p25-{scrap,colony}-small.png`, `p25-towers.png`, `p25-masts.png`,
+`p25-huts.png` (`-uiKitDemo`, new `-uiKitDist`/`-uiKitGap`), and the
+camp's layout staged into the spawn zone for both hands:
+`p25-camp-{gate,north}.png`, `p25-colony-{gate,north}.png`. Open:
+task 1 (the Nature kit, waits on the pack landing in
+`art/vendor/stylized-nature`), task 4 (Essentials props), task 6.
 
 The three Quaternius kits (Modular SciFi MegaKit, Sci-Fi Essentials,
 Stylized Nature MegaKit — CC0, `art/vendor/`) become the world's look;
@@ -2248,7 +2255,7 @@ compass, the POI names, the fights: unchanged.
 |---|---|---|---|---|
 | 1 | 0 | Vendor the Nature MegaKit (`art/vendor/stylized-nature`, by hand); ATTRIBUTION rows for all three kits as world art | `art/` | `npm --prefix art test` |
 | 2 | 1 | ~~`tools/gen_kit.py` + `art/kit/*.json`~~ → the dock's `pieces` composer in `tools/bpy/props_vendor.py` assembles each role (cell offsets, yaw, skirt); same footprints as today | `art/tools/bpy/props_vendor.py`, `art/tools/props_vendor.mjs` | verify gate cell bounds; `-uiKitDemo` shots |
-| 3 | 1 | The 16 struct GLBs rebuilt (wall4/corner/gate4/cover4/tower/mast × faction, hab, shack, post, wall) | `art/structs/` | `-uiShot` from the camp gate and the Colony hab |
+| 3 | 1 | ~~The 16 struct GLBs rebuilt~~ DONE 2026-10-21: the 14 role GLBs (wall4/corner/gate4/cover4/tower/mast × faction, hab, shack); `post`/`wall` are pre-Phase-9 legacy rows, untouched | `art/structs/` | `p25-camp-gate.png`, `p25-colony-gate.png` (the camp layout staged at spawn, both hands) |
 | 4 | 1 | Props: barrel(s), loot_crate, dish, generator from Essentials at the old mounts | `art/props/` | shots; mount points asserted |
 | 5 | 1 | Nature: rock_a/b/c + the three nodes from the Nature kit; tint + pebbles kept | `art/props/`, `gen_nodes.py` | node silhouettes differ at 20 m (shot) |
 | 6 | 2 | Record QA-STATUS "Phase 25"; style guide budgets confirmed against the real tri counts | `docs/` | — |
