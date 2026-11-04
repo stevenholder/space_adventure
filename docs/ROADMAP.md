@@ -2223,12 +2223,13 @@ each surface takes the instance tint into its albedo instead.
 Task 6 (2026-11-04) records C201–C204 (QA-STATUS "Phase 25 — the kit
 swap: criteria C201–C204"): C201 PASS (`server/` has no diff from
 `54ecf83` to `8c0cfb2`, art verify 282/282); C202 PASS on the staged
-camp/colony shots, with no 40 m shot yet taken; C203 passes per piece
-(all inside verify and the GDD classes) but not per POI, since the
-camp totals 19,733 tris against the 12,000 line (relay, outpost and
-range are 10.0–10.3 k); C204 PASS on `go vet`, `go test ./...`, art
-verify and `t13` 13/13, the Godot sweep not re-run. Open: the camp's
-POI budget, the ambient look decision (the user's), and the shack's
+camp/colony shots, with no 40 m shot yet taken; C203 PASS (every piece
+inside verify and the GDD classes; per POI the camp is 16,415 tris
+against the GDD line raised to 20,000, after its duplicate standalone
+dish was dropped from `camp.json`; relay, outpost and range are
+10.0–10.3 k); C204 PASS on `go vet`, `go test ./...`, art
+verify and `t13` 13/13, the Godot sweep not re-run. Open: the
+ambient look decision (the user's), and the shack's
 `TopCables_*_Hanging` (4 k tris each, over budget, deferred).
 
 #### Wave 1 (2026-10-21) — every struct role in the kit
@@ -2289,7 +2290,7 @@ compass, the POI names, the fights: unchanged.
 | 3 | 1 | ~~The 16 struct GLBs rebuilt~~ DONE 2026-10-21: the 14 role GLBs (wall4/corner/gate4/cover4/tower/mast × faction, hab, shack); `post`/`wall` are pre-Phase-9 legacy rows, untouched | `art/structs/` | `p25-camp-gate.png`, `p25-colony-gate.png` (the camp layout staged at spawn, both hands) |
 | 4 | 1 | ~~Props: barrel(s), loot_crate, dish, generator from Essentials at the old mounts~~ DONE 2026-10-23: MegaKit drum ×1/×3, MegaKit Crate3 loot crate, Essentials dish on a pad, generator composed from MegaKit parts; each fills its `PropBoxes` box | `art/props/` | `p25-props.png`, `p25-props-lit.png` |
 | 5 | 1 | ~~Nature: rock_a/b/c + the three nodes from the Nature kit; tint + pebbles kept~~ DONE 2026-10-23: rocks and both ore nodes from the Nature kit; the crystal node stays own art (no crystals in the free tier) | `art/props/`, `gen_nodes.py` | `p25-nodes-20m.png` (three nodes and a rock, distinct at 20 m) |
-| 6 | 2 | ~~Record QA-STATUS "Phase 25"; style guide budgets confirmed against the real tri counts~~ DONE 2026-11-04: QA-STATUS "Phase 25 — criteria C201–C204"; every piece within budget, largest per-POI total 19,733 tris (camp) against 12,000, the other three POIs 10.0–10.3 k | `docs/` | — |
+| 6 | 2 | ~~Record QA-STATUS "Phase 25"; style guide budgets confirmed against the real tri counts~~ DONE 2026-11-04: QA-STATUS "Phase 25 — criteria C201–C204"; every piece within budget, largest per-POI total 16,415 tris (camp, after dropping its duplicate dish) against the GDD line raised to 20,000, the other three POIs 10.0–10.3 k | `docs/` | — |
 
 ### Acceptance criteria (C201–C204)
 
