@@ -119,15 +119,6 @@
    "yaw": 115.0
   },
   {
-   "asset": "prop.dish",
-   "pos": [
-    -13.0,
-    0.0,
-    6.5
-   ],
-   "yaw": 140.0
-  },
-  {
    "asset": "prop.barrel",
    "pos": [
     13.2,

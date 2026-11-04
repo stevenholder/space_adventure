@@ -1297,24 +1297,29 @@ masts within 5 of 3500.
 client-side and resource nodes spawn separately, so neither is counted;
 the spawn zone has no layout and no props):
 
-| POI | faction | pieces | props | total | vs 12,000 |
+| POI | faction | pieces | props | total | vs 20,000 |
 |---|---|---|---|---|---|
 | relay | colony | hab, tower, mast, 2 cover4 (no wall run) | generator, dish, drum | 10,282 | under |
 | outpost | scrap | 15 wall4, 1 gate4, 4 corner posts, mast, shack, 2 cover4 | 2 loot crates, barrels, drum, bones | 10,033 | under |
 | range | colony | 19 wall4, 4 corner posts, mast | barrels, drum, generator | 10,232 | under |
-| camp | scrap | 29 wall4, 1 gate4, 4 corner posts, mast, shack, cover4 | 5 drums, 2 barrels, generator, dish, 2 bones | 19,733 | **over** |
+| camp | scrap | 29 wall4, 1 gate4, 4 corner posts, mast, shack, cover4 | 5 drums, 2 barrels, generator, 2 bones | 16,415 | under |
 
-The camp is the exception: 19,733 tris, 7,733 over the 12,000 line. Its
-structures are 9,137 (the wall ring is 3,886 and the mast 3,495); the
-other 10,596 is props: two three-drum `prop.barrels` (3,012), five
-single drums (2,510), the dish (3,318, beside a mast that already
-carries one), the generator (1,140) and two bones (616). The same camp under the Phase 9 box kit was not measured, so
-this is not a regression claim, only a measurement against the budget.
-Nothing was changed for it; see C203.
+The camp was the exception: 19,733 tris, 7,733 over the old 12,000 line.
+Its structures are 9,137 (the wall ring is 3,886 and the mast 3,495);
+the other 10,596 was props: two three-drum `prop.barrels` (3,012), five
+single drums (2,510), the standalone dish (3,318, beside a mast that
+already carries one), the generator (1,140) and two bones (616). Two
+things were done on 2026-11-04. The standalone dish was dropped from the
+`props` array of `server/data/zones/camp.json`, which removes 3,318 tris
+and leaves the camp at 16,415, and the GDD per-POI line was raised from
+12,000 to 20,000, because in the kit a mast alone is 3.5 k and the camp
+is the dense POI by design. All four POIs are now under 20,000. The same
+camp under the Phase 9 box kit was not measured, so this is a
+measurement against the budget, not a regression claim.
 
 | # | Result | Evidence |
 |---|---|---|
 | C201 | PASS | `git diff --stat 54ecf83..8c0cfb2 -- server/` prints nothing: no file under `server/` changed across the three Phase 25 PRs, so zone JSON (`server/data/zones/*.json`), colliders, sim, wire and protocol are byte-identical (the diff's 83 files are `art/`, `docs/`, `test/out/ui` shots and the client's `Boot.cs`, `Rig.cs`, `Rocks.cs`, `godot-cli`). `npm --prefix art test`: `PASS: 282/282 assets load, match manifest, within budget; palettes ok`, `OVERALL: PASS`; every struct and prop fits its declared cell (+0.45 m margin) and height, and each prop fills its `PropBoxes` box to within 0.05 m (wave 2 table) |
 | C202 | PASS on the shots that exist; the 40 m shot is not taken | `p25-camp-gate.png` and `p25-camp-north.png` (Scrapyard) against `p25-colony-gate.png` and `p25-colony-north.png` (Colony), the same camp layout staged at spawn in both skins, plus the per-role sets `p25-scrap-small.png`, `p25-colony-small.png`, `p25-towers.png`, `p25-masts.png`, `p25-huts.png`. Scrapyard reads as dark gunmetal broken-band walls with a red stripe and a rip per module, a red-trimmed emblem gate with a leaf ajar and a leaning corner post; Colony reads as pale white Astra panels with vent strips and a thin dark-framed square gate on a black skirt. The two are told apart at a glance by value alone (dark against light). Gap, stated plainly: those shots were taken from inside the staged compound at the rig's default eye distance (roughly 5 to 20 m from the nearest wall), not from 40 m, and the staged layout is at spawn, not at the camp. A 40 m silhouette shot of each hand has not been made. Both shadow sides still read dark on kit and own art alike (wave 0 measurement); the ambient decision remains the user's |
-| C203 | PASS for pieces; **FAIL for one POI** | Every id is within its `verify.mjs` budget (282/282) and every struct is within its GDD class line (table above); the three raised props (`prop.dish` 3500, `prop.barrels` 1600, `prop.generator` 1600) are recorded in wave 2 and in the GDD note. Per POI, relay 10,282, outpost 10,033 and range 10,232 are under 12,000; **camp is 19,733** and is not. Recorded, not fixed: no asset or budget was touched in this task. The levers, if the line is to be kept, are the camp's extra dish, its seven drum placements (five singles and two triples) and the generator, not the kit walls |
+| C203 | PASS | Every id is within its `verify.mjs` budget (282/282) and every struct is within its GDD class line (table above); the three per-id prop raises (`prop.dish` 3500, `prop.barrels` 1600, `prop.generator` 1600) are recorded in wave 2 and in the GDD note. Per POI after the fix, against the raised 20,000 line: relay 10,282, outpost 10,033, range 10,232 and camp 16,415, all under. The camp was 19,733 because of a duplicate dish: the standalone `prop.dish` at (-13.0, 0.0, 6.5), yaw 140, was removed from `server/data/zones/camp.json` since the camp's mast already carries a dish, and the GDD per-POI line was raised from 12,000 to 20,000 (a kit mast alone is 3.5 k). Closed 2026-11-04 |
 | C204 | PASS (server, art, collide parity); Godot sweep not re-run | From `server/`: `go vet ./...` clean; `go test ./...` all packages ok (`ai`, `defs`, `protocol`, `server` 49.8 s, `sim`, `skills`, `store`, `terrain`, `web`; `cmd/server` and `data` have no test files). `npm --prefix art test` 282/282, OVERALL PASS. `node test/t13-collide-parity.mjs` OVERALL: PASS (13 scenarios, 5.8 s). Not re-run in this task: the `godot-*` sweep, `-selftest` and the bare-server `t*` harness; the wave 2 record has `make godot-test` PASS and t13 13/13 on the merged tree, and the client changes since `54ecf83` are `Rocks.cs`, `Boot.cs`, `Rig.cs` and `godot-cli` only. So "C153–C200 hold" is supported here by the Go, art and collide-parity results and by the unchanged `server/` tree; the client-side criteria are carried by the wave records, not by a fresh sweep |
