@@ -2224,6 +2224,11 @@ and since Phase 25 the kit IS the MegaKit:
 - Budgets (kit pieces are 2–400 tris each, the dish 3.3 k): wall/
   corner/gate ≤ 400 tris, tower/hab/shack ≤ 1,500, mast ≤ 3,500. A
   whole POI including props stays under 12,000.
+  Measured 2026-11-04 (QA-STATUS "Phase 25 — criteria C201–C204"): every
+  piece is inside its class; props carry per-id exceptions (`prop.dish`
+  3,500, `prop.barrels` and `prop.generator` 1,600); relay, outpost and
+  range are 10.0–10.3 k per POI, but the camp is 19.7 k and over the
+  12,000 line, recorded and not yet resolved.
 
 Colliders remain the server's, authored per zone as today — the kit is
 VISUAL. The mapping rule inverts though: the zone names kit placements
