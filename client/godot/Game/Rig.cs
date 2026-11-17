@@ -48,6 +48,7 @@
 //   -uiLowered              lower the rifle as if a wall were in the way
 //   -uiWield melee          after -uiBuy: put the melee weapon in hand (Tab)
 //   -uiSwing <secs>         swing what is in hand; shoot that far into it
+//   -uiFpSheet              with -uiShot: every first-person clip of the hold, frozen, one PNG each
 //   -uiUse <item>           use / throw it (-uiUseWait <secs>, default 0.6)
 //   -uiChat                 three fake chat lines and the input line open (Phase 20)
 //   -uiCraft <recipe> [-uiCraftQty n] [-uiCraftWait s]  Phase 22: a hand recipe opens the backpack's
@@ -88,6 +89,7 @@ namespace SpaceAdventure.Game
         private bool _rigBack;      // step backwards
         private bool _rigStrafe;    // -uiStrafe: hold D through the shot
         private bool _rigArmed;
+        private string _rigHold;    // -rigHold <item>: hold this item for the shot
         private bool _rigAim;       // -uiAim: hold the aim (right mouse) for the shot
         private bool _rigLowered;   // -uiLowered: pretend a wall is in the way
         private bool _rigInteract; // one frame of E
@@ -1177,11 +1179,31 @@ namespace SpaceAdventure.Game
             {
                 _sun.LookAtFromPosition(Vector3.Zero, CameraForward, Eye.Normalized());
             }
+            // -uiFpSheet: instead of one shot, every first-person clip of what
+            // is in hand, frozen at its telling moments: <path minus .png>
+            // -<clip>-<percent>.png each, with its `fp:` line. tools/fp_sheet.sh
+            // runs it over every body and hold.
+            if (Flag("-uiFpSheet"))
+            {
+                foreach (var (clip, at) in _viewModel.FpSheet())
+                {
+                    _rigAim = clip.StartsWith("fp_ads");
+                    _rigLowered = clip.StartsWith("fp_lower");
+                    _viewModel.FpPose(clip, at);
+                    await Wait(0.5);   // the aim and the lowering ease in
+                    string frame = $"{path[..^4]}-{clip}-{at * 100:00}.png";
+                    await ToSignal(RenderingServer.Singleton, RenderingServerInstance.SignalName.FramePostDraw);
+                    GetViewport().GetTexture().GetImage().SavePng(frame);
+                    GD.Print($"fp: {clip}@{at * 100:00} {_viewModel.FpAudit()}");
+                }
+                return;
+            }
             await ToSignal(RenderingServer.Singleton, RenderingServerInstance.SignalName.FramePostDraw);
             await ToSignal(RenderingServer.Singleton, RenderingServerInstance.SignalName.FramePostDraw);
             Image img = GetViewport().GetTexture().GetImage();
             Error err = img.SavePng(path);
             GD.Print($"uiShot: {path} {img.GetWidth()}x{img.GetHeight()} {err}");
+            GD.Print($"fp: {_viewModel.FpAudit()}");
         }
     }
 }

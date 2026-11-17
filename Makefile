@@ -299,6 +299,13 @@ godot-play-win:
 godot-play:
 	$(GODOT_CLI) play
 
+# The first-person arms, every body x hold x clip, as contact sheets, and a
+# FAIL for a clip the client had to shift to frame (GDD "The first-person
+# rule"). Needs a display (WSLg): it renders. ~12 min; BODIES=/HOLDS= narrow it.
+.PHONY: fp-sheet
+fp-sheet:
+	tools/fp_sheet.sh $(OUT)
+
 # C91: no agent-authored scenes or resources. Exactly one scene is allowed,
 # client/godot/Boot.tscn, and no .tres/.res/.gd/.material/.mesh; models never
 # go under the project (they would be imported as scenes). The shared

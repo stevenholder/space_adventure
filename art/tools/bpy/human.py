@@ -98,8 +98,10 @@ COLONIST_FACE_F = {
 # Head-weighted decimation (`lod` variants): the decimator's vertex-group
 # factor makes collapsing a head edge this much costlier than a torso one;
 # hands sit between (they fill the first-person view).
-HEAD_TRIS = 4050   # the face's share of BUDGET (head + neck, before eyeballs); +600 since the brows are painted
-LOD_WEIGHT = {"feature": 0.05, "ear": 0.04, "head": 0.2, "hand": 0.6}   # lower = kept; 0 would lock a vertex outright
+HEAD_TRIS = 3550   # the face's share of BUDGET (head + neck, before eyeballs); -500 to the hands (below)
+# Hands are kept nearly as long as the face: they are what first person looks
+# at all day, and at 0.6 a closed fist had no fingers left, a mitten.
+LOD_WEIGHT = {"feature": 0.05, "ear": 0.04, "head": 0.2, "hand": 0.12}   # lower = kept; 0 would lock a vertex outright
 BUDGET = 9000      # body + arms + head for a `lod` variant (the Vanguard's ceiling)
 
 # Every humanoid comes from this file. A variant changes the MakeHuman
@@ -151,11 +153,9 @@ VARIANTS = {
     },
     "char.ubc": {                              # spike: Quaternius Universal Base Characters body (CC0)
         "ubc": {"body": "Superhero_Male_FullBody"},     # hair: tools/bpy/hair.py
-        "fists": (0.22, 0.34, 1.36),           # first-person fists at the chest: the shoulders stay under the frame
     },
     "char.ubc.f": {                            # UBC Superhero female (GDD "Bodies": VANGUARD F)
         "ubc": {"body": "Superhero_Female_FullBody"},
-        "fists": (0.22, 0.34, 1.36),
     },
     "npc.gunner": {                            # ranged raider: a combat robot (player's build, so armor fits)
         "materials": {"skin": (0.48, 0.50, 0.54), "suit": (0.30, 0.32, 0.35), "glove": (0.40, 0.42, 0.45),
@@ -1232,24 +1232,56 @@ def head_of(rig, name):
     return pb(rig, name).matrix.translation.copy()
 
 
-def reach(rig, side, target, pole, hand_dir=None):
+REACH = 0.95            # of the arm's length: past it the elbow locks straight
+WRIST_EASE = 60         # degrees a wrist bends before the hold gives instead
+
+
+def comfortable(rig, side, want, hand=0.03):
+    """`want` (a fist's centre), pulled toward the shoulder until the arm
+    reaches it with the elbow still bent. Hold targets are written once for
+    every body; a body with shorter arms (the Vanguard) takes them nearer
+    rather than at full stretch and short of the weapon."""
+    S = head_of(rig, "upperarm_" + side)
+    d = Vector(want) - S
+    most = (pb(rig, "upperarm_" + side).bone.length + pb(rig, "lowerarm_" + side).bone.length) * REACH + hand
+    return S + d.normalized() * most if d.length > most else Vector(want)
+
+
+def reach(rig, side, target, pole, hand_dir=None, toward=None):
     """Two-bone IK: upperarm + lowerarm so the wrist lands on `target`
-    (clamped to reach), the elbow toward `pole`, the hand along hand_dir."""
+    (never past REACH: an elbow does not lock), the elbow toward `pole`, the hand along hand_dir.
+    `toward` is where the knuckles will point: the elbow then swings round
+    from `pole` to wherever the forearm comes nearest that line, so the wrist
+    is asked for as little as the hold allows (an elbow held at one fixed
+    pole folded wrists past 100 degrees on lowered and aimed guns)."""
     up, lo, ha = "upperarm_" + side, "lowerarm_" + side, "hand_" + side
     S = head_of(rig, up)
     l1 = pb(rig, up).bone.length
     l2 = pb(rig, lo).bone.length
     d = Vector(target) - S
-    dist = max(1e-3, min(d.length, (l1 + l2) * 0.999))
+    dist = max(1e-3, min(d.length, (l1 + l2) * REACH))
     dn = d.normalized()
     cos_a = max(-1.0, min(1.0, (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist)))
     a = math.acos(cos_a)
     pv = Vector(pole)
     pn = (pv - dn * pv.dot(dn))
     pn = pn.normalized() if pn.length > 1e-6 else Vector((0, 0, -1))
-    elbow = S + dn * math.cos(a) * l1 + pn * math.sin(a) * l1
-    aim(rig, up, elbow - S)
-    aim(rig, lo, (S + dn * dist) - head_of(rig, lo))
+    wrist = S + dn * dist
+    at = lambda p: S + dn * math.cos(a) * l1 + p * math.sin(a) * l1
+    if toward is not None:
+        t = Vector(toward).normalized()
+        # 5 degree steps and a smooth cost: the choice moves smoothly from
+        # key to key. Turning away from the authored pole costs a little, so
+        # a wrist already at ease leaves the elbow where the pose put it.
+        # The elbow stays under the hand: a raised elbow brings the forearm
+        # into a first-person frame from its side, across the view.
+        def cost(deg_):
+            e = at(Quaternion(dn, math.radians(deg_)) @ pn)
+            bend = math.degrees((wrist - e).angle(t))
+            return max(0.0, bend - WRIST_EASE * 0.5) + 0.2 * abs(deg_) + 1000 * max(0.0, e.z - wrist.z + 0.15)
+        pn = Quaternion(dn, math.radians(min(range(-90, 91, 5), key=cost))) @ pn
+    aim(rig, up, at(pn) - S)
+    aim(rig, lo, wrist - head_of(rig, lo))
     if hand_dir is not None:
         aim(rig, ha, hand_dir)
 
@@ -1335,14 +1367,52 @@ def rest_fingers(rig, side):
     update()
 
 
+def close_finger(rig, name, side, palm, degrees):
+    """Bend one finger's three segments (degrees each, knuckle first) about
+    ONE hinge, taken off the straight finger. Re-deriving the hinge per
+    segment from the palm normal (flex) goes wrong past a right angle at the
+    knuckle: the segment then lies along that normal and the tip splays out
+    sideways -- claw hands on every tight grip."""
+    update()
+    d = (pb(rig, f"{name}_01_{side}").matrix.to_3x3() @ Vector((0, 1, 0))).normalized()
+    hinge = d.cross(palm)
+    if hinge.length < 1e-6:
+        return
+    for seg, deg_ in zip(("01", "02", "03"), degrees):
+        swing(rig, f"{name}_{seg}_{side}", hinge, deg_)
+
+
+def fist(rig, side):
+    """A closed fist on any hand: each finger curls until its tip is as near
+    the palm's centre as it gets. Fixed angles suit one body's fingers: on
+    the Vanguard female (longer fingers, set wider) the last two hung open
+    under the fist."""
+    palm = palm_normal(rig, side)
+    at = mount_at(rig, side)
+    for f in FINGERS:
+        best = None
+        for k in range(14, 27):                       # 0.70 .. 1.30 of a 75/95/60 curl
+            for seg in ("01", "02", "03"):
+                pb(rig, f"{f}_{seg}_{side}").matrix_basis = Matrix.Identity(4)
+            close_finger(rig, f, side, palm, (75 * k / 20, 95 * k / 20, 60 * k / 20))
+            update()
+            tip = pb(rig, f"{f}_03_{side}")
+            miss = (tip.matrix.translation + tip.matrix.to_3x3() @ Vector((0, tip.bone.length, 0)) - at).length
+            if best is None or miss < best[0]:
+                best = (miss, k)
+        for seg in ("01", "02", "03"):
+            pb(rig, f"{f}_{seg}_{side}").matrix_basis = Matrix.Identity(4)
+        close_finger(rig, f, side, palm, (75 * best[1] / 20, 95 * best[1] / 20, 60 * best[1] / 20))
+    wrap_thumb(rig, side)
+
+
 def curl_each(rig, side, degrees, thumb):
     """curl() with a per-finger amount (index first): a trigger finger lies
     straighter than the three wrapped round the grip."""
     update()
     palm = palm_normal(rig, side)
     for f, deg_ in zip(FINGERS, degrees):
-        for seg in ("01", "02", "03"):
-            flex(rig, f"{f}_{seg}_{side}", palm, deg_)
+        close_finger(rig, f, side, palm, (deg_,) * 3)
     for seg in ("01", "02", "03"):
         flex(rig, f"thumb_{seg}_{side}", palm, thumb * (0.6 if seg == "01" else 1.0))
 
@@ -1356,10 +1426,11 @@ def grip(rig, side, want, fwd, palm, pole, fingers, thumb):
     """Put the hand's MOUNT (palm/fist centre) on `want`: solve the arm for a
     wrist target, orient and close the hand, measure where the mount landed,
     move the wrist target by the miss, repeat."""
+    want = comfortable(rig, side, want)
     target = Vector(want) - Vector(fwd).normalized() * 0.07
     for _ in range(5):
         rest_fingers(rig, side)
-        reach(rig, side, target, pole)
+        reach(rig, side, target, pole, toward=fwd)
         orient_hand(rig, side, fwd, palm)
         curl_each(rig, side, fingers, thumb)
         miss = Vector(want) - mount_at(rig, side)
@@ -1376,6 +1447,13 @@ def lay_thumb(rig, side, direction):
     aim(rig, "thumb_03_" + side, d)
     palm = palm_normal(rig, side)
     flex(rig, "thumb_03_" + side, palm, 15)
+
+
+def wrap_thumb(rig, side):
+    """Lay the thumb across the closed index finger, toward its last joint.
+    (flex() bends a thumb about the FINGERS' hinge, which swings it out along
+    the palm normal: a thumb standing off every fist.)"""
+    lay_thumb(rig, side, head_of(rig, f"index_03_{side}") - head_of(rig, f"thumb_02_{side}"))
 
 
 # The rifle's contact points, in its own frame (tools/gen_weapon.py): `fore`
@@ -1411,23 +1489,24 @@ def rifle(rig, G, forward, pole_r=(0.6, -0.3, -0.8), pole_l=(-0.7, 0.2, -0.7)):
     # further under the frame (an 8-step walk took 17 cm and lost it).
     G = Vector(G)
     for _ in range(2):
-        F = G + f * FORE_ALONG + up * FORE_UP
         # Right: knuckles forward and down the raked grip, palm in toward the gun.
         # The pistol grip runs (nearly) vertically through the fist: knuckles
         # point forward, a little down, so the hand's width lines up with it.
         grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
              fingers=(15, 80, 85, 85), thumb=70)
-        # Left: fingers forward and a little across, palm up under the fore-end.
-        grip(rig, "l", F, (f + right * 0.35).normalized(), up, pole_l,
-             fingers=(40, 45, 45, 45), thumb=25)
+        F = mount_at(rig, "r") + f * FORE_ALONG + up * FORE_UP
+        # Left: the fore-end lies ACROSS the palm, fingers under it and up its
+        # far side. (Fingers forward along the barrel was a flat hand beside
+        # the gun, carrying it like a tray.)
+        grip(rig, "l", F, (right + f * 0.6).normalized(), (up + right * 0.2).normalized(), pole_l,
+             fingers=(55, 60, 60, 60), thumb=25)
         miss = (F - mount_at(rig, "l")).length
-        if miss < 0.012:
-            break
-        G = G - f * miss
+        OFF_WEAPON["l"] = miss
+        G = G - f * miss * 1.3
     # Thumbs lie ALONG the gun, not up its side (seen end-on, an upright
     # thumb read far too long): the support thumb runs forward beside the
     # fore-end, the trigger-hand thumb wraps across the left of the grip.
-    lay_thumb(rig, "l", (f + up * 0.10 - right * 0.15).normalized())
+    lay_thumb(rig, "l", (f * 0.7 + up * 0.7 - right * 0.1).normalized())
     lay_thumb(rig, "r", (-right * 0.75 + f * 0.45 - up * 0.25).normalized())
 
 
@@ -1441,9 +1520,18 @@ SIT_DROP = 0.45
 WHEEL_R, WHEEL_AHEAD, WHEEL_BELOW = 0.17, 0.30, 0.40
 
 AIM3P = dict(G=(0.17, 0.24, 1.12), forward=(-0.35, 0.92, 0.18))    # third person, low ready
-FP_HOLD = dict(G=(0.14, 0.30, 1.26), forward=(-0.03, 1.0, 0.03))    # first person hold: straight down the view (the client converges it on the crosshair)
-FP_ADS = dict(G=(0.03, 0.30, 1.38), forward=(0.0, 1.0, 0.02))       # sights; the client lifts it to the eye
-FP_LOWER = dict(G=(0.12, 0.22, 1.10), forward=(-0.25, 0.60, -0.75))
+# THE FIRST-PERSON RULE: every fp_* pose puts the hands where the VIEW wants
+# them (eye at (0, 0, 1.70), looking down +Y), so the client's framing shift
+# is ~0 and the shoulders stay where a body's shoulders are -- 0.25 m under
+# the lens and behind it. An arm then always leaves the frame through its
+# bottom edge and never ends inside it, on any body at any aspect. Poses
+# authored at the belly and lifted 0.16-0.41 m by the client put the
+# shoulders at eye height: upper arms across the frame's edges, hidden by a
+# dissolve that ate the sleeves (playtests 2026-10-08, -10-11, 2026-11-14).
+# The rig prints the shift on every shot (`fp: ... lift=`); keep it under 5 cm.
+FP_HOLD = dict(G=(0.12, 0.30, 1.42), forward=(-0.03, 1.0, 0.03))    # first person hold: straight down the view (the client converges it on the crosshair)
+FP_ADS = dict(G=(0.00, 0.18, 1.53), forward=(0.0, 1.0, 0.02))       # sights; the client lifts it to the eye
+FP_LOWER = dict(G=(0.15, 0.24, 1.42), forward=(-0.40, 0.80, -0.45))   # low ready: down and across, not at the feet (a wrist will not point a gun 50 degrees down from the chest)
 
 
 # The pistol: its `fore` (tools/gen_weapon.py) is where the support palm cups
@@ -1459,19 +1547,29 @@ def pistol(rig, G, forward, pole_r=(0.6, -0.4, -0.7), pole_l=(-0.6, -0.4, -0.7))
     up = Vector((0, 0, 1))
     up = (up - f * up.dot(f)).normalized()
     right = f.cross(up)
-    F = Vector(G) + f * PISTOL_FORE[0] + up * PISTOL_FORE[1]
-    grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
-         fingers=(15, 80, 85, 85), thumb=40)
-    grip(rig, "l", F, (f - up * 0.35 + right * 0.25).normalized(), (right * 0.85 + up * 0.5).normalized(), pole_l,
-         fingers=(70, 75, 75, 75), thumb=25)
-    lay_thumb(rig, "r", (f - right * 0.35).normalized())
-    lay_thumb(rig, "l", (f - right * 0.15 + up * 0.05).normalized())
+    G = Vector(G)
+    for _ in range(3):   # a fixed count, never "until near enough": a hold that corrects on one key and not the next pops
+        grip(rig, "r", G, (f - up * 0.25).normalized(), -right, pole_r,
+             fingers=(15, 80, 85, 85), thumb=40)
+        F = mount_at(rig, "r") + f * PISTOL_FORE[0] + up * PISTOL_FORE[1]
+        grip(rig, "l", F, (f - up * 0.35 + right * 0.25).normalized(), (right * 0.85 + up * 0.5).normalized(), pole_l,
+             fingers=(70, 75, 75, 75), thumb=25)
+        miss = F - mount_at(rig, "l")
+        OFF_WEAPON["l"] = miss.length
+        G = G - miss                                     # the support hand cannot get there: bring the gun to it
+    # Along the frame, not off to the left of it: a pistol is too slim to hide
+    # a thumb laid 20 degrees out, and from the eye it read as a pointing finger.
+    lay_thumb(rig, "r", (f + up * 0.15 - right * 0.08).normalized())
+    # The support hand is a closed cup under the firing fist. (Its thumb laid
+    # forward "along the frame" lay along nothing -- the hand sits under the
+    # gun -- and read from the eye as a finger pointing off to the left.)
+    wrap_thumb(rig, "l")
 
 
 P_AIM3P = dict(G=(0.08, 0.34, 1.20), forward=(-0.10, 1.0, -0.20))   # third person: pistol at the ready
-P_FP_HOLD = dict(G=(0.13, 0.36, 1.30), forward=(-0.02, 1.0, 0.03))   # elbows bent: forearms clear of the lens   # arms near straight: forearms clear of the eye
-P_FP_ADS = dict(G=(0.00, 0.47, 1.55), forward=(0.0, 1.0, 0.02))     # client puts the rear sight 0.42 m out
-P_FP_LOWER = dict(G=(0.08, 0.26, 1.10), forward=(-0.20, 0.60, -0.75))
+P_FP_HOLD = dict(G=(0.12, 0.36, 1.47), forward=(-0.02, 1.0, 0.03))   # elbows bent: forearms clear of the lens   # arms near straight: forearms clear of the eye
+P_FP_ADS = dict(G=(0.00, 0.42, 1.58), forward=(0.0, 1.0, 0.02))     # client puts the rear sight 0.42 m out
+P_FP_LOWER = dict(G=(0.14, 0.28, 1.48), forward=(-0.35, 0.80, -0.32))
 
 # ---- melee -------------------------------------------------------------------
 # A hand weapon sits in the fist with its blade (haft) out of the THUMB side
@@ -1506,13 +1604,28 @@ def grip_blade(rig, side, want, blade, edge, pole):
     """Close a fist on `want` with the blade along `blade` and the edge along
     `edge` (world): grip()'s loop, turning the hand by its knuckle row."""
     A, E = Vector(blade).normalized(), Vector(edge).normalized()
+    want = comfortable(rig, side, want)
     target = Vector(want) - E * 0.07
     for _ in range(5):
         rest_fingers(rig, side)
-        reach(rig, side, target, pole)
+        reach(rig, side, target, pole, toward=E)
+        # The edge leads where the pose says only as far as the wrist goes:
+        # past WRIST_EASE the fist rolls round the haft toward the forearm
+        # (a swing keyed edge-first across the body folded the hand back on
+        # the arm, 120-170 degrees).
+        fore = (head_of(rig, "hand_" + side) - head_of(rig, "lowerarm_" + side)).normalized()
+        easy = fore - A * fore.dot(A)
+        if easy.length > 0.2:
+            E0 = (Vector(edge) - A * Vector(edge).dot(A)).normalized()
+            turn = math.atan2(E0.cross(easy).dot(A), E0.dot(easy))   # about the haft, E0 -> easy
+            for k in range(11):
+                E = Quaternion(A, turn * k / 10) @ E0
+                if E.angle(fore) <= math.radians(WRIST_EASE):
+                    break
         a0, k0 = blade_frame(rig, side)
         rotate_about_head(rig, "hand_" + side, (frame(E, A) @ frame(k0, a0).inverted()).to_quaternion())
-        curl_each(rig, side, (85, 90, 90, 90), 55)
+        curl_each(rig, side, (85, 90, 90, 90), 0)
+        wrap_thumb(rig, side)
         miss = Vector(want) - mount_at(rig, side)
         if miss.length < 0.002:
             break
@@ -1532,8 +1645,14 @@ def melee2(rig, G, forward, edge=None, pole_r=(0.7, -0.3, -0.6), pole_l=(-0.7, -
     MELEE_SPACING down toward the pommel, same blade and edge."""
     A = Vector(forward).normalized()
     E = Vector(edge) if edge is not None else edge_for(A)
-    grip_blade(rig, "r", G, A, E, pole_r)
-    grip_blade(rig, "l", Vector(G) - A * MELEE_SPACING, A, E, pole_l)
+    G = Vector(G)
+    for _ in range(8):
+        grip_blade(rig, "r", G, A, E, pole_r)
+        L = mount_at(rig, "r") - A * MELEE_SPACING      # the haft is rigid in the right fist
+        grip_blade(rig, "l", L, A, E, pole_l)
+        miss = L - mount_at(rig, "l")
+        OFF_WEAPON["l"] = miss.length
+        G = G - miss                                     # the left cannot get there: bring the haft to it
 
 
 def keyed(keys, t):
@@ -1554,11 +1673,11 @@ def keyed(keys, t):
 
 
 M1_AIM3P = dict(G=(0.24, 0.28, 1.05), forward=(0.05, 0.55, 0.83))      # blade up and forward at the hip
-M1_FP = dict(G=(0.20, 0.38, 1.12), forward=(0.48, -0.50, 0.72))   # first person: upright on screen, leaning right, clear of the crosshair (tipped back: the view pulls a forward lean left)
-M1_LOWER = dict(G=(0.20, 0.24, 1.00), forward=(0.0, 0.85, -0.5))
+M1_FP = dict(G=(0.22, 0.50, 1.42), forward=(-0.12, 0.45, 0.88))   # first person: the fist at arm's length low right, the blade up and away from the lens (tipped BACK it passed 10 cm from the eye and filled the corner as a slab)
+M1_LOWER = dict(G=(0.24, 0.44, 1.47), forward=(-0.75, 0.60, -0.15))   # point down and across, the fist still in view
 M2_AIM3P = dict(G=(0.04, 0.32, 1.10), forward=(0.30, 0.42, 0.86))       # two-hander held up across the body: blade over the RIGHT shoulder, so the pommel hand sits ahead of the belly, not through it (playtest 2026-10-06: the old left-leaning blade put the left fist at the right hip and the forearm through the torso)
-M2_FP = dict(G=(0.16, 0.38, 1.16), forward=(0.44, -0.50, 0.74))
-M2_LOWER = dict(G=(0.14, 0.26, 0.98), forward=(-0.2, 0.8, -0.55))
+M2_FP = dict(G=(0.16, 0.50, 1.40), forward=(-0.10, 0.45, 0.88))
+M2_LOWER = dict(G=(0.20, 0.44, 1.45), forward=(-0.75, 0.60, -0.15))   # the blade across the view, low: a wall is in the way
 
 # Swings: (t, fist, blade, edge). The edge leads the motion. Third person
 # twists the chest with it (TWIST, degrees, negative = turned right).
@@ -1577,19 +1696,19 @@ SPIN = [(0.0, *M2_AIM3P.values(), None),                     # out to the right,
         (0.85, (0.30, 0.30, 1.18), (0.80, 0.55, 0.20), (-0.5, 0.75, 0.0)),
         (1.0, *M2_AIM3P.values(), None)]
 FP_SWING1 = [(0.0, *M1_FP.values(), None),
-             (0.25, (0.30, 0.20, 1.55), (0.15, -0.2, 0.97), (0.0, 0.98, 0.2)),
-             (0.55, (0.00, 0.50, 1.35), (-0.85, 0.5, 0.1), (-0.3, -0.35, -0.9)),
-             (0.80, (-0.20, 0.36, 1.05), (-0.5, 0.3, -0.8), (-0.7, -0.5, 0.25)),
+             (0.25, (0.34, 0.40, 1.62), (0.15, -0.2, 0.97), (0.0, 0.98, 0.2)),   # wound up out to the right, an arm's length off: at the ear it filled a third of the frame
+             (0.55, (-0.04, 0.50, 1.59), (-0.85, 0.5, 0.1), (-0.3, -0.35, -0.9)),
+             (0.80, (-0.24, 0.36, 1.29), (-0.5, 0.3, -0.8), (-0.7, -0.5, 0.25)),
              (1.0, *M1_FP.values(), None)]
 FP_SWING2 = [(0.0, *M2_FP.values(), None),
-             (0.30, (0.28, 0.16, 1.58), (0.3, -0.45, 0.84), (0.1, 0.85, 0.5)),
-             (0.58, (0.02, 0.52, 1.25), (-0.5, 0.85, -0.1), (-0.3, 0.1, -0.95)),
-             (0.82, (-0.16, 0.34, 0.95), (-0.5, 0.25, -0.83), (-0.7, -0.6, 0.3)),
+             (0.30, (0.32, 0.42, 1.60), (0.65, -0.30, 0.70), (0.1, 0.85, 0.5)),   # the head out to the right, not over the lens
+             (0.58, (-0.02, 0.52, 1.49), (-0.5, 0.85, -0.1), (-0.3, 0.1, -0.95)),
+             (0.82, (-0.20, 0.34, 1.19), (-0.5, 0.25, -0.83), (-0.7, -0.6, 0.3)),
              (1.0, *M2_FP.values(), None)]
 FP_SPIN = [(0.0, *M2_FP.values(), None),                     # first person: a wide flat sweep right to left
-           (0.30, (0.34, 0.22, 1.30), (0.9, 0.3, 0.3), (-0.3, 0.95, 0.0)),
-           (0.60, (0.00, 0.52, 1.28), (-0.2, 1.0, 0.05), (-0.98, 0.2, 0.0)),
-           (0.82, (-0.30, 0.30, 1.22), (-0.9, 0.1, 0.2), (-0.1, -0.98, 0.0)),
+           (0.30, (0.30, 0.22, 1.54), (0.9, 0.3, 0.3), (-0.3, 0.95, 0.0)),
+           (0.60, (-0.04, 0.52, 1.52), (-0.2, 1.0, 0.05), (-0.98, 0.2, 0.0)),
+           (0.82, (-0.34, 0.30, 1.46), (-0.9, 0.1, 0.2), (-0.1, -0.98, 0.0)),
            (1.0, *M2_FP.values(), None)]
 
 # Weapon classes: a clip-name suffix, the hold, its targets and where its
@@ -1632,7 +1751,10 @@ def clip(rig, name, seconds, pose_at, keys, loop=True):
     rig.animation_data.action = act
     for t in keys:
         pose_rest(rig)
+        OFF_WEAPON.clear()
         pose_at(t)
+        if name.startswith("fp_"):
+            audit_fp(rig, name, t)
         key(rig, 1 + t * frames)
     if loop:
         pose_rest(rig)
@@ -1640,6 +1762,34 @@ def clip(rig, name, seconds, pose_at, keys, loop=True):
         key(rig, 1 + frames)
     bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, 1 + frames)
     pose_rest(rig)
+
+
+# ---- the first-person pose audit ---------------------------------------------
+# What a pose can be measured for, on every key of every fp_* clip of every
+# body, at build time; a fault fails the build. It cannot see whether a hand
+# LOOKS right (that is tools/fp_sheet.sh and a pair of eyes); it catches the
+# breakages that have shipped: a support hand that could not get to the
+# weapon (it floats beside it) and a wrist folded past what a wrist does. A
+# hand authored off the view is the client's to measure (`fp: ... lift=`,
+# also tools/fp_sheet.sh).
+WRIST_MAX = 90          # degrees between the forearm and the knuckles, held
+WRIST_MAX_SWING = 105   # ... and through a swing (a tenth of a second, the haft along the arm)
+OFF_MAX = 0.02          # metres a support hand may sit from its place on the weapon
+OFF_WEAPON = {}         # side -> how far the last two-handed hold left it
+FP_FAULTS = []
+
+
+def audit_fp(rig, name, t):
+    most = WRIST_MAX_SWING if "attack" in name else WRIST_MAX
+    for side in ("r", "l"):
+        tag = f"{ACTIVE['_id']} {name}@{t:.2f} {side}"
+        # A reload takes the hand off the gun on purpose.
+        if OFF_WEAPON.get(side, 0) > OFF_MAX and "reload" not in name:
+            FP_FAULTS.append(f"{tag}: support hand {OFF_WEAPON[side] * 100:.0f} cm off the weapon")
+        fore = (head_of(rig, "hand_" + side) - head_of(rig, "lowerarm_" + side)).normalized()
+        bend = math.degrees(fore.angle(hand_frame(rig, side)[0]))
+        if bend > most:
+            FP_FAULTS.append(f"{tag}: wrist bent {bend:.0f} deg (max {most})")
 
 
 def quat_continuity(act):
@@ -1807,15 +1957,20 @@ def clips(rig):
         clip(rig, "fp_fire" + sfx, 0.12, fire, (0.0, 0.3, 0.6, 1.0), loop=False)
 
         def reload(t, C=C):
-            C["hold"](rig, **C["fp"])
-            # The left hand drops to the magazine, works it, and comes back.
+            # The gun tips muzzle-up and rolls in toward the view, so the
+            # magazine well and the hand working it are IN the frame (held
+            # level, the hand dropped out of the bottom edge and the reload
+            # was two seconds of nothing). The left hand goes to the
+            # magazine, works it, and comes back.
             k = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.8)))
+            G = Vector(C["fp"]["G"]) + Vector((-0.03, 0.02, 0.05)) * k
+            f = (Vector(C["fp"]["forward"]).normalized() + Vector((-0.30, 0, 0.45)) * k).normalized()
+            C["hold"](rig, G, f)
             if k > 0:
-                f = Vector(C["fp"]["forward"]).normalized()
                 up = (Vector((0, 0, 1)) - f * f.z).normalized()
-                G = Vector(C["fp"]["G"])
-                fore = G + f * C["fore"][0] + up * C["fore"][1]
-                mag = G + f * C["mag"][0] + up * C["mag"][1]
+                at = mount_at(rig, "r")
+                fore = at + f * C["fore"][0] + up * C["fore"][1]
+                mag = at + f * C["mag"][0] + up * C["mag"][1]
                 grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
                      (-0.7, 0.2, -0.7), fingers=(45, 50, 50, 50), thumb=30)
         clip(rig, "fp_reload" + sfx, 2.0, reload, (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0), loop=False)
@@ -1843,16 +1998,18 @@ def clips(rig):
 
     def unarmed(t):
         # Loose fists low in the view, knuckles forward, thumbs up and in.
-        # A variant's `fists` raises them: in first person the client lifts the
-        # arms until the right fist sits 0.20 m under the eye, and fists at the
-        # hip (0.6 m under it) mean a 0.4 m lift that drags a thick body's
-        # shoulders past the lens (the Vanguard, playtest 2026-10-11).
-        fx, fy, fz = ACTIVE.get("fists", (0.20, 0.30, 1.10))
+        # At view height, 0.20 m under the eye (THE FIRST-PERSON RULE above).
+        fx, fy, fz = 0.22, 0.42, 1.50
         b = 0.006 * math.sin(2 * math.pi * t)
-        reach(rig, "r", (fx, fy, fz + b), (0.6, -0.2, -0.8), hand_dir=(-0.15, 1, -0.35))
-        reach(rig, "l", (-fx, fy, fz - b), (-0.6, -0.2, -0.8), hand_dir=(0.15, 1, -0.35))
-        curl(rig, "r", CURL * 1.2, thumb=CURL * 0.4)
-        curl(rig, "l", CURL * 1.2, thumb=CURL * 0.4)
+        # Fists in line with the forearm, palms in and a little down, thumbs
+        # on top. (Aimed by hand_dir alone the roll was left to the IK: palms
+        # down on a wrist bent 40 degrees, a limp paw.)
+        for side, sx, bob in (("r", 1, b), ("l", -1, -b)):
+            rest_fingers(rig, side)
+            reach(rig, side, (sx * fx, fy, fz + bob), (sx * 0.6, -0.2, -0.8))
+            fore = head_of(rig, "hand_" + side) - head_of(rig, "lowerarm_" + side)
+            orient_hand(rig, side, fore, (-sx, 0, -0.5))
+            fist(rig, side)
     clip(rig, "fp_unarmed", 3.0, unarmed, Q)
     rig.animation_data.action = None
 
@@ -1975,6 +2132,10 @@ def main():
         out = os.path.join(ART, "build", asset_id + ".raw.glb")
         export(out)
         print("wrote", out, tris, "total", sum(tris.values()))
+    for f in FP_FAULTS:
+        print("FP-POSE", f)
+    if FP_FAULTS:
+        raise SystemExit(f"{len(FP_FAULTS)} first-person pose fault(s): see FP-POSE above and THE FIRST-PERSON RULE")
 
 
 if __name__ == "__main__":
