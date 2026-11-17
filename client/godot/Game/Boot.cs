@@ -1517,7 +1517,8 @@ namespace SpaceAdventure.Game
             // rather than the input.
             // -rigArmed: show the rig without a purchase (screenshot rig).
             // The server still drops the shots of an unarmed player.
-            if (_rigArmed && string.IsNullOrEmpty(_character.Primary)) _character.Primary = "weapon.pulse";
+            // -rigHold <item>: any weapon item (a blade too) in hand the same way.
+            if ((_rigArmed || _rigHold != null) && string.IsNullOrEmpty(_character.Primary)) _character.Primary = _rigHold ?? "weapon.pulse";
             // -rigBody <asset>: the local body (and its first-person arms) for a
             // shot, before any -rigWorn piece hangs on it.
             if (_rigBody != null && _viewModel.BodyReady)
@@ -2161,6 +2162,7 @@ namespace SpaceAdventure.Game
             _rocks.Build(_terrain, _net.WorldSeed);
             _worldBuilt = true;
             _rigArmed = Flag("-rigArmed");
+            _rigHold = Arg("-rigHold");
             // -rigWorn slot=asset,...: dress the local body for a shot (asset
             // ids, not items). Applied by the frame loop once the body is on.
             _rigBody = Arg("-rigBody");

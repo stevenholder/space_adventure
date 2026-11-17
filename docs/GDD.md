@@ -271,8 +271,35 @@ never cut by the world or your own chest, and casts no shadow. The local
 body's torso, head, arms, their armor and the held weapon are shadows-only: the ground
 shadow holds the gun, the eye never sees two pairs of arms.
 
-- Hold: the client frames the rifle by its rear sight (lower right of the
-  view); empty hands frame by the right hand.
+- **The first-person rule: an arm leaves the frame, it never ends in it.**
+  The `fp_*` clips pose the hands where the VIEW wants them (eye space;
+  `human.py` "THE FIRST-PERSON RULE"), so the shoulders stay where a body's
+  shoulders are -- 0.25 m under the lens and behind it -- and every arm
+  exits through the bottom edge, solid, on any body at any aspect. Nothing
+  on the arms dissolves or is cut, and first-person meshes are never
+  frustum-culled (a skinned mesh's bounds do not follow its pose). A new
+  body or hold is checked with the rig's `fp: ... lift=` line: the client's
+  framing shift stays under 5 cm. A bigger shift means the clip is authored
+  off the view; fix the clip, never lift the arms to it.
+- **Hands are solved, not posed per body.** A hold says where the fist
+  goes and where the weapon points, once, for every body; the solver in
+  `human.py` does the rest: a target past 95% of an arm's length comes in
+  toward the shoulder (`comfortable`), the elbow swings to wherever the
+  wrist bends least but never above the hand (`reach(toward=)`), a blade's
+  edge rolls round the haft before a wrist folds past 60 degrees, and a
+  two-handed hold moves the weapon to where the support hand can reach it.
+  Fingers close about one hinge each (`close_finger`); a thumb lies across
+  the fingers (`wrap_thumb`) or along the gun (`lay_thumb`), never bent on
+  the fingers' hinge.
+- **Two checks keep it that way.** The build fails (`FP-POSE`) on any
+  `fp_*` key, on any body, whose wrist is past 90 degrees (105 mid-swing)
+  or whose support hand sits more than 2 cm off the weapon. `make fp-sheet`
+  freezes every first-person clip of every body and hold in the client,
+  lays them out one sheet per body, and fails on a framing shift over 5 cm.
+  Neither can judge looks: the sheets are for eyes, after any change to a
+  pose, a body, a weapon's mounts or the framing.
+- Hold: the client TRIMS the rifle onto its rear-sight target (lower right
+  of the view); empty hands trim by the right hand; a blade is not trimmed.
 - Aim (right mouse, pointer captured): `fp_ads`, the rear sight on the eye
   line, FOV 60→45, sway and bob ×0.3.
 - Recoil kicks the ARMS (back and muzzle-up) and plays `fp_fire`; the camera

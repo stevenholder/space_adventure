@@ -51,10 +51,6 @@ namespace SpaceAdventure.Game
         private static readonly Vector3 AdsSight = new Vector3(0f, -0.01f, 0f);
         private static readonly Vector3 UnarmedHand = new Vector3(0.20f, -0.20f, 0f);
         private static readonly Vector3 UnarmedHandVanguard = new Vector3(0.20f, -0.17f, 0f);
-        // A hand weapon: one fixed lift of the arms (camera space). Measured
-        // off the weapon like a gun's sight, the framing would chase the fist
-        // and cancel the swing.
-        private static readonly Vector3 MeleeLift = new Vector3(-0.04f, 0.24f, 0f);
 
         /// <summary>
         /// The shared vertex-colour shading, with the depth squeezed into the
@@ -99,13 +95,11 @@ uniform float metallic = 0.0;
 uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform float normal_scale = 0.0;
-" + NearCutCode + @"
 void vertex() {
     POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
     POSITION.z = (1.0 - (1.0 - POSITION.z / POSITION.w) * 0.02) * POSITION.w;
 }
 void fragment() {
-    near_cut(VERTEX, FRAGCOORD.xy);
     ALBEDO = albedo.rgb * texture(albedo_tex, UV).rgb;
     NORMAL_MAP = texture(normal_tex, UV).rgb;
     NORMAL_MAP_DEPTH = normal_scale;
@@ -126,6 +120,11 @@ void fragment() {
             foreach (MeshInstance3D mi in AssetRegistry.Descendants<MeshInstance3D>(root))
             {
                 if (mi.Mesh == null) continue;
+                // Never frustum-culled: a skinned mesh is culled by bounds
+                // that do not follow the pose, and arms posed up into the view
+                // from shoulders under it vanished whole on some bodies (the
+                // Colonist F unarmed, 2026-11-14) -- "the arms disappear".
+                mi.ExtraCullMargin = 16384f;
                 for (int i = 0; i < mi.Mesh.GetSurfaceCount(); i++)
                 {
                     Material src = mi.GetActiveMaterial(i);
@@ -135,12 +134,6 @@ void fragment() {
                         if (!FpCopies.TryGetValue(src, out fp))
                         {
                             var sm = new ShaderMaterial { Shader = FpPbrShader };
-                            // The cut takes the sleeves only: the hands ride
-                            // inside the band in the unarmed framing and went
-                            // grainy with it; skin and gloves never dissolve.
-                            bool sleeve = bm.ResourceName == "suit";
-                            sm.SetShaderParameter("NearCut", sleeve ? FpCut : 0f);
-                            sm.SetShaderParameter("NearCutBand", sleeve ? FpCutBand : 0.001f);
                             sm.SetShaderParameter("albedo", bm.AlbedoColor);
                             sm.SetShaderParameter("roughness", bm.Roughness);
                             sm.SetShaderParameter("metallic", bm.Metallic);
@@ -169,15 +162,6 @@ void fragment() {
         /// in it); the shadows-only parts and the 3PM pieces cast the figure.
         /// </summary>
         public const float NearCut = 0.30f, NearCutBand = 0.05f;
-
-        /// <summary>
-        /// The first-person arms' own cut: the Vanguard's thick upper arms
-        /// filled the frame's edges from inside 0.35 m (playtest 2026-10-08);
-        /// shoulders sit 0.30-0.33 m from the eye on both bodies, elbows at
-        /// 0.41 m and beyond, so this takes the shoulder bulk and leaves the
-        /// forearms and hands.
-        /// </summary>
-        public const float FpCut = 0.30f, FpCutBand = 0.05f;
 
         private const string NearCutCode = @"
 uniform float NearCut = 0.30;
@@ -489,6 +473,7 @@ void fragment() {
                 {
                     string n = mi.Name.ToString();
                     mi.Visible = n.StartsWith("lowerarm") || n.StartsWith("hand");
+                    mi.ExtraCullMargin = 16384f;   // as FpOverride: never culled
                 }
         }
 
@@ -582,6 +567,46 @@ void fragment() {
         /// <summary>R was pressed with a gun in hand: the reload motion, stretched to the weapon's time.</summary>
         public void Reload(double seconds) => _fpAnim?.Reload(seconds, Clock.Now);
 
+        /// <summary>
+        /// The first-person frame rule, measured (rig `uiShot` prints it):
+        /// the shift the framing applies to the arms (`lift`; a clip authored
+        /// at view height needs none) and where each shoulder and elbow sits
+        /// in camera space (x right, y up, z ahead), `IN` when it is inside
+        /// the frame. An arm must leave the frame before it ends: a shoulder
+        /// in frame is a cut-off arm.
+        /// </summary>
+        public IEnumerable<(string clip, float at)> FpSheet() => _fpAnim?.Sheet() ?? Array.Empty<(string, float)>();
+        public void FpPose(string clip, float at) => _fpAnim?.Pose(clip, at);
+
+        public string FpAudit()
+        {
+            var sb = new System.Text.StringBuilder($"{BodyId} held={_heldAsset} lift=({_ads.X:F3},{_ads.Y:F3},{_ads.Z:F3})");
+            if (_fpModel == null) return sb.ToString();
+            float ty = Mathf.Tan(Mathf.DegToRad(_eye.Fov / 2f));
+            Vector2 vp = _eye.GetViewport().GetVisibleRect().Size;
+            float tx = ty * vp.X / Mathf.Max(1f, vp.Y);
+            foreach (Skeleton3D sk in AssetRegistry.Descendants<Skeleton3D>(_fpModel))
+            {
+                foreach (string bone in new[] { "upperarm_r", "upperarm_l", "lowerarm_r", "lowerarm_l" })
+                {
+                    int i = sk.FindBone(bone);
+                    if (i < 0) continue;
+                    Vector3 c = _eye.GlobalTransform.AffineInverse() * (sk.GlobalTransform * sk.GetBoneGlobalPose(i).Origin);
+                    float z = -c.Z;
+                    bool inFrame = z > _eye.Near && Mathf.Abs(c.X) < tx * z && Mathf.Abs(c.Y) < ty * z;
+                    sb.Append($" {bone}=({c.X:F2},{c.Y:F2},{z:F2}){(inFrame ? "IN" : "")}");
+                }
+                break;
+            }
+            foreach (string mount in new[] { "hand.r", "hand.l" })
+                if (AssetRegistry.FindNode(_fpModel, mount) is Node3D m)
+                {
+                    Vector3 c = _eye.GlobalTransform.AffineInverse() * m.GlobalPosition;
+                    sb.Append($" {mount}=({c.X:F2},{c.Y:F2},{-c.Z:F2})");
+                }
+            return sb.ToString();
+        }
+
         /// <summary>The first-person arms and weapon (hidden while seated).</summary>
         public bool ArmsVisible
         {
@@ -649,13 +674,16 @@ void fragment() {
             var bob = new Vector3(Mathf.Cos(_bobPhase), -Mathf.Abs(Mathf.Sin(_bobPhase)), 0f) * BobAmount * moving * scale;
             _kick = Mathf.Lerp(_kick, 0f, 1f - Mathf.Exp(-18f * dt));
 
-            // Framing: the shoulders are 0.25 m under the eye, so no arm pose
-            // alone puts a rifle where a first-person view wants it. Every
-            // frame the arms holder is shifted (camera space, without the
-            // shift already applied) so the rear sight lands on a target:
-            // low and right for the hold, dead centre 30 cm out for ADS.
-            // Empty hands get a fixed lift instead. Measured off the weapon,
-            // so any rifle with a `grip` frames itself.
+            // Framing, a TRIM and nothing more: the fp_* clips already put
+            // the hands where the view wants them (human.py THE FIRST-PERSON
+            // RULE), so the shoulders stay 0.25 m under the lens and every
+            // arm leaves the frame through its bottom edge. Every frame the
+            // arms holder is shifted (camera space, without the shift already
+            // applied) the last centimetres so the rear sight lands on its
+            // target whatever the gun's own sight height. A shift over ~5 cm
+            // means a clip is authored off the view: fix the clip, never
+            // lift the arms to it (that raised the shoulders into the frame
+            // and needed a dissolve to hide them). `FpAudit` prints it.
             Vector3 want = Vector3.Zero;
             Node3D hand = _fpModel != null ? AssetRegistry.FindNode(_fpModel, "hand.r") : null;
             if (!Armed && hand != null && IsInstanceValidNode(hand))
@@ -668,8 +696,10 @@ void fragment() {
                 want = (BodyId.StartsWith("char.ubc") ? UnarmedHandVanguard : UnarmedHand) - un;
                 want.Z = 0f;
             }
-            else if (Armed && _cls.StartsWith("_melee"))
-                want = MeleeLift;
+            // A hand weapon is not framed at all: its clips are authored at
+            // view height (human.py THE FIRST-PERSON RULE), and a framing
+            // measured off the fist would chase it and cancel the swing.
+            else if (Armed && _cls.StartsWith("_melee")) { }
             else if (Armed && _fpGrip != null && IsInstanceValidNode(_fpGrip) && _adsW > 0.5f)
             {
                 // Aimed: the gun sits on the sight line by itself, so pull
@@ -839,6 +869,37 @@ void fragment() {
             _player.Play(clip, 0.04);
             _player.Seek(0, true);
             _oneShotUntil = now + _player.GetAnimation(clip).Length;
+            _current = clip;
+        }
+
+        /// <summary>
+        /// Every first-person clip this hold can show, with the moments worth
+        /// a look (fractions of the clip): the rig's `-uiFpSheet`.
+        /// </summary>
+        public IEnumerable<(string clip, float at)> Sheet()
+        {
+            if (!Armed) { foreach (float t in new[] { 0f, 0.25f }) yield return ("fp_unarmed", t); yield break; }
+            var frames = new (string name, float[] at)[]
+            {
+                ("fp_idle", new[] { 0f }), ("fp_walk", new[] { 0.25f, 0.75f }), ("fp_sprint", new[] { 0.25f, 0.75f }),
+                ("fp_ads", new[] { 0f }), ("fp_lower", new[] { 0f }), ("fp_fire", new[] { 0.4f }),
+                ("fp_reload", new[] { 0.3f, 0.5f, 0.7f }),
+                ("fp_attack", new[] { 0.2f, 0.4f, 0.6f, 0.8f }), ("fp_attack_spin", new[] { 0.2f, 0.4f, 0.6f, 0.8f }),
+            };
+            foreach (var (name, at) in frames)
+                // A one-shot the class has no clip of its own for (a blade's
+                // fire, a gun's swing) is never played: skip it.
+                if (_player.HasAnimation(name + Class) || !CharacterAnim.OneShot(name) && _player.HasAnimation(name))
+                    foreach (float t in at) yield return (CharacterAnim.Clip(_player, name, Class), t);
+        }
+
+        /// <summary>Freeze the arms on one moment of one clip (the rig's sheet).</summary>
+        public void Pose(string clip, float at)
+        {
+            _player.Play(clip, 0);
+            _player.Seek(at * _player.GetAnimation(clip).Length, true);
+            _player.Pause();
+            _oneShotUntil = double.MaxValue;
             _current = clip;
         }
 

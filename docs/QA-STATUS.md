@@ -1323,3 +1323,91 @@ measurement against the budget, not a regression claim.
 | C202 | PASS on the shots that exist; the 40 m shot is not taken | `p25-camp-gate.png` and `p25-camp-north.png` (Scrapyard) against `p25-colony-gate.png` and `p25-colony-north.png` (Colony), the same camp layout staged at spawn in both skins, plus the per-role sets `p25-scrap-small.png`, `p25-colony-small.png`, `p25-towers.png`, `p25-masts.png`, `p25-huts.png`. Scrapyard reads as dark gunmetal broken-band walls with a red stripe and a rip per module, a red-trimmed emblem gate with a leaf ajar and a leaning corner post; Colony reads as pale white Astra panels with vent strips and a thin dark-framed square gate on a black skirt. The two are told apart at a glance by value alone (dark against light). Gap, stated plainly: those shots were taken from inside the staged compound at the rig's default eye distance (roughly 5 to 20 m from the nearest wall), not from 40 m, and the staged layout is at spawn, not at the camp. A 40 m silhouette shot of each hand has not been made. Both shadow sides still read dark on kit and own art alike (wave 0 measurement); the ambient decision remains the user's |
 | C203 | PASS | Every id is within its `verify.mjs` budget (282/282) and every struct is within its GDD class line (table above); the three per-id prop raises (`prop.dish` 3500, `prop.barrels` 1600, `prop.generator` 1600) are recorded in wave 2 and in the GDD note. Per POI after the fix, against the raised 20,000 line: relay 10,282, outpost 10,033, range 10,232 and camp 16,415, all under. The camp was 19,733 because of a duplicate dish: the standalone `prop.dish` at (-13.0, 0.0, 6.5), yaw 140, was removed from `server/data/zones/camp.json` since the camp's mast already carries a dish, and the GDD per-POI line was raised from 12,000 to 20,000 (a kit mast alone is 3.5 k). Closed 2026-11-04 |
 | C204 | PASS (server, art, collide parity); Godot sweep not re-run | From `server/`: `go vet ./...` clean; `go test ./...` all packages ok (`ai`, `defs`, `protocol`, `server` 49.8 s, `sim`, `skills`, `store`, `terrain`, `web`; `cmd/server` and `data` have no test files). `npm --prefix art test` 282/282, OVERALL PASS. `node test/t13-collide-parity.mjs` OVERALL: PASS (13 scenarios, 5.8 s). Not re-run in this task: the `godot-*` sweep, `-selftest` and the bare-server `t*` harness; the wave 2 record has `make godot-test` PASS and t13 13/13 on the merged tree, and the client changes since `54ecf83` are `Rocks.cs`, `Boot.cs`, `Rig.cs` and `godot-cli` only. So "C153–C200 hold" is supported here by the Go, art and collide-parity results and by the unchanged `server/` tree; the client-side criteria are carried by the wave records, not by a fresh sweep |
+
+# First-person arms: the view-height rule (2026-11-14)
+
+Playtest: "arms are cut off / disappearing around the edges", again,
+after three earlier fixes (2026-10-08 sleeve dissolve, 2026-10-08 keep
+the forearm, 2026-10-11 Vanguard fists). Two causes, both generic:
+
+1. **The clips were authored at the belly and the client lifted the arms
+   to the view.** Measured with the new `fp: ... lift=` rig line
+   (Colonist): unarmed 0.41 m, rifle 0.16, rifle lowered 0.32, pistol
+   0.17, blades 0.24. The lift raised the shoulders from 0.29 m under
+   the eye to 0.05 m under it (unarmed: 0.12 m ABOVE), so the upper arms
+   crossed the frame's edges and the `FpCut` dissolve that hid them ate
+   the sleeves. Fix: every `fp_*` target in `human.py` moved to view
+   height (the measured lift baked in), `FpCut`, `MeleeLift` and the
+   per-body `fists` variant deleted. After: lift 0.000-0.012 m armed,
+   0.03-0.07 m unarmed, shoulders 0.24-0.30 m under the eye on all four
+   bodies.
+2. **Godot frustum-culled the arms by bounds that do not follow the
+   pose.** With the lift gone the rest-pose bounds sit under the frame
+   and both female bodies lost their arms entirely when unarmed. Fix:
+   `ExtraCullMargin` on every first-person mesh (`FpOverride`, `DressFp`).
+
+Also retuned while there: the blade holds (`M1_FP`/`M2_FP`: the blade
+tipped back passed 10 cm from the lens and filled the corner as a grey
+slab; now the fist at arm's length, blade up and away) and the unarmed
+fists (closed, 0.42 m out).
+
+Evidence: 4 bodies x (unarmed, rifle, sidearm, sword, greatsword) x
+(1920x1080, 2560x1080) = 40 shots, every arm solid to the bottom edge,
+nothing dissolved, nothing missing; rifle/pistol aim and lowered on the
+Colonist and Vanguard. `npm --prefix art test` PASS (all eight bodies
+rebuilt, 8855-8992 tris for the four characters), `dotnet build` 0
+errors, `-selftest` PASS (195), `godot-gate` clean. Rig: `-rigHold
+<item>` holds any weapon item without a purchase.
+
+## Hands, and every clip (same day, second pass)
+
+Playtest of the shots above: "why do the hands and fingers look so
+abnormal". Causes, all in the solver rather than in any one pose:
+
+- **Thumb on the fingers' hinge.** `flex` bent a thumb about the axis the
+  fingers close on, which swings it out along the palm normal: a thumb
+  standing off every fist (unarmed, both blades). Now `wrap_thumb` lays it
+  across the closed index finger.
+- **Hinge re-derived per finger segment.** Past a right angle at the
+  knuckle the tips splayed sideways (claws). `close_finger`: one hinge per
+  finger, used by every grip.
+- **Hand roll left to the IK** (unarmed): palms down on a wrist bent 40
+  degrees. Fists now line up with the forearm, palms in.
+- **Hold targets beyond a body's reach.** The Vanguard's arms are shorter:
+  blades and the rifle were held with the elbow locked and the hand short
+  of its target. `comfortable` brings a target inside 95% of the arm.
+- **Wrists folded 100-170 degrees** in swings, lowered guns and rifle aim
+  (the elbow sat at one fixed pole; a blade's edge was forced where the
+  key said). The elbow now swings to ease the wrist, never above the hand;
+  a blade rolls round the haft instead.
+- **Support hands**: the rifle's lay flat beside the fore-end (fingers
+  along the barrel), the pistol's thumb pointed off to the left. Fore-end
+  now across the palm; pistol thumbs along the frame / wrapped.
+- Lowered blades were out of frame, swing wind-ups 20 cm from the lens.
+  Retuned (`M1_LOWER`, `M2_LOWER`, `FP_SWING1/2`).
+
+Two checks added so the next body or hold cannot ship these silently:
+
+- `human.py` fails the build with `FP-POSE` lines for a wrist past 90
+  degrees (105 mid-swing) or a support hand over 2 cm off the weapon, on
+  every key of every `fp_*` clip of every body. First run: 222 faults on
+  two bodies; now 0 on all eight.
+- `make fp-sheet` (`tools/fp_sheet.sh`, rig flag `-uiFpSheet`): every
+  first-person clip of every body x hold frozen in the client, one sheet
+  per body (50 frames each), FAIL on a framing shift over 5 cm.
+
+Known: the Colonist's hands are low-poly and read as mittens when closed;
+the Vanguard female fist is lumpy at the knuckles; reload shows the
+support hand leaving the frame and nothing else; mid-swing the
+two-hander's head passes close to the lens. Not run: the Go suite and
+harness (no server or wire change), the Windows install.
+
+Third-person clips by eye (2026-11-17; they share the solver and changed
+with it): all 30 non-`fp_` clips of the four player bodies rendered in
+Blender, front and three-quarter (attacks at 0.2/0.5/0.8, the rest at
+0.25), and the Colonist and Vanguard male set against the same render of
+main's GLBs. Same poses, no limb through the body, no folded wrist; the
+visible change is closed fists where main had splayed fingers. Bodies
+only: no weapon was attached in these renders, and the four NPC bodies
+were not rendered. Also 2026-11-17: `make godot-test` PASS, `make
+godot-gate` clean, `npm --prefix art test` OVERALL PASS.
