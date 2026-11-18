@@ -2302,6 +2302,117 @@ compass, the POI names, the fights: unchanged.
   rewritten style guide.
 - **C204 Nothing else moved.** Sweep green; C153–C200 hold.
 
+# Phase 26 — the devcontainer: the same bench on any machine (drafted 2026-11-17)
+
+Not a game phase. Today the toolchain lives in one WSL home directory
+(`~/opt/godot`, `~/opt/blender`, Go, .NET, Node, kind) and nowhere says
+how to rebuild it. Phase 26 writes it down as an image: clone, "Reopen
+in Container", and the sweep, the rig, the art build and the kind
+cluster all run. No server, wire, client or art change.
+
+**Decisions (user, 2026-11-17).** In scope: CI parity, windowed Godot
+and rig shots, the Blender art pipeline, the kind cluster. Hosts:
+Windows + WSL2, a Linux desktop, GitHub Codespaces (macOS is not a
+target: no official linux-arm64 Blender, no GL passthrough). The vendor
+packs arrive by a fetch script, not by copying.
+
+**Proof.** On a machine that has only Docker and VS Code: clone, reopen
+in the container, then `make godot-test`, a `-uiShot` PNG, one
+`human.py` body build and `make up` + `t3-authority` all pass with
+nothing installed by hand. The same four in a Codespace.
+
+### Design
+
+- **One image, two configs.** `.devcontainer/Dockerfile` holds every
+  tool; the configs differ only in whether the host's display is
+  mounted, because a bind mount of a path the host lacks fails the
+  start:
+  - `.devcontainer/devcontainer.json`: no host display. The default,
+    and what Codespaces picks up.
+  - `.devcontainer/x11/devcontainer.json`: the same plus
+    the host's X socket and `DISPLAY=:0`, for real windows on WSL2 (WSLg)
+    and a Linux desktop (`xhost +local:` there).
+  No GPU is passed in either: this box draws on Mesa llvmpipe already
+  (task 1), so software GL is the baseline, not the fallback. A `wslg/`
+  config (Wayland, PulseAudio, `/dev/dxg`) is added when sound or a GPU
+  inside the container is wanted.
+- **The xvfb fallback is in the image, not in the scripts.**
+  `/usr/local/bin/godot` (`.devcontainer/godot.sh`, what `GODOT` names)
+  runs Godot as-is under a display or `--headless`, and under
+  `xvfb-run` otherwise; `godot-cli` and `fp_sheet.sh` do not change.
+- **Versions are read, never retyped.** Go from `server/go.mod`, Godot
+  from `client/.godot-version`, .NET 10 and Node 22 as `ci.yml` has
+  them, Blender 4.5.14 as one build arg. Godot (mono) with its export
+  templates and Blender install under `/opt`; `GODOT` and `BLENDER` are
+  set in `containerEnv`. `godot-cli`, `tools/fp_sheet.sh` and the `art`
+  npm scripts already honour both, so no script changes. Also in the
+  image: ffmpeg, python3, postgresql-client, gh, kind, kubectl, xvfb,
+  Mesa.
+- **kind runs inside the container** (docker-in-docker feature), not on
+  the host's daemon. With the host's socket, kind's `:18080` mapping
+  and its kubeconfig (`127.0.0.1:<port>`) land on the host, where the
+  container's `localhost` cannot reach them; fixing that is host
+  networking, which differs per host and does not exist in Codespaces.
+  Inside, `make up` and every `t*.mjs` work unchanged. Cost: the
+  container is privileged, and a rebuild loses the cluster (`make up`
+  again; the kind `SA_START` hand-edit must move into the manifest or
+  be re-applied). `:18080` is forwarded for a client on the host.
+- **Caches are volumes**: Go module and build cache, NuGet, npm, the
+  docker-in-docker data. `client/godot/.godot` stays in the workspace;
+  `postCreateCommand` runs `npm --prefix art ci` and `godot-cli import`.
+- **Vendor packs: `art/tools/fetch_vendor.sh`** over a checked-in
+  `art/vendor.lock.json` (dir, source page, upload id or URL, sha256,
+  licence). Each pack is downloaded from its own source into the
+  gitignored `art/vendor/<dir>`, checksum-verified, skipped if present.
+  The itch.io route is the one proven 2026-10-23 (csrf token, `POST
+  .../file/<upload_id>`, signed link). Nothing is rehosted: the
+  Bestiary's licence forbids redistribution and the script does not
+  need it. Eleven dirs, 1.0 GB; run on demand, not at container create.
+- **On Windows the repo lives in WSL's ext4 or a container volume**,
+  never under `/mnt/c` (the Godot import and Go build are several times
+  slower across the 9p mount). README says so.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 0 | Gate: Godot 4.7.2 gl_compat under `xvfb-run` + llvmpipe draws a correct `-uiShot` (not black, not unlit) and one Blender EEVEE tile renders, in a throwaway `docker run`. If either fails, Codespaces is headless-only and C207/C208 say so. **Half closed 2026-11-17, on the host:** this WSL box has been drawing Godot on `Mesa llvmpipe` all along (the `OpenGL API ... Using Device` line of any rig log), so every shot on record is already software GL; and Blender 4.5.14 renders an EEVEE tile with `DISPLAY`, `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` unset (it needs no display at all, 2.6 s). **Closed 2026-11-17:** the same inside the image under xvfb, both PNGs looked at (QA-STATUS "Phase 26") | scratch | the two PNGs, looked at |
+| 2 | 1 | DONE on this host 2026-11-17 (C205, C206; the image also pins the MPFB 2.0.17 Blender extension `human.py` needs). `Dockerfile` + default `devcontainer.json`: toolchain, `GODOT`/`BLENDER`, docker-in-docker, cache volumes, `postCreateCommand`, `:18080` forward | `.devcontainer/` | `devcontainer up`; then `(cd server && go test ./...)`, `make godot-gate godot-test godot-codec godot-conformance`, `npm --prefix art test` inside |
+| 3 | 1 | `x11/` config (the X socket and `DISPLAY`; same Dockerfile). DONE on this host 2026-11-17: the socket is bound at `/mnt/x11` and linked back, because docker-in-docker remounts `/tmp` | `.devcontainer/x11/` | windowed `godot-cli play` on this WSL box; a `-uiShot` PNG matching one taken on the host |
+| 4 | 1 | The image's `godot` wrapper: real display when there is one, `xvfb-run` when not. DONE 2026-11-17 (C207) | `.devcontainer/godot.sh` | `BODIES=char.ubc HOLDS=unarmed make fp-sheet` in the default config |
+| 5 | 1 | WRITTEN 2026-11-17: 8 of 11 packs (the itch.io ones, 825 MB) fetch, pass sha256 and unpack `diff -rq`-identical to this box. The three Google Drive packs (`modular-characters`, `ultimate-monsters`, `ultimate-rpg`) are NOT verified: Drive answered "Quota exceeded" to every anonymous download, and their sha256 rows come from this box's copies, two of which were first taken from GitHub mirrors, so a mismatch on the first good run is possible. `ultimate-rpg/list.tsv` is a local file the script does not recreate. `ual2` and `ubc-outfits` (313 MB) are referenced by no tool. The `import_pack` half of the verify is not run. `vendor.lock.json` (11 packs: source, id, sha256 of what is on this box, licence) + `fetch_vendor.sh` | `art/` | empty `art/vendor`, fetch, `diff -r` against this box's copy; one `import_pack` recipe reproduces its committed GLB |
+| 6 | 1 | DONE 2026-11-17, no change needed: `make up` works as is and the manifest already carries `SA_START`; `t3-authority` PASS. `make godot-run` is red for a reason that is not the container's (`ControlsPanel` under `--headless`, since `92acd5f`). kind inside the container: `make up`, `SA_START` carried by the manifest instead of a hand edit | `deploy/`, `Makefile` | `make up`, then `t3-authority` and `make godot-run` |
+| 7 | 2 | WRITTEN 2026-11-17, first run is the PR's: its own workflow (a path filter is per workflow), on `.devcontainer/**`, `server/go.mod`, `client/.godot-version`: build the image, run `make godot-gate godot-test` in it | `.github/workflows/devcontainer.yml` | the job, green |
+| 8 | 2 | README "Develop in a container" (two configs, which to pick, the `/mnt/c` rule, fetch script, what Codespaces cannot do); RUNBOOK pointer; QA-STATUS "Phase 26" | `docs/`, `README.md` | — |
+
+### Acceptance criteria (C205–C210)
+
+- **C205 Nothing by hand.** From a clone on a machine with only Docker
+  and an editor, the container builds and `postCreateCommand` finishes;
+  no step in the README installs a tool on the host.
+- **C206 The sweep.** Inside the default config: Go build/vet/test,
+  `godot-gate`, `godot-test`, `godot-codec`, `godot-conformance`, art
+  verify and `t13` pass, as CI's do.
+- **C207 Eyes.** A `-uiShot` PNG is produced in both configs; the
+  host-display shot matches a host shot, the xvfb shot is correct in
+  content (speed and exact pixels not required).
+- **C208 Art.** One `human.py` body build and `import_pack` reproduce
+  the committed GLB's tri count and clips; after `fetch_vendor.sh`, one
+  vendor recipe does the same.
+- **C209 Cluster.** `make up` inside the container, then `t3-authority`
+  against `:18080` and `make godot-run`.
+- **C210 Three hosts.** C205–C209 recorded per host: this WSL box, a
+  Linux desktop, a Codespace; each gap named, not skipped silently.
+
+### Not in this phase
+
+Prebuilt images on GHCR and Codespaces prebuilds (add when the first
+build's wait is the complaint; expect 4–5 GB and several minutes),
+macOS, a GPU for Cycles inside the container (EEVEE and the CPU are
+what the pipeline uses), the Windows client export's native launch
+(`play-win` stays a WSL-host job), and Claude's per-machine memory
+(keyed by the host path, not carried by the container).
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.

@@ -1,0 +1,34 @@
+// The bench with the host's display: Godot opens real windows (editor, play,
+// rig shots you can watch). For WSL2 (WSLg) and a Linux desktop; on Linux run
+// `xhost +local:` on the host first. Same image as ../devcontainer.json and
+// the same lines, plus the X socket and DISPLAY. Rendering stays Mesa
+// llvmpipe, as on the host; no GPU is passed in. ROADMAP Phase 26.
+{
+  "name": "Space Adventure (host display)",
+  "build": { "dockerfile": "../Dockerfile", "context": "../.." },
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "10.0" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "helm": "none", "minikube": "none" },
+    // kind runs INSIDE the container: `make up`'s :18080 and kubeconfig then
+    // sit on this container's localhost, the same on every host.
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  // :0 is WSLg's display and the usual first X display; change it if `echo $DISPLAY` on the host differs.
+  "containerEnv": { "DISPLAY": ":0" },
+  "mounts": [
+    // Not onto /tmp/.X11-unix directly: docker-in-docker remounts /tmp at
+    // start and would hide it. postStartCommand links it back.
+    "source=/tmp/.X11-unix,target=/mnt/x11,type=bind",
+    "source=sa-go,target=/home/vscode/go,type=volume",
+    "source=sa-gocache,target=/home/vscode/.cache/go-build,type=volume",
+    "source=sa-nuget,target=/home/vscode/.nuget,type=volume",
+    "source=sa-npm,target=/home/vscode/.npm,type=volume"
+  ],
+  "forwardPorts": [18080],
+  "remoteUser": "vscode",
+  "postStartCommand": "ln -sfn /mnt/x11 /tmp/.X11-unix",
+  // Named volumes mount root-owned; then the two things every later command needs.
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/go /home/vscode/.cache /home/vscode/.nuget /home/vscode/.npm && npm --prefix art ci && ./client/godot-cli import"
+}

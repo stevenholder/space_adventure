@@ -1411,3 +1411,27 @@ visible change is closed fists where main had splayed fingers. Bodies
 only: no weapon was attached in these renders, and the four NPC bodies
 were not rendered. Also 2026-11-17: `make godot-test` PASS, `make
 godot-gate` clean, `npm --prefix art test` OVERALL PASS.
+
+# Phase 26: the devcontainer (2026-11-17)
+
+Host: this WSL2 box (Ubuntu 26.04, Docker Desktop 29.7.2), in a fresh
+`git clone` of `b2373c0` plus the uncommitted `.devcontainer/`, brought up
+with `@devcontainers/cli up`. Linux desktop and Codespaces: NOT run.
+
+| # | Result | Evidence |
+|---|---|---|
+| C205 | PASS on this host | Image builds (4.76 GB without features, 6.8 GB with .NET, Node, gh, kubectl, docker-in-docker); `postCreateCommand` (`npm ci`, `godot-cli import`) finishes; `godot-cli where` reports editor 4.7.2 and templates installed. Inside: Go 1.26.0, .NET 10.0.404, Node 22.23.5, Blender 4.5.14, kind v0.33.0 |
+| C206 | PASS | In the default config: `go vet` + `go test ./...`, `godot-gate`, `godot-test`, `godot-codec` (9 checks), `godot-conformance`, `npm --prefix art test`, `t13` (13 scenarios), all exit 0 |
+| C207 | PASS on this host | Default config, no display: `BODIES=char.ubc HOLDS="unarmed weapon.pulse" make fp-sheet` wrote 13 frames through the image's `godot` wrapper (xvfb), "every clip framed within 0.05 m"; the frame looked at is lit and correct. `x11/` config: a `-uiShot` drew through WSLg (`pgrep Xvfb` = 0). Against the host's shot of the same rig line: same scene, PSNR 33.8 dB, not pixel-equal (Mesa 25.2 in the image, 26.0 on the host). Both are `Mesa llvmpipe` |
+| C208 | PASS, with drift | `human.py -- char.player` (1 m 17 s) + `import_pack`: 8904 tris, manifest unchanged, art verify PASS; the GLB differs in bytes (2,804,364 against 2,805,508). After `fetch_vendor.sh ubc` inside the container, `char.ubc`: 8992 tris against the committed 8994, art verify PASS. Byte-reproducibility across machines is not claimed |
+| C209 | PASS for the server, FAIL for `godot-run` | `make up` inside the container exit 0 ("server on :18080 is build aaa4c49"), `t3-authority` OVERALL PASS. `make godot-run` fails, and not because of the container: the packaged player under `--headless` logs `ERROR: Not supported by this display server` from `ControlsPanel.cs:87` (`KeyboardGetKeycodeFromPhysical`), which `godot-cli` counts as fatal. The same line appears on the host (6720 times in a 6 s headless run), since `92acd5f` (CONTROLS page). Open, a client fix |
+| C210 | 1 of 3 hosts | This WSL box only |
+
+Found on the way: docker-in-docker remounts `/tmp` at container start, so
+an X socket bound onto `/tmp/.X11-unix` vanishes; the `x11/` config binds
+it at `/mnt/x11` and links it back in `postStartCommand`. `human.py` needs
+the MPFB 2.0.17 Blender extension, installed by hand on this box and
+written down nowhere but the file's header; the image pins it by sha256.
+Vendor fetch: 8 of 11 packs proven identical (itch.io); the three Google
+Drive packs unverified ("Quota exceeded").
+
