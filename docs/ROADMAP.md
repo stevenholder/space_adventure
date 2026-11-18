@@ -2413,6 +2413,70 @@ what the pipeline uses), the Windows client export's native launch
 (`play-win` stays a WSL-host job), and Claude's per-machine memory
 (keyed by the host path, not carried by the container).
 
+# Phase 27 — hands on the weapon (drafted 2026-11-18)
+
+Playtest 2026-11-18: animations jumpy when walking, shooting, aiming and
+reloading; hands do not grip the weapons naturally. The jump at every clip
+change was the animation mixer and is fixed on its own (QA-STATUS "Jumpy
+arms: the mixer, measured"). What is left is structural: a hold is a pose
+SOLVED in Python at build time (`human.py`, 4-10 keys a clip), the weapon
+hangs off the right hand and is re-aimed every frame (`AlignToForearm`),
+and a third controller trims the arms toward the sight (`ViewModel._ads`).
+Three systems correct each other; none of them knows where the grip is.
+
+**Decisions (user, 2026-11-18).** CC0 sources only. The Colonist goes on
+the shared skeleton (it already carries the same 53 UE bone names as the
+Vanguard and the Universal Animation Library; `mobs.py` `retarget` works by
+name). Motion is judged by `-uiMotion` numbers and by eye, never by stills
+alone.
+
+### Design
+
+- **First person is weapon-first.** The weapon is a child of the camera,
+  posed by code: a hip, aimed, lowered and sprint pose per weapon class,
+  eased between, plus sway, bob and recoil as springs. No clip moves it,
+  so nothing can pop.
+- **Hands follow by IK.** Every weapon GLB already has `grip` and `fore`
+  nodes. A `HandIk` skeleton modifier (two-bone, analytic; runs after the
+  AnimationPlayer) puts each hand mount on its socket every frame, on any
+  body. Fingers take one static grip pose per weapon class. Reload and
+  melee swings move the IK targets and the weapon along authored curves.
+  `AlignToForearm` and the `_ads` trim are deleted.
+- **Third person uses authored clips.** UAL1 + UAL2 (CC0, in
+  `art/vendor`, 86 clips) retargeted onto all four player bodies:
+  locomotion, pistol, sword, unarmed. The free tier has no rifle or
+  two-hander clips: those keep one static upper-body aim pose over UAL
+  legs, with the left hand on `fore` by the same `HandIk`.
+- **`human.py` stops authoring motion.** It keeps the bodies, the rig and
+  the static poses (grip fingers, the rifle aim); the solver-made gaits,
+  swings and every `fp_*` clip go.
+
+### Task list
+
+| # | Wave | Task | Where | Verify |
+|---|---|---|---|---|
+| 1 | 0 | DONE 2026-11-18: `-uiMotion` + `tools/fp_motion.py`; baseline recorded | `client/godot/Game/Rig.cs`, `tools/` | QA-STATUS table |
+| 2 | 1 | `HandIk` modifier + weapon-first first-person holds for rifle and pistol (hip, aim, lowered, sprint, sway, bob, recoil); delete `AlignToForearm`'s fp path and the `_ads` trim | `client/godot/Game/` | `fp_motion.py --max-gap 0.02 --max-pop 8` in every phase incl. aim and unaim; `make fp-sheet` |
+| 3 | 1 | Static grip poses per class (`grip_rifle`, `grip_pistol`, `grip_melee`, `grip_melee2h`), fingers closed on the real weapon mesh, looked at in Blender | `art/tools/bpy/human.py` | close-up sheet per body x class |
+| 4 | 2 | Reload and melee swings as authored target curves; unarmed fists | `client/godot/Game/` | `fp_motion.py`; frame strips |
+| 5 | 2 | UAL clips retargeted onto the four player bodies; the solver-made third-person clips removed | `art/tools/bpy/`, `art/recipes/` | art verify; third-person strips against the UAL mannequin |
+| 6 | 2 | Third person: left hand on `fore` by `HandIk`; rifle and two-hander static aim over UAL legs | `client/godot/Game/Entities.cs`, `CharacterAnim.cs` | `-uiMotion` for a remote body; strips |
+| 7 | 3 | QA-STATUS "Phase 27"; GDD "First-person arms" rewritten; `human.py` motion code deleted | `docs/`, `art/` | sweep green |
+
+### Acceptance criteria (C211–C215)
+
+- **C211 On the gun.** First person, every body x {rifle, pistol, sword,
+  greatsword}: each hand within 2 cm of its socket in every frame of the
+  `-uiMotion` routine, reload's travelling hand excepted.
+- **C212 No pops.** No phase of the routine has a frame whose sight, bore
+  or hand speed is over 8x that phase's median.
+- **C213 Reads as a grip.** Fingers wrap the grip and fore-end with no
+  finger through the mesh, in a close-up per body x class; the user's eyes
+  in a playtest are the final word.
+- **C214 Third person.** Other players walk, run, aim, fire and swing on
+  UAL clips with the support hand on the weapon.
+- **C215 Nothing else moved.** Sweep green; no server or wire change.
+
 ## Deferred — and what would earn each one a place
 
 Named so nobody builds them speculatively, and so the trigger is explicit.

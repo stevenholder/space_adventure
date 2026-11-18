@@ -396,6 +396,14 @@ for (const asset of selected) {
     }
   }
 
+  // Every clip of a model keys the same tracks. The client's mixer leaves a
+  // bone the incoming clip does not key where the outgoing clip put it
+  // (CharacterAnim.Mix), so a clip that skips a bone inherits another's pose.
+  const trackSets = (gltf.animations ?? []).map((c) => [c.name, new Set(c.tracks.map((t) => t.name))]);
+  const everyTrack = new Set(trackSets.flatMap(([, set]) => [...set]));
+  for (const [name, set] of trackSets)
+    if (set.size !== everyTrack.size)
+      problems.push(`clip "${name}" keys ${set.size} of the model's ${everyTrack.size} tracks`);
 
   problems.push(...textureProblems(asset));
   if (tris !== asset.tris)
