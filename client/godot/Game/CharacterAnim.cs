@@ -103,17 +103,38 @@ namespace SpaceAdventure.Game
         private readonly Transform3D _rest;
         private double _fellAt = -1;
 
+        /// <summary>
+        /// How a player blends its clips. NOT deterministic: in that mode a
+        /// cross-fade is rest + (new - rest) + w * (old - rest), the outgoing
+        /// clip's pose ADDED to the incoming one, so at every clip change the
+        /// arms flew out by their own offset from rest and came back over the
+        /// fade (measured 2026-11-18: the first-person left hand 50 cm off the
+        /// fore-end on each step off, 115 cm on each shot; `-uiMotion`).
+        /// The plain mixer cross-fades properly but leaves a bone the new clip
+        /// does not key where the last clip put it (a body revived from `die`
+        /// played idle on its back, playtest 2026-10-01). So every clip must
+        /// key every bone: the loader keeps rest-pose tracks
+        /// (AssetRegistry.Generate) and art verify checks the GLBs. A model
+        /// that breaks the rule anyway falls back to deterministic and says so.
+        /// </summary>
+        internal static void Mix(AnimationPlayer player)
+        {
+            int min = int.MaxValue, max = 0;
+            foreach (string name in player.GetAnimationList())
+            {
+                int n = player.GetAnimation(name).GetTrackCount();
+                min = Mathf.Min(min, n); max = Mathf.Max(max, n);
+            }
+            player.Deterministic = min != max;
+            if (min != max) GD.Print($"anim: clips key {min}..{max} tracks under {player.GetParent()?.Name}; deterministic mix (clip changes will pop)");
+        }
+
         private CharacterAnim(AnimationPlayer player, Node3D model)
         {
             _player = player;
             _model = model;
             if (model != null) _rest = model.Transform;
-            // Godot's glTF import drops constant tracks, so idle carries no
-            // Root track and a non-deterministic mixer leaves any bone the new
-            // clip doesn't key wherever the last clip put it: a body revived
-            // from `die` played idle lying flat on its back (playtest
-            // 2026-10-01). Deterministic blends every untracked bone to rest.
-            _player.Deterministic = true;
+            Mix(_player);
             // Everything loops except dying, which holds its last frame -- a
             // body that loops its own death animation is a bug you cannot unsee.
             foreach (string name in _player.GetAnimationList())

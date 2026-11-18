@@ -1435,3 +1435,56 @@ written down nowhere but the file's header; the image pins it by sha256.
 Vendor fetch: 8 of 11 packs proven identical (itch.io); the three Google
 Drive packs unverified ("Quota exceeded").
 
+# Jumpy arms: the mixer, measured (2026-11-18)
+
+Playtest of `v2026.11.18`: "animations are still very jumpy" (walking,
+shooting, aiming, reloading). Four earlier fixes were judged on still
+frames, which cannot show this. New rig mode `-uiMotion <csv>` runs a fixed
+first-person routine and records EVERY frame: the distance from each hand
+mount to its socket on the weapon (`grip`, `fore`) and the sight, bore and
+hands in camera space. `tools/fp_motion.py` reports per phase the worst
+gap, the worst frame-to-frame speed, and that speed over the phase's
+median (`pop`).
+
+What it showed on `0098d46` (rifle; 960x540, ~15 fps on software GL): at
+rest the hands sit on the gun (left hand 0.9 cm off the fore-end), but for
+the 2-3 frames after EVERY clip change the arms fly out and come back.
+
+| phase | left hand off the fore-end, before | after | sight speed before | after |
+|---|---|---|---|---|
+| walk (step off) | 50.8 cm | 1.0 cm | 405 cm/s | 15 cm/s |
+| sprint | 95.1 cm | 1.5 cm | 942 cm/s | 44 cm/s |
+| fire (each shot) | 114.6 cm | 1.1 cm | 1465 cm/s | 12 cm/s |
+| reload (start) | 72.5 cm | 18.5 cm (the hand leaving for the magazine) | 664 cm/s | 16 cm/s |
+
+Cause: `AnimationPlayer.Deterministic = true`. In that mode a cross-fade
+is rest + (new - rest) + w * (old - rest): the outgoing clip's offset from
+rest is ADDED to the incoming pose and decays over the fade, so the further
+a hold is from the rest pose, the further the arms are thrown. It was
+switched on (2026-10-01) because the plain mixer leaves a bone the incoming
+clip does not key where the last clip left it (a body revived from `die`
+idled on its back), and Godot's glTF loader drops every track that never
+leaves rest.
+
+Fix: the loader keeps those tracks (`GenerateScene(...,
+removeImmutableTracks: false)`), so every clip keys every bone, and
+`CharacterAnim.Mix` uses the plain mixer for the body, the first-person
+arms and the character select. Two guards: art verify fails a GLB whose
+clips key different track sets (all 77 animated GLBs pass today), and `Mix`
+falls back to deterministic, with an `anim:` log line, for a model that
+breaks the rule at runtime (0 such lines in these runs).
+
+Run: `make godot-gate`, `make godot-test`, `npm --prefix art test` PASS;
+rifle and pistol `-uiMotion` before and after; a `-uiDemo` shot, same as on
+`0098d46`. NOT checked: the revive-from-`die` case in a live fight (argued
+from the tracks being kept, not observed), remote players and creatures by
+eye, a real frame rate (the rig draws ~15 fps; the fault lasts the fade
+time, so at 60 fps it is the same throw over more frames).
+
+Still wrong after this, and the reason for Phase 27: aiming in, the hands
+trail the gun by 15 cm for ~0.3 s and aiming out the bore swings at
+1400 deg/s for a frame (the weapon is placed by its sights, the arms by a
+clip, and a third controller pulls one to the other); the pistol's support
+hand sits 3.9 cm off its socket at all times; and nothing here makes a
+hand close on a grip.
+

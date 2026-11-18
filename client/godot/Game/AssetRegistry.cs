@@ -583,7 +583,10 @@ namespace SpaceAdventure.Game
         /// </summary>
         private static Node Generate(GltfState state)
         {
-            Node scene = new GltfDocument().GenerateScene(state);
+            // removeImmutableTracks: false. The default drops every track that
+            // never leaves the rest pose, so a clip no longer says where those
+            // bones go; CharacterAnim.Mix relies on every clip keying every bone.
+            Node scene = new GltfDocument().GenerateScene(state, 30f, false, false);
             if (scene == null) return null;
             var importers = new List<ImporterMeshInstance3D>(Descendants<ImporterMeshInstance3D>(scene));
             foreach (ImporterMeshInstance3D imi in importers)

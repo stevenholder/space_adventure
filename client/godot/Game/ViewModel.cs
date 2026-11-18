@@ -578,6 +578,36 @@ void fragment() {
         public IEnumerable<(string clip, float at)> FpSheet() => _fpAnim?.Sheet() ?? Array.Empty<(string, float)>();
         public void FpPose(string clip, float at) => _fpAnim?.Pose(clip, at);
 
+        public const string MotionHeader = "gapR,gapL,sx,sy,sz,bx,by,bz,hrx,hry,hrz,hlx,hly,hlz";
+
+        /// <summary>
+        /// One frame of the first-person hold, for the rig's `-uiMotion`:
+        /// metres from each hand mount to its socket on the weapon (`grip`,
+        /// `fore`; -1 without one), then in camera space (x right, y up, z
+        /// ahead) the sight, the bore direction and both hand mounts.
+        /// </summary>
+        public string MotionSample()
+        {
+            Transform3D inv = _eye.GlobalTransform.AffineInverse();
+            Vector3 Cam(Vector3 w) { Vector3 c = inv * w; return new Vector3(c.X, c.Y, -c.Z); }
+            Node3D hr = _fpModel != null ? AssetRegistry.FindNode(_fpModel, "hand.r") : null;
+            Node3D hl = _fpModel != null ? AssetRegistry.FindNode(_fpModel, "hand.l") : null;
+            bool held = _fpHeld != null && IsInstanceValidNode(_fpHeld);
+            Node3D grip = held ? AssetRegistry.FindNode(_fpHeld, "grip") : null;
+            Node3D fore = held ? AssetRegistry.FindNode(_fpHeld, "fore") : null;
+            Node3D sight = held ? AssetRegistry.FindNode(_fpHeld, "sight") ?? grip : null;
+            Node3D muzzle = held ? AssetRegistry.FindNode(_fpHeld, "muzzle") : null;
+            float gapR = hr != null && grip != null ? hr.GlobalPosition.DistanceTo(grip.GlobalPosition) : -1f;
+            float gapL = hl != null && fore != null ? hl.GlobalPosition.DistanceTo(fore.GlobalPosition) : -1f;
+            Vector3 s = sight != null ? Cam(sight.GlobalPosition) : Vector3.Zero;
+            Vector3 b = grip != null && muzzle != null
+                ? (Cam(muzzle.GlobalPosition) - Cam(grip.GlobalPosition)).Normalized() : Vector3.Zero;
+            Vector3 r = hr != null ? Cam(hr.GlobalPosition) : Vector3.Zero;
+            Vector3 l = hl != null ? Cam(hl.GlobalPosition) : Vector3.Zero;
+            return FormattableString.Invariant(
+                $"{gapR:F4},{gapL:F4},{s.X:F4},{s.Y:F4},{s.Z:F4},{b.X:F4},{b.Y:F4},{b.Z:F4},{r.X:F4},{r.Y:F4},{r.Z:F4},{l.X:F4},{l.Y:F4},{l.Z:F4}");
+        }
+
         public string FpAudit()
         {
             var sb = new System.Text.StringBuilder($"{BodyId} held={_heldAsset} lift=({_ads.X:F3},{_ads.Y:F3},{_ads.Z:F3})");
@@ -821,7 +851,7 @@ void fragment() {
         private FirstPersonAnim(AnimationPlayer player)
         {
             _player = player;
-            _player.Deterministic = true;   // untracked bones to rest; see CharacterAnim
+            CharacterAnim.Mix(_player);
             foreach (string name in _player.GetAnimationList())
                 _player.GetAnimation(name).LoopMode =
                     CharacterAnim.OneShot(name) ? Animation.LoopModeEnum.None : Animation.LoopModeEnum.Linear;

@@ -1032,7 +1032,7 @@ namespace SpaceAdventure.Game.UI
             foreach (AnimationPlayer ap in AssetRegistry.Descendants<AnimationPlayer>(model))
             {
                 if (!ap.HasAnimation("idle")) continue;
-                ap.Deterministic = true;   // see CharacterAnim: untracked bones go to rest
+                CharacterAnim.Mix(ap);
                 ap.GetAnimation("idle").LoopMode = Animation.LoopModeEnum.Linear;
                 ap.Play("idle");
                 return;

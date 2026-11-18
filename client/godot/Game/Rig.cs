@@ -49,6 +49,7 @@
 //   -uiWield melee          after -uiBuy: put the melee weapon in hand (Tab)
 //   -uiSwing <secs>         swing what is in hand; shoot that far into it
 //   -uiFpSheet              with -uiShot: every first-person clip of the hold, frozen, one PNG each
+//   -uiMotion <csv>         with -uiShot: no shot; a per-frame record of the first-person hands and weapon (tools/fp_motion.py)
 //   -uiUse <item>           use / throw it (-uiUseWait <secs>, default 0.6)
 //   -uiChat                 three fake chat lines and the input line open (Phase 20)
 //   -uiCraft <recipe> [-uiCraftQty n] [-uiCraftWait s]  Phase 22: a hand recipe opens the backpack's
@@ -1178,6 +1179,39 @@ namespace SpaceAdventure.Game
             if (_rigLamp && _sun != null)
             {
                 _sun.LookAtFromPosition(Vector3.Zero, CameraForward, Eye.Normalized());
+            }
+            // -uiMotion <csv>: instead of a shot, a fixed first-person routine
+            // (idle, walk, sprint, aim, fire, reload) sampled EVERY frame:
+            // how far each hand is off its socket on the weapon and where the
+            // sight and bore are in camera space. tools/fp_motion.py turns it
+            // into the numbers a still cannot show (gaps, jerk). Phase 27.
+            if (Arg("-uiMotion") is string motionCsv)
+            {
+                var csv = new System.Text.StringBuilder("t,phase," + ViewModel.MotionHeader + "\n");
+                double t0 = Clock.Now;
+                async Task Run(string phase, double secs)
+                {
+                    double until = Clock.Now + secs;
+                    while (Clock.Now < until)
+                    {
+                        // Sampled when the frame has been drawn: what the player saw.
+                        await ToSignal(RenderingServer.Singleton, RenderingServerInstance.SignalName.FramePostDraw);
+                        csv.Append(FormattableString.Invariant($"{Clock.Now - t0:F4},{phase},{_viewModel.MotionSample()}\n"));
+                    }
+                }
+                await Run("idle", 1.5);
+                _rigStrafe = true; await Run("walk", 2.0); _rigStrafe = false;
+                await Run("stop", 0.6);
+                _rigWalk = true; await Run("sprint", 2.0); _rigWalk = false;
+                await Run("stop2", 0.6);
+                _rigAim = true; await Run("aim", 1.0); _rigAim = false;
+                await Run("unaim", 0.6);
+                _rigFire = true; await Run("fire", 1.0); _rigFire = false;
+                await Run("settle", 0.5);
+                _viewModel.Reload(2.0); await Run("reload", 2.3);
+                System.IO.File.WriteAllText(motionCsv, csv.ToString());
+                GD.Print($"uiMotion: {motionCsv}");
+                return;
             }
             // -uiFpSheet: instead of one shot, every first-person clip of what
             // is in hand, frozen at its telling moments: <path minus .png>
