@@ -84,7 +84,10 @@ namespace SpaceAdventure.Game.UI
         public static string Name(Key k)
         {
             Key shown = Key.None;
-            try { shown = DisplayServer.KeyboardGetKeycodeFromPhysical(k); } catch (Exception) { }
+            // The headless display server has no keyboard: the call logs an
+            // ERROR line (it does not throw), and godot-cli fails a run on one.
+            if (DisplayServer.GetName() != "headless")
+                try { shown = DisplayServer.KeyboardGetKeycodeFromPhysical(k); } catch (Exception) { }
             if (shown == Key.None) shown = k;
             string s = OS.GetKeycodeString(shown);
             return string.IsNullOrEmpty(s) ? k.ToString() : s;
