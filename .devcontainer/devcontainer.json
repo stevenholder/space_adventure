@@ -1,0 +1,26 @@
+// The default bench: no host display. Codespaces uses this one. Windowed Godot
+// (rig shots, fp-sheet) runs under `xvfb-run -a`; for a real window pick the
+// wslg/ or x11/ config instead. ROADMAP Phase 26.
+{
+  "name": "Space Adventure",
+  "build": { "dockerfile": "Dockerfile", "context": ".." },
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "10.0" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "helm": "none", "minikube": "none" },
+    // kind runs INSIDE the container: `make up`'s :18080 and kubeconfig then
+    // sit on this container's localhost, the same on every host.
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "mounts": [
+    "source=sa-go,target=/home/vscode/go,type=volume",
+    "source=sa-gocache,target=/home/vscode/.cache/go-build,type=volume",
+    "source=sa-nuget,target=/home/vscode/.nuget,type=volume",
+    "source=sa-npm,target=/home/vscode/.npm,type=volume"
+  ],
+  "forwardPorts": [18080],
+  "remoteUser": "vscode",
+  // Named volumes mount root-owned; then the two things every later command needs.
+  "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/go /home/vscode/.cache /home/vscode/.nuget /home/vscode/.npm && npm --prefix art ci && ./client/godot-cli import"
+}

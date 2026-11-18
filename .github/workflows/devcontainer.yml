@@ -1,0 +1,21 @@
+# The dev image must keep building (ROADMAP Phase 26, task 7). Only runs when
+# the image or one of the two files it reads its versions from changes: the
+# build pulls about 2 GB, too much for every push.
+name: devcontainer
+
+on:
+  pull_request:
+    paths: ['.devcontainer/**', 'server/go.mod', 'client/.godot-version', '.github/workflows/devcontainer.yml']
+  push:
+    branches: [main]
+    paths: ['.devcontainer/**', 'server/go.mod', 'client/.godot-version', '.github/workflows/devcontainer.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: make godot-gate godot-test

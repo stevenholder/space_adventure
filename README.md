@@ -74,6 +74,36 @@ so no scene setup is needed. It connects to `ws://127.0.0.1:18080/ws` unless
 `SA_SERVER_URL` or `-serverUrl` (after `--`) says otherwise, so bring the
 server up with `make up` first.
 
+## Develop in a container
+
+Everything above, already installed: `.devcontainer/` (ROADMAP Phase 26).
+Needs Docker and an editor that speaks devcontainers (VS Code: "Reopen in
+Container"), or a GitHub Codespace. First build downloads about 2 GB and
+makes a 7 GB image.
+
+| Config | Use it when |
+|---|---|
+| `.devcontainer/devcontainer.json` | default, and Codespaces. No host display: a windowed Godot run (rig shots, `make fp-sheet`) draws on a virtual screen (xvfb), so you get the PNG but no window |
+| `.devcontainer/x11/devcontainer.json` | WSL2 (WSLg) or a Linux desktop, when you want real windows: the editor, `godot-cli play`. On Linux run `xhost +local:` on the host first |
+
+Inside, `GODOT` and `BLENDER` are set and every command in this file works
+as written. Things to know:
+
+- **On Windows keep the clone in WSL's filesystem** (or a container
+  volume), never under `/mnt/c`: the Godot import and Go build crawl there.
+- **kind runs inside the container** (docker-in-docker): `make up` there
+  owns the container's `:18080`, which is forwarded to the host. Stop a
+  kind cluster on the host first, or the forward lands on another port.
+  A container rebuild loses the cluster; `make up` again.
+- **Rendering is software GL** (Mesa llvmpipe), in both configs. Correct,
+  not fast; no GPU is passed in.
+- **Vendor art packs** (`art/vendor/`, 1 GB, only needed to re-run a pack
+  import): `art/tools/fetch_vendor.sh [dir ...]` downloads them from their
+  sources by `art/vendor.lock.json`. itch.io rate-limits; a pack that
+  fails with 429 is re-run by name. The three Google Drive packs often
+  answer "quota exceeded"; try again a day later.
+- Not in the container: `godot-cli play-win` (a WSL-host job) and sound.
+
 ## Agent-first development
 
 Agents live in `.omp/agents/*.md` and are auto-discovered by the harness. The
