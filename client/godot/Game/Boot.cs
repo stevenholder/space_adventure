@@ -2179,6 +2179,14 @@ namespace SpaceAdventure.Game
                 }
             _rigAim = Flag("-uiAim");
             _rigLowered = Flag("-uiLowered");
+            // -uiFpOrbit <yaw>[,<pitch>[,<dist>[,1 = about `fore`]]]: look at the hands on the weapon from outside (ViewModel.Orbit).
+            if (Arg("-uiFpOrbit") is string orbit)
+            {
+                string[] v = orbit.Split(',');
+                float F(int i, float d) => v.Length > i && float.TryParse(v[i], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) ? x : d;
+                _viewModel.Orbit = new Vector3(F(0, 90f), F(1, 0f), F(2, 0.6f));
+                _viewModel.OrbitFore = F(3, 0f) > 0.5f;
+            }
             // The sheet up front, so the first drip and the K panel already
             // know the levels a reconnecting player arrives with.
             _net.Send(Encode.Cmd(NextCmdSeq(), Op.Skills, "{}"));

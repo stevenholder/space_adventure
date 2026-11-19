@@ -1007,19 +1007,6 @@ namespace SpaceAdventure.Game
         public Node3D Weapon, Hand, Model;
         /// <summary>A hand weapon: rides the fist's blade frame (EntityViews.BladeFrame) every frame, so a swing clip swings it.</summary>
         public bool Blade;
-        /// <summary>
-        /// First-person aim: the camera, a weight 0..1 (blends hip -> aimed)
-        /// and the recoil kick in metres. When set and the weight is above
-        /// zero the rifle is placed by its SIGHTS on the eye line, not by the
-        /// hands; the view model then pulls the arms to the gun.
-        /// </summary>
-        public Func<(Transform3D eye, float w, float kick, Basis sway)?> Ads;
-
-        /// <summary>Eye to rear sight when aimed: a shouldered long gun 0.20 m, a pistol at arm's length.</summary>
-        public float SightDistance = 0.20f;
-
-        /// <summary>Hip fire: the bore converges on the crosshair this far out.</summary>
-        public const float Converge = 15f;
         private int _frames;
         private Node3D _left;
 
@@ -1030,62 +1017,6 @@ namespace SpaceAdventure.Game
         /// forearm (elbow -> wrist) when it does not. Then the weapon's top
         /// is rolled to the wearer's up and its grip seated in the hand.
         /// </summary>
-        /// <summary>
-        /// Blend from where the hands put the gun to the aimed placement: the
-        /// line of sight (rear notch -> front post) down the view, nudged up
-        /// by the kick, the rear sight SightDistance ahead of the eye (back by
-        /// the kick), the gun's top to the camera's up.
-        /// </summary>
-        private void Aim()
-        {
-            var a = Ads?.Invoke();
-            if (!a.HasValue) return;
-            Node3D sightN = AssetRegistry.FindNode(Weapon, "sight");
-            Node3D frontN = AssetRegistry.FindNode(Weapon, "front");
-            Node3D gripN = AssetRegistry.FindNode(Weapon, "grip");
-            if (sightN == null || frontN == null || gripN == null) return;
-            Transform3D eye = a.Value.eye;
-            Vector3 fwd = -eye.Basis.Z.Normalized(), up = eye.Basis.Y.Normalized();
-
-            // Hip: converge. Turn the gun about its grip (the right hand keeps
-            // it) so the bore points at the spot under the crosshair, Converge
-            // metres out -- shots leave the muzzle toward where the crosshair
-            // says they go. A small turn: the hip pose already points ahead.
-            Vector3 pivot = gripN.GlobalPosition;
-            // Converge along the ARMS' view (the eye turned by the sway), not the
-            // camera's: the hands lag a mouse turn by the sway angle, and a bore
-            // turned onto the crosshair left the fore-end hanging beside the
-            // left hand. Aimed (below), the sights go on the true eye line and
-            // the view model pulls the arms to the gun.
-            Vector3 armsFwd = -(eye.Basis * a.Value.sway).Z.Normalized();
-            Vector3 aimAt = eye.Origin + armsFwd * Converge;
-            Vector3 bore = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
-            Vector3 toAim = (aimAt - frontN.GlobalPosition).Normalized();
-            Vector3 cax = bore.Cross(toAim);
-            if (cax.LengthSquared() > 1e-10f)
-            {
-                var turn = new Basis(cax.Normalized(), bore.AngleTo(toAim));
-                Weapon.GlobalBasis = turn * Weapon.GlobalBasis;
-                Weapon.GlobalPosition = pivot + turn * (Weapon.GlobalPosition - pivot);
-            }
-            if (a.Value.w <= 0.001f) return;
-            Transform3D hip = Weapon.GlobalTransform;
-            Vector3 want = (fwd + up * a.Value.kick * 1.2f).Normalized();
-            Vector3 los = (frontN.GlobalPosition - sightN.GlobalPosition).Normalized();
-            Vector3 ax = los.Cross(want);
-            if (ax.LengthSquared() > 1e-8f)
-                Weapon.GlobalBasis = new Basis(ax.Normalized(), los.AngleTo(want)) * Weapon.GlobalBasis;
-            Vector3 w1 = (up - want * up.Dot(want)).Normalized();
-            Vector3 h1 = Weapon.GlobalBasis.Y.Normalized();
-            h1 = (h1 - want * h1.Dot(want)).Normalized();
-            if (w1.LengthSquared() > 0.5f && h1.LengthSquared() > 0.5f)
-                Weapon.GlobalBasis = new Basis(want, h1.SignedAngleTo(w1, want)) * Weapon.GlobalBasis;
-            Vector3 target = eye.Origin + fwd * (SightDistance - a.Value.kick) - up * 0.012f;
-            Weapon.GlobalPosition += target - sightN.GlobalPosition;
-            Transform3D aimed = Weapon.GlobalTransform;
-            Weapon.GlobalTransform = hip.InterpolateWith(aimed, a.Value.w);
-        }
-
         public override void _Process(double delta)
         {
             if (++_frames < 3) return;
@@ -1142,7 +1073,6 @@ namespace SpaceAdventure.Game
                 if (want0.LengthSquared() > 0.5f && have0.LengthSquared() > 0.5f)
                     Weapon.GlobalBasis = new Basis(hn, have0.SignedAngleTo(want0, hn)) * Weapon.GlobalBasis;
                 Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
-                Aim();
                 return;
             }
             else if (_left != null && !pistol)
@@ -1168,7 +1098,6 @@ namespace SpaceAdventure.Game
             if (want.LengthSquared() > 0.5f && have.LengthSquared() > 0.5f)
                 Weapon.GlobalBasis = new Basis(arm, have.SignedAngleTo(want, arm)) * Weapon.GlobalBasis;
             Weapon.GlobalPosition += Hand.GlobalPosition - grip.GlobalPosition;
-            Aim();
             if (_left == null) QueueFree();   // one-handed (old bodies): once is enough
         }
     }
