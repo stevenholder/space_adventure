@@ -7,8 +7,9 @@ cannot show (ROADMAP Phase 27):
   gapR/gapL  worst distance (cm) from a hand to its socket on the weapon
   step       worst frame-to-frame move of the sight, the bore and each hand,
              as a speed (cm/s, deg/s): a pop is one frame far above the rest
-  pop        that worst step over the phase's median step: ~1-3 is smooth
-             motion, 10+ is a visible jump
+  pop        the worst step over the median of itself and its two
+             neighbours: ~1-3 is smooth motion (a planned 0.18 s aim-in
+             included), 10+ is one frame far above its neighbours, a jump
 
 Exit 1 when --max-gap (m) or --max-pop is exceeded. Stdlib only.
 """
@@ -39,15 +40,22 @@ def main():
                 if dt <= 0: continue
                 va, vb = [a[k] for k in keys], [b[k] for k in keys]
                 if angular:
-                    dot = max(-1.0, min(1.0, sum(x * y for x, y in zip(va, vb))))
+                    # Normalised: the csv's 4 decimals leave a still bore a
+                    # hair off unit length, which read as ~8 deg/s at rest.
+                    na, nb = math.hypot(*va) or 1.0, math.hypot(*vb) or 1.0
+                    dot = max(-1.0, min(1.0, sum(x * y for x, y in zip(va, vb)) / (na * nb)))
                     out.append(math.degrees(math.acos(dot)) / dt)
                 else:
                     out.append(100 * math.dist(va, vb) / dt)
             return out
         def peak_pop(v):
-            # The worst step against the typical one; the 1.0 floor (cm/s or
-            # deg/s) keeps a still phase from dividing by nothing.
-            return max(v), max(v) / max(statistics.median(v), 1.0)
+            # Each step against the median of itself and its neighbours: an
+            # eased move rises and falls over several frames, a pop is one
+            # frame alone (a whole-phase median called any aim-in a pop).
+            # The 1.0 floor (cm/s or deg/s) keeps a still stretch from
+            # dividing by nothing.
+            pops = [v[i] / max(statistics.median(v[max(0, i - 1):i + 2]), 1.0) for i in range(len(v))]
+            return max(v), max(pops)
         gr = max(f["gapR"] for f in fr); gl = max(f["gapL"] for f in fr)
         s, sp = peak_pop(speeds(("sx", "sy", "sz")))
         b, bp = peak_pop(speeds(("bx", "by", "bz"), angular=True))

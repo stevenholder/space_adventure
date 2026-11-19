@@ -50,6 +50,9 @@
 //   -uiSwing <secs>         swing what is in hand; shoot that far into it
 //   -uiFpSheet              with -uiShot: every first-person clip of the hold, frozen, one PNG each
 //   -uiMotion <csv>         with -uiShot: no shot; a per-frame record of the first-person hands and weapon (tools/fp_motion.py)
+//   -uiFpOrbit <yaw>[,<pitch>[,<dist>]]  the shot (or -uiFpSheet) from a camera circling the weapon's grip, first-person
+//                           layer only: yaw 0 behind / 90 right / 180 front / 270 left, pitch -90 below; dist default 0.6 m;
+//                           a 4th value 1 circles the weapon's `fore` (the support hand) instead
 //   -uiUse <item>           use / throw it (-uiUseWait <secs>, default 0.6)
 //   -uiChat                 three fake chat lines and the input line open (Phase 20)
 //   -uiCraft <recipe> [-uiCraftQty n] [-uiCraftWait s]  Phase 22: a hand recipe opens the backpack's

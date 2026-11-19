@@ -21,7 +21,9 @@ What it builds, in order:
      shoulders, torso capped on top, legs open), as the client's
      first-person body needs (art/README.md);
   5. `hand.r` / `hand.l` empties riding the hand bones at the palm: the
-     weapon's grip goes in the right, its barrel points at the left;
+     weapon's grip goes in the right, its barrel points at the left (third
+     person); and `hold.<rifle|pistol>.<r|l>`, the gun's `grip` / `fore`
+     frame as each hand holds it by contact (solve_hold; first person);
   6. clips: idle/walk/sprint (+_armed), die, and the fp_* set, posed by
      world-space swings and an analytic two-bone IK toward hand targets.
 Materials carry real roughness/metallic (the recipe says `pbr`, so the
@@ -1571,6 +1573,467 @@ P_FP_HOLD = dict(G=(0.12, 0.36, 1.47), forward=(-0.02, 1.0, 0.03))   # elbows be
 P_FP_ADS = dict(G=(0.00, 0.42, 1.58), forward=(0.0, 1.0, 0.02))     # client puts the rear sight 0.42 m out
 P_FP_LOWER = dict(G=(0.14, 0.28, 1.48), forward=(-0.35, 0.80, -0.32))
 
+
+# ---- contact grips (Phase 27) ---------------------------------------------------
+# First person holds a gun weapon-first: the client poses the gun and puts each
+# hand bone where its `hold.<kind>.<side>` empty lands on the gun's socket
+# (`grip` for the right, `fore` for the left; client HandIk), the fingers as
+# fp_idle has them. Both come from here, solved ONCE per body and kind against
+# the real weapon (tools/gen_weapon.py boxes) in the gun's own frame -- x
+# right, y down the bore, z up: the palm slid onto the surface, each finger
+# closed segment by segment until it touches, the thumb swept round the other
+# side to its spot. Contact, not fixed angles: hand sizes differ per body.
+# (rifle()/pistol() above stay the third-person holds, on the hand mounts.)
+GUN_ASSET = {"rifle": "weapon.pulse", "pistol": "weapon.sidearm"}   # long guns share the rifle's grip and fore-end
+FINGER_MAX = (95, 105, 80)     # degrees per joint, knuckle first: a closed finger
+TRIGGER_MAX = (12, 18, 10)     # a trigger finger: along the frame (spread level, grasp), a little bent
+SKIN = 0.001                   # metres of skin a contact may press in
+_GUNS = {}
+
+
+def gun_pt(p):
+    """A weapon point (glTF: -Z forward, +Y up) in the gun's Blender frame."""
+    return Vector((p[0], -p[2], p[1]))
+
+
+class Gun:
+    """A weapon's boxes and nodes, gun frame, with a signed distance."""
+
+    def __init__(self, kind):
+        sys.path.append(os.path.join(ART, "tools"))
+        import gen_weapon   # noqa: E402 -- the boxes the game draws
+        _, _, build_, nodes = next(w for w in gen_weapon.WEAPONS if w[0] == GUN_ASSET[kind])
+        tris = build_()
+        self.boxes = []
+        for i in range(0, len(tris), 12):     # glb.box: 12 tris a box, corners 0 1 3 4 at these slots
+            t = tris[i:i + 12]
+            v0, v3, v1, v4 = (gun_pt(p) for p in (t[0][0], t[0][1], t[1][2], t[2][0]))
+            ax = [v1 - v0, v3 - v0, v4 - v0]
+            self.boxes.append((v0 + (ax[0] + ax[1] + ax[2]) * 0.5, [a.normalized() for a in ax], [a.length * 0.5 for a in ax]))
+        self.nodes = {k: gun_pt(v) for k, v in nodes.items()}
+
+    @staticmethod
+    def _sd(b, p):
+        c, ax, h = b
+        d = p - c
+        q = [abs(d.dot(a)) - hh for a, hh in zip(ax, h)]
+        return math.sqrt(sum(max(x, 0.0) ** 2 for x in q)) + min(max(q), 0.0)
+
+    def sd(self, p):
+        return min(self._sd(b, p) for b in self.boxes)
+
+    def box(self, at):
+        """The box `at` (glTF weapon point) is deepest in, as (centre, right, up, fwd, half right, half up, half fwd)."""
+        b = min(self.boxes, key=lambda b: self._sd(b, gun_pt(at)))
+        c, ax, h = b
+        return c, ax[0], ax[1], -ax[2], h[0], h[1], h[2]
+
+
+def gun(kind):
+    if kind not in _GUNS:
+        _GUNS[kind] = Gun(kind)
+    return _GUNS[kind]
+
+
+def seg_dist(p, a, b):
+    ab = b - a
+    t = 0.0 if ab.length_squared < 1e-12 else max(0.0, min(1.0, (p - a).dot(ab) / ab.length_squared))
+    return (p - a - ab * t).length
+
+
+class HandGeo:
+    """One hand at the rest pose, in its hand bone's frame: a sample of the
+    palm's vertices, each digit's joints and tip, its hinge (the axis
+    close_finger() bends it about) and, per segment, the capsule its flesh
+    fills: the bones run along the BACK of the fingers, so the capsule sits
+    off the bone toward the palm (measured off the skin, as a hand's size)."""
+
+    def __init__(self, rig, parts, side):
+        update()
+        self.side = side
+        self.M0 = pb(rig, "hand_" + side).matrix.copy()
+        inv = self.M0.inverted()
+        arms = parts["arms"]
+        gid = {g.name: g.index for g in arms.vertex_groups}
+        wv = [(inv @ (arms.matrix_world @ v.co), {g.group: g.weight for g in v.groups}) for v in arms.data.vertices]
+        palm = [w for w, g in wv if g.get(gid["hand_" + side], 0) > 0.5]
+        self.palm = palm[::max(1, len(palm) // 150)]
+        self.chain, self.hinge, self.off, self.rad = {}, {}, {}, {}
+        self.spread = {}     # digit -> degrees about the palm normal, before it closes (the trigger finger)
+        # Two palm normals: the bone's (palm_normal(), which close_finger()
+        # bends about) and the knuckle row's, which says how the hand LIES
+        # (on MakeHuman the bone's is ~40 degrees off it: a hand placed by
+        # it stood its knuckle row out from the grip).
+        self.bone_n = (inv.to_3x3() @ palm_normal(rig, side)).normalized()
+        self.k = (inv @ pb(rig, "middle_01_" + side).matrix.translation).normalized()
+        row = inv @ pb(rig, "index_01_" + side).matrix.translation - inv @ pb(rig, "pinky_01_" + side).matrix.translation
+        self.n = self.k.cross(row).normalized() * (-1 if side == "r" else 1)
+        for f in FINGERS + ("thumb",):
+            bones = [pb(rig, f"{f}_{s}_{side}") for s in ("01", "02", "03")]
+            pts = [inv @ b.matrix.translation for b in bones] + [inv @ (bones[2].matrix @ Vector((0, bones[2].bone.length, 0)))]
+            # The hinge rides the straight digit: a finger's first segment,
+            # the thumb's second (its first is the metacarpal, swung apart).
+            b = bones[1 if f == "thumb" else 0]
+            h = (inv.to_3x3() @ (b.matrix.to_3x3() @ Vector((0, 1, 0)))).normalized().cross(self.bone_n).normalized()
+            offs, rads = [], []
+            for s_, bone in enumerate(bones):
+                a, ax = pts[s_], (pts[s_ + 1] - pts[s_]).normalized()
+                hn = h.cross(ax).normalized()            # the segment's palm side
+                d = sorted((w - a - ax * (w - a).dot(ax)).dot(hn) for w, g in wv if g.get(gid.get(bone.name, -1), 0) > 0.5)
+                lo, hi = (d[len(d) // 10], d[len(d) * 9 // 10]) if d else (-0.007, 0.007)
+                offs.append((hi + lo) / 2)
+                rads.append((hi - lo) / 2)
+            self.chain[f], self.hinge[f], self.off[f], self.rad[f] = pts, h, offs, rads
+
+
+def bend(pts, hinge, angles):
+    """A digit's joints after turning joint j by angles[j] degrees about
+    `hinge` (one axis, as close_finger turns all three)."""
+    P = [p.copy() for p in pts]
+    for j, a in enumerate(angles):
+        if a:
+            R = Matrix.Rotation(math.radians(a), 3, hinge)
+            for i in range(j + 1, 4):
+                P[i] = P[j] + R @ (P[i] - P[j])
+    return P
+
+
+def caps(P, hinge, offs, rads):
+    """A digit's segments (joints P, any frame; hinge in that frame) as flesh capsules (a, b, r)."""
+    out = []
+    for s in range(3):
+        ax = P[s + 1] - P[s]
+        o = hinge.cross(ax).normalized() * offs[s]
+        out.append((P[s] + o, P[s + 1] + o, rads[s]))
+    return out
+
+
+def seg_depth(cs, sd, s):
+    """How far capsule s clears `sd` (negative: pressed in)."""
+    a, b, r = cs[s]
+    return min(sd(a.lerp(b, t)) for t in (0.2, 0.5, 0.8, 1.0)) - r
+
+
+def seg_hit(cs, sd, first=0, last=2):
+    """The first capsule (first..last) pressing into `sd` deeper than SKIN; None when clear."""
+    for s in range(first, last + 1):
+        if seg_depth(cs, sd, s) < -SKIN:
+            return s
+    return None
+
+
+def digit_caps(geo, d, M, angles, pre=None):
+    """Digit `d` of `geo` bent by `angles` (after the thumb's base swing `pre`), as capsules in M's frame."""
+    pts, h = geo.chain[d], geo.hinge[d]
+    if pre is None and geo.spread.get(d):
+        pre = Matrix.Rotation(math.radians(geo.spread[d]), 3, geo.n)
+    if pre is not None:
+        pts = [pts[0]] + [pts[0] + pre @ (p - pts[0]) for p in pts[1:]]
+        h = pre @ h
+    return caps([M @ p for p in bend(pts, h, angles)], M.to_3x3() @ h, geo.off[d], geo.rad[d])
+
+
+def close_digit(geo, d, M, sd, maxes, joints=(0, 1, 2), step=1.0, pre=None):
+    """Wrap a digit round `sd` (gun frame; M takes the hand's frame into it),
+    knuckle first: each joint in `joints` closes until its own segment
+    touches or it reaches its max, the segments beyond it riding along
+    straight, then the next. (All joints closing together let a straight
+    fingertip touch the magazine first and froze the finger in a claw.)"""
+    a = [0.0, 0.0, 0.0]
+    for j in joints:
+        now = seg_depth(digit_caps(geo, d, M, a, pre), sd, j)
+        while a[j] < maxes[j]:
+            trial = list(a)
+            trial[j] = min(maxes[j], a[j] + step)
+            dep = seg_depth(digit_caps(geo, d, M, trial, pre), sd, j)
+            # Touching stops it only when closing presses it IN: a straight
+            # finger grazing the trigger guard still closes round the grip.
+            if dep < -SKIN and dep < now:
+                break
+            a, now = trial, dep
+    return a
+
+
+def capsules_sd(sd, cs):
+    """`sd` with capsules (a, b, r) added: another hand's fingers."""
+    return lambda p: min([sd(p)] + [seg_dist(p, a, b) - r for a, b, r in cs])
+
+
+PALM_SINK = 0.004   # metres the palm's flesh may give round a grip
+
+
+def place_palm(geo, k, n, fix, sd):
+    """The hand frame (hand bone -> gun) with its knuckles along `k` and palm
+    along `n`, each (axis, digit, value) in `fix` (three orthogonal axes)
+    putting that digit's knuckle at `value` along `axis`; then backed off
+    along -n while the palm's flesh sinks into `sd` deeper than PALM_SINK."""
+    R = frame(k, n) @ frame(geo.k, geo.n).inverted()
+    T = Vector()
+    for axis, digit, value in fix:
+        T += axis * (value - (R @ geo.chain[digit][0]).dot(axis))
+    back = -Vector(n).normalized()
+    for _ in range(60):
+        # The deepest few vertices aside: a pad of flesh gives round a grip.
+        if sorted(sd(R @ v + T) for v in geo.palm)[len(geo.palm) // 30] >= -PALM_SINK:
+            break
+        T += back * 0.001
+    return Matrix.Translation(T) @ R.to_4x4()
+
+
+def grasp(geo, sd, tries, score, maxes, level=None):
+    """The best of several palm placements: `tries` yields (label, M); each
+    has its fingers wrapped (close_digit) and is scored by `score(tips)`,
+    tips = per finger (fingertip capsule end, radius). Returns (label, M, angles)."""
+    best = None
+    for label, M in tries:
+        if level is not None:
+            # The trigger finger along the bore, not up the grip's rake into the frame.
+            def lie(a):
+                geo.spread["index"] = a
+                cs = digit_caps(geo, "index", M, (0, 0, 0))
+                along = (cs[2][1] - cs[0][0]).normalized().dot(level) + 0.05
+                return abs(along) + 50 * max(0.0, -min(seg_depth(cs, sd, s) for s in (1, 2)))   # ...and clear of the guard
+            geo.spread["index"] = min(range(-60, 61, 5), key=lie)
+        ang = {d: close_digit(geo, d, M, sd, maxes.get(d, FINGER_MAX)) for d in FINGERS}
+        tips, inside = {}, []
+        for d in FINGERS:
+            cs = digit_caps(geo, d, M, ang[d])
+            tips[d] = (cs[2][1], cs[2][2])
+            # Reported, not scored: a wrapping finger crosses the pistol's
+            # thin trigger-guard bar at nearly every placement, and scoring
+            # it only drove the hand to worse ones.
+            inside += [f"{d}{s}" for s in range(1, 3) if seg_depth(cs, sd, s) < -0.005]
+        sc = score(tips)
+        if best is None or sc > best[0] + 1e-9:
+            best = (sc, label, M, ang, dict(geo.spread), inside)
+    geo.spread = best[4]
+    print(f"  grasp {ACTIVE.get('_id')} {geo.side}: {best[1]} score {best[0]:.2f} spread {geo.spread} inside {best[5]}")
+    return best[1], best[2], best[3]
+
+
+def solve_thumb(geo, M, sd, target):
+    """Swing the thumb about its base -- opposition (about the knuckle line)
+    and spread (about the palm normal) -- and bend its two joints, keeping
+    the pose clear of `sd` whose tip rests nearest `target` (gun frame).
+    Returns (opposition axis, spread axis, the two swing angles, joint angles)."""
+    pts = geo.chain["thumb"]
+    sd_ = sd
+    sd = lambda p: sd_(p) + 0.003       # its root rides the palm, pressed to the gun: a little give
+    out = pts[3] - pts[0]
+    out -= geo.k * out.dot(geo.k)
+    A = geo.k if geo.k.cross(out).dot(geo.n) > 0 else -geo.k     # + brings the thumb to the palm side
+    best = None
+    for al in range(-90, 121, 20):
+        for be in range(-90, 61, 20):
+            for tw in range(-60, 61, 30):     # and a twist about itself: which way its joints bend
+                R = thumb_rot((A, geo.n, al, be, None, tw), pts)
+                for g2 in range(0, 61, 15):
+                    for g3 in range(0, 61, 20):
+                        cs = digit_caps(geo, "thumb", M, (0, g2, g3), R)
+                        if seg_hit(cs, sd, 1) is not None:     # its metacarpal is palm
+                            continue
+                        cost = (cs[2][1] - target).length + 0.5 * max(0.0, seg_depth(cs, sd, 2) - 0.004)   # resting on something
+                        if best is None or cost < best[0]:
+                            best = (cost, al, be, (0, g2, g3), tw)
+    if best is None:
+        print(f"  thumb {ACTIVE.get('_id')} {geo.side}: no pose clears the gun")
+        return A, geo.n, 0, 0, (0, 0, 0), 0
+    print(f"  thumb {ACTIVE.get('_id')} {geo.side}: tip {best[0] * 100:.1f} cm off its spot")
+    return A, geo.n, best[1], best[2], best[3], best[4]
+
+
+def thumb_rot(th, pts):
+    """The thumb's base swing: opposition, spread, then a twist about its own (swung) metacarpal."""
+    A, B, al, be, _, tw = th
+    R = Matrix.Rotation(math.radians(be), 3, B) @ Matrix.Rotation(math.radians(al), 3, A)
+    return Matrix.Rotation(math.radians(tw), 3, (R @ (pts[1] - pts[0])).normalized()) @ R
+
+
+def hand_caps(geo, M, ang, th=None):
+    """A solved hand's digits as capsules in the gun frame (for the other hand to close on)."""
+    out = []
+    for d, a in ang.items():
+        out += digit_caps(geo, d, M, a)
+    if th is not None:
+        out += digit_caps(geo, "thumb", M, th[4], thumb_rot(th, geo.chain["thumb"]))
+    return out
+
+
+def solve_hold(rig, parts, kind):
+    """Both hands on `kind` by contact. Returns per side the hand bone's
+    frame in the gun frame (M) and the digits' pose bones' local matrices."""
+    g = gun(kind)
+    pose_rest(rig)
+    R_, L_ = HandGeo(rig, parts, "r"), HandGeo(rig, parts, "l")
+    nodes = gun_nodes_gl(kind)
+    c, x, u, f, hx, hu, hf = g.box(nodes["grip"])
+    top, front = c.dot(u) + hu, c.dot(f) + hf
+    trig = {"index": TRIGGER_MAX}
+    # Right: the index knuckle high on the grip (under the receiver), the
+    # palm on its right side, turned so the web of the thumb comes round its
+    # back and the knuckles sit off its front right corner; the three fingers
+    # wrap the front face and end on the left side. Placement searched: the
+    # one whose fingertips get furthest round, touching. The index lies
+    # along the frame (trigger finger), the thumb round the left side.
+    def tries_r():
+        for yaw in range(0, 31, 10):
+            Y = Matrix.Rotation(math.radians(-yaw), 3, u)
+            for du in (6, 12, 18, 24):     # the middle finger under the trigger, not on it
+                for df in range(0, 31, 5):
+                    yield (f"yaw {yaw} down {du} front {df} mm", place_palm(R_, Y @ f, Y @ -x, [
+                        (u, "index", top - du / 1000), (f, "middle", front + df / 1000), (x, "middle", c.dot(x) + hx)], g.sd))
+    on = lambda box, p, r: g._sd(box, p) < r + 0.004                 # a fingertip on THAT box
+    gbox = min(g.boxes, key=lambda b: g._sd(b, gun_pt(nodes["grip"])))
+    left_of = lambda tips: sum((1 + max(-1.0, min(1.0, (c - p).dot(x) / hx))) * on(gbox, p, r) for d, (p, r) in tips.items() if d != "index")
+    _, Mr, fr = grasp(R_, g.sd, tries_r(), left_of, trig, level=Vector((0, 0, 1)))
+    rt = R_.rad["thumb"][2]
+    if kind == "rifle":
+        t_r = c - x * (hx + rt) + u * (hu - 0.035)        # round the grip's left side, high
+    else:
+        t_r = gun_pt((-0.014 - rt, 0.08, -0.045))         # along the frame, under the slide
+    th_r = solve_thumb(R_, Mr, capsules_sd(g.sd, hand_caps(R_, Mr, fr)), t_r)
+    lt = L_.rad["thumb"][2]
+    if kind == "rifle":
+        # Left: under the fore-end at `fore`, palm up, the fingers up its
+        # right side and the thumb up its left: a C round the handguard.
+        c2, x2, u2, f2, hx2, hu2, hf2 = g.box(tuple(a + b for a, b in zip(nodes["fore"], (0, 0.01, 0))))
+        sd_l = g.sd
+
+        def tries_l():
+            for yaw in range(0, 46, 15):
+                k = Matrix.Rotation(math.radians(yaw), 3, u2) @ x2
+                for dx in range(-15, 16, 5):
+                    yield (f"yaw {yaw} side {dx} mm", place_palm(L_, k, u2, [
+                        (x2, "middle", c2.dot(x2) + hx2 + dx / 1000), (f2, "middle", g.nodes["fore"].dot(f2)),
+                        (u2, "middle", c2.dot(u2) - hu2)], g.sd))
+        bottom = c2.dot(u2) - hu2
+        fbox = min(g.boxes, key=lambda b: g._sd(b, c2))
+        score_l = lambda tips: sum((1 + max(0.0, min(1.0, (p.dot(u2) - bottom) / (2 * hu2)))) * on(fbox, p, r) for p, r in tips.values())
+        t_l = gun_pt((-0.0275 - lt, 0.165, -0.30))
+    else:
+        # Support: palm on the grip's left side over the right fingertips,
+        # the four fingers over the right hand's three on the front face and
+        # round to the right, the thumb forward along the frame under the
+        # right thumb.
+        sd_l = capsules_sd(g.sd, hand_caps(R_, Mr, fr, th_r))
+        rk = (Mr @ R_.chain["middle"][0]).dot(u)
+
+        def tries_l():
+            for yaw in range(0, 41, 10):
+                Y = Matrix.Rotation(math.radians(yaw), 3, u)
+                for df in range(10, 51, 5):        # one layer out: over the right hand's fingers
+                    yield (f"yaw {yaw} front {df} mm", place_palm(L_, Y @ f, Y @ x, [
+                        (u, "index", rk - 0.004), (f, "middle", front + df / 1000), (x, "middle", c.dot(x) - hx)], sd_l))
+        score_l = lambda tips: sum((1 + max(-1.0, min(1.0, (p - c).dot(x) / hx))) * (sd_l(p) < r + 0.004 and abs((p - c).dot(u)) < hu + 0.01)
+                                   for p, r in tips.values())
+        t_l = gun_pt((-0.014 - lt, 0.066, -0.06))
+    _, Ml, fl = grasp(L_, sd_l, tries_l(), score_l, {})
+    th_l = solve_thumb(L_, Ml, capsules_sd(sd_l, hand_caps(L_, Ml, fl)), t_l)
+    out = {}
+    for side, geo, M, fing, th in (("r", R_, Mr, fr, th_r), ("l", L_, Ml, fl, th_l)):
+        pose_rest(rig)
+        R0 = geo.M0.to_3x3()
+        for d, a in fing.items():
+            pre = Matrix.Rotation(math.radians(geo.spread.get(d, 0)), 3, geo.n)
+            if geo.spread.get(d):
+                swing(rig, f"{d}_01_{side}", R0 @ geo.n, geo.spread[d])
+            for seg, deg_ in zip(("01", "02", "03"), a):
+                swing(rig, f"{d}_{seg}_{side}", R0 @ (pre @ geo.hinge[d]), deg_)
+        A, B, al, be, gg, tw = th
+        tp = geo.chain["thumb"]
+        swing(rig, f"thumb_01_{side}", R0 @ A, al)
+        swing(rig, f"thumb_01_{side}", R0 @ B, be)
+        Rab = Matrix.Rotation(math.radians(be), 3, B) @ Matrix.Rotation(math.radians(al), 3, A)
+        swing(rig, f"thumb_01_{side}", R0 @ (Rab @ (tp[1] - tp[0])).normalized(), tw)
+        for seg, deg_ in zip(("02", "03"), gg[1:]):
+            swing(rig, f"thumb_{seg}_{side}", R0 @ (thumb_rot(th, tp) @ geo.hinge["thumb"]), deg_)
+        # The model and the rig must agree: the index tip, both ways.
+        tip = geo.M0.inverted() @ (pb(rig, f"index_03_{side}").matrix @ Vector((0, pb(rig, f"index_03_{side}").bone.length, 0)))
+        ip = Matrix.Rotation(math.radians(geo.spread.get("index", 0)), 3, geo.n)
+        ic = geo.chain["index"]
+        drift = (tip - bend([ic[0]] + [ic[0] + ip @ (p - ic[0]) for p in ic[1:]], ip @ geo.hinge["index"], fing["index"])[3]).length
+        Rt = thumb_rot(th, tp)
+        ttip = geo.M0.inverted() @ (pb(rig, f"thumb_03_{side}").matrix @ Vector((0, pb(rig, f"thumb_03_{side}").bone.length, 0)))
+        drift = max(drift, (ttip - bend([tp[0]] + [tp[0] + Rt @ (p - tp[0]) for p in tp[1:]], Rt @ geo.hinge["thumb"], gg)[3]).length)
+        basis = {n: pb(rig, n).matrix_basis.copy() for d in FINGERS + ("thumb",) for n in (f"{d}_01_{side}", f"{d}_02_{side}", f"{d}_03_{side}")}
+        out[side] = dict(M=M, basis=basis, geo=geo)
+        print(f"grip {ACTIVE.get('_id')} {kind}.{side}: fingers " +
+              " ".join(f"{d}=" + "/".join(f"{x_:.0f}" for x_ in fing[d]) for d in FINGERS) +
+              f" thumb={al}/{be}/{tw}/" + "/".join(f"{x_:.0f}" for x_ in gg[1:]) + f" model drift {drift * 1000:.1f} mm")
+    pose_rest(rig)
+    return out
+
+
+def gun_nodes_gl(kind):
+    sys.path.append(os.path.join(ART, "tools"))
+    import gen_weapon   # noqa: E402
+    return next(w for w in gen_weapon.WEAPONS if w[0] == GUN_ASSET[kind])[3]
+
+
+def hold_empties(rig, holds):
+    """`hold.<kind>.<side>`: the gun's socket (`grip` right, `fore` left) as
+    the solved hand holds it, riding the hand bone -- the client puts this
+    frame ON the socket (HandIk). Made at the rest pose."""
+    for kind, H in holds.items():
+        for side, socket in (("r", "grip"), ("l", "fore")):
+            h = H[side]
+            e = bpy.data.objects.new(f"hold.{kind}.{side}", None)
+            bpy.context.scene.collection.objects.link(e)
+            e.parent = rig
+            e.parent_type = "BONE"
+            e.parent_bone = "hand_" + side
+            update()
+            e.matrix_world = rig.matrix_world @ h["geo"].M0 @ h["M"].inverted() @ Matrix.Translation(gun(kind).nodes[socket])
+
+
+def gun_frame(kind, G, forward):
+    """The gun's frame in the body's: `grip` at G, the bore along `forward`, top up."""
+    f = Vector(forward).normalized()
+    up = Vector((0, 0, 1))
+    up = (up - f * up.dot(f)).normalized()
+    R = Matrix((f.cross(up), f, up)).transposed()
+    return Matrix.Translation(Vector(G) - R @ gun(kind).nodes["grip"]) @ R.to_4x4()
+
+
+def put_hand(rig, side, W, h, pole):
+    """The solved hand `h` on the gun at W (body space): the arm by IK (its
+    elbow is the client's hint), the hand turned exactly, the digits as
+    solved. Returns how far the wrist fell short."""
+    H = W @ h["M"]
+    rest_fingers(rig, side)
+    target = H.translation
+    reach(rig, side, target, pole, toward=H.to_3x3() @ h["geo"].k)
+    update()
+    cur = pb(rig, "hand_" + side).matrix.to_3x3().normalized()
+    rotate_about_head(rig, "hand_" + side, (H.to_3x3().normalized() @ cur.inverted()).to_quaternion())
+    for n, m in h["basis"].items():
+        pb(rig, n).matrix_basis = m
+    update()
+    return target - head_of(rig, "hand_" + side)
+
+
+def gun_hold(rig, kind, G, forward, pole_r=(0.6, -0.3, -0.8), pole_l=(-0.7, 0.2, -0.7)):
+    """First person: both hands on the gun as solved (solve_hold), the gun's
+    grip at G, bore along `forward`. A hand that cannot get there brings the
+    gun to it (as rifle()/pistol() do). Returns the grip point used."""
+    H = ACTIVE["_holds"][kind]
+    if kind == "rifle":
+        swing(rig, "spine_02", (0, 0, 1), -BLADE * 0.5)
+        swing(rig, "spine_03", (0, 0, 1), -BLADE * 0.5)
+        swing(rig, "neck_01", (0, 0, 1), BLADE * 0.6)
+        swing(rig, "head", (0, 0, 1), BLADE * 0.4)
+    else:
+        pole_r, pole_l = (0.6, -0.4, -0.7), (-0.6, -0.4, -0.7)
+    f = Vector(forward).normalized()
+    G = Vector(G)
+    for _ in range(3):   # a fixed count: a hold that corrects on one key and not the next pops
+        G = G - put_hand(rig, "r", gun_frame(kind, G, f), H["r"], pole_r)
+        miss = put_hand(rig, "l", gun_frame(kind, G, f), H["l"], pole_l)
+        G = G - (f * miss.length * 1.3 if kind == "rifle" else miss)
+    put_hand(rig, "r", gun_frame(kind, G, f), H["r"], pole_r)
+    OFF_WEAPON["l"] = put_hand(rig, "l", gun_frame(kind, G, f), H["l"], pole_l).length
+    return G
+
 # ---- melee -------------------------------------------------------------------
 # A hand weapon sits in the fist with its blade (haft) out of the THUMB side
 # and its edge toward the KNUCKLES. Both read off the bones the same way here
@@ -1726,6 +2189,7 @@ CLASSES = {
                             "attack_spin": (SPIN, 1.0), "fp_attack_spin": (FP_SPIN, 0.8)}),
 }
 TWIST = {"attack": 25, "attack_spin": 0}
+FP_GUN = {"": "rifle", "_pistol": "pistol"}   # first-person class -> contact hold (client: _pistol or a long gun)
 
 
 def pose_rest(rig):
@@ -1937,6 +2401,8 @@ def clips(rig):
     # clip fully overrides the one before it. One set per weapon class.
     for sfx, C in CLASSES.items():
         hold, fp = C["hold"], C["fp"]
+        if sfx in FP_GUN:   # a gun: the contact hold (gun_hold), its grip at G
+            hold = lambda rig_, G, forward, kind=FP_GUN[sfx]: gun_hold(rig_, kind, G, forward)
 
         def held(t, bob=0.0, amp=0.0, hold=hold, fp=fp):
             G = Vector(fp["G"]) + Vector((amp * math.sin(2 * math.pi * t), 0, bob * math.sin(4 * math.pi * t)))
@@ -1944,8 +2410,8 @@ def clips(rig):
         clip(rig, "fp_idle" + sfx, 3.0, lambda t, h=held: h(t, bob=0.004), Q)
         clip(rig, "fp_walk" + sfx, 0.70, lambda t, h=held: h(t, bob=0.008, amp=0.010), Q)
         clip(rig, "fp_sprint" + sfx, 0.50, lambda t, h=held: h(t, bob=0.014, amp=0.020), Q)
-        clip(rig, "fp_ads" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["ads"]), (0.0,))
-        clip(rig, "fp_lower" + sfx, 1.0, lambda t, C=C: C["hold"](rig, **C["lower"]), (0.0,))
+        clip(rig, "fp_ads" + sfx, 1.0, lambda t, C=C, hold=hold: hold(rig, **C["ads"]), (0.0,))
+        clip(rig, "fp_lower" + sfx, 1.0, lambda t, C=C, hold=hold: hold(rig, **C["lower"]), (0.0,))
 
         if "melee" in C:
             continue
@@ -1956,7 +2422,7 @@ def clips(rig):
             hold(rig, G, Vector(fp["forward"]) + Vector((0, 0, 0.06 * k)))
         clip(rig, "fp_fire" + sfx, 0.12, fire, (0.0, 0.3, 0.6, 1.0), loop=False)
 
-        def reload(t, C=C):
+        def reload(t, C=C, hold=hold):
             # The gun tips muzzle-up and rolls in toward the view, so the
             # magazine well and the hand working it are IN the frame (held
             # level, the hand dropped out of the bottom edge and the reload
@@ -1965,10 +2431,9 @@ def clips(rig):
             k = math.sin(math.pi * min(1.0, max(0.0, (t - 0.1) / 0.8)))
             G = Vector(C["fp"]["G"]) + Vector((-0.03, 0.02, 0.05)) * k
             f = (Vector(C["fp"]["forward"]).normalized() + Vector((-0.30, 0, 0.45)) * k).normalized()
-            C["hold"](rig, G, f)
+            at = hold(rig, G, f)                      # where the grip ended up
             if k > 0:
                 up = (Vector((0, 0, 1)) - f * f.z).normalized()
-                at = mount_at(rig, "r")
                 fore = at + f * C["fore"][0] + up * C["fore"][1]
                 mag = at + f * C["mag"][0] + up * C["mag"][1]
                 grip(rig, "l", fore.lerp(mag, k), (f - up * 0.6).normalized(), (f.cross(up)).normalized() * -1,
@@ -2098,6 +2563,9 @@ def build():
     for side in ("r", "l"):
         k, palm_n = hand_frame(rig, side)
         mount("hand." + side, rig, "hand_" + side, palm(parts, side) + palm_n * (0.025 if side == "r" else 0.03))
+    # First-person gun holds, by contact (Phase 27), and their hold.* empties.
+    ACTIVE["_holds"] = {kind: solve_hold(rig, parts, kind) for kind in GUN_ASSET}
+    hold_empties(rig, ACTIVE["_holds"])
     clips(rig)
     return rig, parts
 

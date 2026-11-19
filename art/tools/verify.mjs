@@ -99,11 +99,15 @@ const CLIP_CONTRACTS = {
   creature: ["idle"],
 };
 
+// First-person contact holds (human.py solve_hold, Phase 27): the client puts
+// each on its gun's socket (HandIk). The player bodies carry them.
+const HOLDS = ["hold.rifle.r", "hold.rifle.l", "hold.pistol.r", "hold.pistol.l"];
+
 const NODE_CONTRACTS = {
   // The MakeHuman body (tools/bpy/human.py): game-engine bone names, both
   // hand mounts (grip in the right, barrel toward the left).
   "char.player": {
-    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03", ...HOLDS],
     eyeHeadSiblings: true,
     legsCut: true,
     chestCut: true,
@@ -115,20 +119,20 @@ const NODE_CONTRACTS = {
     chestCut: true,
   },
   "char.player.f": {
-    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03", ...HOLDS],
     eyeHeadSiblings: true,
     legsCut: true,
     chestCut: true,
   },
   // Quaternius UBC bodies (human.py variants char.ubc, char.ubc.f): same rig names after their import.
   "char.ubc.f": {
-    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03", ...HOLDS],
     eyeHeadSiblings: true,
     legsCut: true,
     chestCut: true,
   },
   "char.ubc": {
-    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03"],
+    nodes: ["eye", "head", "arms", "chest", "torso", "legs", "hand.r", "hand.l", "upperarm_r", "lowerarm_r", "hand_r", "spine_03", ...HOLDS],
     eyeHeadSiblings: true,
     legsCut: true,
     chestCut: true,

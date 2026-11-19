@@ -1444,7 +1444,10 @@ first-person routine and records EVERY frame: the distance from each hand
 mount to its socket on the weapon (`grip`, `fore`) and the sight, bore and
 hands in camera space. `tools/fp_motion.py` reports per phase the worst
 gap, the worst frame-to-frame speed, and that speed over the phase's
-median (`pop`).
+median (`pop`; since Phase 27 task 2 over the median of that frame and
+its two neighbours, so a planned 0.18 s aim-in is not a pop). Rig flag
+`-uiFpOrbit <yaw>[,<pitch>[,<dist>]]` (with `-uiShot`, `-rigHold`,
+`-uiFpSheet`) shoots the arms and gun from a camera circling the grip.
 
 What it showed on `0098d46` (rifle; 960x540, ~15 fps on software GL): at
 rest the hands sit on the gun (left hand 0.9 cm off the fore-end), but for
@@ -1488,3 +1491,52 @@ clip, and a third controller pulls one to the other); the pistol's support
 hand sits 3.9 cm off its socket at all times; and nothing here makes a
 hand close on a grip.
 
+
+## Phase 27 task 3: grips by contact (2026-11-19)
+
+Playtest: "the hand holding the gun goes through the gun", "the left hand
+thumb doesn't wrap around the gun at all". The hold was one static pose per
+body and class, fingers at fixed angles round the palm centre placed ON the
+grip's centre. Now `human.py` `solve_hold` builds it against the real
+weapon (the `tools/gen_weapon.py` boxes of `weapon.pulse` and
+`weapon.sidearm`; long guns share the rifle's), once per body: the palm is
+placed by a small search (turn, height, how far past the front face),
+every finger wraps knuckle first until each segment touches (flesh capsules
+measured off the skin: the bones run along the BACK of the fingers), the
+trigger finger is spread level with the bore, the thumb's base swing,
+twist and two joints are searched for a pose clear of the gun whose tip
+rests nearest its spot. The result goes out as four empties per body,
+`hold.rifle.r/l`, `hold.pistol.r/l` (the gun's `grip` / `fore` frame as
+that hand holds it); `HandIk` puts the empty's frame on the socket, position
+and turn, and falls back to the old palm mount + clip turn without them.
+Every fp clip of a gun class carries the solved fingers. Third person, the
+`hand.r`/`hand.l` mounts, melee and unarmed are unchanged.
+
+`-uiMotion` (960x540, ~16 fps), gap = hold empty to socket:
+
+| body / gun | worst gap, every phase but reload | reload (left hand off on purpose) | worst pop |
+|---|---|---|---|
+| char.player rifle | 0.0 cm | 11.3 cm | 2.0 |
+| char.player pistol | 0.0 cm | 9.5 cm | 2.0 |
+| char.ubc rifle | 1.7 cm (unaim, left) | 13.7 cm | 1.8 |
+| char.ubc pistol | 0.0 cm | 7.1 cm | 1.8 |
+
+Wrist bend (forearm to knuckles, client solve, `fp:` line `wrist=(r,l)`),
+hip / aimed: char.player rifle 37,44 / 31,37, pistol 32,32 / 30,32, smg
+35,38 at hip; char.player.f rifle 59,47 / 52,44, pistol 52,31 / 32,33;
+char.ubc rifle 33,16 / 31,38, pistol 33,40 / 33,30; char.ubc.f rifle
+30,32 / 43,42, pistol 29,31 / 32,30. All under 70. `tools/fp_sheet.sh`:
+every clip framed within 0.05 m; art verify 282/282 (the four player
+bodies must carry the hold empties); the third-person clips of char.player
+and char.ubc are bit-identical to the previous build.
+
+Rig: `-uiFpOrbit <yaw>,<pitch>,<dist>,1` circles `fore` (the support hand)
+instead of the grip.
+
+Still off (close-ups per body x gun): the firing thumb rests 2-5 cm from
+its spot on some bodies (round the back of the grip, tip forward on the
+left, not pressed to the left face); on the pistol a wrapping finger
+crosses the thin trigger-guard bar, and the trigger finger cannot be clear
+of frame and guard (the gap is narrower than a finger); on the Vanguard
+bodies the support fingers on the pistol hook forward of the grip. The
+user's eyes in a playtest are the word on C213.
